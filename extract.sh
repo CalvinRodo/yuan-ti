@@ -25,7 +25,7 @@ for gff in "$INPUT_DIR"/*.GFF; do
 
     mkdir -p "$outdir"
 
-    python3 "$SCRIPT" \
+    uv run python3 "$SCRIPT" \
         --gff="$gff" \
         --extract-to-dir="$outdir"
 

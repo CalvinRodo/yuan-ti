@@ -7,7 +7,7 @@
     {
       "label": "Serve: start web viewer",
       "type": "shell",
-      "command": "python3 src/server.py",
+      "command": "uv run python3 src/server.py",
       "isBackground": true,
       "problemMatcher": [],
       "group": "build",
@@ -24,7 +24,7 @@
     {
       "label": "Install: Python deps (flask, pillow)",
       "type": "shell",
-      "command": "python3 -m pip install flask pillow",
+      "command": "uv sync",
       "problemMatcher": [],
       "presentation": {
         "reveal": "always",
@@ -50,7 +50,7 @@
     {
       "label": "Extract: one GFF file → ./out/",
       "type": "shell",
-      "command": "python3 src/gff_tool.py --gff=dark_sun/${input:gffName} --extract-to-dir=out/${input:gffName}",
+      "command": "uv run python3 src/gff_tool.py --gff=dark_sun/${input:gffName} --extract-to-dir=out/${input:gffName}",
       "problemMatcher": [],
       "presentation": {
         "reveal": "always",
@@ -65,7 +65,7 @@
     {
       "label": "List: RESOURCE.GFF contents",
       "type": "shell",
-      "command": "python3 src/gff_tool.py --gff=dark_sun/RESOURCE.GFF --list-contents",
+      "command": "uv run python3 src/gff_tool.py --gff=dark_sun/RESOURCE.GFF --list-contents",
       "problemMatcher": [],
       "presentation": {
         "reveal": "always",
@@ -76,7 +76,7 @@
     {
       "label": "List: one GFF file contents",
       "type": "shell",
-      "command": "python3 src/gff_tool.py --gff=dark_sun/${input:gffName} --list-contents",
+      "command": "uv run python3 src/gff_tool.py --gff=dark_sun/${input:gffName} --list-contents",
       "problemMatcher": [],
       "presentation": {
         "reveal": "always",

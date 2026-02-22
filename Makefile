@@ -1,8 +1,7 @@
 # Dark Sun GFF Toolkit
 # Run 'make' or 'make help' to list available commands.
 
-VENV     := .venv
-PYTHON   := $(VENV)/bin/python3
+PYTHON   := uv run python3
 SRC      := src
 GAME_DIR := dark_sun
 OUT_DIR  := out
@@ -26,9 +25,8 @@ help: ## Show this help message
 serve: ## Start the Flask web viewer  →  http://localhost:5000
 	$(PYTHON) $(SRC)/server.py
 
-install: ## Create .venv and install Python deps (flask, pillow)
-	python3 -m venv $(VENV)
-	$(PYTHON) -m pip install flask pillow
+install: ## Sync Python deps with uv (creates .venv)
+	uv sync
 
 extract: ## Extract ALL GFF files to ./out/<gff-name>/
 	bash extract.sh

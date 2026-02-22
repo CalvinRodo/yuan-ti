@@ -3,9 +3,9 @@ Dark Sun GFF Viewer - Flask web server.
 Serves a browser UI to explore GFF file contents and view images.
 
 Usage:
-  cd src
-  pip install flask pillow
-  python server.py
+    cd ..
+    uv sync
+    uv run python src/server.py
 
 Then open http://localhost:5000
 """

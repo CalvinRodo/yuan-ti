@@ -1,0 +1,9 @@
+[project]
+name = "yuan-ti"
+version = "0.1.0"
+description = "Dark Sun GFF toolkit and web viewer"
+requires-python = ">=3.10"
+dependencies = [
+    "flask",
+    "pillow",
+]
