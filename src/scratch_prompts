@@ -1,3 +1,0 @@
-add a view that renders a RGN14.GFF file, it displays the Region Tile Map entry. 
-
-The region Tile Map is a 2d array containing ascii values that are the number of a tile in the same GFF file, this view will allow for the customization of the width of the 2d array. It will render the tiles that are found, each tile is a byte, it's unclear if it's big endian 

@@ -8,121 +8,230 @@
 </head>
 <body>
 
-  <!-- ===== APP SHELL ===== -->
   <div id="app">
 
     <header id="header">
-      <div id="header-title">
-        <span class="header-icon">☀</span>
+      <div id="header-brand">
+        <span class="header-icon">&#9728;</span>
         <h1>Dark Sun <span class="dim">GFF Viewer</span></h1>
-      </div>
-      <div id="header-controls">
-        <label for="pal-select" class="control-label">Palette</label>
-        <select id="pal-select" title="Choose palette">
-          <option value="auto">Auto‑detect</option>
-        </select>
       </div>
     </header>
 
     <div id="layout">
 
-      <!-- ===== SIDEBAR ===== -->
-      <aside id="sidebar">
-        <div id="sidebar-search-wrap">
-          <input id="sidebar-search" type="search" placeholder="Filter files…" autocomplete="off">
-        </div>
-        <ul id="gff-list"></ul>
-      </aside>
+      <!-- ===== MODE NAV ===== -->
+      <nav id="mode-nav">
+        <button class="mode-btn active" data-mode="spells" title="Spell Viewer">
+          <span class="mode-icon">&#10022;</span>
+          <span class="mode-label">Spells</span>
+        </button>
+        <button class="mode-btn" data-mode="map" title="Map Viewer">
+          <span class="mode-icon">&#8862;</span>
+          <span class="mode-label">Map</span>
+        </button>
+        <button class="mode-btn" data-mode="resources" title="Resource Viewer">
+          <span class="mode-icon">&#8801;</span>
+          <span class="mode-label">Resources</span>
+        </button>
+        <button class="mode-btn" data-mode="images" title="Image Viewer">
+          <span class="mode-icon">&#9707;</span>
+          <span class="mode-label">Images</span>
+        </button>
+        <button class="mode-btn" data-mode="text" title="Text Viewer">
+          <span class="mode-icon">&#9776;</span>
+          <span class="mode-label">Text</span>
+        </button>
+      </nav>
 
-      <!-- ===== MAIN AREA ===== -->
+      <!-- ===== MAIN ===== -->
       <main id="main">
 
-        <!-- Toolbar -->
-        <div id="toolbar">
-          <div id="toolbar-left">
-            <span id="current-file-label" class="dim">Select a GFF file →</span>
+        <!-- Mode toolbar -->
+        <div id="mode-toolbar">
+          <div id="mode-gff-group" class="tb-group hidden">
+            <label class="control-label" for="mode-gff-select">File</label>
+            <select id="mode-gff-select"></select>
           </div>
-          <div id="toolbar-right">
-            <div id="type-filter" role="group" aria-label="Resource type filter">
-              <button class="filter-btn active" data-filter="images">Images</button>
-              <button class="filter-btn" data-filter="all">All Resources</button>
+
+          <div id="img-view-group" class="tb-group hidden">
+            <label class="control-label">View</label>
+            <div class="btn-pair">
+              <button id="img-card-btn" class="view-toggle active" title="Card view">&#8862; Cards</button>
+              <button id="img-list-btn" class="view-toggle"        title="List view">&#9776; List</button>
             </div>
+          </div>
+
+          <div id="pal-group" class="tb-group">
+            <label class="control-label" for="pal-select">Palette</label>
+            <select id="pal-select">
+              <option value="auto">Auto&#8209;detect</option>
+            </select>
           </div>
         </div>
 
-        <!-- Split: list + detail pane -->
+        <!-- Resource filter bar (resources mode only) -->
+        <div id="res-filter-bar" class="hidden">
+          <input id="res-filter-tag"  class="res-filter-input" placeholder="Filter tag&#8230;"         list="tag-datalist"  spellcheck="false" autocomplete="off">
+          <input id="res-filter-desc" class="res-filter-input" placeholder="Filter description&#8230;" list="desc-datalist" spellcheck="false" autocomplete="off">
+          <datalist id="tag-datalist"></datalist>
+          <datalist id="desc-datalist"></datalist>
+          <span id="res-filter-count" class="res-filter-count"></span>
+        </div>
+
+        <!-- Split: content + detail pane -->
         <div id="split">
 
-          <!-- Content (grid / table) -->
+          <!-- Content -->
           <div id="content">
             <div id="empty-state">
-              <div class="empty-icon">☀</div>
-              <p>Select a GFF file from the sidebar to explore its contents.</p>
+              <div class="empty-icon">&#9728;</div>
+              <p id="empty-msg">Select a mode to begin.</p>
             </div>
-            <div id="image-grid" class="hidden"></div>
+
+            <div id="image-grid"      class="hidden"></div>
+
+            <div id="image-list-wrap" class="hidden">
+              <table id="image-list-table">
+                <thead>
+                  <tr>
+                    <th></th>
+                    <th>Tag</th>
+                    <th>Number</th>
+                    <th>Size</th>
+                  </tr>
+                </thead>
+                <tbody id="image-list-tbody"></tbody>
+              </table>
+            </div>
+
+            <div id="spell-grid"      class="hidden"></div>
+
+            <!-- Text viewer -->
+            <div id="text-view" class="hidden">
+              <div id="text-list-wrap">
+                <div id="text-list-filter">
+                  <input id="text-search" type="search" placeholder="Search&#8230;" autocomplete="off" spellcheck="false">
+                  <span id="text-search-count"></span>
+                </div>
+                <ul id="text-list"></ul>
+              </div>
+              <div id="text-reader">
+                <div id="text-reader-empty">Select an entry to read it.</div>
+                <div id="text-reader-content" class="hidden">
+                  <div id="text-reader-header">
+                    <span id="text-reader-badge"></span>
+                    <span id="text-reader-num" class="dim"></span>
+                  </div>
+                  <div id="text-reader-body"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Region tile-map viewer -->
+            <div id="rmap-view" class="hidden">
+              <div id="map-toolbar">
+                <div class="map-ctrl-group">
+                  <label class="control-label" for="rmap-select">RMAP</label>
+                  <select id="rmap-select"></select>
+                </div>
+                <div class="map-ctrl-group">
+                  <label class="control-label" for="map-width-input">Width</label>
+                  <input id="map-width-input" type="number" min="1" max="2048">
+                  <span id="map-size-label" class="dim"></span>
+                </div>
+                <div class="map-ctrl-group">
+                  <label class="control-label">Zoom</label>
+                  <button id="map-zoom-out" class="map-btn" title="Zoom out">&#8722;</button>
+                  <span id="map-zoom-label" class="map-zoom-label">16px</span>
+                  <button id="map-zoom-in"  class="map-btn" title="Zoom in">+</button>
+                </div>
+                <div class="map-ctrl-group">
+                  <button id="map-reset-pan" class="map-btn map-btn-text" title="Reset pan">&#8962; Reset</button>
+                </div>
+              </div>
+              <div id="map-canvas-wrap">
+                <canvas id="map-canvas"></canvas>
+                <div id="map-spinner" class="hidden">
+                  <div class="spinner"></div>
+                  <span>Loading map&#8230;</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- All-resources table -->
             <div id="resource-table-wrap" class="hidden">
               <table id="resource-table">
                 <thead>
                   <tr>
-                    <th>Tag</th>
-                    <th>Number</th>
-                    <th>Size</th>
-                    <th>Description</th>
+                    <th data-col="tag">Tag</th>
+                    <th data-col="number">Number</th>
+                    <th data-col="size">Size</th>
+                    <th data-col="description">Description</th>
                     <th></th>
                   </tr>
                 </thead>
                 <tbody id="resource-tbody"></tbody>
               </table>
             </div>
-          </div>
+
+          </div><!-- /#content -->
 
           <!-- ===== DETAIL PANE ===== -->
           <aside id="detail-pane" class="hidden">
-            <div id="detail-header">
-              <div id="detail-title-wrap">
-                <span id="detail-tag"></span>
-                <span id="detail-num" class="dim"></span>
-              </div>
-              <div id="detail-header-right">
-                <span id="detail-size" class="dim"></span>
-                <button id="detail-close" aria-label="Close">✕</button>
-              </div>
+            <div id="detail-resizer">
+              <button id="detail-toggle" aria-label="Collapse panel" title="Collapse panel">&#8249;</button>
             </div>
-            <div id="detail-desc" class="dim"></div>
+            <div id="detail-inner">
+              <div id="detail-header">
+                <div id="detail-title-wrap">
+                  <span id="detail-tag"></span>
+                  <span id="detail-num" class="dim"></span>
+                </div>
+                <div id="detail-header-right">
+                  <span id="detail-size" class="dim"></span>
+                  <button id="detail-close" aria-label="Close">&#10005;</button>
+                </div>
+              </div>
+              <div id="detail-desc" class="dim"></div>
 
-            <!-- Image view -->
-            <div id="detail-image-view" class="hidden">
-              <div id="detail-img-toolbar">
-                <button id="detail-prev" class="frame-nav" aria-label="Previous frame">‹</button>
-                <span id="detail-frame-info"></span>
-                <button id="detail-next" class="frame-nav" aria-label="Next frame">›</button>
+              <!-- Image view -->
+              <div id="detail-image-view" class="hidden">
+                <div id="detail-img-toolbar">
+                  <button id="detail-prev" class="frame-nav" aria-label="Previous frame">&#8249;</button>
+                  <span id="detail-frame-info"></span>
+                  <button id="detail-next" class="frame-nav" aria-label="Next frame">&#8250;</button>
+                </div>
+                <div id="detail-img-wrap">
+                  <img id="detail-img" alt="resource image">
+                  <div id="detail-img-spinner" class="spinner"></div>
+                </div>
+                <div id="detail-img-dims" class="dim"></div>
               </div>
-              <div id="detail-img-wrap">
-                <img id="detail-img" alt="resource image">
-                <div id="detail-img-spinner" class="spinner"></div>
-              </div>
-              <div id="detail-img-dims" class="dim"></div>
-            </div>
 
-            <!-- Hex view -->
-            <div id="detail-hex-view" class="hidden">
-              <div id="hex-toolbar">
-                <span id="hex-info" class="dim"></span>
-                <span id="hex-truncated" class="warn hidden">Showing first 8 KB</span>
+              <!-- Hex view -->
+              <div id="detail-hex-view" class="hidden">
+                <div id="hex-toolbar">
+                  <span id="hex-info" class="dim"></span>
+                  <span id="hex-truncated" class="warn hidden">Showing first 8 KB</span>
+                </div>
+                <div id="hex-body">
+                  <pre id="hex-pre"></pre>
+                </div>
               </div>
-              <div id="hex-body">
-                <pre id="hex-pre"></pre>
-              </div>
-            </div>
 
+            </div><!-- /#detail-inner -->
           </aside>
 
         </div><!-- /#split -->
 
       </main>
-    </div>
-  </div>
+    </div><!-- /#layout -->
+  </div><!-- /#app -->
 
   <script src="app.js"></script>
+  <script src="view-images.js"></script>
+  <script src="view-map.js"></script>
+  <script src="view-spells.js"></script>
+  <script src="view-text.js"></script>
 </body>
 </html>

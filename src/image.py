@@ -101,9 +101,9 @@ class Palette:
         colors: List[Color] = []
         for i in range(n_colors):
             base = i * cls.BYTES_PER_COLOR
-            red   = 4 * (pal_data[base]     & 0xFF)
-            green = 4 * (pal_data[base + 1] & 0xFF)
-            blue  = 4 * (pal_data[base + 2] & 0xFF)
+            red   = 4 * pal_data[base]
+            green = 4 * pal_data[base + 1]
+            blue  = 4 * pal_data[base + 2]
             colors.append(Color(red, green, blue))
         return cls(colors)
 
@@ -145,7 +145,7 @@ class ImageReading:
     @staticmethod
     def _read_frame(image_bytes: bytes, frame_start: int) -> ImageFrame:
         # Check for planar format: byte at frame_start+4 == 0xFF followed by tag
-        if (image_bytes[frame_start + 4] & 0xFF) == 0xFF and \
+        if image_bytes[frame_start + 4] == 0xFF and \
                 len(image_bytes) >= frame_start + 5 + 4:
             tag = image_bytes[frame_start + 5:frame_start + 9]
             if tag == _PLAN_TAG:
@@ -168,7 +168,7 @@ class ImageReading:
         data = image_bytes
 
         while len(runs_by_row) < height:
-            row_number = data[pos] & 0xFF
+            row_number = data[pos]
             pos += 1
 
             if row_number == _NO_MORE_ROWS:
@@ -179,12 +179,12 @@ class ImageReading:
 
             runs: List[PixelRun] = []
             while True:
-                start_x  = data[pos] & 0xFF;  pos += 1
-                flags    = data[pos] & 0xFF;  pos += 1
-                uncomp_len = data[pos] & 0xFF; pos += 1
-                comp_len   = data[pos] & 0xFF; pos += 1
+                start_x    = data[pos]; pos += 1
+                flags      = data[pos]; pos += 1
+                uncomp_len = data[pos]; pos += 1
+                comp_len   = data[pos]; pos += 1
 
-                if (flags & _COLUMN_256_FLAG) != 0:
+                if flags & _COLUMN_256_FLAG:
                     start_x += 256
 
                 compressed = data[pos:pos + comp_len]
@@ -194,7 +194,7 @@ class ImageReading:
                     compressed, uncomp_len)
                 runs.append(PixelRun(start_x, uncompressed))
 
-                if (flags & _LAST_RUN_FLAG) != 0:
+                if flags & _LAST_RUN_FLAG:
                     break
 
             runs_by_row[row_number] = runs
@@ -212,17 +212,17 @@ class ImageReading:
         i_out = 0
         i_in  = 0
         while i_in < len(compressed):
-            code = compressed[i_in] & 0xFF
+            code = compressed[i_in]
             i_in += 1
             run_len = code // 2 + 1
-            if (code % 2) == 0:
+            if code % 2 == 0:
                 # literal run
                 out[i_out:i_out + run_len] = compressed[i_in:i_in + run_len]
                 i_in  += run_len
                 i_out += run_len
             else:
                 # repeated byte
-                byte_val = compressed[i_in] & 0xFF
+                byte_val = compressed[i_in]
                 i_in += 1
                 for _ in range(run_len):
                     out[i_out] = byte_val
@@ -244,7 +244,7 @@ class ImageReading:
         width  = struct.unpack_from('<H', image_bytes, frame_start)[0]
         height = struct.unpack_from('<H', image_bytes, frame_start + 2)[0]
 
-        bits_per_symbol = image_bytes[frame_start + 9] & 0xFF
+        bits_per_symbol = image_bytes[frame_start + 9]
         if bits_per_symbol == 0:
             return ImageFrame(width, height, {})
 
@@ -306,7 +306,7 @@ def _plnr_symbol_source(chomper: BitChomper, bits_per_symbol: int):
 def _next_planar_pixel(symbol_source, dictionary: List[int]) -> Optional[int]:
     """Return the palette index for the next pixel, or None (transparent)."""
     symbol = symbol_source()
-    value = dictionary[symbol] & 0xFF
+    value = dictionary[symbol]
     return None if value == 0 else value
 
 

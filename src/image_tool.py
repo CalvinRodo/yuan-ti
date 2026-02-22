@@ -56,7 +56,7 @@ def frame_to_pil_image(frame: ImageFrame, palette: Palette):
     pixel_data = []
     for i in range(frame.width * frame.height):
         if alpha[i]:
-            color = palette.get_color(pixels[i] & 0xFF)
+            color = palette.get_color(pixels[i])
             pixel_data.append((color.red, color.green, color.blue, 255))
         else:
             pixel_data.append((0, 0, 0, 0))

@@ -1,0 +1,140 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    // -----------------------------------------------------------------------
+    // Web server
+    // -----------------------------------------------------------------------
+    {
+      "label": "Serve: start web viewer",
+      "type": "shell",
+      "command": "python3 src/server.py",
+      "isBackground": true,
+      "problemMatcher": [],
+      "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": true
+      }
+    },
+
+    // -----------------------------------------------------------------------
+    // Dependencies
+    // -----------------------------------------------------------------------
+    {
+      "label": "Install: Python deps (flask, pillow)",
+      "type": "shell",
+      "command": "python3 -m pip install flask pillow",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      }
+    },
+
+    // -----------------------------------------------------------------------
+    // Extraction
+    // -----------------------------------------------------------------------
+    {
+      "label": "Extract: all GFF files → ./out/",
+      "type": "shell",
+      "command": "bash extract.sh",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      }
+    },
+    {
+      "label": "Extract: one GFF file → ./out/",
+      "type": "shell",
+      "command": "python3 src/gff_tool.py --gff=dark_sun/${input:gffName} --extract-to-dir=out/${input:gffName}",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      }
+    },
+
+    // -----------------------------------------------------------------------
+    // Listing
+    // -----------------------------------------------------------------------
+    {
+      "label": "List: RESOURCE.GFF contents",
+      "type": "shell",
+      "command": "python3 src/gff_tool.py --gff=dark_sun/RESOURCE.GFF --list-contents",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      }
+    },
+    {
+      "label": "List: one GFF file contents",
+      "type": "shell",
+      "command": "python3 src/gff_tool.py --gff=dark_sun/${input:gffName} --list-contents",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      }
+    }
+  ],
+
+  // -------------------------------------------------------------------------
+  // Shared inputs
+  // -------------------------------------------------------------------------
+  "inputs": [
+    {
+      "id": "gffName",
+      "type": "pickString",
+      "description": "GFF file name",
+      "options": [
+        "RESOURCE.GFF",
+        "CINE.GFF",
+        "DARKRUN.GFF",
+        "GPLDATA.GFF",
+        "SEGOBJEX.GFF",
+        "RGN02.GFF",
+        "RGN03.GFF",
+        "RGN04.GFF",
+        "RGN05.GFF",
+        "RGN06.GFF",
+        "RGN07.GFF",
+        "RGN08.GFF",
+        "RGN09.GFF",
+        "RGN0A.GFF",
+        "RGN0B.GFF",
+        "RGN0D.GFF",
+        "RGN0E.GFF",
+        "RGN0F.GFF",
+        "RGN12.GFF",
+        "RGN14.GFF",
+        "RGN1A.GFF",
+        "RGN1B.GFF",
+        "RGN1C.GFF",
+        "RGN1D.GFF",
+        "RGN1E.GFF",
+        "RGN1F.GFF",
+        "RGN21.GFF",
+        "RGN22.GFF",
+        "RGN23.GFF",
+        "RGN26.GFF",
+        "RGN27.GFF",
+        "RGN28.GFF",
+        "RGN29.GFF",
+        "RGN2A.GFF",
+        "RGN2B.GFF",
+        "RGN2C.GFF",
+        "RGN2D.GFF",
+        "RGNFF.GFF"
+      ],
+      "default": "RESOURCE.GFF"
+    }
+  ]
+}

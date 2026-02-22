@@ -25,7 +25,7 @@ from image import ImageReading, Palette
 # Paths
 # ---------------------------------------------------------------------------
 SRC_DIR  = os.path.dirname(os.path.abspath(__file__))
-GAME_DIR = os.path.dirname(SRC_DIR)
+GAME_DIR = os.path.join(os.path.dirname(SRC_DIR), 'dark_sun')
 WEB_DIR  = os.path.join(SRC_DIR, 'web')
 
 # Tags that contain renderable image data
@@ -56,18 +56,25 @@ def load_gff(name: str) -> GffFile:
 
 def find_palette(gff: GffFile,
                  pal_gff_name: str | None = None,
-                 pal_num: int | None = None) -> Palette | None:
-    """Locate a palette.  Priority:
-    1. Explicit pal_gff + pal_num query params.
+                 pal_num: int | None = None,
+                 pal_tag: str = 'PAL') -> Palette | None:
+    """Locate a palette.
+
+    Priority:
+    1. Explicit pal_gff + pal_num + pal_tag query params.
     2. First PAL resource that lives in the same GFF.
     3. First PAL resource in RESOURCE.GFF.
     """
+    # Normalise tag to exactly 4 characters (e.g. 'PAL' → 'PAL ', 'CPAL' → 'CPAL')
+    tag4 = (pal_tag.strip() + '    ')[:4]
+
     if pal_gff_name is not None and pal_num is not None:
-        try:
-            pg = load_gff(pal_gff_name)
-            return Palette.from_pal_data(pg.get_resource_data('PAL ', pal_num))
-        except Exception:
-            pass  # fall through to auto-detect
+        for try_tag in (tag4, 'PAL '):
+            try:
+                pg = load_gff(pal_gff_name)
+                return Palette.from_pal_data(pg.get_resource_data(try_tag, pal_num))
+            except Exception:
+                continue
 
     candidates = [gff]
     resource_gff_path = os.path.join(GAME_DIR, 'RESOURCE.GFF')
@@ -115,9 +122,38 @@ def index():
 
 @app.route('/api/gffs')
 def api_gffs():
-    """Return sorted list of all .GFF filenames in the game directory."""
+    """Return sorted list of .GFF filenames, optionally filtered by capability.
+
+    ?cap=maps    — only GFFs that match the RGN*.GFF naming pattern
+    ?cap=images  — only GFFs that contain at least one BMP/TILE/ICON resource
+    ?cap=spells  — only RESOURCE.GFF
+    ?cap=texts   — only GFFs that contain at least one TEXT/MERR/SPIN resource
+    """
     pattern = os.path.join(GAME_DIR, '*.GFF')
-    files = sorted([os.path.basename(f) for f in glob.glob(pattern)])
+    files = sorted(os.path.basename(f) for f in glob.glob(pattern))
+
+    cap = request.args.get('cap', '').lower()
+    if cap == 'maps':
+        files = [f for f in files if f.upper().startswith('RGN')]
+    elif cap == 'spells':
+        files = [f for f in files if f.upper() == 'RESOURCE.GFF']
+    elif cap == 'images':
+        def has_images(name):
+            try:
+                return any(d.tag in IMAGE_TAGS
+                           for d in load_gff(name).describe_resources())
+            except Exception:
+                return False
+        files = [f for f in files if has_images(f)]
+    elif cap == 'texts':
+        def has_texts(name):
+            try:
+                return any(d.tag.strip() in TEXT_TAGS
+                           for d in load_gff(name).describe_resources())
+            except Exception:
+                return False
+        files = [f for f in files if has_texts(f)]
+
     return jsonify(files)
 
 
@@ -135,6 +171,7 @@ def api_resources(name: str):
             'offset':      d.offset,
             'description': GFF_CHUNK_TYPES.get(d.tag, 'Unknown'),
             'is_image':    d.tag in IMAGE_TAGS,
+            'is_rmap':     d.tag == 'RMAP',
         })
     return jsonify(result)
 
@@ -190,9 +227,10 @@ def api_image(name: str, tag_url: str, number: int):
     pal_gff_name = request.args.get('pal_gff')
     pal_num_raw  = request.args.get('pal_num')
     pal_num      = int(pal_num_raw) if pal_num_raw is not None else None
+    pal_tag_raw  = request.args.get('pal_tag', 'PAL')
     frame_idx    = int(request.args.get('frame', '-1'))
 
-    palette = find_palette(gff, pal_gff_name, pal_num)
+    palette = find_palette(gff, pal_gff_name, pal_num, pal_tag_raw)
 
     if palette is None:
         # Grey placeholder so the UI doesn't break
@@ -226,6 +264,139 @@ def api_image(name: str, tag_url: str, number: int):
     img.save(buf, format='PNG')
     buf.seek(0)
     return send_file(buf, mimetype='image/png')
+
+
+@app.route('/api/pals/all')
+def api_pals_all():
+    """Return every PAL and CPAL resource across all GFF files.
+
+    Response items: {gff, tag, number}
+    where gff is the uppercase filename and tag is 'PAL' or 'CPAL'.
+    """
+    pattern = os.path.join(GAME_DIR, '*.GFF')
+    all_files = sorted(os.path.basename(f) for f in glob.glob(pattern))
+    results = []
+    seen = set()
+    for name in all_files:
+        try:
+            g = load_gff(name)
+        except Exception:
+            continue
+        for d in g.describe_resources():
+            tag_stripped = d.tag.strip()
+            if tag_stripped in ('PAL', 'CPAL'):
+                key = (name.upper(), tag_stripped, d.number)
+                if key not in seen:
+                    seen.add(key)
+                    results.append({
+                        'gff':    name.upper(),
+                        'tag':    tag_stripped,
+                        'number': d.number,
+                    })
+    return jsonify(results)
+
+
+@app.route('/api/gff/<name>/rmap/<int:number>')
+def api_rmap(name: str, number: int):
+    """Return a Region Tile Map resource as JSON.
+
+    Response
+    --------
+    {
+      "width":  <int>,   # columns (sqrt of size when perfectly square)
+      "height": <int>,   # rows
+      "tiles":  [<int>, ...]  # flat array of 1-byte tile numbers, row-major
+    }
+    """
+    gff = load_gff(name)
+    try:
+        raw = gff.get_resource_data('RMAP', number)
+    except NoSuchResourceError:
+        abort(404)
+
+    size = len(raw)
+    sq   = int(size ** 0.5)
+    if sq * sq == size:
+        width = height = sq
+    else:
+        width  = size
+        height = 1
+
+    return jsonify({'width': width, 'height': height, 'tiles': list(raw)})
+
+
+SPIN_ICON_OFFSET = 21000
+
+
+@app.route('/api/gff/<name>/spells')
+def api_spells(name: str):
+    """Return parsed SPIN (spell information) resources.
+
+    Each entry:
+      number       – SPIN resource number
+      name         – spell name (text before first ': ')
+      description  – remainder of the text (stripped)
+      icon_number  – ICON resource number (SPIN number + 21000), or None
+    """
+    gff = load_gff(name)
+    icon_numbers = {
+        d.number for d in gff.describe_resources() if d.tag.strip() == 'ICON'
+    }
+    result = []
+    for d in gff.describe_resources():
+        if d.tag.strip() != 'SPIN':
+            continue
+        try:
+            raw = gff.get_resource_data('SPIN', d.number)
+            text = raw.decode('latin-1').strip()
+        except Exception:
+            text = ''
+        if ': ' in text:
+            spell_name, desc = text.split(': ', 1)
+        elif ':' in text:
+            spell_name, desc = text.split(':', 1)
+        else:
+            spell_name, desc = text, ''
+        spell_name = spell_name.strip()
+        desc       = desc.strip()
+        icon_n     = SPIN_ICON_OFFSET + d.number
+        result.append({
+            'number':      d.number,
+            'name':        spell_name,
+            'description': desc,
+            'icon_number': icon_n if icon_n in icon_numbers else None,
+        })
+    result.sort(key=lambda r: r['name'])
+    return jsonify(result)
+
+
+TEXT_TAGS = {'TEXT', 'MERR', 'SPIN'}
+
+
+@app.route('/api/gff/<name>/texts')
+def api_texts(name: str):
+    """Return decoded text content for all TEXT, MERR, and SPIN resources.
+
+    Each entry: {tag, number, size, content}
+    where content is the latin-1 decoded string (stripped of trailing nulls).
+    """
+    gff = load_gff(name)
+    result = []
+    for d in gff.describe_resources():
+        if d.tag.strip() not in TEXT_TAGS:
+            continue
+        try:
+            raw  = gff.get_resource_data(d.tag, d.number)
+            text = raw.split(b'\x00')[0].decode('latin-1').replace('\r\n', '\n').replace('\r', '\n')
+        except Exception:
+            text = ''
+        result.append({
+            'tag':     d.tag.strip(),
+            'number':  d.number,
+            'size':    d.size,
+            'content': text,
+        })
+    return jsonify(result)
 
 
 @app.route('/api/gff/<name>/raw/<tag_url>/<int:number>')
