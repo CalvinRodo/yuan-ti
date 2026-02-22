@@ -12,6 +12,7 @@ Then open http://localhost:5000
 
 import os
 import io
+import re
 import glob
 import sys
 
@@ -22,11 +23,41 @@ from gff import GffFile, NoSuchResourceError, GFF_CHUNK_TYPES
 from image import ImageReading, Palette
 
 # ---------------------------------------------------------------------------
-# Paths
+# Paths & game library
 # ---------------------------------------------------------------------------
 SRC_DIR  = os.path.dirname(os.path.abspath(__file__))
-GAME_DIR = os.path.join(os.path.dirname(SRC_DIR), 'dark_sun')
+BASE_DIR = os.path.dirname(SRC_DIR)
 WEB_DIR  = os.path.join(SRC_DIR, 'web')
+
+GAMES: dict[str, dict] = {
+    'dark_sun': {
+        'id':        'dark_sun',
+        'label':     'Dark Sun: Shattered Lands',
+        'dir':       os.path.join(BASE_DIR, 'dark_sun'),
+        'supported': True,
+    },
+    'dark_sun_2': {
+        'id':        'dark_sun_2',
+        'label':     'Dark Sun: Wake of the Ravager',
+        'dir':       os.path.join(BASE_DIR, 'dark_sun_2', 'data'),
+        'supported': True,
+    },
+    'al-qadim': {
+        'id':        'al-qadim',
+        'label':     "Al-Qadim: The Genie's Curse",
+        'dir':       os.path.join(BASE_DIR, 'al-qadim', 'data'),
+        'supported': False,
+    },
+}
+DEFAULT_GAME = 'dark_sun'
+
+
+def resolve_game_dir(game_id: str) -> str:
+    """Return the GFF data directory for *game_id*, or abort if unsupported."""
+    info = GAMES.get(game_id, GAMES[DEFAULT_GAME])
+    if not info.get('supported', True):
+        abort(400, description=f"Game '{game_id}' is not supported.")
+    return info['dir']
 
 # Tags that contain renderable image data
 IMAGE_TAGS = {'BMP ', 'TILE', 'ICON'}
@@ -40,24 +71,26 @@ _gff_cache: dict = {}
 MAX_CACHE = 10
 
 
-def load_gff(name: str) -> GffFile:
+def load_gff(name: str, game_id: str = DEFAULT_GAME) -> GffFile:
     name = name.upper()
-    if name not in _gff_cache:
-        path = os.path.join(GAME_DIR, name)
+    cache_key = (game_id, name)
+    if cache_key not in _gff_cache:
+        path = os.path.join(resolve_game_dir(game_id), name)
         if not os.path.isfile(path):
             abort(404, description=f"GFF file not found: {name}")
         with open(path, 'rb') as fh:
             data = fh.read()
         if len(_gff_cache) >= MAX_CACHE:
             _gff_cache.pop(next(iter(_gff_cache)))
-        _gff_cache[name] = GffFile.create(data)
-    return _gff_cache[name]
+        _gff_cache[cache_key] = GffFile.create(data)
+    return _gff_cache[cache_key]
 
 
 def find_palette(gff: GffFile,
                  pal_gff_name: str | None = None,
                  pal_num: int | None = None,
-                 pal_tag: str = 'PAL') -> Palette | None:
+                 pal_tag: str = 'PAL',
+                 game_id: str = DEFAULT_GAME) -> Palette | None:
     """Locate a palette.
 
     Priority:
@@ -71,16 +104,16 @@ def find_palette(gff: GffFile,
     if pal_gff_name is not None and pal_num is not None:
         for try_tag in (tag4, 'PAL '):
             try:
-                pg = load_gff(pal_gff_name)
+                pg = load_gff(pal_gff_name, game_id)
                 return Palette.from_pal_data(pg.get_resource_data(try_tag, pal_num))
             except Exception:
                 continue
 
     candidates = [gff]
-    resource_gff_path = os.path.join(GAME_DIR, 'RESOURCE.GFF')
-    if os.path.isfile(resource_gff_path) and gff is not _gff_cache.get('RESOURCE.GFF'):
+    resource_gff_path = os.path.join(resolve_game_dir(game_id), 'RESOURCE.GFF')
+    if os.path.isfile(resource_gff_path) and gff is not _gff_cache.get((game_id, 'RESOURCE.GFF')):
         try:
-            candidates.append(load_gff('RESOURCE.GFF'))
+            candidates.append(load_gff('RESOURCE.GFF', game_id))
         except Exception:
             pass
 
@@ -120,6 +153,18 @@ def index():
 # Routes — API
 # ---------------------------------------------------------------------------
 
+@app.route('/api/games')
+def api_games():
+    """Return the list of known games with metadata."""
+    return jsonify([
+        {
+            'id':        info['id'],
+            'label':     info['label'],
+            'supported': info['supported'],
+        }
+        for info in GAMES.values()
+    ])
+
 @app.route('/api/gffs')
 def api_gffs():
     """Return sorted list of .GFF filenames, optionally filtered by capability.
@@ -128,8 +173,10 @@ def api_gffs():
     ?cap=images  — only GFFs that contain at least one BMP/TILE/ICON resource
     ?cap=spells  — only RESOURCE.GFF
     ?cap=texts   — only GFFs that contain at least one TEXT/MERR/SPIN resource
+    ?game=<id>   — which game's GFF directory to use (default: dark_sun)
     """
-    pattern = os.path.join(GAME_DIR, '*.GFF')
+    game_id = request.args.get('game', DEFAULT_GAME)
+    pattern = os.path.join(resolve_game_dir(game_id), '*.GFF')
     files = sorted(os.path.basename(f) for f in glob.glob(pattern))
 
     cap = request.args.get('cap', '').lower()
@@ -141,7 +188,7 @@ def api_gffs():
         def has_images(name):
             try:
                 return any(d.tag in IMAGE_TAGS
-                           for d in load_gff(name).describe_resources())
+                           for d in load_gff(name, game_id).describe_resources())
             except Exception:
                 return False
         files = [f for f in files if has_images(f)]
@@ -149,7 +196,7 @@ def api_gffs():
         def has_texts(name):
             try:
                 return any(d.tag.strip() in TEXT_TAGS
-                           for d in load_gff(name).describe_resources())
+                           for d in load_gff(name, game_id).describe_resources())
             except Exception:
                 return False
         files = [f for f in files if has_texts(f)]
@@ -160,7 +207,8 @@ def api_gffs():
 @app.route('/api/gff/<name>/resources')
 def api_resources(name: str):
     """Return all resource descriptors for one GFF file."""
-    gff = load_gff(name)
+    game_id = request.args.get('game', DEFAULT_GAME)
+    gff = load_gff(name, game_id)
     result = []
     for d in gff.describe_resources():
         result.append({
@@ -171,7 +219,7 @@ def api_resources(name: str):
             'offset':      d.offset,
             'description': GFF_CHUNK_TYPES.get(d.tag, 'Unknown'),
             'is_image':    d.tag in IMAGE_TAGS,
-            'is_rmap':     d.tag == 'RMAP',
+            'is_rmap':     d.tag.strip() in ('RMAP', 'MAP'),
         })
     return jsonify(result)
 
@@ -179,12 +227,13 @@ def api_resources(name: str):
 @app.route('/api/gff/<name>/pals')
 def api_pals(name: str):
     """List all PAL resources available: ones inside this GFF, then RESOURCE.GFF."""
+    game_id = request.args.get('game', DEFAULT_GAME)
     results = []
     seen = set()
 
     def collect(gff_name: str):
         try:
-            g = load_gff(gff_name)
+            g = load_gff(gff_name, game_id)
         except Exception:
             return
         for d in g.describe_resources():
@@ -216,9 +265,10 @@ def api_image(name: str, tag_url: str, number: int):
     except ImportError:
         abort(500, description="Pillow is not installed. Run: pip install pillow")
 
+    game_id = request.args.get('game', DEFAULT_GAME)
     tag = url_seg_to_tag(tag_url)
 
-    gff = load_gff(name)
+    gff = load_gff(name, game_id)
     try:
         image_data = gff.get_resource_data(tag, number)
     except NoSuchResourceError:
@@ -230,7 +280,7 @@ def api_image(name: str, tag_url: str, number: int):
     pal_tag_raw  = request.args.get('pal_tag', 'PAL')
     frame_idx    = int(request.args.get('frame', '-1'))
 
-    palette = find_palette(gff, pal_gff_name, pal_num, pal_tag_raw)
+    palette = find_palette(gff, pal_gff_name, pal_num, pal_tag_raw, game_id)
 
     if palette is None:
         # Grey placeholder so the UI doesn't break
@@ -273,13 +323,14 @@ def api_pals_all():
     Response items: {gff, tag, number}
     where gff is the uppercase filename and tag is 'PAL' or 'CPAL'.
     """
-    pattern = os.path.join(GAME_DIR, '*.GFF')
+    game_id = request.args.get('game', DEFAULT_GAME)
+    pattern = os.path.join(resolve_game_dir(game_id), '*.GFF')
     all_files = sorted(os.path.basename(f) for f in glob.glob(pattern))
     results = []
     seen = set()
     for name in all_files:
         try:
-            g = load_gff(name)
+            g = load_gff(name, game_id)
         except Exception:
             continue
         for d in g.describe_resources():
@@ -308,10 +359,17 @@ def api_rmap(name: str, number: int):
       "tiles":  [<int>, ...]  # flat array of 1-byte tile numbers, row-major
     }
     """
-    gff = load_gff(name)
-    try:
-        raw = gff.get_resource_data('RMAP', number)
-    except NoSuchResourceError:
+    game_id = request.args.get('game', DEFAULT_GAME)
+    gff = load_gff(name, game_id)
+    # Dark Sun 1 uses 'RMAP', Dark Sun 2 uses 'MAP '
+    raw = None
+    for try_tag in ('RMAP', 'MAP '):
+        try:
+            raw = gff.get_resource_data(try_tag, number)
+            break
+        except NoSuchResourceError:
+            continue
+    if raw is None:
         abort(404)
 
     size = len(raw)
@@ -327,18 +385,41 @@ def api_rmap(name: str, number: int):
 
 SPIN_ICON_OFFSET = 21000
 
+# Psionic powers: SPIN 139–172 use ICON 3000–3033
+# SPIN 139 (Detonate) → ICON 3000, SPIN 172 (Thought Shield) → ICON 3033
+PSIONICS_SPIN_START  = 139
+PSIONICS_SPIN_END    = 172          # inclusive
+PSIONICS_ICON_BASE   = 3000         # icon = PSIONICS_ICON_BASE + (spin - PSIONICS_SPIN_START)
+
+# Turn Undead (SPIN 1000) → one entry per elemental cleric domain
+# Icons 3044–3047 correspond to Air / Earth / Fire / Water
+TURN_UNDEAD_SPIN = 1000
+TURN_UNDEAD_VARIANTS = [
+    ('AIR',   3044),
+    ('EARTH', 3045),
+    ('FIRE',  3046),
+    ('WATER', 3047),
+]
+
 
 @app.route('/api/gff/<name>/spells')
 def api_spells(name: str):
     """Return parsed SPIN (spell information) resources.
 
     Each entry:
-      number       – SPIN resource number
-      name         – spell name (text before first ': ')
-      description  – remainder of the text (stripped)
-      icon_number  – ICON resource number (SPIN number + 21000), or None
+      number       – SPIN resource number (synthetic for Turn Undead variants)
+      name         – spell name
+      description  – description text (stripped)
+      icon_number  – ICON resource number, or None
+
+    Icon lookup rules:
+      • SPIN 1–137, 173–248 → ICON 21000 + spin_number
+      • SPIN 139–172 (psionics) → ICON 3000 + (spin_number − 139)
+      • SPIN 1000 (Turn Undead) → expanded to 4 domain variants (icons 3044–3047)
+      • All others (SPIN 249–255 stat increases, etc.) → no icon
     """
-    gff = load_gff(name)
+    game_id = request.args.get('game', DEFAULT_GAME)
+    gff = load_gff(name, game_id)
     icon_numbers = {
         d.number for d in gff.describe_resources() if d.tag.strip() == 'ICON'
     }
@@ -346,11 +427,14 @@ def api_spells(name: str):
     for d in gff.describe_resources():
         if d.tag.strip() != 'SPIN':
             continue
+
         try:
-            raw = gff.get_resource_data('SPIN', d.number)
+            raw  = gff.get_resource_data('SPIN', d.number)
             text = raw.decode('latin-1').strip()
         except Exception:
             text = ''
+
+        # Split "Name: Description"
         if ': ' in text:
             spell_name, desc = text.split(': ', 1)
         elif ':' in text:
@@ -359,42 +443,135 @@ def api_spells(name: str):
             spell_name, desc = text, ''
         spell_name = spell_name.strip()
         desc       = desc.strip()
-        icon_n     = SPIN_ICON_OFFSET + d.number
+
+        # --- Turn Undead: expand to one card per elemental domain ---
+        if d.number == TURN_UNDEAD_SPIN:
+            for domain, icon_n in TURN_UNDEAD_VARIANTS:
+                result.append({
+                    'number':      icon_n,          # unique synthetic id per variant
+                    'name':        f'TURN UNDEAD - {domain}',
+                    'description': desc,
+                    'icon_number': icon_n if icon_n in icon_numbers else None,
+                })
+            continue
+
+        # --- Psionic powers: offset into 3000-range icon block ---
+        if PSIONICS_SPIN_START <= d.number <= PSIONICS_SPIN_END:
+            icon_n = PSIONICS_ICON_BASE + (d.number - PSIONICS_SPIN_START)
+        else:
+            icon_n = SPIN_ICON_OFFSET + d.number
+
         result.append({
             'number':      d.number,
             'name':        spell_name,
             'description': desc,
             'icon_number': icon_n if icon_n in icon_numbers else None,
         })
+
     result.sort(key=lambda r: r['name'])
     return jsonify(result)
 
 
-TEXT_TAGS = {'TEXT', 'MERR', 'SPIN'}
+TEXT_TAGS = {'TEXT', 'MERR', 'SPIN', 'NAME'}
+
+
+def _decode_text(raw: bytes) -> str:
+    """Decode a single null-terminated latin-1 string."""
+    return raw.split(b'\x00')[0].decode('latin-1').replace('\r\n', '\n').replace('\r', '\n')
+
+
+# Separator pattern for NAME resources:
+# Each entry is: name\x00 + path_fragment\x00 + 1-3 type bytes ending with \xff+
+# Observed variants:
+#   \x00 XX \x00 \xff           – 4 bytes (most common)
+#   \x00 XX \x00 \xff \xff+     – extended, e.g. 00 d5 00 ff ff ff
+#   \x00 \xff \xff              – 3 bytes
+#   \x00 \xff \xff \xff         – 4 bytes
+# The trailing \xff+ handles extended separators that would otherwise
+# leave stray \xff bytes at the start of the next entry's name.
+_NAME_SEP_RE = re.compile(rb'\x00(?:.\x00\xff+|\xff{2,4})', re.DOTALL)
+
+
+def _parse_name_resource(raw: bytes) -> list:
+    """Parse a NAME resource into structured entries.
+
+    Each entry: {text, path, sep_hex, raw_bytes, seg_len}
+      text      – null-terminated display name
+      path      – ASCII path fragment between the two nulls
+      sep_hex   – separator bytes rendered as space-separated hex
+      raw_bytes – complete bytes for this entry (segment + separator) as list[int]
+      seg_len   – byte length of the segment portion (raw_bytes[:seg_len] = content)
+    """
+    entries = []
+    sep_spans = [(m.start(), m.end()) for m in _NAME_SEP_RE.finditer(raw)]
+    starts = [0] + [end for _, end in sep_spans]
+    ends   = [start for start, _ in sep_spans] + [len(raw)]
+    seps   = [raw[s:e] for s, e in sep_spans] + [b'']
+
+    for seg_start, seg_end, sep in zip(starts, ends, seps):
+        seg = raw[seg_start:seg_end]
+        if not seg:
+            continue
+        null_pos = seg.find(b'\x00')
+        if null_pos >= 0:
+            text = seg[:null_pos].decode('latin-1', errors='replace')
+            path_raw = seg[null_pos + 1:]
+        else:
+            text = seg.decode('latin-1', errors='replace')
+            path_raw = b''
+
+        # Decode path as mixed ASCII/hex inline — non-printable become \xNN
+        path_parts = []
+        for b in path_raw:
+            if 32 <= b < 127:
+                path_parts.append(chr(b))
+            else:
+                path_parts.append(f'\\x{b:02x}')
+        path_str = ''.join(path_parts)
+
+        # sep includes the leading \x00 (the path-fragment null terminator);
+        # encode the full separator as space-delimited hex pairs
+        sep_hex = ' '.join(f'{b:02x}' for b in sep) if sep else ''
+
+        if text.strip():
+            entries.append({
+                'text':      text,
+                'path':      path_str,
+                'sep_hex':   sep_hex,
+                'raw_bytes': list(seg) + list(sep),
+                'seg_len':   len(seg),
+            })
+
+    return entries
 
 
 @app.route('/api/gff/<name>/texts')
 def api_texts(name: str):
-    """Return decoded text content for all TEXT, MERR, and SPIN resources.
+    """Return decoded text content for all TEXT, MERR, SPIN, and NAME resources.
 
     Each entry: {tag, number, size, content}
-    where content is the latin-1 decoded string (stripped of trailing nulls).
+    For NAME resources, content is a list of {text, path, sep_hex} entry objects.
+    For all other tags, content is a single string.
     """
-    gff = load_gff(name)
+    game_id = request.args.get('game', DEFAULT_GAME)
+    gff = load_gff(name, game_id)
     result = []
     for d in gff.describe_resources():
         if d.tag.strip() not in TEXT_TAGS:
             continue
         try:
-            raw  = gff.get_resource_data(d.tag, d.number)
-            text = raw.split(b'\x00')[0].decode('latin-1').replace('\r\n', '\n').replace('\r', '\n')
+            raw = gff.get_resource_data(d.tag, d.number)
+            if d.tag.strip() == 'NAME':
+                content = _parse_name_resource(raw)
+            else:
+                content = _decode_text(raw)
         except Exception:
-            text = ''
+            content = [] if d.tag.strip() == 'NAME' else ''
         result.append({
             'tag':     d.tag.strip(),
             'number':  d.number,
             'size':    d.size,
-            'content': text,
+            'content': content,
         })
     return jsonify(result)
 
@@ -402,8 +579,9 @@ def api_texts(name: str):
 @app.route('/api/gff/<name>/raw/<tag_url>/<int:number>')
 def api_raw(name: str, tag_url: str, number: int):
     """Return the raw bytes of any resource as application/octet-stream."""
+    game_id = request.args.get('game', DEFAULT_GAME)
     tag = url_seg_to_tag(tag_url)
-    gff = load_gff(name)
+    gff = load_gff(name, game_id)
     try:
         data = gff.get_resource_data(tag, number)
     except NoSuchResourceError:
@@ -415,8 +593,9 @@ def api_raw(name: str, tag_url: str, number: int):
 @app.route('/api/gff/<name>/image/<tag_url>/<int:number>/info')
 def api_image_info(name: str, tag_url: str, number: int):
     """Return frame count and dimensions for an image resource."""
+    game_id = request.args.get('game', DEFAULT_GAME)
     tag = url_seg_to_tag(tag_url)
-    gff = load_gff(name)
+    gff = load_gff(name, game_id)
     try:
         image_data = gff.get_resource_data(tag, number)
         frames = ImageReading.extract_frames(image_data)
@@ -434,7 +613,7 @@ def api_image_info(name: str, tag_url: str, number: int):
 # ---------------------------------------------------------------------------
 
 if __name__ == '__main__':
-    print(f"Game directory : {GAME_DIR}")
+    print(f"Games          : {', '.join(GAMES.keys())}")
     print(f"Web directory  : {WEB_DIR}")
     print(f"Open           : http://localhost:5000")
     app.run(debug=True, port=5000)

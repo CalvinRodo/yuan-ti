@@ -86,6 +86,18 @@ body            { font-family: var(--font); background: var(--bg); color: var(--
   gap: 10px;
 }
 
+/* Game selector in header — shorter than the default select min-width */
+#game-select {
+  min-width: 0;
+  max-width: 320px;
+}
+
+/* Dim "not supported" options */
+#game-select option[data-unsupported] {
+  color: var(--text-dim);
+  font-style: italic;
+}
+
 .control-label {
   font-size: 12px;
   color: var(--text-dim);
@@ -453,12 +465,21 @@ select:focus { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(200,144,
   font-size: 12px;
   min-width: 0;
 }
-.res-filter-input:first-of-type { width: 100px; flex-shrink: 0; }
-.res-filter-input:last-of-type  { flex: 1; }
-.res-filter-input:focus {
+.res-filter-select { width: 110px; flex-shrink: 0; }
+#res-filter-desc   { flex: 1; }
+.res-filter-input:focus,
+.res-filter-input:focus-visible {
   outline: none;
   border-color: var(--primary);
   background: var(--surface3);
+}
+
+.res-filter-readonly {
+  color: var(--text-dim);
+  border-color: transparent !important;
+  background: transparent !important;
+  cursor: default;
+  pointer-events: none;
 }
 
 .res-filter-count {
@@ -688,6 +709,7 @@ select:focus { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(200,144,
 .text-tag-TEXT { background: rgba(76,175,110,.18); color: #4caf6e; }
 .text-tag-MERR { background: rgba(198,64,64,.18);  color: #e07070; }
 .text-tag-SPIN { background: rgba(200,144,43,.18); color: var(--primary-lt); }
+.text-tag-NAME { background: rgba(66,165,245,.12); color: #42a5f5; }
 
 /* Right: reader panel */
 #text-reader {
@@ -748,6 +770,103 @@ select:focus { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(200,144,
   margin-bottom: 14px;
 }
 .text-body-para:last-child { margin-bottom: 0; }
+
+.text-item-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.text-item-entry {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 6px 10px;
+  border-radius: var(--radius);
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  font-size: 13px;
+  color: var(--text);
+  line-height: 1.5;
+}
+
+.text-item-num {
+  flex-shrink: 0;
+  min-width: 22px;
+  font-size: 11px;
+  color: var(--text-dim);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.text-item-body {
+  flex: 1;
+  word-break: break-word;
+}
+
+/* NAME binary/hex dump display */
+.name-dump-block {
+  margin-bottom: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.name-dump-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  background: var(--surface2);
+  border-bottom: 1px solid var(--border);
+}
+
+.name-dump-idx {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-dim);
+  min-width: 22px;
+  text-align: right;
+}
+
+.name-dump-name {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--primary-lt);
+}
+
+.name-dump-pre {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.65;
+  padding: 8px 10px;
+  overflow-x: auto;
+  white-space: pre;
+  color: var(--text);
+  margin: 0;
+  background: var(--card-bg);
+}
+
+.name-dump-hdr {
+  color: var(--text-dim);
+  font-size: 10px;
+  display: block;
+  margin-bottom: 2px;
+}
+
+/* Delimiter / separator bytes — red */
+.name-dump-sep {
+  color: var(--danger);
+  font-weight: 700;
+}
+
+/* Null bytes (0x00) — dimmed */
+.name-dump-zero {
+  color: var(--text-faint);
+}
 
 /* ================================================================
    DETAIL PANE

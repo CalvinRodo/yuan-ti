@@ -37,7 +37,20 @@ function bindResourceTableEvents() {
   });
 
   // Filter inputs
-  dom.resFilterTag.addEventListener('input',  () => renderResourceTable());
+  dom.resFilterTag.addEventListener('change', () => {
+    const tag = dom.resFilterTag.value;
+    if (tag) {
+      const match = state.resources.find(r => r.tag.trim() === tag);
+      dom.resFilterDesc.value    = match ? (match.description || '') : '';
+      dom.resFilterDesc.readOnly = true;
+      dom.resFilterDesc.classList.add('res-filter-readonly');
+    } else {
+      dom.resFilterDesc.value    = '';
+      dom.resFilterDesc.readOnly = false;
+      dom.resFilterDesc.classList.remove('res-filter-readonly');
+    }
+    renderResourceTable();
+  });
   dom.resFilterDesc.addEventListener('input', () => renderResourceTable());
 }
 
@@ -338,7 +351,7 @@ async function loadDetailImage(res) {
 
   try {
     const r = await fetch(
-      `/api/gff/${encodeURIComponent(state.currentGff)}/image/${res.tag_url}/${res.number}/info?v=${palVersion}`);
+      `/api/gff/${encodeURIComponent(state.currentGff)}/image/${res.tag_url}/${res.number}/info?game=${state.game}&v=${palVersion}`);
     const info = await r.json();
     if (!info.error && info.frames?.length) {
       state.detail.frames = info.frames;

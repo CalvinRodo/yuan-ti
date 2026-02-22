@@ -1,0 +1,127 @@
+# Dark Sun: Shattered Lands
+
+**GOG folder:** `dark_sun/`  
+1993 SSI/Strategic Simulations isometric RPG based on the AD&D Dark Sun setting.
+Uses the SSI GFF (Generic File Format) container for all game data.
+All GFF files live directly in the `dark_sun/` directory; there are no subdirectories.
+
+---
+
+## CINE.GFF
+Cutscene / cinematic resources. Drives the intro, ending, and in-game FMV sequences.
+
+### Resource Types
+| Tag | Count | Description |
+|-----|------:|-------------|
+| ACF | 13 | Cinematic binary — encoded cinematic animation or script data |
+| ADV | 13 | AIL audio driver — Miles Sound System `.ADV` driver files |
+| BMA | 11 | Cinematic binary animation frames |
+| BMP | 19 | Bitmap images — cinematic backgrounds and frame graphics |
+| CSEQ | 1 | Cinematic sequence — playback control block |
+| GSEQ | 4 | Global sequence — shared timing/sync sequence used across cutscenes |
+| LSEQ | 4 | Local sequence — per-scene sequencing data |
+| MERR | 31 | Error/message text strings (same format as in RESOURCE.GFF) |
+| PAL | 8 | VGA 256-color palettes for the cinematic scenes |
+| PSEQ | 4 | Playback sequence — audio/visual sync block |
+
+---
+
+## DARKRUN.GFF
+Single-entry launcher configuration file. Loaded by `DARKRUN.EXE`.
+
+### Resource Types
+| Tag | Count | Description |
+|-----|------:|-------------|
+| ETME | 1 | Event timer entry — timing/launch configuration record |
+
+---
+
+## GPLDATA.GFF
+Gameplay data: compiled game scripts, item/entity name table, UI portraits, wall graphics. 
+This file is loaded alongside region GFFs when rendering a region (supplies WALL images and GPL scripts).
+
+### Resource Types
+| Tag | Count | Description |
+|-----|------:|-------------|
+| GFFI | 9 | GFF index blocks — internal secondary-table index entries |
+| GPL | 217 | Compiled GPL files — the game's bytecode scripting language (items, containers, NPCs, world events) |
+| GPLI | 1 | GPL index — lookup table mapping GPL resource numbers to their scripts |
+| GPLX | 1 | GPL cross-reference index — cross-references GPL entries |
+| IT1R | 1 | Item type 1 record — item constants / configuration table |
+| MAS | 33 | Compiled MAS files — object / AI state-machine scripts |
+| NAME | 1 | Name table — 256 null-terminated entries, each with: display name `\x00` path-fragment `\x00` 2–3 type/flags bytes ending in `\xff`. Used to look up canonical names for items and entities. Many entries carry a leading `=` byte (0x3D) that may act as a category flag. |
+| PAL | 45 | VGA 256-color palettes shared across gameplay scenes |
+| PORT | 112 | Portrait bitmaps — character and NPC portrait images used in dialogue and character sheets |
+| WALL | 664 | Wall tile graphics — isometric wall-edge sprites. Resource numbers are encoded as `regionNumber × 100 + wallIndex − 1` (wallIndex = lower 5 bits of the GMAP byte). |
+
+---
+
+## RESOURCE.GFF
+The main global resource file. Contains UI chrome, audio drivers, spell data,
+icon sprites, text strings, and palettes. Almost every other system in the game
+references resources here — palettes are looked up here when not found in the
+current GFF, and spell ICON images are numbered from 21 000 upward.
+
+### Resource Types
+| Tag | Count | Description |
+|-----|------:|-------------|
+| ACCL | 1 | Accelerator table — keyboard shortcut definitions |
+| ADV | 17 | AIL audio drivers — Miles Sound System `.ADV` driver blobs |
+| APFM | 97 | Application frames — top-level UI window/layout containers |
+| BMP | 105 | Bitmap images — general-purpose sprites and backgrounds |
+| BUTN | 139 | Button resources — clickable UI button definitions |
+| BVOC | 111 | Background audio samples — `.VOC`-format ambient/music loops |
+| CMAT | 2 | Color matrix — color transformation data (fade tables, etc.) |
+| CPAL | 2 | Alternate color palette (may be compressed or remapped) |
+| CSEQ | 1 | Cinematic sequence block |
+| EBOX | 6 | Edit-box UI resources |
+| FONT | 1 | Font resource |
+| GFFI | 15 | GFF index blocks |
+| GSEQ | 23 | Global audio/sync sequences |
+| ICON | 292 | Icon images — spell and item icons. Spell icons are at number `21 000 + SPIN_number`. |
+| LSEQ | 23 | Local audio sequences |
+| MERR | 31 | Error / message text strings (null-terminated latin-1) |
+| MONR | 1 | Monster/monologue record |
+| PAL | 2 | VGA 256-color palettes (primary gameplay palettes) |
+| PSEQ | 23 | Playback sequences |
+| RDAT | 45 | Runtime data blocks — purpose unclear; may be pre-computed lookup tables |
+| SPIN | 180 | Spell information — null-terminated latin-1 text, format `"Spell Name: Description"`. Numbered 0–179. Paired ICON is at `21 000 + number`. |
+| TEXT | 60 | General text strings — null-terminated latin-1 (item descriptions, area names, etc.) |
+| VECT | 1 | Vector resource — likely a UI vector path or polygon table |
+| WIND | 27 | Window resources — UI window layout definitions |
+
+---
+
+## RGN02.GFF … RGN2D.GFF, RGNFF.GFF  *(35 region files)*
+One file per explorable region of the game world. Region filenames use two-digit
+hexadecimal identifiers (`02` … `2D` plus the special `FF`).
+Each file is self-contained: the RMAP provides a 128 × 98 tile index that the
+renderer looks up against the TILE sprites, and the ETAB/GMAP layers add 3-D
+wall edges and placed objects (resolved via OJFF/WALL in SEGOBJEX.GFF and GPLDATA.GFF).
+
+### Resource Types (all region files share this identical structure)
+| Tag | Count | Description |
+|-----|------:|-------------|
+| ETAB | 1 | Object entry table — array of 8-byte records: `int16 x, int16 y, int8 yOffset, uint8 flags (bit7=mirrored), int16 ojffNumber`. Each record places one game-world object sprite at a pixel position. OJFF numbers reference SEGOBJEX.GFF. |
+| GFFI | 1 | GFF index block |
+| GMAP | 1 | Region map flags — 128 × 98 byte array (one byte per tile). Lower 5 bits = wall index (0 = no wall); upper 3 bits = passability / terrain flags. Wall index encodes `wallNumber = regionNumber × 100 + wallIndex − 1` into GPLDATA.GFF's WALL resources. |
+| RMAP | 1 | Region tile map — 128 × 98 byte array (one byte per tile). Each byte is the TILE resource number for the ground-layer graphic. |
+| TILE | 152–254 | Tile graphics — 16 × 16 pixel indexed bitmaps for the ground layer. Typically ~190–254 unique tiles per region. Require a PAL to render. |
+
+**Region tile dimensions:** 128 columns × 98 rows = 12 544 tiles, 2 048 × 1 568 pixels fully rendered.
+
+---
+
+## SEGOBJEX.GFF
+Segment / object / extra sprites — the large sprite sheet for all game-world objects:
+characters, monsters, items, doors, containers, and environmental props.
+Region rendering requires SEGOBJEX.GFF + GPLDATA.GFF alongside the region GFF.
+
+### Resource Types
+| Tag | Count | Description |
+|-----|------:|-------------|
+| BMP | 2 419 | Bitmap sprite frames — the actual pixel data for all in-world objects. Referenced by OJFF entries via their `bmpNumber` field. |
+| GFFI | 4 | GFF index blocks |
+| OJFF | 2 775 | Object sprite definition — 16-byte record: `int16 ??, int16 xOffset, int16 yOffset, …, uint16 bmpNumber` at offset 0x0C. Gives the pixel offset and BMP reference for one sprite. ETAB entries in region files reference these by number. |
+| RDFF | 1 046 | Resource definition — paired with OJFF entries at the same resource numbers. Size varies (61, 159, 312, or 455 bytes). Likely stores collision boxes, pathfinding hints, or extra metadata for each object. |
+| SCMD | 256 | Animation scripts — bytecode controlling multi-frame sprite animation and state transitions for objects and characters. |

@@ -34,7 +34,7 @@ async function renderSpellGrid() {
   const gff = state.currentGff;
   if (!spellData.length || spellData._gff !== gff) {
     try {
-      const res = await fetch(`/api/gff/${encodeURIComponent(gff)}/spells`);
+      const res = await fetch(`/api/gff/${encodeURIComponent(gff)}/spells?game=${state.game}`);
       spellData = await res.json();
       spellData._gff = gff;
     } catch {

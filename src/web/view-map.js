@@ -64,7 +64,8 @@ function buildRmapSelector() {
   mapState.rmapList.forEach(r => {
     const opt = document.createElement('option');
     opt.value       = r.number;
-    opt.textContent = `RMAP #${r.number} (${formatBytes(r.size)})`;
+    const tagLabel  = (r.tag || 'RMAP').trim();
+    opt.textContent = `${tagLabel} #${r.number} (${formatBytes(r.size)})`;
     if (r.number === mapState.rmapNumber) opt.selected = true;
     dom.rmapSelect.appendChild(opt);
   });
@@ -79,7 +80,7 @@ async function loadRmap() {
   dom.mapSpinner.classList.remove('hidden');
   try {
     const r = await fetch(
-      `/api/gff/${encodeURIComponent(state.currentGff)}/rmap/${mapState.rmapNumber}`);
+      `/api/gff/${encodeURIComponent(state.currentGff)}/rmap/${mapState.rmapNumber}?game=${state.game}`);
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const data = await r.json();
 
@@ -141,7 +142,7 @@ function getTileImage(tileNum) {
   if (entry) return entry;
   entry = { status: 'loading', img: null };
   mapState.tileCache.set(tileNum, entry);
-  const url = `/api/gff/${encodeURIComponent(state.currentGff)}/image/TILE/${tileNum}?frame=0${palParams()}`;
+  const url = `/api/gff/${encodeURIComponent(state.currentGff)}/image/TILE/${tileNum}?frame=0&game=${state.game}${palParams()}`;
   const img = new Image();
   img.onload  = () => { entry.status = 'loaded'; entry.img = img; mapState.dirty = true; };
   img.onerror = () => { entry.status = 'error';                   mapState.dirty = true; };

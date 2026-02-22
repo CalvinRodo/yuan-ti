@@ -12,6 +12,9 @@
 // ---------------------------------------------------------------------------
 const state = {
   mode: 'spells',
+  game: 'dark_sun',         // currently active game id
+  games: [],                // [{id, label, supported}] from /api/games
+  gameUnsupported: false,   // true when selected game cannot be browsed
   // Per-mode selected GFF (spells is always locked to RESOURCE.GFF)
   gffByMode:    { spells: 'RESOURCE.GFF', map: null, resources: null, images: null, text: null },
   // Per-mode fetched GFF lists
@@ -36,6 +39,9 @@ const state = {
 const $ = id => document.getElementById(id);
 
 const dom = {
+  // Header
+  gameSelect:     $('game-select'),
+
   // Mode nav
   modeBtns:       document.querySelectorAll('.mode-btn'),
   modeGffGroup:   $('mode-gff-group'),
@@ -84,7 +90,7 @@ const dom = {
   resFilterTag:     $('res-filter-tag'),
   resFilterDesc:    $('res-filter-desc'),
   resFilterCount:   $('res-filter-count'),
-  tagDatalist:      $('tag-datalist'),
+
   descDatalist:     $('desc-datalist'),
 
   // Detail pane
@@ -126,7 +132,52 @@ document.addEventListener('DOMContentLoaded', () => {
 
 async function init() {
   bindEvents();
-  // Pre-fetch GFF lists for all non-spells modes and all PALs in parallel
+  await populateGameSelect();
+  await refreshGameData();
+}
+
+async function populateGameSelect() {
+  try {
+    const r = await fetch('/api/games');
+    state.games = await r.json();
+    dom.gameSelect.innerHTML = '';
+    state.games.forEach(g => {
+      const opt = document.createElement('option');
+      opt.value = g.id;
+      opt.textContent = g.supported ? g.label : `${g.label}  — not supported`;      if (!g.supported) opt.dataset.unsupported = '1';      dom.gameSelect.appendChild(opt);
+    });
+    dom.gameSelect.value = state.game;
+  } catch {
+    // /api/games failed — keep fallback HTML option
+  }
+  const selected = state.games.find(g => g.id === state.game);
+  state.gameUnsupported = selected ? !selected.supported : false;
+}
+
+async function refreshGameData() {
+  // Reset all cached GFF lists so they reload for the active game
+  state.gffListByMode = { spells: ['RESOURCE.GFF'], map: [], resources: [], images: [], text: [] };
+  state.gffByMode     = { spells: 'RESOURCE.GFF', map: null, resources: null, images: null, text: null };
+  state.allPals       = [];
+  state.resources     = [];
+  state.pals          = [];
+  state.selectedPal   = null;
+
+  // Bust view-level caches that key by GFF name (same filename across different games)
+  if (typeof spellData   !== 'undefined') spellData   = [];
+  if (typeof textDataGff !== 'undefined') textDataGff = null;
+  if (typeof mapState    !== 'undefined') { mapState.tiles = null; mapState.tileCache.clear(); }
+
+  closeDetailPane();
+  hideAllViews();
+
+  if (state.gameUnsupported) {
+    const gameInfo = state.games.find(g => g.id === state.game);
+    dom.emptyMsg.textContent = `${gameInfo?.label || state.game} — not currently supported.`;
+    dom.emptyState.classList.remove('hidden');
+    return;
+  }
+
   await Promise.all([
     ensureGffList('map'),
     ensureGffList('resources'),
@@ -134,7 +185,7 @@ async function init() {
     ensureGffList('text'),
     fetchAllPals(),
   ]);
-  await activateMode('spells');
+  await activateMode(state.mode);
 }
 
 // ---------------------------------------------------------------------------
@@ -164,6 +215,13 @@ function bindEvents() {
     if (e.key === 'Escape')     closeDetailPane();
     if (e.key === 'ArrowLeft')  navigateFrame(-1);
     if (e.key === 'ArrowRight') navigateFrame(1);
+  });
+
+  dom.gameSelect.addEventListener('change', async () => {
+    state.game = dom.gameSelect.value;
+    const selected = state.games.find(g => g.id === state.game);
+    state.gameUnsupported = selected ? !selected.supported : false;
+    await refreshGameData();
   });
 }
 
@@ -216,7 +274,7 @@ async function ensureGffList(mode) {
   const capMap = { map: 'maps', images: 'images', text: 'texts' };
   const cap = capMap[mode] ?? 'resources';
   try {
-    const r = await fetch(`/api/gffs?cap=${cap}`);
+    const r = await fetch(`/api/gffs?cap=${cap}&game=${state.game}`);
     state.gffListByMode[mode] = await r.json();
   } catch {
     state.gffListByMode[mode] = [];
@@ -249,6 +307,8 @@ async function loadGffForMode(gff, mode) {
 
   dom.resFilterTag.value         = '';
   dom.resFilterDesc.value        = '';
+  dom.resFilterDesc.readOnly     = false;
+  dom.resFilterDesc.classList.remove('res-filter-readonly');
   dom.resFilterCount.textContent = '';
 
   // Reset spell view state
@@ -260,8 +320,8 @@ async function loadGffForMode(gff, mode) {
   showLoadingState();
 
   const [resources, pals] = await Promise.all([
-    fetch(`/api/gff/${encodeURIComponent(gff)}/resources`).then(r => r.json()).catch(() => []),
-    fetch(`/api/gff/${encodeURIComponent(gff)}/pals`).then(r => r.json()).catch(() => []),
+    fetch(`/api/gff/${encodeURIComponent(gff)}/resources?game=${state.game}`).then(r => r.json()).catch(() => []),
+    fetch(`/api/gff/${encodeURIComponent(gff)}/pals?game=${state.game}`).then(r => r.json()).catch(() => []),
   ]);
 
   state.resources = resources;
@@ -285,7 +345,7 @@ async function loadGffForMode(gff, mode) {
 // ---------------------------------------------------------------------------
 async function fetchAllPals() {
   try {
-    const r = await fetch('/api/pals/all');
+    const r = await fetch(`/api/pals/all?game=${state.game}`);
     state.allPals = await r.json();
   } catch {
     state.allPals = [];
@@ -342,7 +402,10 @@ function onPalChange() {
 function buildFilterDataLists() {
   const tags  = [...new Set(state.resources.map(r => r.tag.trim()))].sort();
   const descs = [...new Set(state.resources.map(r => r.description).filter(Boolean))].sort();
-  dom.tagDatalist.innerHTML  = tags.map(t  => `<option value="${htmlEsc(t)}">`).join('');
+  const saved = dom.resFilterTag.value;
+  dom.resFilterTag.innerHTML = `<option value="">All types</option>` +
+    tags.map(t => `<option value="${htmlEsc(t)}">${htmlEsc(t)}</option>`).join('');
+  dom.resFilterTag.value = tags.includes(saved) ? saved : '';
   dom.descDatalist.innerHTML = descs.map(d => `<option value="${htmlEsc(d)}">`).join('');
 }
 
@@ -426,11 +489,11 @@ function palParams() {
 
 function imageUrl(gff, tagUrl, number, frame = -1) {
   return `/api/gff/${encodeURIComponent(gff)}/image/${tagUrl}/${number}`
-       + `?frame=${frame}${palParams()}&v=${palVersion}`;
+       + `?frame=${frame}&game=${state.game}${palParams()}&v=${palVersion}`;
 }
 
 function rawUrl(gff, tagUrl, number) {
-  return `/api/gff/${encodeURIComponent(gff)}/raw/${tagUrl}/${number}`;
+  return `/api/gff/${encodeURIComponent(gff)}/raw/${tagUrl}/${number}?game=${state.game}`;
 }
 
 // ---------------------------------------------------------------------------

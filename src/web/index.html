@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Dark Sun — GFF Viewer</title>
+  <title>GFF Viewer</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -13,7 +13,13 @@
     <header id="header">
       <div id="header-brand">
         <span class="header-icon">&#9728;</span>
-        <h1>Dark Sun <span class="dim">GFF Viewer</span></h1>
+        <h1>GFF Viewer</h1>
+      </div>
+      <div id="header-controls">
+        <label class="control-label" for="game-select">Game</label>
+        <select id="game-select">
+          <option value="dark_sun">Dark Sun: Shattered Lands</option>
+        </select>
       </div>
     </header>
 
@@ -71,9 +77,10 @@
 
         <!-- Resource filter bar (resources mode only) -->
         <div id="res-filter-bar" class="hidden">
-          <input id="res-filter-tag"  class="res-filter-input" placeholder="Filter tag&#8230;"         list="tag-datalist"  spellcheck="false" autocomplete="off">
+          <select id="res-filter-tag" class="res-filter-input res-filter-select">
+            <option value="">All types</option>
+          </select>
           <input id="res-filter-desc" class="res-filter-input" placeholder="Filter description&#8230;" list="desc-datalist" spellcheck="false" autocomplete="off">
-          <datalist id="tag-datalist"></datalist>
           <datalist id="desc-datalist"></datalist>
           <span id="res-filter-count" class="res-filter-count"></span>
         </div>

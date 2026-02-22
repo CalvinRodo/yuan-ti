@@ -1,8 +1,8 @@
 // =============================================================================
-// view-text.js  —  Text resource viewer (TEXT, MERR, SPIN)
+// view-text.js  —  Text resource viewer (TEXT, MERR, SPIN, NAME)
 // =============================================================================
 
-const TEXT_DISPLAY_TAGS = new Set(['TEXT', 'MERR', 'SPIN']);
+const TEXT_DISPLAY_TAGS = new Set(['TEXT', 'MERR', 'SPIN', 'NAME']);
 
 let textData       = [];   // [{tag, number, size, content}]
 let textFilter     = '';   // current search string
@@ -38,7 +38,7 @@ async function renderTextView() {
     clearTextReader();
 
     try {
-      const res = await fetch(`/api/gff/${encodeURIComponent(gff)}/texts`);
+      const res = await fetch(`/api/gff/${encodeURIComponent(gff)}/texts?game=${state.game}`);
       textData  = await res.json();
     } catch {
       textData = [];
@@ -54,10 +54,14 @@ async function renderTextView() {
 
 function renderTextList() {
   const filtered = textFilter
-    ? textData.filter(e =>
-        e.tag.toLowerCase().includes(textFilter) ||
-        String(e.number).includes(textFilter) ||
-        e.content.toLowerCase().includes(textFilter))
+    ? textData.filter(e => {
+        const body = Array.isArray(e.content)
+          ? e.content.map(x => typeof x === 'object' ? x.text + ' ' + x.path : x).join(' ')
+          : e.content;
+        return e.tag.toLowerCase().includes(textFilter) ||
+               String(e.number).includes(textFilter) ||
+               body.toLowerCase().includes(textFilter);
+      })
     : textData;
 
   dom.textSearchCount.textContent = textFilter
@@ -75,8 +79,11 @@ function renderTextList() {
     if (origIdx === activeTextIdx) li.classList.add('active');
     li.dataset.idx = origIdx;
 
-    const preview = entry.content.trim().replace(/\s+/g, ' ').slice(0, 90);
-    const ellipsis = entry.content.trim().length > 90 ? '\u2026' : '';
+    const previewSrc  = Array.isArray(entry.content)
+      ? entry.content.map(e => typeof e === 'object' ? e.text : e).join(' \u00b7 ')
+      : entry.content;
+    const preview  = previewSrc.trim().replace(/\s+/g, ' ').slice(0, 90);
+    const ellipsis = previewSrc.trim().length > 90 ? '\u2026' : '';
 
     li.innerHTML =
       `<div class="text-list-header">` +
@@ -119,6 +126,8 @@ function showTextEntry(entry) {
   // Format content based on tag
   if (entry.tag === 'SPIN') {
     renderSpinContent(entry.content);
+  } else if (entry.tag === 'NAME') {
+    renderNameEntries(entry.content);
   } else {
     renderPlainContent(entry.content);
   }
@@ -136,6 +145,88 @@ function renderSpinContent(raw) {
   dom.textReaderBody.innerHTML =
     (name ? `<p class="text-spin-name">${htmlEsc(name)}</p>` : '') +
     `<p class="text-body-para">${htmlEsc(desc).replace(/\n/g, '<br>')}</p>`;
+}
+
+function renderNameEntries(entries) {
+  // entries: [{text, path, sep_hex, raw_bytes, seg_len}]
+  if (!entries || entries.length === 0) {
+    dom.textReaderBody.innerHTML = `<p class="text-body-para dim">(empty)</p>`;
+    return;
+  }
+
+  const blocks = entries.map((e, i) => {
+    const bytes  = e.raw_bytes || [];
+    const segLen = (e.seg_len != null) ? e.seg_len : bytes.length;
+    const dump   = buildNameByteDump(bytes, segLen);
+
+    return `<div class="name-dump-block">` +
+      `<div class="name-dump-title">` +
+        `<span class="name-dump-idx">${i + 1}</span>` +
+        `<span class="name-dump-name">${htmlEsc(e.text)}</span>` +
+      `</div>` +
+      `<pre class="name-dump-pre">${dump}</pre>` +
+    `</div>`;
+  });
+
+  dom.textReaderBody.innerHTML = blocks.join('');
+}
+
+// Build a 4-bytes-per-row binary+hex+ascii dump for a NAME entry.
+// Bytes from index segLen onward are the delimiter and are highlighted in red.
+function buildNameByteDump(bytes, segLen) {
+  const COLS = 4;
+  const rows = [];
+
+  rows.push(
+    '<span class="name-dump-hdr">Offs  Binary                               Hex         ASCII</span>'
+  );
+
+  for (let i = 0; i < bytes.length; i += COLS) {
+    const chunk  = bytes.slice(i, i + COLS);
+    const offset = i.toString(16).padStart(4, '0');
+
+    const binParts = [];
+    const hexParts = [];
+    const ascParts = [];
+
+    for (let j = 0; j < COLS; j++) {
+      if (j >= chunk.length) {
+        binParts.push('        ');
+        hexParts.push('  ');
+        ascParts.push(' ');
+        continue;
+      }
+
+      const b       = chunk[j];
+      const byteIdx = i + j;
+      const isSep   = byteIdx >= segLen;
+      const binStr  = b.toString(2).padStart(8, '0');
+      const hexStr  = b.toString(16).padStart(2, '0');
+      const safeAsc = (b >= 32 && b < 127)
+        ? htmlEsc(String.fromCharCode(b))
+        : '·';
+
+      if (isSep) {
+        binParts.push(`<span class="name-dump-sep">${binStr}</span>`);
+        hexParts.push(`<span class="name-dump-sep">${hexStr}</span>`);
+        ascParts.push(`<span class="name-dump-sep">${safeAsc}</span>`);
+      } else if (b === 0) {
+        binParts.push(`<span class="name-dump-zero">${binStr}</span>`);
+        hexParts.push(`<span class="name-dump-zero">${hexStr}</span>`);
+        ascParts.push(`<span class="name-dump-zero">·</span>`);
+      } else {
+        binParts.push(binStr);
+        hexParts.push(hexStr);
+        ascParts.push(safeAsc);
+      }
+    }
+
+    rows.push(
+      `${offset}  ${binParts.join(' ')}  ${hexParts.join(' ')}  ${ascParts.join('')}`
+    );
+  }
+
+  return rows.join('\n');
 }
 
 function renderPlainContent(raw) {
