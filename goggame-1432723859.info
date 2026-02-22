@@ -1,0 +1,64 @@
+{
+    "buildId": "52095423113949307",
+    "clientId": "49184616786918323",
+    "gameId": "1432723859",
+    "language": "English",
+    "languages": [
+        "en-US"
+    ],
+    "name": "Dark Sun: Shattered Lands",
+    "playTasks": [
+        {
+            "arguments": "-conf \"..\\dosbox_darksun.conf\" -conf \"..\\dosbox_darksun_single.conf\" -noconsole -c \"exit\"",
+            "category": "game",
+            "isPrimary": true,
+            "languages": [
+                "*"
+            ],
+            "name": "Dark Sun: Shattered Lands",
+            "path": "DOSBOX\\dosbox.exe",
+            "type": "FileTask",
+            "workingDir": "DOSBOX"
+        },
+        {
+            "arguments": "1432723859",
+            "category": "tool",
+            "languages": [
+                "*"
+            ],
+            "name": "Graphic Mode Setup",
+            "path": "DOSBOX\\GOGDOSConfig.exe",
+            "type": "FileTask",
+            "workingDir": "DOSBOX"
+        },
+        {
+            "category": "document",
+            "languages": [
+                "*"
+            ],
+            "link": "http://www.gog.com/support/dungeons_dragons_dark_sun_series",
+            "name": "Support",
+            "type": "URLTask"
+        },
+        {
+            "category": "document",
+            "languages": [
+                "*"
+            ],
+            "name": "Manual",
+            "path": "Manual.pdf",
+            "type": "FileTask"
+        },
+        {
+            "category": "document",
+            "languages": [
+                "*"
+            ],
+            "name": "Cluebook",
+            "path": "Cluebook.pdf",
+            "type": "FileTask"
+        }
+    ],
+    "rootGameId": "1432723859",
+    "version": 1
+}

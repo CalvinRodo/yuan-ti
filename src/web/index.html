@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dark Sun — GFF Viewer</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- ===== APP SHELL ===== -->
+  <div id="app">
+
+    <header id="header">
+      <div id="header-title">
+        <span class="header-icon">☀</span>
+        <h1>Dark Sun <span class="dim">GFF Viewer</span></h1>
+      </div>
+      <div id="header-controls">
+        <label for="pal-select" class="control-label">Palette</label>
+        <select id="pal-select" title="Choose palette">
+          <option value="auto">Auto‑detect</option>
+        </select>
+      </div>
+    </header>
+
+    <div id="layout">
+
+      <!-- ===== SIDEBAR ===== -->
+      <aside id="sidebar">
+        <div id="sidebar-search-wrap">
+          <input id="sidebar-search" type="search" placeholder="Filter files…" autocomplete="off">
+        </div>
+        <ul id="gff-list"></ul>
+      </aside>
+
+      <!-- ===== MAIN AREA ===== -->
+      <main id="main">
+
+        <!-- Toolbar -->
+        <div id="toolbar">
+          <div id="toolbar-left">
+            <span id="current-file-label" class="dim">Select a GFF file →</span>
+          </div>
+          <div id="toolbar-right">
+            <div id="type-filter" role="group" aria-label="Resource type filter">
+              <button class="filter-btn active" data-filter="images">Images</button>
+              <button class="filter-btn" data-filter="all">All Resources</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Split: list + detail pane -->
+        <div id="split">
+
+          <!-- Content (grid / table) -->
+          <div id="content">
+            <div id="empty-state">
+              <div class="empty-icon">☀</div>
+              <p>Select a GFF file from the sidebar to explore its contents.</p>
+            </div>
+            <div id="image-grid" class="hidden"></div>
+            <div id="resource-table-wrap" class="hidden">
+              <table id="resource-table">
+                <thead>
+                  <tr>
+                    <th>Tag</th>
+                    <th>Number</th>
+                    <th>Size</th>
+                    <th>Description</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="resource-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- ===== DETAIL PANE ===== -->
+          <aside id="detail-pane" class="hidden">
+            <div id="detail-header">
+              <div id="detail-title-wrap">
+                <span id="detail-tag"></span>
+                <span id="detail-num" class="dim"></span>
+              </div>
+              <div id="detail-header-right">
+                <span id="detail-size" class="dim"></span>
+                <button id="detail-close" aria-label="Close">✕</button>
+              </div>
+            </div>
+            <div id="detail-desc" class="dim"></div>
+
+            <!-- Image view -->
+            <div id="detail-image-view" class="hidden">
+              <div id="detail-img-toolbar">
+                <button id="detail-prev" class="frame-nav" aria-label="Previous frame">‹</button>
+                <span id="detail-frame-info"></span>
+                <button id="detail-next" class="frame-nav" aria-label="Next frame">›</button>
+              </div>
+              <div id="detail-img-wrap">
+                <img id="detail-img" alt="resource image">
+                <div id="detail-img-spinner" class="spinner"></div>
+              </div>
+              <div id="detail-img-dims" class="dim"></div>
+            </div>
+
+            <!-- Hex view -->
+            <div id="detail-hex-view" class="hidden">
+              <div id="hex-toolbar">
+                <span id="hex-info" class="dim"></span>
+                <span id="hex-truncated" class="warn hidden">Showing first 8 KB</span>
+              </div>
+              <div id="hex-body">
+                <pre id="hex-pre"></pre>
+              </div>
+            </div>
+
+          </aside>
+
+        </div><!-- /#split -->
+
+      </main>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,65 @@
+{
+    "actions": [
+        {
+            "install": {
+                "action": "supportData",
+                "arguments": {
+                    "overwrite": true,
+                    "source": "{supportDir}/app",
+                    "target": "{app}",
+                    "type": "folder"
+                }
+            },
+            "languages": [
+                "*"
+            ],
+            "name": "DOSBoxConfig"
+        },
+        {
+            "install": {
+                "action": "setRegistry",
+                "arguments": {
+                    "root": "HKEY_LOCAL_MACHINE",
+                    "subkey": "Software\\GOG.com\\Games\\{productID}",
+                    "valueData": "{app}\\DOSBox",
+                    "valueName": "DOSBOXFOLDER",
+                    "valueType": "String"
+                }
+            },
+            "languages": [
+                "*"
+            ],
+            "name": "DOSBoxConfigLegacy1"
+        },
+        {
+            "install": {
+                "action": "setRegistry",
+                "arguments": {
+                    "root": "HKEY_LOCAL_MACHINE",
+                    "subkey": "Software\\GOG.com\\Games\\{productID}",
+                    "valueData": "dosbox_darksun",
+                    "valueName": "DOSBOXCONF",
+                    "valueType": "String"
+                }
+            },
+            "languages": [
+                "*"
+            ],
+            "name": "DOSBoxConfigLegacy2"
+        },
+        {
+            "install": {
+                "action": "supportData",
+                "arguments": {
+                    "target": "{app}/cloud_saves",
+                    "type": "folder"
+                }
+            },
+            "languages": [
+                "*"
+            ],
+            "name": "DOSBoxCSFolder"
+        }
+    ],
+    "productId": "1432723859"
+}
