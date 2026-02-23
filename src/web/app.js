@@ -16,9 +16,9 @@ const state = {
   games: [],                // [{id, label, supported}] from /api/games
   gameUnsupported: false,   // true when selected game cannot be browsed
   // Per-mode selected GFF (spells is always locked to RESOURCE.GFF)
-  gffByMode:    { spells: 'RESOURCE.GFF', map: null, resources: null, images: null, text: null, palette: null },
+  gffByMode:    { spells: 'RESOURCE.GFF', map: null, resources: null, images: null, text: null, palette: null, music: 'RESOURCE.GFF', sfx: 'RESOURCE.GFF' },
   // Per-mode fetched GFF lists
-  gffListByMode:{ spells: ['RESOURCE.GFF'], map: [], resources: [], images: [], text: [], palette: [] },
+  gffListByMode:{ spells: ['RESOURCE.GFF'], map: [], resources: [], images: [], text: [], palette: [], music: [], sfx: [] },
 
   resources:   [],
   pals:        [],    // per-GFF pals (for non-images modes)
@@ -91,10 +91,7 @@ const dom = {
 
   // Resource table filters
   resFilterTag:     $('res-filter-tag'),
-  resFilterDesc:    $('res-filter-desc'),
   resFilterCount:   $('res-filter-count'),
-
-  descDatalist:     $('desc-datalist'),
 
   // Detail pane
   detailPane:       $('detail-pane'),
@@ -240,8 +237,8 @@ async function populateGameSelect() {
 
 async function refreshGameData() {
   // Reset all cached GFF lists so they reload for the active game
-  state.gffListByMode = { spells: ['RESOURCE.GFF'], map: [], resources: [], images: [], text: [], palette: [] };
-  state.gffByMode     = { spells: 'RESOURCE.GFF', map: null, resources: null, images: null, text: null, palette: null };
+  state.gffListByMode = { spells: ['RESOURCE.GFF'], map: [], resources: [], images: [], text: [], palette: [], music: [], sfx: [] };
+  state.gffByMode     = { spells: 'RESOURCE.GFF', map: null, resources: null, images: null, text: null, palette: null, music: 'RESOURCE.GFF', sfx: 'RESOURCE.GFF' };
   state.allPals       = [];
   state.resources     = [];
   state.pals          = [];
@@ -251,6 +248,9 @@ async function refreshGameData() {
   if (typeof spellData   !== 'undefined') spellData   = [];
   if (typeof textDataGff !== 'undefined') textDataGff = null;
   if (typeof mapState    !== 'undefined') { mapState.tiles = null; mapState.tileCache.clear(); }
+  if (typeof musicViewBuilt !== 'undefined') { musicViewBuilt = false; musicDataGff = null;
+    if (typeof stopPlayback === 'function') stopPlayback(); }
+  if (typeof sfxViewBuilt !== 'undefined') { sfxViewBuilt = false; sfxDataGff = null; }
 
   closeDetailPane();
   hideAllViews();
@@ -267,6 +267,8 @@ async function refreshGameData() {
     ensureGffList('resources'),
     ensureGffList('images'),
     ensureGffList('text'),
+    ensureGffList('music'),
+    ensureGffList('sfx'),
     fetchAllPals(),
   ]);
   await activateMode(state.mode);
@@ -325,11 +327,31 @@ async function activateMode(mode) {
   // Show/hide toolbar groups
   dom.modeGffGroup.classList.toggle('hidden', mode === 'spells' || mode === 'palette');
   dom.imgViewGroup.classList.toggle('hidden', mode !== 'images');
-  // Palette selector is not useful in text or palette modes
-  dom.palGroup.classList.toggle('hidden', mode === 'text' || mode === 'palette');
+  // Palette selector is not useful in text or palette or music/sfx modes
+  dom.palGroup.classList.toggle('hidden', mode === 'text' || mode === 'palette' || mode === 'music' || mode === 'sfx');
+
+  // Tear down music player when leaving music or sfx mode
+  if (mode !== 'music' && mode !== 'sfx' && typeof teardownMusicView === 'function') teardownMusicView();
+  if (mode !== 'sfx' && typeof teardownSfxView === 'function') teardownSfxView();
 
   // Palette mode renders directly from state.allPals — no GFF selection needed
   if (mode === 'palette') {
+    renderContent();
+    return;
+  }
+
+  // Music mode uses its own GFF selector (defaults to RESOURCE.GFF)
+  if (mode === 'music') {
+    await ensureGffList('music');
+    populateModeGffSelect('music');
+    renderContent();
+    return;
+  }
+
+  // SFX mode — same pattern as music
+  if (mode === 'sfx') {
+    await ensureGffList('sfx');
+    populateModeGffSelect('sfx');
     renderContent();
     return;
   }
@@ -363,7 +385,7 @@ async function activateMode(mode) {
 // ---------------------------------------------------------------------------
 async function ensureGffList(mode) {
   if (state.gffListByMode[mode].length > 0) return;
-  const capMap = { map: 'maps', images: 'images', text: 'texts' };
+  const capMap = { map: 'maps', images: 'images', text: 'texts', music: 'music', sfx: 'music' };
   const cap = capMap[mode] ?? 'resources';
   try {
     const r = await fetch(`/api/gffs?cap=${cap}&game=${state.game}`);
@@ -391,6 +413,23 @@ function populateModeGffSelect(mode) {
 // ---------------------------------------------------------------------------
 async function loadGffForMode(gff, mode) {
   if (!gff) return;
+
+  // Music mode has its own loader — just update state and re-render
+  if (mode === 'music') {
+    state.gffByMode.music = gff;
+    if (typeof musicDataGff !== 'undefined') musicDataGff = null; // force track-list reload
+    renderContent();
+    return;
+  }
+
+  // SFX mode — same pattern
+  if (mode === 'sfx') {
+    state.gffByMode.sfx = gff;
+    if (typeof sfxDataGff !== 'undefined') sfxDataGff = null; // force track-list reload
+    renderContent();
+    return;
+  }
+
   state.gffByMode[mode]  = gff;
   state.resources        = [];
   state.pals             = [];
@@ -398,9 +437,6 @@ async function loadGffForMode(gff, mode) {
   state.detail.resource  = null;
 
   dom.resFilterTag.value         = '';
-  dom.resFilterDesc.value        = '';
-  dom.resFilterDesc.readOnly     = false;
-  dom.resFilterDesc.classList.remove('res-filter-readonly');
   dom.resFilterCount.textContent = '';
 
   // Reset spell view state
@@ -493,12 +529,14 @@ function onPalChange() {
 
 function buildFilterDataLists() {
   const tags  = [...new Set(state.resources.map(r => r.tag.trim()))].sort();
-  const descs = [...new Set(state.resources.map(r => r.description).filter(Boolean))].sort();
   const saved = dom.resFilterTag.value;
   dom.resFilterTag.innerHTML = `<option value="">All types</option>` +
-    tags.map(t => `<option value="${htmlEsc(t)}">${htmlEsc(t)}</option>`).join('');
+    tags.map(t => {
+      const desc = (state.resources.find(r => r.tag.trim() === t)?.description || '').trim();
+      const label = desc ? `${t} \u2014 ${desc}` : t;
+      return `<option value="${htmlEsc(t)}">${htmlEsc(label)}</option>`;
+    }).join('');
   dom.resFilterTag.value = tags.includes(saved) ? saved : '';
-  dom.descDatalist.innerHTML = descs.map(d => `<option value="${htmlEsc(d)}">`).join('');
 }
 
 // ---------------------------------------------------------------------------
@@ -540,6 +578,10 @@ function hideAllViews() {
   dom.tableWrap.classList.add('hidden');
   dom.resFilterBar.classList.add('hidden');
   dom.paletteView.classList.add('hidden');
+  const mv = document.getElementById('music-view');
+  if (mv) mv.classList.add('hidden');
+  const sv = document.getElementById('sfx-view');
+  if (sv) sv.classList.add('hidden');
   hideMapView();
 }
 
@@ -550,9 +592,21 @@ function renderContent() {
   hideLoadingState();
   hideAllViews();
 
-  // Palette mode doesn't need a selected GFF — render straight from allPals
+  // Palette mode renders directly from state.allPals
   if (state.mode === 'palette') {
     renderPaletteView();
+    return;
+  }
+
+  // Music mode has its own loader — bypass the resources guard
+  if (state.mode === 'music') {
+    renderMusicView();
+    return;
+  }
+
+  // SFX mode — bypass the resources guard
+  if (state.mode === 'sfx') {
+    renderSfxView();
     return;
   }
 
@@ -569,6 +623,7 @@ function renderContent() {
     case 'map':       showMapView(); break;
     case 'resources': renderResourceTable(); break;
     case 'text':      renderTextView(); break;
+    case 'music':     renderMusicView(); break;
     case 'images':
       if (state.imageView === 'list') renderImageList();
       else                            renderImageGrid();

@@ -51,6 +51,14 @@
           <span class="mode-icon">&#9632;</span>
           <span class="mode-label">Palettes</span>
         </button>
+        <button class="mode-btn" data-mode="music" title="Music Player">
+          <span class="mode-icon">&#9835;</span>
+          <span class="mode-label">Music</span>
+        </button>
+        <button class="mode-btn" data-mode="sfx" title="Sound Effects">
+          <span class="mode-icon">&#128266;</span>
+          <span class="mode-label">SFX</span>
+        </button>
       </nav>
 
       <!-- ===== MAIN ===== -->
@@ -84,8 +92,6 @@
           <select id="res-filter-tag" class="res-filter-input res-filter-select">
             <option value="">All types</option>
           </select>
-          <input id="res-filter-desc" class="res-filter-input" placeholder="Filter description&#8230;" list="desc-datalist" spellcheck="false" autocomplete="off">
-          <datalist id="desc-datalist"></datalist>
           <span id="res-filter-count" class="res-filter-count"></span>
         </div>
 
@@ -166,6 +172,12 @@
             <!-- Palette viewer -->
             <div id="palette-view" class="hidden"></div>
 
+            <!-- Music player -->
+            <div id="music-view" class="hidden"></div>
+
+            <!-- Sound effects player -->
+            <div id="sfx-view" class="hidden"></div>
+
             <!-- All-resources table -->
             <div id="resource-table-wrap" class="hidden">
               <table id="resource-table">
@@ -242,5 +254,6 @@
   <script src="view-spells.js"></script>
   <script src="view-text.js"></script>
   <script src="view-palette.js"></script>
+  <script src="view-music.js"></script>
 </body>
 </html>
