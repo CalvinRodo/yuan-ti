@@ -383,6 +383,63 @@ def api_rmap(name: str, number: int):
     return jsonify({'width': width, 'height': height, 'tiles': list(raw)})
 
 
+# Auxiliary GFF names to search for OJFF/BMP/WALL resources
+_AUX_GFF_NAMES = ['SEGOBJEX.GFF', 'OBJEX.GFF', 'GPLDATA.GFF']
+
+
+@app.route('/api/gff/<name>/map-render')
+def api_map_render(name: str):
+    """Render a full region map image as PNG.
+
+    Loads the region GFF, auto-discovers SEGOBJEX/OBJEX/GPLDATA helper GFFs,
+    and composites RMAP tiles + ETAB objects + WALL sprites into one PNG.
+
+    Query parameters
+    ----------------
+    game    : game id (default: dark_sun)
+    pal_gff : GFF filename that holds the palette (optional)
+    pal_num : PAL resource number (optional)
+    pal_tag : 'PAL' or 'CPAL' (default: 'PAL')
+    """
+    try:
+        from PIL import Image as _PilImage  # noqa — checked here so error is clear
+    except ImportError:
+        abort(500, description='Pillow is not installed. Run: pip install pillow')
+
+    game_id = request.args.get('game', DEFAULT_GAME)
+    gff     = load_gff(name, game_id)
+
+    # Load auxiliary GFFs (silently skip those that don't exist)
+    aux_gffs = []
+    for aux_name in _AUX_GFF_NAMES:
+        try:
+            aux_gffs.append(load_gff(aux_name, game_id))
+        except Exception:
+            pass
+
+    # Resolve palette
+    pal_gff_name = request.args.get('pal_gff')
+    pal_num_raw  = request.args.get('pal_num')
+    pal_num      = int(pal_num_raw) if pal_num_raw is not None else None
+    pal_tag_raw  = request.args.get('pal_tag', 'PAL')
+    palette      = find_palette(gff, pal_gff_name, pal_num, pal_tag_raw, game_id)
+
+    if palette is None:
+        abort(400, description='No palette found. Supply pal_gff and pal_num.')
+
+    # Render
+    try:
+        from region_renderer import render_region
+        img = render_region(gff, aux_gffs, palette)
+    except Exception as exc:
+        abort(500, description=str(exc))
+
+    buf = io.BytesIO()
+    img.save(buf, format='PNG', optimize=False)
+    buf.seek(0)
+    return send_file(buf, mimetype='image/png')
+
+
 SPIN_ICON_OFFSET = 21000
 
 # Psionic powers: SPIN 139–172 use ICON 3000–3033
