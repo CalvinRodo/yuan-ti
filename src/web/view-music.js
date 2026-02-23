@@ -10,10 +10,12 @@
 // Module state
 // ---------------------------------------------------------------------------
 const musicState = {
-  tracks:       [],       // [{tag, tag_url, tag_label, number, size, gff}]
+  tracks:       [],       // [{tag, tag_url, tag_label, number, size, gff, type}]
   currentIdx:   -1,       // index into musicState.tracks
+  trackType:    null,     // 'midi' | 'voc'
   midiBytes:    null,     // Uint8Array of current MIDI file
   parsed:       null,     // ParsedMidi object
+  vocAudio:     null,     // HTMLAudioElement for VOC playback
   audioCtx:     null,
   nodes:        [],       // scheduled AudioNodes (for stop)
   startedAt:    0,        // audioCtx.currentTime when playback started
@@ -417,6 +419,12 @@ async function startPlayback(fromSec = 0) {
 }
 
 function stopPlayback(ended = false) {
+  // Stop VOC (HTML5 Audio) if active
+  if (musicState.vocAudio) {
+    musicState.vocAudio.pause();
+    if (ended) musicState.vocAudio.currentTime = 0;
+  }
+  // Stop MIDI engine
   if (musicState.endTimer) { clearTimeout(musicState.endTimer); musicState.endTimer = null; }
   if (musicState.rafId)    { cancelAnimationFrame(musicState.rafId); musicState.rafId = null; }
   musicState.nodes.forEach(n => { try { n.stop(); } catch {} });
@@ -425,10 +433,18 @@ function stopPlayback(ended = false) {
     musicState.audioCtx.close().catch(() => {});
     musicState.audioCtx = null;
   }
-  if (!ended) musicState.pausedAt = currentPositionSec();
-  musicState.playing = false;
-  updateTransportUI();
-  updateProgressBar(ended ? 0 : musicState.pausedAt);
+  // Capture pause position
+  if (musicState.trackType === 'voc' && musicState.vocAudio) {
+    const pos = ended ? 0 : musicState.vocAudio.currentTime;
+    musicState.playing = false;
+    updateTransportUI();
+    updateProgressBar(pos);
+  } else {
+    if (!ended) musicState.pausedAt = currentPositionSec();
+    musicState.playing = false;
+    updateTransportUI();
+    updateProgressBar(ended ? 0 : musicState.pausedAt);
+  }
 }
 
 function pausePlayback() {
@@ -462,6 +478,7 @@ async function loadMusicTrack(idx) {
 
   stopPlayback();
   musicState.currentIdx = idx;
+  musicState.trackType  = track.type || 'midi';
   musicState.midiBytes  = null;
   musicState.parsed     = null;
   musicState.pausedAt   = 0;
@@ -471,6 +488,43 @@ async function loadMusicTrack(idx) {
   setPlayerStatus('Loading…');
   updateTransportUI();
 
+  // ---- VOC (HTML5 Audio) path ----
+  if (track.type === 'voc') {
+    if (!musicState.vocAudio) musicState.vocAudio = new Audio();
+    const audio = musicState.vocAudio;
+    const url   = `/api/gff/${encodeURIComponent(track.gff)}/audio/${track.tag_url}/${track.number}`
+                + `?game=${state.game}`;
+    audio.src     = url;
+    audio.volume  = musicState.volume;
+    audio.loop    = musicState.looping;
+    audio.preload = 'metadata';
+
+    audio.onloadedmetadata = () => {
+      if (isFinite(audio.duration)) musicState.duration = audio.duration;
+      setPlayerStatus(`${track.tag.trim()} #${track.number}  —  ${fmtSec(musicState.duration)}`);
+      updateProgressBar(0);
+    };
+    audio.ontimeupdate = () => {
+      if (isFinite(audio.duration)) musicState.duration = audio.duration;
+      updateProgressBar(audio.currentTime);
+    };
+    audio.onended = () => {
+      if (!musicState.looping) stopPlayback(true);
+    };
+
+    setPlayerStatus(`${track.tag.trim()} #${track.number}`);
+    updateTransportUI();
+    try {
+      await audio.play();
+      musicState.playing = true;
+    } catch (e) {
+      setPlayerStatus(`Error: ${e.message}`);
+    }
+    updateTransportUI();
+    return;
+  }
+
+  // ---- MIDI (Web Audio) path ----
   try {
     const url = `/api/gff/${encodeURIComponent(track.gff)}/midi/${track.tag_url}/${track.number}`
               + `?game=${state.game}&track_index=0`;
@@ -519,10 +573,10 @@ function updateTransportUI() {
   const stopBtn  = document.getElementById('music-stop-btn');
   const loopBtn  = document.getElementById('music-loop-btn');
   if (!playBtn) return;
-  const hasMidi  = !!musicState.parsed;
+  const hasTrack = !!musicState.parsed || musicState.trackType === 'voc';
   playBtn.textContent = musicState.playing ? '⏸' : '▶';
-  playBtn.disabled    = !hasMidi;
-  stopBtn.disabled    = !hasMidi;
+  playBtn.disabled    = !hasTrack;
+  stopBtn.disabled    = !hasTrack;
   loopBtn.classList.toggle('active', musicState.looping);
 }
 
@@ -626,28 +680,36 @@ function buildMusicViewDom(view) {
 
   // Bind transport events
   document.getElementById('music-play-btn').addEventListener('click', onPlayPause);
-  document.getElementById('music-stop-btn').addEventListener('click', () => { stopPlayback(false); musicState.pausedAt=0; updateProgressBar(0); });
+  document.getElementById('music-stop-btn').addEventListener('click', () => {
+    stopPlayback(false);
+    if (musicState.vocAudio) musicState.vocAudio.currentTime = 0;
+    musicState.pausedAt = 0;
+    updateProgressBar(0);
+  });
   document.getElementById('music-prev-btn').addEventListener('click', () => navigateTrack(-1));
   document.getElementById('music-next-btn').addEventListener('click', () => navigateTrack(1));
   document.getElementById('music-loop-btn').addEventListener('click', () => {
     musicState.looping = !musicState.looping;
+    if (musicState.vocAudio) musicState.vocAudio.loop = musicState.looping;
     updateTransportUI();
   });
   document.getElementById('music-volume').addEventListener('input', e => {
     musicState.volume = parseFloat(e.target.value);
-    if (musicState.audioCtx) {
-      // Update gain of master node isn't tracked, so restart is needed
-      // for live changes; for simplicity just update the value
-    }
+    if (musicState.vocAudio) musicState.vocAudio.volume = musicState.volume;
   });
 
   // Seekable progress bar
   const bar = document.getElementById('music-progress-bar');
   bar.addEventListener('click', e => {
-    if (!musicState.parsed) return;
     const rect = bar.getBoundingClientRect();
     const pct  = (e.clientX - rect.left) / rect.width;
-    const sec  = pct * musicState.duration;
+    const sec  = pct * (musicState.duration || 1);
+    if (musicState.trackType === 'voc' && musicState.vocAudio) {
+      musicState.vocAudio.currentTime = sec;
+      updateProgressBar(sec);
+      return;
+    }
+    if (!musicState.parsed) return;
     musicState.pausedAt = sec;
     if (musicState.playing) startPlayback(sec);
     else updateProgressBar(sec);
@@ -680,33 +742,49 @@ async function loadMusicTrackList(gff) {
     return;
   }
 
-  // Group by tag_label
+  // Separate MIDI tracks from VOC (sound effects) tracks
+  const midiTracks = allTracks.map((t, i) => ({ ...t, _idx: i })).filter(t => t.type !== 'voc');
+  const vocTracks  = allTracks.map((t, i) => ({ ...t, _idx: i })).filter(t => t.type === 'voc');
+
+  // Group MIDI tracks by tag_label
   const groups = {};
-  allTracks.forEach((t, i) => {
-    (groups[t.tag_label] = groups[t.tag_label] || []).push({ ...t, _idx: i });
+  midiTracks.forEach(t => {
+    (groups[t.tag_label] = groups[t.tag_label] || []).push(t);
   });
 
   const frag = document.createDocumentFragment();
+
+  function buildTrackRow(track) {
+    const row = document.createElement('div');
+    row.className = 'music-track-row';
+    if (track._idx === musicState.currentIdx) row.classList.add('active');
+    row.dataset.idx = track._idx;
+    row.innerHTML = `
+      <span class="music-track-icon">${track.type === 'voc' ? '&#128266;' : '&#9834;'}</span>
+      <span class="music-track-label">${htmlEsc(track.tag.trim())} #${track.number}</span>
+      <span class="music-track-size dim">${formatBytes(track.size)}</span>
+    `;
+    row.addEventListener('click', () => loadMusicTrack(track._idx));
+    return row;
+  }
+
+  // Render MIDI groups
   Object.entries(groups).forEach(([label, tracks]) => {
     const grpHeader = document.createElement('div');
     grpHeader.className = 'music-group-header';
     grpHeader.textContent = label;
     frag.appendChild(grpHeader);
-
-    tracks.forEach(track => {
-      const row = document.createElement('div');
-      row.className = 'music-track-row';
-      if (track._idx === musicState.currentIdx) row.classList.add('active');
-      row.dataset.idx = track._idx;
-      row.innerHTML = `
-        <span class="music-track-icon">♪</span>
-        <span class="music-track-label">${htmlEsc(track.tag.trim())} #${track.number}</span>
-        <span class="music-track-size dim">${formatBytes(track.size)}</span>
-      `;
-      row.addEventListener('click', () => loadMusicTrack(track._idx));
-      frag.appendChild(row);
-    });
+    tracks.forEach(track => frag.appendChild(buildTrackRow(track)));
   });
+
+  // Render Sound Effects section
+  if (vocTracks.length > 0) {
+    const sfxHeader = document.createElement('div');
+    sfxHeader.className = 'music-group-header';
+    sfxHeader.textContent = 'Sound Effects';
+    frag.appendChild(sfxHeader);
+    vocTracks.forEach(track => frag.appendChild(buildTrackRow(track)));
+  }
 
   listEl.innerHTML = '';
   listEl.appendChild(frag);
@@ -717,6 +795,20 @@ async function loadMusicTrackList(gff) {
 // ---------------------------------------------------------------------------
 
 async function onPlayPause() {
+  // VOC (HTML5 Audio) path
+  if (musicState.trackType === 'voc' && musicState.vocAudio) {
+    const audio = musicState.vocAudio;
+    if (musicState.playing) {
+      audio.pause();
+      musicState.playing = false;
+    } else {
+      try { await audio.play(); musicState.playing = true; }
+      catch (e) { setPlayerStatus(`Error: ${e.message}`); }
+    }
+    updateTransportUI();
+    return;
+  }
+  // MIDI path
   if (musicState.playing) {
     pausePlayback();
   } else if (musicState.parsed) {
@@ -756,3 +848,277 @@ function teardownMusicView() {
   const view = document.getElementById('music-view');
   if (view) view.classList.add('hidden');
 }
+
+// ---------------------------------------------------------------------------
+// Sound Effects (SFX) view
+// A lightweight player for BVOC (Creative Voice File) resources.
+// Shares musicState.vocAudio but keeps its own track list and state.
+// ---------------------------------------------------------------------------
+
+const sfxState = {
+  tracks:     [],   // [{tag, tag_url, number, size, gff}]
+  currentIdx: -1,
+  audio:      null, // HTMLAudioElement (lazily created)
+  playing:    false,
+};
+
+let sfxViewBuilt = false;
+let sfxDataGff   = null;
+
+function getSfxAudio() {
+  if (!sfxState.audio) sfxState.audio = new Audio();
+  return sfxState.audio;
+}
+
+async function loadSfxTrack(idx) {
+  const track = sfxState.tracks[idx];
+  if (!track) return;
+
+  const audio = getSfxAudio();
+  audio.pause();
+  sfxState.playing    = false;
+  sfxState.currentIdx = idx;
+
+  // Highlight row
+  document.querySelectorAll('#sfx-track-list .sfx-track-row').forEach((r, i) => {
+    r.classList.toggle('active', i === idx);
+  });
+
+  const url = `/api/gff/${encodeURIComponent(track.gff)}/audio/${track.tag_url}/${track.number}`
+            + `?game=${state.game}`;
+
+  audio.src     = url;
+  audio.preload = 'metadata';
+  audio.volume  = parseFloat(document.getElementById('sfx-volume')?.value ?? '0.7');
+
+  audio.onended = () => {
+    sfxState.playing = false;
+    updateSfxUI();
+    // Auto-advance
+    const next = sfxState.currentIdx + 1;
+    if (next < sfxState.tracks.length) loadSfxTrack(next);
+  };
+  audio.ontimeupdate = () => updateSfxProgress();
+  audio.onloadedmetadata = () => updateSfxProgress();
+
+  try {
+    await audio.play();
+    sfxState.playing = true;
+  } catch (e) {
+    const statusEl = document.getElementById('sfx-status');
+    if (statusEl) statusEl.textContent = `Error: ${e.message}`;
+  }
+  updateSfxUI();
+}
+
+function updateSfxUI() {
+  const playBtn = document.getElementById('sfx-play-btn');
+  const stopBtn = document.getElementById('sfx-stop-btn');
+  if (!playBtn) return;
+  const hasTrack = sfxState.currentIdx >= 0;
+  playBtn.textContent = sfxState.playing ? '\u23f8' : '\u25b6';
+  playBtn.disabled    = !hasTrack;
+  stopBtn.disabled    = !hasTrack;
+
+  const track = sfxState.tracks[sfxState.currentIdx];
+  const statusEl = document.getElementById('sfx-status');
+  if (statusEl && track) {
+    statusEl.textContent = `${track.tag.trim()} #${track.number}`;
+  }
+}
+
+function updateSfxProgress() {
+  const audio  = sfxState.audio;
+  const fill   = document.getElementById('sfx-progress-fill');
+  const thumb  = document.getElementById('sfx-progress-thumb');
+  const cur    = document.getElementById('sfx-time-current');
+  const tot    = document.getElementById('sfx-time-total');
+  if (!audio) return;
+  const dur = isFinite(audio.duration) ? audio.duration : 0;
+  const pct = dur > 0 ? Math.min(audio.currentTime / dur, 1) * 100 : 0;
+  if (fill)  fill.style.width  = pct + '%';
+  if (thumb) thumb.style.left  = pct + '%';
+  if (cur)   cur.textContent   = fmtSec(Math.max(0, audio.currentTime));
+  if (tot)   tot.textContent   = fmtSec(dur);
+}
+
+async function renderSfxView() {
+  const view = document.getElementById('sfx-view');
+  if (!view) return;
+  view.classList.remove('hidden');
+
+  const gff      = state.gffByMode.sfx || 'RESOURCE.GFF';
+  const needLoad = !sfxViewBuilt || sfxDataGff !== gff;
+
+  if (!sfxViewBuilt) {
+    buildSfxViewDom(view);
+    sfxViewBuilt = true;
+  }
+
+  if (needLoad) {
+    sfxDataGff = gff;
+    await loadSfxTrackList(gff);
+  }
+
+  updateSfxUI();
+}
+
+async function loadSfxTrackList(gff) {
+  const listEl  = document.getElementById('sfx-track-list');
+  const countEl = document.getElementById('sfx-track-count');
+  if (!listEl) return;
+
+  listEl.innerHTML = '<div class="music-loading"><div class="spinner"></div> Loading\u2026</div>';
+
+  let allTracks = [];
+  try {
+    const r    = await fetch(`/api/gff/${encodeURIComponent(gff)}/music?game=${state.game}`);
+    const data = await r.json();
+    allTracks  = data.filter(t => t.type === 'voc').map(t => ({ ...t, gff }));
+  } catch {
+    listEl.innerHTML = '<div class="music-error">Failed to load sound effects.</div>';
+    return;
+  }
+
+  sfxState.tracks     = allTracks;
+  sfxState.currentIdx = -1;
+
+  if (countEl) countEl.textContent = `${allTracks.length} sample${allTracks.length !== 1 ? 's' : ''}`;
+
+  if (allTracks.length === 0) {
+    listEl.innerHTML = '<div class="music-error">No sound effects found in this file.</div>';
+    return;
+  }
+
+  const frag = document.createDocumentFragment();
+  allTracks.forEach((track, i) => {
+    const row = document.createElement('div');
+    row.className = 'sfx-track-row music-track-row';
+    row.dataset.idx = i;
+    row.innerHTML = `
+      <span class="music-track-icon">&#128266;</span>
+      <span class="music-track-label">${htmlEsc(track.tag.trim())} #${track.number}</span>
+      <span class="music-track-size dim">${formatBytes(track.size)}</span>
+    `;
+    row.addEventListener('click', () => loadSfxTrack(i));
+    frag.appendChild(row);
+  });
+
+  listEl.innerHTML = '';
+  listEl.appendChild(frag);
+  updateSfxUI();
+}
+
+function buildSfxViewDom(view) {
+  view.innerHTML = `
+    <div id="music-layout">
+      <div id="music-sidebar">
+        <div id="music-sidebar-header">
+          <span class="music-section-label">Sound Effects</span>
+          <span id="sfx-track-count" class="dim"></span>
+        </div>
+        <div id="sfx-track-list"></div>
+      </div>
+
+      <div id="music-player">
+        <div id="music-player-inner">
+          <div id="music-title-area">
+            <div id="music-now-playing">Now Playing</div>
+            <div id="sfx-status" class="dim">Select a sound to play.</div>
+          </div>
+
+          <div id="music-progress-wrap">
+            <span id="sfx-time-current" class="music-time">0:00</span>
+            <div id="sfx-progress-bar">
+              <div id="sfx-progress-fill"></div>
+              <div id="sfx-progress-thumb"></div>
+            </div>
+            <span id="sfx-time-total" class="music-time">0:00</span>
+          </div>
+
+          <div id="music-controls">
+            <button id="sfx-prev-btn"  class="music-btn" title="Previous">&#9198;</button>
+            <button id="sfx-play-btn"  class="music-btn music-btn-primary" disabled title="Play / Pause">&#9654;</button>
+            <button id="sfx-stop-btn"  class="music-btn" disabled title="Stop">&#9209;</button>
+            <button id="sfx-next-btn"  class="music-btn" title="Next">&#9197;</button>
+            <div id="music-volume-group">
+              <span class="music-vol-icon">&#128266;</span>
+              <input id="sfx-volume" type="range" min="0" max="1" step="0.05"
+                     value="0.7" title="Volume">
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  // Progress bar seek
+  document.getElementById('sfx-progress-bar').addEventListener('click', e => {
+    const audio = sfxState.audio;
+    if (!audio || !isFinite(audio.duration)) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    audio.currentTime = ((e.clientX - rect.left) / rect.width) * audio.duration;
+    updateSfxProgress();
+  });
+
+  // Transport controls
+  document.getElementById('sfx-play-btn').addEventListener('click', async () => {
+    const audio = getSfxAudio();
+    if (sfxState.playing) {
+      audio.pause();
+      sfxState.playing = false;
+    } else if (sfxState.currentIdx >= 0) {
+      try { await audio.play(); sfxState.playing = true; }
+      catch (e) { /* ignore */ }
+    }
+    updateSfxUI();
+  });
+
+  document.getElementById('sfx-stop-btn').addEventListener('click', () => {
+    const audio = getSfxAudio();
+    audio.pause();
+    audio.currentTime  = 0;
+    sfxState.playing   = false;
+    updateSfxUI();
+    updateSfxProgress();
+  });
+
+  document.getElementById('sfx-prev-btn').addEventListener('click', () => {
+    const n = sfxState.tracks.length;
+    if (n === 0) return;
+    const idx = sfxState.currentIdx <= 0 ? n - 1 : sfxState.currentIdx - 1;
+    loadSfxTrack(idx);
+  });
+
+  document.getElementById('sfx-next-btn').addEventListener('click', () => {
+    const n = sfxState.tracks.length;
+    if (n === 0) return;
+    const idx = (sfxState.currentIdx + 1) % n;
+    loadSfxTrack(idx);
+  });
+
+  document.getElementById('sfx-volume').addEventListener('input', e => {
+    if (sfxState.audio) sfxState.audio.volume = parseFloat(e.target.value);
+  });
+}
+
+function teardownSfxView() {
+  if (sfxState.audio) {
+    sfxState.audio.pause();
+    sfxState.playing = false;
+  }
+  const view = document.getElementById('sfx-view');
+  if (view) view.classList.add('hidden');
+}
+
+// Keyboard shortcuts for sfx mode
+document.addEventListener('keydown', e => {
+  if (state.mode !== 'sfx') return;
+  if (e.target.tagName === 'INPUT') return;
+  if (e.code === 'Space') {
+    e.preventDefault();
+    document.getElementById('sfx-play-btn')?.click();
+  }
+  if (e.key === 'ArrowRight' && e.altKey) document.getElementById('sfx-next-btn')?.click();
+  if (e.key === 'ArrowLeft'  && e.altKey) document.getElementById('sfx-prev-btn')?.click();
+});

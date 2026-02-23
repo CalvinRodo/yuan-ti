@@ -74,6 +74,14 @@ MUSIC_TAG_LABELS = {
     'MSEQ': 'XMIDI music sequence (XMIDI/EVNT format — game music data)',
 }
 
+# Tags that contain raw audio (Creative Voice File / VOC)
+AUDIO_TAGS = {'BVOC'}
+
+# Human-readable names for each audio tag
+AUDIO_TAG_LABELS = {
+    'BVOC': 'Background audio sample (Creative Voice File)',
+}
+
 app = Flask(__name__, static_folder=WEB_DIR, static_url_path='')
 
 # ---------------------------------------------------------------------------
@@ -215,7 +223,7 @@ def api_gffs():
     elif cap == 'music':
         def has_music(name):
             try:
-                return any(d.tag.strip() in MUSIC_TAGS
+                return any(d.tag.strip() in MUSIC_TAGS or d.tag.strip() in AUDIO_TAGS
                            for d in load_gff(name, game_id).describe_resources())
             except Exception:
                 return False
@@ -748,7 +756,11 @@ def api_image_info(name: str, tag_url: str, number: int):
 
 @app.route('/api/gff/<name>/music')
 def api_music_list(name: str):
-    """Return all XMIDI sequence resources in a GFF file."""
+    """Return all music/audio resources in a GFF file.
+
+    Each entry has a ``type`` field: ``'midi'`` for XMIDI sequences,
+    ``'voc'`` for Creative Voice File (BVOC) samples.
+    """
     game_id = request.args.get('game', DEFAULT_GAME)
     gff = load_gff(name, game_id)
     result = []
@@ -761,8 +773,44 @@ def api_music_list(name: str):
                 'tag_label': MUSIC_TAG_LABELS.get(stripped, stripped),
                 'number':    d.number,
                 'size':      d.size,
+                'type':      'midi',
+            })
+        elif stripped in AUDIO_TAGS:
+            result.append({
+                'tag':       d.tag,
+                'tag_url':   tag_to_url_seg(d.tag),
+                'tag_label': AUDIO_TAG_LABELS.get(stripped, stripped),
+                'number':    d.number,
+                'size':      d.size,
+                'type':      'voc',
             })
     return jsonify(result)
+
+
+@app.route('/api/gff/<name>/audio/<tag_url>/<int:number>')
+def api_audio(name: str, tag_url: str, number: int):
+    """Convert a VOC audio resource (BVOC) to MP3 via ffmpeg and stream it."""
+    import subprocess
+    game_id = request.args.get('game', DEFAULT_GAME)
+    tag     = url_seg_to_tag(tag_url)
+
+    gff = load_gff(name, game_id)
+    try:
+        voc_data = gff.get_resource_data(tag, number)
+    except NoSuchResourceError:
+        abort(404)
+
+    result = subprocess.run(
+        ['ffmpeg', '-y', '-f', 'voc', '-i', 'pipe:0', '-f', 'mp3', 'pipe:1'],
+        input=voc_data,
+        capture_output=True,
+    )
+    if result.returncode != 0:
+        abort(500, description=f'ffmpeg conversion failed: {result.stderr.decode(errors="replace")}')
+
+    buf = io.BytesIO(result.stdout)
+    return send_file(buf, mimetype='audio/mpeg',
+                     download_name=f'{name}_{tag.strip()}_{number}.mp3')
 
 
 @app.route('/api/gff/<name>/midi/<tag_url>/<int:number>')
