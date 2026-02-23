@@ -62,6 +62,18 @@ def resolve_game_dir(game_id: str) -> str:
 # Tags that contain renderable image data
 IMAGE_TAGS = {'BMP ', 'TILE', 'ICON'}
 
+# Tags that contain XMIDI music sequences
+MUSIC_TAGS = {'GSEQ', 'LSEQ', 'CSEQ', 'PSEQ', 'MSEQ'}
+
+# Human-readable names for each music tag
+MUSIC_TAG_LABELS = {
+    'GSEQ': 'Global audio/sync sequence (shared background themes and sync data)',
+    'LSEQ': 'Local audio sequence (region- or scene-specific music and ambience)',
+    'CSEQ': 'Cinematic sequence (cutscene/scripted music and playback control)',
+    'PSEQ': 'Playback sequence (short playback/playlist blocks used for cues)',
+    'MSEQ': 'XMIDI music sequence (XMIDI/EVNT format — game music data)',
+}
+
 app = Flask(__name__, static_folder=WEB_DIR, static_url_path='')
 
 # ---------------------------------------------------------------------------
@@ -200,6 +212,14 @@ def api_gffs():
             except Exception:
                 return False
         files = [f for f in files if has_texts(f)]
+    elif cap == 'music':
+        def has_music(name):
+            try:
+                return any(d.tag.strip() in MUSIC_TAGS
+                           for d in load_gff(name, game_id).describe_resources())
+            except Exception:
+                return False
+        files = [f for f in files if has_music(f)]
 
     return jsonify(files)
 
@@ -720,6 +740,57 @@ def api_image_info(name: str, tag_url: str, number: int):
         'frames': [{'index': i, 'width': f.width, 'height': f.height}
                    for i, f in enumerate(frames)]
     })
+
+
+# ---------------------------------------------------------------------------
+# Routes — Music
+# ---------------------------------------------------------------------------
+
+@app.route('/api/gff/<name>/music')
+def api_music_list(name: str):
+    """Return all XMIDI sequence resources in a GFF file."""
+    game_id = request.args.get('game', DEFAULT_GAME)
+    gff = load_gff(name, game_id)
+    result = []
+    for d in gff.describe_resources():
+        stripped = d.tag.strip()
+        if stripped in MUSIC_TAGS:
+            result.append({
+                'tag':       d.tag,
+                'tag_url':   tag_to_url_seg(d.tag),
+                'tag_label': MUSIC_TAG_LABELS.get(stripped, stripped),
+                'number':    d.number,
+                'size':      d.size,
+            })
+    return jsonify(result)
+
+
+@app.route('/api/gff/<name>/midi/<tag_url>/<int:number>')
+def api_midi(name: str, tag_url: str, number: int):
+    """Convert an XMIDI sequence resource to a standard MIDI file."""
+    try:
+        from xmi_tool import xmi_to_midi, XmiError
+    except ImportError as exc:
+        abort(500, description=f'xmi_tool not available: {exc}')
+
+    game_id     = request.args.get('game', DEFAULT_GAME)
+    track_index = int(request.args.get('track_index', '0'))
+    tag         = url_seg_to_tag(tag_url)
+
+    gff = load_gff(name, game_id)
+    try:
+        xmi_data = gff.get_resource_data(tag, number)
+    except NoSuchResourceError:
+        abort(404)
+
+    try:
+        midi_bytes = xmi_to_midi(xmi_data, track_index)
+    except Exception as exc:
+        abort(400, description=f'XMI conversion failed: {exc}')
+
+    buf = io.BytesIO(midi_bytes)
+    return send_file(buf, mimetype='audio/midi',
+                     download_name=f'{name}_{tag.strip()}_{number}.mid')
 
 
 # ---------------------------------------------------------------------------

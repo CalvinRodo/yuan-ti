@@ -37,21 +37,7 @@ function bindResourceTableEvents() {
   });
 
   // Filter inputs
-  dom.resFilterTag.addEventListener('change', () => {
-    const tag = dom.resFilterTag.value;
-    if (tag) {
-      const match = state.resources.find(r => r.tag.trim() === tag);
-      dom.resFilterDesc.value    = match ? (match.description || '') : '';
-      dom.resFilterDesc.readOnly = true;
-      dom.resFilterDesc.classList.add('res-filter-readonly');
-    } else {
-      dom.resFilterDesc.value    = '';
-      dom.resFilterDesc.readOnly = false;
-      dom.resFilterDesc.classList.remove('res-filter-readonly');
-    }
-    renderResourceTable();
-  });
-  dom.resFilterDesc.addEventListener('input', () => renderResourceTable());
+  dom.resFilterTag.addEventListener('change', () => renderResourceTable());
 }
 
 function bindDetailPaneEvents() {
@@ -227,12 +213,10 @@ function renderResourceTable() {
   const gff = state.currentGff;
 
   // ---- filter ----
-  const tagF  = (dom.resFilterTag.value  || '').trim().toLowerCase();
-  const descF = (dom.resFilterDesc.value || '').trim().toLowerCase();
+  const tagF = (dom.resFilterTag.value || '').trim().toLowerCase();
 
   let rows = state.resources.filter(res => {
-    if (tagF  && !res.tag.trim().toLowerCase().includes(tagF))   return false;
-    if (descF && !res.description.toLowerCase().includes(descF)) return false;
+    if (tagF && !res.tag.trim().toLowerCase().includes(tagF)) return false;
     return true;
   });
 

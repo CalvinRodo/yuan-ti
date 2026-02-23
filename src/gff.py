@@ -78,6 +78,10 @@ GFF_CHUNK_TYPES: Dict[str, str] = {
     'WIND': 'Window resource',
     'ACF ': 'Cinematic Binary',
     'BMA ': 'Cinematic Binary File',
+    'GSEQ': 'Global audio/sync sequence',
+    'LSEQ': 'Local audio sequence',
+    'CSEQ': 'Cinematic sequence (cutscene / scripted playback control)',
+    'PSEQ': 'Playback sequence (audio/visual sync blocks)',
 }
 
 
