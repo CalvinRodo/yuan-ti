@@ -12,7 +12,7 @@
 const musicState = {
   tracks:       [],       // [{tag, tag_url, tag_label, number, size, gff, type}]
   currentIdx:   -1,       // index into musicState.tracks
-  trackType:    null,     // 'midi' | 'voc'
+  trackType:    null,     // 'midi' | 'voc' | 'ogg'
   midiBytes:    null,     // Uint8Array of current MIDI file
   parsed:       null,     // ParsedMidi object
   vocAudio:     null,     // HTMLAudioElement for VOC playback
@@ -434,7 +434,7 @@ function stopPlayback(ended = false) {
     musicState.audioCtx = null;
   }
   // Capture pause position
-  if (musicState.trackType === 'voc' && musicState.vocAudio) {
+  if ((musicState.trackType === 'voc' || musicState.trackType === 'ogg') && musicState.vocAudio) {
     const pos = ended ? 0 : musicState.vocAudio.currentTime;
     musicState.playing = false;
     updateTransportUI();
@@ -488,6 +488,42 @@ async function loadMusicTrack(idx) {
   setPlayerStatus('Loading…');
   updateTransportUI();
 
+  // ---- OGG (HTML5 Audio, native browser) path ----
+  if (track.type === 'ogg') {
+    if (!musicState.vocAudio) musicState.vocAudio = new Audio();
+    const audio = musicState.vocAudio;
+    const url   = `/api/ogg-file/${encodeURIComponent(track.filename)}?game=${state.game}`;
+    audio.src     = url;
+    audio.volume  = musicState.volume;
+    audio.loop    = musicState.looping;
+    audio.preload = 'metadata';
+
+    audio.onloadedmetadata = () => {
+      if (isFinite(audio.duration)) musicState.duration = audio.duration;
+      setPlayerStatus(`${track.name}  —  ${fmtSec(musicState.duration)}`);
+      updateProgressBar(0);
+    };
+    audio.ontimeupdate = () => {
+      if (isFinite(audio.duration)) musicState.duration = audio.duration;
+      updateProgressBar(audio.currentTime);
+    };
+    audio.onended = () => {
+      if (musicState.looping) { audio.currentTime = 0; audio.play().catch(()=>{}); }
+      else stopPlayback(true);
+    };
+
+    setPlayerStatus(`${track.name}`);
+    updateTransportUI();
+    try {
+      await audio.play();
+      musicState.playing = true;
+    } catch (e) {
+      setPlayerStatus(`Error: ${e.message}`);
+    }
+    updateTransportUI();
+    return;
+  }
+
   // ---- VOC (HTML5 Audio) path ----
   if (track.type === 'voc') {
     if (!musicState.vocAudio) musicState.vocAudio = new Audio();
@@ -521,6 +557,26 @@ async function loadMusicTrack(idx) {
       setPlayerStatus(`Error: ${e.message}`);
     }
     updateTransportUI();
+    return;
+  }
+
+  // ---- Filesystem XMI (Web Audio) path ----
+  if (track.type === 'xmi-file') {
+    try {
+      const url = `/api/xmi-file/${encodeURIComponent(track.filename)}?game=${state.game}&track_index=0`;
+      const resp = await fetch(url);
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const buf  = await resp.arrayBuffer();
+      musicState.midiBytes = new Uint8Array(buf);
+      musicState.parsed    = parseMidi(musicState.midiBytes);
+      musicState.duration  = musicState.parsed.duration;
+      setPlayerStatus(`${track.name}  —  ${fmtSec(musicState.duration)}`);
+    } catch (e) {
+      setPlayerStatus(`Error: ${e.message}`);
+      return;
+    }
+    updateTransportUI();
+    await startPlayback(0);
     return;
   }
 
@@ -573,7 +629,7 @@ function updateTransportUI() {
   const stopBtn  = document.getElementById('music-stop-btn');
   const loopBtn  = document.getElementById('music-loop-btn');
   if (!playBtn) return;
-  const hasTrack = !!musicState.parsed || musicState.trackType === 'voc';
+  const hasTrack = !!musicState.parsed || musicState.trackType === 'voc' || musicState.trackType === 'ogg';
   playBtn.textContent = musicState.playing ? '⏸' : '▶';
   playBtn.disabled    = !hasTrack;
   stopBtn.disabled    = !hasTrack;
@@ -603,7 +659,9 @@ async function renderMusicView() {
   if (!view) return;
   view.classList.remove('hidden');
 
-  const gff     = state.gffByMode.music || 'RESOURCE.GFF';
+  // gff may be null/empty for games that have no GFF music (e.g. OGG-only);
+  // loadMusicTrackList handles null gracefully and still fetches OGG tracks.
+  const gff     = state.gffByMode.music || null;
   const needLoad = !musicViewBuilt || musicDataGff !== gff || musicState.tracks.length === 0;
 
   if (!musicViewBuilt) {
@@ -704,7 +762,7 @@ function buildMusicViewDom(view) {
     const rect = bar.getBoundingClientRect();
     const pct  = (e.clientX - rect.left) / rect.width;
     const sec  = pct * (musicState.duration || 1);
-    if (musicState.trackType === 'voc' && musicState.vocAudio) {
+    if ((musicState.trackType === 'voc' || musicState.trackType === 'ogg') && musicState.vocAudio) {
       musicState.vocAudio.currentTime = sec;
       updateProgressBar(sec);
       return;
@@ -724,32 +782,52 @@ async function loadMusicTrackList(gff) {
   listEl.innerHTML = '<div class="music-loading"><div class="spinner"></div> Loading…</div>';
 
   let allTracks = [];
+
+  // --- GFF MIDI tracks (only when a GFF is selected) ---
+  if (gff) {
+    try {
+      const r = await fetch(`/api/gff/${encodeURIComponent(gff)}/music?game=${state.game}`);
+      const data = await r.json();
+      allTracks = data.map(t => ({ ...t, gff }));
+    } catch {
+      // non-fatal — may simply have no GFF music
+    }
+  }
+
+  // --- Filesystem XMI tracks ---
   try {
-    const r = await fetch(`/api/gff/${encodeURIComponent(gff)}/music?game=${state.game}`);
+    const r = await fetch(`/api/xmi-files?game=${state.game}`);
     const data = await r.json();
-    allTracks = data.map(t => ({ ...t, gff }));
+    data.forEach(f => allTracks.push({ ...f, type: 'xmi-file', tag_label: 'XMI Music Files' }));
   } catch {
-    listEl.innerHTML = '<div class="music-error">Failed to load track list.</div>';
+    // non-fatal
+  }
+
+  // --- Filesystem OGG tracks ---
+  try {
+    const r = await fetch(`/api/ogg-files?game=${state.game}`);
+    const data = await r.json();
+    data.forEach(f => allTracks.push({ ...f, type: 'ogg', tag_label: 'CD Audio Tracks (OGG)' }));
+  } catch {
+    // non-fatal
+  }
+
+  if (allTracks.length === 0) {
+    listEl.innerHTML = '<div class="music-error">No music resources found.</div>';
+    musicState.tracks = [];
+    if (countEl) countEl.textContent = '0 tracks';
     return;
   }
 
   musicState.tracks = allTracks;
-
   if (countEl) countEl.textContent = `${allTracks.length} track${allTracks.length !== 1 ? 's' : ''}`;
 
-  if (allTracks.length === 0) {
-    listEl.innerHTML = '<div class="music-error">No music resources found.</div>';
-    return;
-  }
-
-  // Separate MIDI tracks from VOC (sound effects) tracks
-  const midiTracks = allTracks.map((t, i) => ({ ...t, _idx: i })).filter(t => t.type !== 'voc');
-  const vocTracks  = allTracks.map((t, i) => ({ ...t, _idx: i })).filter(t => t.type === 'voc');
-
-  // Group MIDI tracks by tag_label
+  // Group by tag_label
   const groups = {};
-  midiTracks.forEach(t => {
-    (groups[t.tag_label] = groups[t.tag_label] || []).push(t);
+  allTracks.forEach((t, i) => {
+    const label = t.tag_label || 'Music';
+    if (!groups[label]) groups[label] = [];
+    groups[label].push({ ...t, _idx: i });
   });
 
   const frag = document.createDocumentFragment();
@@ -759,16 +837,19 @@ async function loadMusicTrackList(gff) {
     row.className = 'music-track-row';
     if (track._idx === musicState.currentIdx) row.classList.add('active');
     row.dataset.idx = track._idx;
+    const icon  = track.type === 'ogg' ? '&#127925;' : '&#9834;';
+    const label = (track.type === 'ogg' || track.type === 'xmi-file')
+      ? htmlEsc(track.name)
+      : `${htmlEsc(track.tag.trim())} #${track.number}`;
     row.innerHTML = `
-      <span class="music-track-icon">${track.type === 'voc' ? '&#128266;' : '&#9834;'}</span>
-      <span class="music-track-label">${htmlEsc(track.tag.trim())} #${track.number}</span>
+      <span class="music-track-icon">${icon}</span>
+      <span class="music-track-label">${label}</span>
       <span class="music-track-size dim">${formatBytes(track.size)}</span>
     `;
     row.addEventListener('click', () => loadMusicTrack(track._idx));
     return row;
   }
 
-  // Render MIDI groups
   Object.entries(groups).forEach(([label, tracks]) => {
     const grpHeader = document.createElement('div');
     grpHeader.className = 'music-group-header';
@@ -776,15 +857,6 @@ async function loadMusicTrackList(gff) {
     frag.appendChild(grpHeader);
     tracks.forEach(track => frag.appendChild(buildTrackRow(track)));
   });
-
-  // Render Sound Effects section
-  if (vocTracks.length > 0) {
-    const sfxHeader = document.createElement('div');
-    sfxHeader.className = 'music-group-header';
-    sfxHeader.textContent = 'Sound Effects';
-    frag.appendChild(sfxHeader);
-    vocTracks.forEach(track => frag.appendChild(buildTrackRow(track)));
-  }
 
   listEl.innerHTML = '';
   listEl.appendChild(frag);
@@ -795,8 +867,8 @@ async function loadMusicTrackList(gff) {
 // ---------------------------------------------------------------------------
 
 async function onPlayPause() {
-  // VOC (HTML5 Audio) path
-  if (musicState.trackType === 'voc' && musicState.vocAudio) {
+  // OGG / VOC (HTML5 Audio) path
+  if ((musicState.trackType === 'voc' || musicState.trackType === 'ogg') && musicState.vocAudio) {
     const audio = musicState.vocAudio;
     if (musicState.playing) {
       audio.pause();
@@ -884,8 +956,14 @@ async function loadSfxTrack(idx) {
     r.classList.toggle('active', i === idx);
   });
 
-  const url = `/api/gff/${encodeURIComponent(track.gff)}/audio/${track.tag_url}/${track.number}`
-            + `?game=${state.game}`;
+  // Route to filesystem VOC or GFF-embedded BVOC depending on source
+  let url;
+  if (track.source === 'file') {
+    url = `/api/sfx-file/${encodeURIComponent(track.filename)}?game=${state.game}`;
+  } else {
+    url = `/api/gff/${encodeURIComponent(track.gff)}/audio/${track.tag_url}/${track.number}`
+        + `?game=${state.game}`;
+  }
 
   audio.src     = url;
   audio.preload = 'metadata';
@@ -901,11 +979,18 @@ async function loadSfxTrack(idx) {
   audio.ontimeupdate = () => updateSfxProgress();
   audio.onloadedmetadata = () => updateSfxProgress();
 
+  // Update status label
+  const statusEl = document.getElementById('sfx-status');
+  if (statusEl) {
+    statusEl.textContent = track.source === 'file'
+      ? track.name
+      : `${track.tag.trim()} #${track.number}`;
+  }
+
   try {
     await audio.play();
     sfxState.playing = true;
   } catch (e) {
-    const statusEl = document.getElementById('sfx-status');
     if (statusEl) statusEl.textContent = `Error: ${e.message}`;
   }
   updateSfxUI();
@@ -923,7 +1008,9 @@ function updateSfxUI() {
   const track = sfxState.tracks[sfxState.currentIdx];
   const statusEl = document.getElementById('sfx-status');
   if (statusEl && track) {
-    statusEl.textContent = `${track.tag.trim()} #${track.number}`;
+    statusEl.textContent = track.source === 'file'
+      ? track.name
+      : `${track.tag.trim()} #${track.number}`;
   }
 }
 
@@ -972,9 +1059,10 @@ async function loadSfxTrackList(gff) {
 
   let allTracks = [];
   try {
-    const r    = await fetch(`/api/gff/${encodeURIComponent(gff)}/music?game=${state.game}`);
+    // Use the unified /api/sfx endpoint — returns GFF-embedded BVOC + filesystem VOC files
+    const r    = await fetch(`/api/sfx?game=${state.game}&gff=${encodeURIComponent(gff)}`);
     const data = await r.json();
-    allTracks  = data.filter(t => t.type === 'voc').map(t => ({ ...t, gff }));
+    allTracks  = data;
   } catch {
     listEl.innerHTML = '<div class="music-error">Failed to load sound effects.</div>';
     return;
@@ -995,9 +1083,12 @@ async function loadSfxTrackList(gff) {
     const row = document.createElement('div');
     row.className = 'sfx-track-row music-track-row';
     row.dataset.idx = i;
+    const label = track.source === 'file'
+      ? htmlEsc(track.name)
+      : `${htmlEsc(track.tag.trim())} #${track.number}`;
     row.innerHTML = `
       <span class="music-track-icon">&#128266;</span>
-      <span class="music-track-label">${htmlEsc(track.tag.trim())} #${track.number}</span>
+      <span class="music-track-label">${label}</span>
       <span class="music-track-size dim">${formatBytes(track.size)}</span>
     `;
     row.addEventListener('click', () => loadSfxTrack(i));

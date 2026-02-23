@@ -37,51 +37,110 @@ from typing import Dict, List, Optional, Tuple
 # Known chunk type descriptions
 # ---------------------------------------------------------------------------
 GFF_CHUNK_TYPES: Dict[str, str] = {
-    'ACCL': 'Accelerator resource',
-    'ADV ': 'AIL Audio Driver',
-    'APFM': 'Application frame',
-    'BMP ': 'Bitmap',
-    'BVOC': 'Background play samples',
-    'BUTN': 'Button resource',
-    'CMAP': 'Color map table',
-    'DADV': 'AIL and .COM drivers',
-    'DBOX': 'Dialog box resource',
-    'DRV ': 'Run-time loadable',
-    'EDAT': '3DX Environment database',
-    'EBOX': 'Edit box resource',
-    'ETAB': 'Object entry table',
-    'FONT': 'Font',
-    'FVOC': 'Foreground play samples',
-    'GMAP': 'Region map flags',
-    'GPL ': 'Compiled GPL files',
-    'GPLX': 'GPL index file',
-    'ICON': 'Icon resource',
-    'MAS ': 'Compiled MAS files',
-    'MENU': 'Menu resource',
-    'MERR': 'Error message text',
-    'GSEC': 'Unknown, maybe "Global secondary"?',
-    'MGTL': 'Global timbre library',
-    'MSEQ': 'XMIDI sequence files',
-    'OMAP': 'Opacity map',
-    'PAL ': 'VGA 256 color palette',
-    'POBJ': 'PolyMesh object database',
-    'RMAP': 'Region tile map',
-    'SCMD': 'Animation script',
-    'SBAR': 'Scroll-bar resource',
-    'SINF': 'Sound card info',
-    'SJMP': 'OENGINE animation',
-    'SPIN': 'Spell Information',
+    # ── GFF structure ────────────────────────────────────────────────────
+    'GFFI': 'GFF file index / resource directory',
+
+    # ── Items ────────────────────────────────────────────────────────────
+    'IT1R': 'Item data record',
+
+    # ── Text ─────────────────────────────────────────────────────────────
+    'NAME': 'Name string',
     'TEXT': 'Text resource',
+    'MERR': 'Error message text',
+    'ETME': 'Event timer entry',
+    'SPIN': 'Spell information',
+
+    # ── Images (all use PAL palette) ─────────────────────────────────────
+    'BMP ': 'Bitmap',
+    'CBMP': 'Compressed bitmap',
+    'PORT': 'Portrait image',
+    'WALL': 'Wall / background image',
+    'ICON': 'Icon resource',
     'TILE': 'Tile graphic',
-    'TMAP': 'Texture map',
-    'TXRF': 'Texture map',
+    'FONT': 'Font',
+    'PAL ': 'VGA 256-color palette',
+    'CPAL': 'Compressed / alternate color palette',
+    'CMAT': 'Color material table',
+
+    # ── Animation ────────────────────────────────────────────────────────
+    'SCMD': 'Animation script',
+    'SJMP': 'OENGINE animation jump table',
+    'VECT': 'Vector / animation data',
+
+    # ── Objects ──────────────────────────────────────────────────────────
+    'OJFF': 'Embedded object GFF',
+    'MONR': 'Monster record',
+    'PSIN': 'Psionic power entry',
+    'PSST': 'Psionic power status',
+
+    # ── Map data ─────────────────────────────────────────────────────────
+    'ETAB': 'Object entry table',
+    'GMAP': 'Region map flags',
+    'RMAP': 'Region tile map',
+    'MAP ': 'Map data',
+    'RDAT': 'Region data',
+    'RNME': 'Region name',
+
+    # ── Window / UI data ─────────────────────────────────────────────────
     'WIND': 'Window resource',
-    'ACF ': 'Cinematic Binary',
-    'BMA ': 'Cinematic Binary File',
+    'BUTN': 'Button resource',
+    'APFM': 'Application frame',
+    'EBOX': 'Edit box resource',
+    'ACCL': 'Accelerator resource',
+    'SBAR': 'Scroll-bar resource',
+    'MENU': 'Menu resource',
+    'DBOX': 'Dialog box resource',
+
+    # ── GPL scripting ────────────────────────────────────────────────────
+    'GPLI': 'GPL symbol export index',
+    'GPLX': 'GPL index file',
+    'MAS ': 'Compiled MAS files',
+    'GPL ': 'Compiled GPL code',
+
+    # ── Characters ───────────────────────────────────────────────────────
+    'CHAR': 'Character data',
+
+    # ── Spell / combat status ────────────────────────────────────────────
+    'SPST': 'Spell status record',
+
+    # ── Saveable object data (RDFF) ──────────────────────────────────────
+    'RDFF': 'Saveable object data (item / combat / char / mini / player / entity)',
+
+    # ── Audio ────────────────────────────────────────────────────────────
+    'BVOC': 'Background audio sample (Creative Voice File)',
+    'FVOC': 'Foreground audio sample (Creative Voice File)',
     'GSEQ': 'Global audio/sync sequence',
     'LSEQ': 'Local audio sequence',
     'CSEQ': 'Cinematic sequence (cutscene / scripted playback control)',
     'PSEQ': 'Playback sequence (audio/visual sync blocks)',
+    'MSEQ': 'XMIDI music sequence',
+    'PLYL': 'Playlist',
+    'MGTL': 'Global timbre library',
+    'SINF': 'Sound card info',
+
+    # ── Cinematics ───────────────────────────────────────────────────────
+    'ACF ': 'Cinematic binary',
+    'BMA ': 'Cinematic binary file',
+
+    # ── Audio drivers ────────────────────────────────────────────────────
+    'ADV ': 'AIL audio driver',
+    'DADV': 'AIL .COM driver',
+    'DRV ': 'Run-time loadable driver',
+
+    # ── Misc ─────────────────────────────────────────────────────────────
+    'ALL ': 'All-resource data block',
+    'CACT': 'Combat / character action',
+    'DATA': 'Generic data block',
+    'EDAT': '3DX environment database',
+    'FNFO': 'Font info',
+    'GREQ': 'Global requirement',
+    'GSEC': 'Global secondary data',
+    'OMAP': 'Opacity map',
+    'POBJ': 'PolyMesh object database',
+    'PREF': 'Preferences',
+    'TMAP': 'Texture map',
+    'TXRF': 'Texture map reference',
+    'CMAP': 'Color map table',
 }
 
 

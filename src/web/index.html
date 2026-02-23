@@ -59,6 +59,14 @@
           <span class="mode-icon">&#128266;</span>
           <span class="mode-label">SFX</span>
         </button>
+        <button class="mode-btn" data-mode="cinematic" title="Cinematic Viewer">
+          <span class="mode-icon">&#127909;</span>
+          <span class="mode-label">Cinema</span>
+        </button>
+        <button class="mode-btn" data-mode="data" title="Game Data Browser">
+          <span class="mode-icon">&#128218;</span>
+          <span class="mode-label">Data</span>
+        </button>
       </nav>
 
       <!-- ===== MAIN ===== -->
@@ -178,6 +186,12 @@
             <!-- Sound effects player -->
             <div id="sfx-view" class="hidden"></div>
 
+            <!-- Cinematic viewer -->
+            <div id="cinematic-view" class="hidden"></div>
+
+            <!-- Game data browser (items / monsters / spells) -->
+            <div id="data-view" class="hidden"></div>
+
             <!-- All-resources table -->
             <div id="resource-table-wrap" class="hidden">
               <table id="resource-table">
@@ -255,5 +269,7 @@
   <script src="view-text.js"></script>
   <script src="view-palette.js"></script>
   <script src="view-music.js"></script>
+  <script src="view-cinematic.js"></script>
+  <script src="view-data.js"></script>
 </body>
 </html>

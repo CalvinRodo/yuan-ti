@@ -8,7 +8,7 @@ OUT_DIR  := out
 
 .DEFAULT_GOAL := help
 
-.PHONY: help serve install extract list-resource list-gff extract-gff
+.PHONY: help serve install install-ffmpeg extract list-resource list-gff extract-gff
 
 help: ## Show this help message
 	@echo ""
@@ -27,6 +27,10 @@ serve: ## Start the Flask web viewer  →  http://localhost:5000
 
 install: ## Sync Python deps with uv (creates .venv)
 	uv sync
+
+install-ffmpeg: ## Install ffmpeg (required for VOC → MP3 audio conversion)
+	sudo apt-get update -qq && sudo apt-get install -y ffmpeg
+	@echo "ffmpeg installed: $$(ffmpeg -version 2>&1 | head -1)"
 
 extract: ## Extract ALL GFF files to ./out/<gff-name>/
 	bash extract.sh

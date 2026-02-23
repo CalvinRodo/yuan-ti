@@ -16,9 +16,9 @@ const state = {
   games: [],                // [{id, label, supported}] from /api/games
   gameUnsupported: false,   // true when selected game cannot be browsed
   // Per-mode selected GFF (spells is always locked to RESOURCE.GFF)
-  gffByMode:    { spells: 'RESOURCE.GFF', map: null, resources: null, images: null, text: null, palette: null, music: 'RESOURCE.GFF', sfx: 'RESOURCE.GFF' },
+  gffByMode:    { spells: 'RESOURCE.GFF', map: null, resources: null, images: null, text: null, palette: null, music: 'RESOURCE.GFF', sfx: 'RESOURCE.GFF', cinematic: null, data: null },
   // Per-mode fetched GFF lists
-  gffListByMode:{ spells: ['RESOURCE.GFF'], map: [], resources: [], images: [], text: [], palette: [], music: [], sfx: [] },
+  gffListByMode:{ spells: ['RESOURCE.GFF'], map: [], resources: [], images: [], text: [], palette: [], music: [], sfx: [], cinematic: [], data: [] },
 
   resources:   [],
   pals:        [],    // per-GFF pals (for non-images modes)
@@ -237,8 +237,8 @@ async function populateGameSelect() {
 
 async function refreshGameData() {
   // Reset all cached GFF lists so they reload for the active game
-  state.gffListByMode = { spells: ['RESOURCE.GFF'], map: [], resources: [], images: [], text: [], palette: [], music: [], sfx: [] };
-  state.gffByMode     = { spells: 'RESOURCE.GFF', map: null, resources: null, images: null, text: null, palette: null, music: 'RESOURCE.GFF', sfx: 'RESOURCE.GFF' };
+  state.gffListByMode = { spells: ['RESOURCE.GFF'], map: [], resources: [], images: [], text: [], palette: [], music: [], sfx: [], cinematic: [], data: [] };
+  state.gffByMode     = { spells: 'RESOURCE.GFF', map: null, resources: null, images: null, text: null, palette: null, music: 'RESOURCE.GFF', sfx: 'RESOURCE.GFF', cinematic: null, data: null };
   state.allPals       = [];
   state.resources     = [];
   state.pals          = [];
@@ -251,6 +251,8 @@ async function refreshGameData() {
   if (typeof musicViewBuilt !== 'undefined') { musicViewBuilt = false; musicDataGff = null;
     if (typeof stopPlayback === 'function') stopPlayback(); }
   if (typeof sfxViewBuilt !== 'undefined') { sfxViewBuilt = false; sfxDataGff = null; }
+  if (typeof cinematicViewBuilt !== 'undefined') cinematicViewBuilt = false;
+  if (typeof teardownDataView    === 'function')  teardownDataView();
 
   closeDetailPane();
   hideAllViews();
@@ -325,10 +327,10 @@ async function activateMode(mode) {
   closeDetailPane();
 
   // Show/hide toolbar groups
-  dom.modeGffGroup.classList.toggle('hidden', mode === 'spells' || mode === 'palette');
+  dom.modeGffGroup.classList.toggle('hidden', mode === 'spells' || mode === 'palette' || mode === 'cinematic' || mode === 'data');
   dom.imgViewGroup.classList.toggle('hidden', mode !== 'images');
-  // Palette selector is not useful in text or palette or music/sfx modes
-  dom.palGroup.classList.toggle('hidden', mode === 'text' || mode === 'palette' || mode === 'music' || mode === 'sfx');
+  // Palette selector is not useful in text or palette or music/sfx/cinematic/data modes
+  dom.palGroup.classList.toggle('hidden', mode === 'text' || mode === 'palette' || mode === 'music' || mode === 'sfx' || mode === 'cinematic' || mode === 'data');
 
   // Tear down music player when leaving music or sfx mode
   if (mode !== 'music' && mode !== 'sfx' && typeof teardownMusicView === 'function') teardownMusicView();
@@ -336,6 +338,18 @@ async function activateMode(mode) {
 
   // Palette mode renders directly from state.allPals — no GFF selection needed
   if (mode === 'palette') {
+    renderContent();
+    return;
+  }
+
+  // Cinematic mode — no GFF files, just standalone FLI files
+  if (mode === 'cinematic') {
+    renderContent();
+    return;
+  }
+
+  // Data mode — items/monsters/spells from dedicated API endpoints
+  if (mode === 'data') {
     renderContent();
     return;
   }
@@ -385,7 +399,7 @@ async function activateMode(mode) {
 // ---------------------------------------------------------------------------
 async function ensureGffList(mode) {
   if (state.gffListByMode[mode].length > 0) return;
-  const capMap = { map: 'maps', images: 'images', text: 'texts', music: 'music', sfx: 'music' };
+  const capMap = { map: 'maps', images: 'images', text: 'texts', music: 'music', sfx: 'sfx' };
   const cap = capMap[mode] ?? 'resources';
   try {
     const r = await fetch(`/api/gffs?cap=${cap}&game=${state.game}`);
@@ -582,6 +596,10 @@ function hideAllViews() {
   if (mv) mv.classList.add('hidden');
   const sv = document.getElementById('sfx-view');
   if (sv) sv.classList.add('hidden');
+  const cv = document.getElementById('cinematic-view');
+  if (cv) cv.classList.add('hidden');
+  const dv = document.getElementById('data-view');
+  if (dv) dv.classList.add('hidden');
   hideMapView();
 }
 
@@ -607,6 +625,18 @@ function renderContent() {
   // SFX mode — bypass the resources guard
   if (state.mode === 'sfx') {
     renderSfxView();
+    return;
+  }
+
+  // Cinematic mode — no GFF resources
+  if (state.mode === 'cinematic') {
+    renderCinematicView();
+    return;
+  }
+
+  // Data browser — items / monsters / spells
+  if (state.mode === 'data') {
+    renderDataView();
     return;
   }
 

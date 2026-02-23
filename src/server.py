@@ -16,11 +16,12 @@ import re
 import glob
 import sys
 
-from flask import Flask, jsonify, send_file, abort, send_from_directory, request
+from flask import Flask, jsonify, send_file, abort, send_from_directory, request, Response
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from gff import GffFile, NoSuchResourceError, GFF_CHUNK_TYPES
 from image import ImageReading, Palette
+from ds1_parsers import parse_items, parse_monsters, parse_spells
 
 # ---------------------------------------------------------------------------
 # Paths & game library
@@ -31,36 +32,44 @@ WEB_DIR  = os.path.join(SRC_DIR, 'web')
 
 GAMES: dict[str, dict] = {
     'dark_sun': {
-        'id':        'dark_sun',
-        'label':     'Dark Sun: Shattered Lands',
-        'dir':       os.path.join(BASE_DIR, 'dark_sun'),
-        'supported': True,
+        'id':             'dark_sun',
+        'label':          'Dark Sun: Shattered Lands',
+        'dir':            os.path.join(BASE_DIR, 'dark_sun'),
+        'supported':      True,
+        'sfx_dir':        None,   # BVOC lives inside GFF files only
+        'music_dir':      None,
+        'cinematic_dir':  None,   # DS1 has no standalone FLI files
     },
     'dark_sun_2': {
-        'id':        'dark_sun_2',
-        'label':     'Dark Sun: Wake of the Ravager',
-        'dir':       os.path.join(BASE_DIR, 'dark_sun_2', 'data'),
-        'supported': True,
+        'id':             'dark_sun_2',
+        'label':          'Dark Sun: Wake of the Ravager',
+        'dir':            os.path.join(BASE_DIR, 'dark_sun_2', 'data'),
+        'supported':      True,
+        'sfx_dir':        os.path.join(BASE_DIR, 'dark_sun_2', 'data'),
+        'music_dir':      os.path.join(BASE_DIR, 'dark_sun_2', 'data', 'MUSIC'),
+        'cinematic_dir':  os.path.join(BASE_DIR, 'dark_sun_2', 'data'),
     },
     'al-qadim': {
-        'id':        'al-qadim',
-        'label':     "Al-Qadim: The Genie's Curse",
-        'dir':       os.path.join(BASE_DIR, 'al-qadim', 'data'),
-        'supported': False,
+        'id':             'al-qadim',
+        'label':          "Al-Qadim: The Genie's Curse",
+        'dir':            os.path.join(BASE_DIR, 'al-qadim', 'data'),
+        'supported':      True,
+        'sfx_dir':        os.path.join(BASE_DIR, 'al-qadim', 'data', 'SFX'),
+        'music_dir':      None,
+        'xmi_dir':        os.path.join(BASE_DIR, 'al-qadim', 'data', 'SFX'),
+        'cinematic_dir':  None,
     },
 }
 DEFAULT_GAME = 'dark_sun'
 
 
 def resolve_game_dir(game_id: str) -> str:
-    """Return the GFF data directory for *game_id*, or abort if unsupported."""
+    """Return the GFF data directory for *game_id*, or abort if not found."""
     info = GAMES.get(game_id, GAMES[DEFAULT_GAME])
-    if not info.get('supported', True):
-        abort(400, description=f"Game '{game_id}' is not supported.")
     return info['dir']
 
 # Tags that contain renderable image data
-IMAGE_TAGS = {'BMP ', 'TILE', 'ICON'}
+IMAGE_TAGS = {'BMP ', 'CBMP', 'TILE', 'ICON', 'PORT', 'WALL', 'FONT'}
 
 # Tags that contain XMIDI music sequences
 MUSIC_TAGS = {'GSEQ', 'LSEQ', 'CSEQ', 'PSEQ', 'MSEQ'}
@@ -181,6 +190,8 @@ def api_games():
             'id':        info['id'],
             'label':     info['label'],
             'supported': info['supported'],
+            'has_sfx':   bool(info.get('sfx_dir') and os.path.isdir(info['sfx_dir'])),
+            'has_ogg':   bool(info.get('music_dir') and os.path.isdir(info['music_dir'])),
         }
         for info in GAMES.values()
     ])
@@ -223,11 +234,19 @@ def api_gffs():
     elif cap == 'music':
         def has_music(name):
             try:
-                return any(d.tag.strip() in MUSIC_TAGS or d.tag.strip() in AUDIO_TAGS
+                return any(d.tag.strip() in MUSIC_TAGS
                            for d in load_gff(name, game_id).describe_resources())
             except Exception:
                 return False
         files = [f for f in files if has_music(f)]
+    elif cap == 'sfx':
+        def has_sfx(name):
+            try:
+                return any(d.tag.strip() in AUDIO_TAGS
+                           for d in load_gff(name, game_id).describe_resources())
+            except Exception:
+                return False
+        files = [f for f in files if has_sfx(f)]
 
     return jsonify(files)
 
@@ -756,10 +775,12 @@ def api_image_info(name: str, tag_url: str, number: int):
 
 @app.route('/api/gff/<name>/music')
 def api_music_list(name: str):
-    """Return all music/audio resources in a GFF file.
+    """Return all XMIDI music resources in a GFF file.
 
-    Each entry has a ``type`` field: ``'midi'`` for XMIDI sequences,
-    ``'voc'`` for Creative Voice File (BVOC) samples.
+    Only MIDI/XMIDI sequences are returned (MUSIC_TAGS).  BVOC (Creative
+    Voice File) resources are intentionally excluded here — they are served
+    via the dedicated /api/sfx endpoint so they appear only in the Sound
+    Effects tab and not in the Music tab.
     """
     game_id = request.args.get('game', DEFAULT_GAME)
     gff = load_gff(name, game_id)
@@ -775,16 +796,218 @@ def api_music_list(name: str):
                 'size':      d.size,
                 'type':      'midi',
             })
-        elif stripped in AUDIO_TAGS:
+    return jsonify(result)
+
+
+@app.route('/api/sfx')
+def api_sfx_list():
+    """Return all sound-effect tracks for a game.
+
+    Combines two sources:
+    1. GFF-embedded BVOC resources (from the GFF specified by the ``gff``
+       query parameter, defaulting to RESOURCE.GFF).
+    2. Loose *.VOC files found in the game's filesystem SFX directory.
+
+    Each entry carries a ``source`` field (``'gff'`` or ``'file'``) so the
+    front-end knows which playback route to use.
+    """
+    game_id  = request.args.get('game', DEFAULT_GAME)
+    gff_name = request.args.get('gff', 'RESOURCE.GFF').upper()
+    game     = GAMES.get(game_id, GAMES[DEFAULT_GAME])
+    result   = []
+
+    # --- 1. GFF-embedded BVOC ---
+    gff_dir  = game['dir']
+    gff_path = os.path.join(gff_dir, gff_name)
+    if os.path.isfile(gff_path):
+        try:
+            gff = load_gff(gff_name, game_id)
+            for d in gff.describe_resources():
+                if d.tag.strip() in AUDIO_TAGS:
+                    result.append({
+                        'source':   'gff',
+                        'gff':      gff_name,
+                        'tag':      d.tag,
+                        'tag_url':  tag_to_url_seg(d.tag),
+                        'number':   d.number,
+                        'size':     d.size,
+                        'name':     f'{d.tag.strip()} #{d.number}',
+                    })
+        except Exception:
+            pass
+
+    # --- 2. Filesystem *.VOC files ---
+    sfx_dir = game.get('sfx_dir')
+    if sfx_dir and os.path.isdir(sfx_dir):
+        voc_files = sorted(
+            glob.glob(os.path.join(sfx_dir, '*.VOC')) +
+            glob.glob(os.path.join(sfx_dir, '*.voc'))
+        )
+        seen = set()
+        for filepath in voc_files:
+            filename = os.path.basename(filepath)
+            key = filename.upper()
+            if key in seen:
+                continue
+            seen.add(key)
             result.append({
-                'tag':       d.tag,
-                'tag_url':   tag_to_url_seg(d.tag),
-                'tag_label': AUDIO_TAG_LABELS.get(stripped, stripped),
-                'number':    d.number,
-                'size':      d.size,
-                'type':      'voc',
+                'source':   'file',
+                'filename': filename,
+                'name':     os.path.splitext(filename)[0],
+                'size':     os.path.getsize(filepath),
+            })
+
+    return jsonify(result)
+
+
+@app.route('/api/sfx-file/<path:filename>')
+def api_sfx_file(filename: str):
+    """Convert a filesystem VOC file to MP3 via ffmpeg and stream it.
+
+    The ``filename`` is looked up in the game's sfx_dir.  The lookup is
+    case-insensitive on case-sensitive filesystems.
+    """
+    import subprocess
+    game_id = request.args.get('game', DEFAULT_GAME)
+    game    = GAMES.get(game_id, GAMES[DEFAULT_GAME])
+    sfx_dir = game.get('sfx_dir')
+    if not sfx_dir or not os.path.isdir(sfx_dir):
+        abort(404, description='No SFX directory configured for this game.')
+
+    # Resolve the file path (case-insensitive fallback)
+    filepath = os.path.join(sfx_dir, filename)
+    if not os.path.isfile(filepath):
+        upper = filename.upper()
+        match = next(
+            (f for f in os.listdir(sfx_dir) if f.upper() == upper), None
+        )
+        if match is None:
+            abort(404, description=f'VOC file not found: {filename}')
+        filepath = os.path.join(sfx_dir, match)
+
+    with open(filepath, 'rb') as fh:
+        voc_data = fh.read()
+
+    proc = subprocess.run(
+        ['ffmpeg', '-y', '-f', 'voc', '-i', 'pipe:0', '-f', 'mp3', 'pipe:1'],
+        input=voc_data,
+        capture_output=True,
+    )
+    if proc.returncode != 0:
+        abort(500, description=f'ffmpeg failed: {proc.stderr.decode(errors="replace")}')
+
+    buf = io.BytesIO(proc.stdout)
+    stem = os.path.splitext(os.path.basename(filepath))[0]
+    return send_file(buf, mimetype='audio/mpeg', download_name=f'{stem}.mp3')
+
+
+@app.route('/api/xmi-files')
+def api_xmi_files():
+    """Return a sorted list of filesystem XMI music files in the game's xmi_dir."""
+    game_id = request.args.get('game', DEFAULT_GAME)
+    game    = GAMES.get(game_id, GAMES[DEFAULT_GAME])
+    xmi_dir = game.get('xmi_dir')
+    result  = []
+    if xmi_dir and os.path.isdir(xmi_dir):
+        xmi_files = sorted(
+            glob.glob(os.path.join(xmi_dir, '*.XMI')) +
+            glob.glob(os.path.join(xmi_dir, '*.xmi'))
+        )
+        seen = set()
+        for filepath in xmi_files:
+            filename = os.path.basename(filepath)
+            if filename.upper() in seen:
+                continue
+            seen.add(filename.upper())
+            result.append({
+                'filename': filename,
+                'name':     os.path.splitext(filename)[0],
+                'size':     os.path.getsize(filepath),
             })
     return jsonify(result)
+
+
+@app.route('/api/xmi-file/<path:filename>')
+def api_xmi_file(filename: str):
+    """Convert a filesystem XMI file to MIDI and serve it.
+
+    The file is looked up (case-insensitively) in the game's xmi_dir.
+    """
+    from xmi_tool import xmi_to_midi
+    game_id = request.args.get('game', DEFAULT_GAME)
+    game    = GAMES.get(game_id, GAMES[DEFAULT_GAME])
+    xmi_dir = game.get('xmi_dir')
+    if not xmi_dir or not os.path.isdir(xmi_dir):
+        abort(404, description='No XMI directory configured for this game.')
+
+    filepath = os.path.join(xmi_dir, filename)
+    if not os.path.isfile(filepath):
+        upper = filename.upper()
+        match = next(
+            (f for f in os.listdir(xmi_dir) if f.upper() == upper), None
+        )
+        if match is None:
+            abort(404, description=f'XMI file not found: {filename}')
+        filepath = os.path.join(xmi_dir, match)
+
+    with open(filepath, 'rb') as fh:
+        xmi_data = fh.read()
+
+    track_index = int(request.args.get('track_index', 0))
+    try:
+        midi_data = xmi_to_midi(xmi_data, track_index)
+    except Exception as exc:
+        abort(500, description=f'XMI conversion failed: {exc}')
+
+    return Response(midi_data, mimetype='audio/midi')
+
+
+@app.route('/api/ogg-files')
+def api_ogg_files():
+    """Return a sorted list of OGG music files in the game's music directory."""
+    game_id   = request.args.get('game', DEFAULT_GAME)
+    game      = GAMES.get(game_id, GAMES[DEFAULT_GAME])
+    music_dir = game.get('music_dir')
+    result    = []
+    if music_dir and os.path.isdir(music_dir):
+        ogg_files = sorted(
+            glob.glob(os.path.join(music_dir, '*.ogg')) +
+            glob.glob(os.path.join(music_dir, '*.OGG'))
+        )
+        seen = set()
+        for filepath in ogg_files:
+            filename = os.path.basename(filepath)
+            if filename.upper() in seen:
+                continue
+            seen.add(filename.upper())
+            result.append({
+                'filename': filename,
+                'name':     os.path.splitext(filename)[0],
+                'size':     os.path.getsize(filepath),
+            })
+    return jsonify(result)
+
+
+@app.route('/api/ogg-file/<path:filename>')
+def api_ogg_file(filename: str):
+    """Stream an OGG music file directly (no conversion required)."""
+    game_id   = request.args.get('game', DEFAULT_GAME)
+    game      = GAMES.get(game_id, GAMES[DEFAULT_GAME])
+    music_dir = game.get('music_dir')
+    if not music_dir or not os.path.isdir(music_dir):
+        abort(404, description='No music directory configured for this game.')
+
+    filepath = os.path.join(music_dir, filename)
+    if not os.path.isfile(filepath):
+        upper = filename.upper()
+        match = next(
+            (f for f in os.listdir(music_dir) if f.upper() == upper), None
+        )
+        if match is None:
+            abort(404, description=f'OGG file not found: {filename}')
+        filepath = os.path.join(music_dir, match)
+
+    return send_file(filepath, mimetype='audio/ogg')
 
 
 @app.route('/api/gff/<name>/audio/<tag_url>/<int:number>')
@@ -839,6 +1062,160 @@ def api_midi(name: str, tag_url: str, number: int):
     buf = io.BytesIO(midi_bytes)
     return send_file(buf, mimetype='audio/midi',
                      download_name=f'{name}_{tag.strip()}_{number}.mid')
+
+
+# ---------------------------------------------------------------------------
+# Routes — Cinematics
+# ---------------------------------------------------------------------------
+
+# In-memory cache: filename → mp4 bytes (keyed per game)
+_cinematic_cache: dict[tuple, bytes] = {}
+
+
+@app.route('/api/cinematics')
+def api_cinematics():
+    """Return a sorted list of .FLI/.FLC cinematic files for the game."""
+    game_id = request.args.get('game', DEFAULT_GAME)
+    game    = GAMES.get(game_id, GAMES[DEFAULT_GAME])
+    cine_dir = game.get('cinematic_dir')
+    if not cine_dir or not os.path.isdir(cine_dir):
+        return jsonify([])
+
+    results = []
+    seen = set()
+    patterns = ['*.FLI', '*.fli', '*.FLC', '*.flc']
+    for pat in patterns:
+        for filepath in sorted(glob.glob(os.path.join(cine_dir, pat))):
+            name = os.path.basename(filepath)
+            if name.upper() in seen:
+                continue
+            seen.add(name.upper())
+            results.append({
+                'filename': name,
+                'name':     os.path.splitext(name)[0],
+                'size':     os.path.getsize(filepath),
+            })
+    results.sort(key=lambda r: r['name'])
+    return jsonify(results)
+
+
+@app.route('/api/cinematic/<path:filename>')
+def api_cinematic(filename: str):
+    """Convert a FLI/FLC cinematic to MP4 via ffmpeg and stream it.
+
+    The result is cached in memory so subsequent requests are instant.
+    """
+    import subprocess
+    game_id  = request.args.get('game', DEFAULT_GAME)
+    game     = GAMES.get(game_id, GAMES[DEFAULT_GAME])
+    cine_dir = game.get('cinematic_dir')
+    if not cine_dir or not os.path.isdir(cine_dir):
+        abort(404, description='No cinematic directory for this game.')
+
+    # Resolve file (case-insensitive)
+    filepath = os.path.join(cine_dir, filename)
+    if not os.path.isfile(filepath):
+        upper = filename.upper()
+        match = next(
+            (f for f in os.listdir(cine_dir) if f.upper() == upper), None
+        )
+        if match is None:
+            abort(404, description=f'Cinematic not found: {filename}')
+        filepath = os.path.join(cine_dir, match)
+
+    cache_key = (game_id, os.path.basename(filepath).upper())
+    if cache_key not in _cinematic_cache:
+        proc = subprocess.run(
+            [
+                'ffmpeg', '-y',
+                '-i', filepath,
+                '-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2',  # ensure even dimensions for h264
+                '-c:v', 'libx264', '-preset', 'fast', '-crf', '23',
+                '-c:a', 'aac',
+                '-movflags', 'frag_keyframe+empty_moov',  # streamable fragmented MP4
+                '-f', 'mp4',
+                'pipe:1',
+            ],
+            capture_output=True,
+        )
+        if proc.returncode != 0:
+            abort(500, description=f'ffmpeg failed: {proc.stderr.decode(errors="replace")}')
+        _cinematic_cache[cache_key] = proc.stdout
+
+    buf = io.BytesIO(_cinematic_cache[cache_key])
+    stem = os.path.splitext(os.path.basename(filepath))[0]
+    return send_file(buf, mimetype='video/mp4', download_name=f'{stem}.mp4')
+
+
+# ---------------------------------------------------------------------------
+# Game data: items, monsters, spells
+# ---------------------------------------------------------------------------
+
+# In-process cache so large SEGOBJEX scans aren't repeated per request.
+_gamedata_cache: dict[tuple, list] = {}
+
+
+def _load_gamedata(kind: str, game_id: str) -> list:
+    """Load and cache items / monsters / spells for *game_id*."""
+    key = (kind, game_id)
+    if key in _gamedata_cache:
+        return _gamedata_cache[key]
+
+    game    = GAMES.get(game_id, GAMES[DEFAULT_GAME])
+    game_dir = game['dir']
+
+    def try_gff(filename: str):
+        """Try to load *filename* from game dir, case-insensitively."""
+        path = os.path.join(game_dir, filename)
+        if not os.path.isfile(path):
+            # Case-insensitive fallback
+            upper = filename.upper()
+            match = next(
+                (f for f in os.listdir(game_dir) if f.upper() == upper), None)
+            if match is None:
+                return None
+            path = os.path.join(game_dir, match)
+        try:
+            return load_gff(os.path.basename(path), game_id)
+        except Exception:
+            return None
+
+    if kind == 'items':
+        gff = try_gff('GPLDATA.GFF')
+        result = parse_items(gff) if gff else []
+    elif kind == 'monsters':
+        # DS1 uses SEGOBJEX.GFF, DS2 uses OBJEX.GFF
+        gff = try_gff('SEGOBJEX.GFF') or try_gff('OBJEX.GFF')
+        result = parse_monsters(gff) if gff else []
+    elif kind == 'spells':
+        gff = try_gff('RESOURCE.GFF')
+        result = parse_spells(gff) if gff else []
+    else:
+        result = []
+
+    _gamedata_cache[key] = result
+    return result
+
+
+@app.route('/api/items')
+def api_items():
+    """Return all item types from IT1R + NAME in GPLDATA.GFF."""
+    game_id = request.args.get('game', DEFAULT_GAME)
+    return jsonify(_load_gamedata('items', game_id))
+
+
+@app.route('/api/monsters')
+def api_monsters():
+    """Return all combat entities from RDFF resources in SEGOBJEX/OBJEX.GFF."""
+    game_id = request.args.get('game', DEFAULT_GAME)
+    return jsonify(_load_gamedata('monsters', game_id))
+
+
+@app.route('/api/spells')
+def api_gamedata_spells():
+    """Return all spell descriptions from SPIN resources in RESOURCE.GFF."""
+    game_id = request.args.get('game', DEFAULT_GAME)
+    return jsonify(_load_gamedata('spells', game_id))
 
 
 # ---------------------------------------------------------------------------
