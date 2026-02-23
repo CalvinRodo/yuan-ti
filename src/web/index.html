@@ -141,15 +141,9 @@
             <!-- Region tile-map viewer -->
             <div id="rmap-view" class="hidden">
               <div id="map-toolbar">
-                <div class="map-ctrl-group">
-                  <label class="control-label" for="rmap-select">RMAP</label>
-                  <select id="rmap-select"></select>
-                </div>
-                <div class="map-ctrl-group">
-                  <label class="control-label" for="map-width-input">Width</label>
-                  <input id="map-width-input" type="number" min="1" max="2048">
-                  <span id="map-size-label" class="dim"></span>
-                </div>
+                <select id="rmap-select" class="hidden"></select>
+                <input  id="map-width-input" class="hidden" type="number" min="1" max="2048">
+                <span   id="map-size-label"  class="hidden"></span>
                 <div class="map-ctrl-group">
                   <label class="control-label">Zoom</label>
                   <button id="map-zoom-out" class="map-btn" title="Zoom out">&#8722;</button>
@@ -161,7 +155,7 @@
                 </div>
               </div>
               <div id="map-canvas-wrap">
-                <canvas id="map-canvas"></canvas>
+                <img id="map-render-img" alt="Region map">
                 <div id="map-spinner" class="hidden">
                   <div class="spinner"></div>
                   <span>Loading map&#8230;</span>

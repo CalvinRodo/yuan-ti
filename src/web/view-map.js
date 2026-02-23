@@ -1,28 +1,32 @@
 /* ================================================================
    Dark Sun GFF Viewer — view-map.js
-   Region tile-map canvas viewer (RMAP resources).
-   Depends on globals from app.js: state, dom, palParams(),
-   formatBytes()
+   Region map viewer: loads a server-rendered PNG of the full map
+   (RMAP tiles + ETAB objects + WALL sprites) and provides
+   CSS-transform pan/zoom interaction.
+
+   Depends on globals from app.js: state, dom, palParams(), formatBytes()
    ================================================================ */
 
 'use strict';
 
-const TILE_SIZES = [8, 12, 16, 24, 32, 48, 64];
+// Zoom steps: effective tile sizes in pixels (native render is 16 px/tile).
+const TILE_SIZES = [4, 8, 12, 16, 24, 32, 48, 64];
+const NATIVE_TILE_PX = 16;
 
 const mapState = {
-  tiles:       null,         // flat Array of tile numbers
-  mapWidth:    128,          // columns (set from RMAP or user input)
-  mapHeight:   112,          // rows
-  tileSize:    16,           // rendered pixels per tile
-  tileSizeIdx: TILE_SIZES.indexOf(16),
+  loadedUrl:   null,   // URL of the currently displayed render
+  imgW:        0,      // natural width of the loaded image
+  imgH:        0,      // natural height of the loaded image
+  zoom:        1.0,    // CSS scale multiplier (1.0 = native 16 px/tile)
+  zoomIdx:     TILE_SIZES.indexOf(NATIVE_TILE_PX),
   pan:         { x: 0, y: 0 },
   drag:        { active: false, startX: 0, startY: 0, startPanX: 0, startPanY: 0 },
-  tileCache:   new Map(),    // tileNum -> { status, img }
-  rafId:       null,
+  // kept so app.js code that resets these doesn't error
+  tiles:       null,
+  tileCache:   { clear() {} },
   dirty:       false,
   rmapList:    [],
   rmapNumber:  null,
-  resizeObs:   null,
 };
 
 // ---------------------------------------------------------------------------
@@ -32,200 +36,123 @@ const mapState = {
 function showMapView() {
   dom.content.classList.add('map-active');
   dom.mapView.classList.remove('hidden');
-  buildRmapSelector();
-  startMapRaf();
-  resizeMapCanvas();
-  if (!mapState.tiles) {
-    loadRmap();
-  } else {
-    mapState.dirty = true;
-  }
-  if (!mapState.resizeObs) {
-    mapState.resizeObs = new ResizeObserver(() => {
-      resizeMapCanvas();
-      mapState.dirty = true;
-    });
-    mapState.resizeObs.observe(dom.mapCanvasWrap);
+  applyTransform();
+
+  const url = _buildRenderUrl();
+  if (url && url !== mapState.loadedUrl) {
+    loadMapRender(url);
   }
 }
 
 function hideMapView() {
   dom.content.classList.remove('map-active');
   dom.mapView.classList.add('hidden');
-  stopMapRaf();
 }
 
 // ---------------------------------------------------------------------------
-// RMAP selector
+// URL builder
 // ---------------------------------------------------------------------------
 
-function buildRmapSelector() {
-  dom.rmapSelect.innerHTML = '';
-  mapState.rmapList.forEach(r => {
-    const opt = document.createElement('option');
-    opt.value       = r.number;
-    const tagLabel  = (r.tag || 'RMAP').trim();
-    opt.textContent = `${tagLabel} #${r.number} (${formatBytes(r.size)})`;
-    if (r.number === mapState.rmapNumber) opt.selected = true;
-    dom.rmapSelect.appendChild(opt);
-  });
+function _buildRenderUrl() {
+  if (!state.currentGff) return null;
+  return `/api/gff/${encodeURIComponent(state.currentGff)}/map-render`
+       + `?game=${state.game}${palParams()}`;
 }
 
 // ---------------------------------------------------------------------------
-// Load RMAP from server
+// Load rendered map image from server
 // ---------------------------------------------------------------------------
 
-async function loadRmap() {
-  if (!state.currentGff || !mapState.rmapNumber) return;
+async function loadMapRender(url) {
   dom.mapSpinner.classList.remove('hidden');
+  dom.mapRenderImg.style.display = 'none';
+  mapState.loadedUrl = null;
+
+  // Append a cache-bust so palette changes always reload
+  const fetchUrl = url + `&_v=${Date.now()}`;
+
   try {
-    const r = await fetch(
-      `/api/gff/${encodeURIComponent(state.currentGff)}/rmap/${mapState.rmapNumber}?game=${state.game}`);
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    const data = await r.json();
+    const res = await fetch(fetchUrl);
+    if (!res.ok) {
+      console.error(`map-render failed: HTTP ${res.status}`);
+      return;
+    }
+    const blob = await res.blob();
+    const objUrl = URL.createObjectURL(blob);
 
-    mapState.tiles     = data.tiles;
-    mapState.mapHeight = data.height;
-    mapState.tileCache.clear();
+    // Clean up previous object URL
+    if (dom.mapRenderImg._objUrl) URL.revokeObjectURL(dom.mapRenderImg._objUrl);
+    dom.mapRenderImg._objUrl = objUrl;
+
+    await new Promise((resolve, reject) => {
+      dom.mapRenderImg.onload  = resolve;
+      dom.mapRenderImg.onerror = reject;
+      dom.mapRenderImg.src = objUrl;
+    });
+
+    mapState.imgW      = dom.mapRenderImg.naturalWidth;
+    mapState.imgH      = dom.mapRenderImg.naturalHeight;
+    mapState.loadedUrl = url;  // store without cache-bust for comparison
     mapState.pan       = { x: 0, y: 0 };
-    mapState.dirty     = true;
 
-    dom.mapWidthInput.value = mapState.mapWidth;
-    updateMapSizeLabel();
-  } catch { /* ignore */ } finally {
+    dom.mapRenderImg.style.display = 'block';
+    applyTransform();
+  } catch (err) {
+    console.error('Failed to load map render:', err);
+  } finally {
     dom.mapSpinner.classList.add('hidden');
   }
 }
 
 // ---------------------------------------------------------------------------
-// Canvas resize
+// CSS transform
 // ---------------------------------------------------------------------------
 
-function resizeMapCanvas() {
-  const rect = dom.mapCanvasWrap.getBoundingClientRect();
-  const w = Math.floor(rect.width);
-  const h = Math.floor(rect.height);
-  if (w > 0 && h > 0 &&
-      (dom.mapCanvas.width !== w || dom.mapCanvas.height !== h)) {
-    dom.mapCanvas.width  = w;
-    dom.mapCanvas.height = h;
-    mapState.dirty = true;
-  }
+function applyTransform() {
+  const { pan, zoom } = mapState;
+  dom.mapRenderImg.style.transform =
+    `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`;
 }
-
-// ---------------------------------------------------------------------------
-// RAF draw loop
-// ---------------------------------------------------------------------------
-
-function startMapRaf() {
-  if (mapState.rafId) return;
-  (function loop() {
-    resizeMapCanvas();
-    if (mapState.dirty) {
-      drawMap();
-      mapState.dirty = false;
-    }
-    mapState.rafId = requestAnimationFrame(loop);
-  })();
-}
-
-function stopMapRaf() {
-  if (mapState.rafId) { cancelAnimationFrame(mapState.rafId); mapState.rafId = null; }
-}
-
-// ---------------------------------------------------------------------------
-// Tile image cache
-// ---------------------------------------------------------------------------
-
-function getTileImage(tileNum) {
-  let entry = mapState.tileCache.get(tileNum);
-  if (entry) return entry;
-  entry = { status: 'loading', img: null };
-  mapState.tileCache.set(tileNum, entry);
-  const url = `/api/gff/${encodeURIComponent(state.currentGff)}/image/TILE/${tileNum}?frame=0&game=${state.game}${palParams()}`;
-  const img = new Image();
-  img.onload  = () => { entry.status = 'loaded'; entry.img = img; mapState.dirty = true; };
-  img.onerror = () => { entry.status = 'error';                   mapState.dirty = true; };
-  img.src = url;
-  return entry;
-}
-
-// ---------------------------------------------------------------------------
-// Canvas draw
-// ---------------------------------------------------------------------------
-
-function drawMap() {
-  const canvas = dom.mapCanvas;
-  const ctx    = canvas.getContext('2d');
-  const { tiles, mapWidth, tileSize, pan } = mapState;
-
-  ctx.fillStyle = '#0d0c14';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-  if (!tiles || mapWidth < 1) return;
-
-  const mapHeight = Math.ceil(tiles.length / mapWidth);
-  const colStart  = Math.max(0, Math.floor(-pan.x / tileSize));
-  const rowStart  = Math.max(0, Math.floor(-pan.y / tileSize));
-  const colEnd    = Math.min(mapWidth,  Math.ceil((-pan.x + canvas.width)  / tileSize) + 1);
-  const rowEnd    = Math.min(mapHeight, Math.ceil((-pan.y + canvas.height) / tileSize) + 1);
-
-  ctx.imageSmoothingEnabled = false;
-
-  for (let row = rowStart; row < rowEnd; row++) {
-    for (let col = colStart; col < colEnd; col++) {
-      const tileNum = tiles[row * mapWidth + col];
-      if (!tileNum) continue;
-
-      const x = Math.round(pan.x + col * tileSize);
-      const y = Math.round(pan.y + row * tileSize);
-
-      const entry = getTileImage(tileNum);
-      if (entry.status === 'loaded' && entry.img) {
-        ctx.drawImage(entry.img, x, y, tileSize, tileSize);
-      } else {
-        ctx.fillStyle = entry.status === 'error' ? '#3a0f0f' : '#131223';
-        ctx.fillRect(x, y, tileSize, tileSize);
-        if (tileSize >= 14) {
-          ctx.fillStyle = '#4e4b64';
-          ctx.font = `${Math.max(7, Math.floor(tileSize * 0.38))}px monospace`;
-          ctx.textAlign    = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillText(tileNum, x + tileSize / 2, y + tileSize / 2);
-        }
-      }
-    }
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Pan clamping
-// ---------------------------------------------------------------------------
 
 function clampPan() {
-  if (!mapState.tiles || mapState.mapWidth < 1) return;
-  const totalW = mapState.mapWidth  * mapState.tileSize;
-  const totalH = Math.ceil(mapState.tiles.length / mapState.mapWidth) * mapState.tileSize;
-  const cw = dom.mapCanvas.width;
-  const ch = dom.mapCanvas.height;
-  const maxX = Math.max(0, cw - mapState.tileSize);
-  const maxY = Math.max(0, ch - mapState.tileSize);
-  mapState.pan.x = Math.max(-(totalW - mapState.tileSize), Math.min(maxX, mapState.pan.x));
-  mapState.pan.y = Math.max(-(totalH - mapState.tileSize), Math.min(maxY, mapState.pan.y));
+  if (!mapState.imgW) return;
+  const scaledW = mapState.imgW * mapState.zoom;
+  const scaledH = mapState.imgH * mapState.zoom;
+  const ww = dom.mapCanvasWrap.clientWidth;
+  const wh = dom.mapCanvasWrap.clientHeight;
+
+  // Allow panning so at least one tile-row/col remains visible
+  const margin = NATIVE_TILE_PX * mapState.zoom;
+  mapState.pan.x = Math.max(-(scaledW - margin), Math.min(ww - margin, mapState.pan.x));
+  mapState.pan.y = Math.max(-(scaledH - margin), Math.min(wh - margin, mapState.pan.y));
 }
 
 // ---------------------------------------------------------------------------
-// UI helpers
+// Zoom helpers
 // ---------------------------------------------------------------------------
 
-function updateMapSizeLabel() {
-  const w = mapState.mapWidth;
-  const h = mapState.tiles ? Math.ceil(mapState.tiles.length / w) : 0;
-  dom.mapSizeLabel.textContent = `${w} \u00d7 ${h}`;
+function _applyZoom(newIdx, pivotX, pivotY) {
+  // Pivot-aware zoom: keep the canvas-relative point (pivotX, pivotY) fixed.
+  // Before zoom: point in image coords = (pivotX - pan.x) / oldZoom
+  // After  zoom: same image coord must map back to same canvas point.
+  const oldZoom = mapState.zoom;
+  mapState.zoomIdx = Math.max(0, Math.min(TILE_SIZES.length - 1, newIdx));
+  mapState.zoom    = TILE_SIZES[mapState.zoomIdx] / NATIVE_TILE_PX;
+
+  // Anchor the pivot point
+  const imgX = (pivotX - mapState.pan.x) / oldZoom;
+  const imgY = (pivotY - mapState.pan.y) / oldZoom;
+  mapState.pan.x = pivotX - imgX * mapState.zoom;
+  mapState.pan.y = pivotY - imgY * mapState.zoom;
+
+  clampPan();
+  applyTransform();
+  updateZoomLabel();
 }
 
 function updateZoomLabel() {
-  dom.mapZoomLabel.textContent = `${mapState.tileSize}px`;
+  const px = Math.round(TILE_SIZES[mapState.zoomIdx]);
+  dom.mapZoomLabel.textContent = `${px}px`;
 }
 
 // ---------------------------------------------------------------------------
@@ -233,43 +160,34 @@ function updateZoomLabel() {
 // ---------------------------------------------------------------------------
 
 function bindMapEvents() {
-  dom.rmapSelect.addEventListener('change', () => {
-    mapState.rmapNumber = parseInt(dom.rmapSelect.value);
-    mapState.tiles      = null;
-    mapState.tileCache.clear();
-    loadRmap();
-  });
-
-  dom.mapWidthInput.addEventListener('change', () => {
-    const v = parseInt(dom.mapWidthInput.value);
-    if (!Number.isFinite(v) || v < 1) return;
-    mapState.mapWidth = v;
-    mapState.pan      = { x: 0, y: 0 };
-    mapState.dirty    = true;
-    updateMapSizeLabel();
-  });
-
   dom.mapZoomIn.addEventListener('click', () => {
-    mapState.tileSizeIdx = Math.min(TILE_SIZES.length - 1, mapState.tileSizeIdx + 1);
-    mapState.tileSize    = TILE_SIZES[mapState.tileSizeIdx];
-    mapState.dirty       = true;
-    updateZoomLabel();
+    const cx = dom.mapCanvasWrap.clientWidth  / 2;
+    const cy = dom.mapCanvasWrap.clientHeight / 2;
+    _applyZoom(mapState.zoomIdx + 1, cx, cy);
   });
 
   dom.mapZoomOut.addEventListener('click', () => {
-    mapState.tileSizeIdx = Math.max(0, mapState.tileSizeIdx - 1);
-    mapState.tileSize    = TILE_SIZES[mapState.tileSizeIdx];
-    mapState.dirty       = true;
-    updateZoomLabel();
+    const cx = dom.mapCanvasWrap.clientWidth  / 2;
+    const cy = dom.mapCanvasWrap.clientHeight / 2;
+    _applyZoom(mapState.zoomIdx - 1, cx, cy);
   });
 
   dom.mapResetPan.addEventListener('click', () => {
-    mapState.pan   = { x: 0, y: 0 };
-    mapState.dirty = true;
+    mapState.pan = { x: 0, y: 0 };
+    applyTransform();
   });
 
+  // Scroll-to-zoom
+  dom.mapCanvasWrap.addEventListener('wheel', e => {
+    e.preventDefault();
+    const rect = dom.mapCanvasWrap.getBoundingClientRect();
+    const px   = e.clientX - rect.left;
+    const py   = e.clientY - rect.top;
+    _applyZoom(mapState.zoomIdx + (e.deltaY < 0 ? 1 : -1), px, py);
+  }, { passive: false });
+
   // Mouse drag
-  dom.mapCanvas.addEventListener('mousedown', e => {
+  dom.mapCanvasWrap.addEventListener('mousedown', e => {
     mapState.drag = {
       active:    true,
       startX:    e.clientX,
@@ -277,7 +195,7 @@ function bindMapEvents() {
       startPanX: mapState.pan.x,
       startPanY: mapState.pan.y,
     };
-    dom.mapCanvas.classList.add('dragging');
+    dom.mapCanvasWrap.classList.add('dragging');
     e.preventDefault();
   });
   document.addEventListener('mousemove', e => {
@@ -285,16 +203,16 @@ function bindMapEvents() {
     mapState.pan.x = mapState.drag.startPanX + (e.clientX - mapState.drag.startX);
     mapState.pan.y = mapState.drag.startPanY + (e.clientY - mapState.drag.startY);
     clampPan();
-    mapState.dirty = true;
+    applyTransform();
   });
   document.addEventListener('mouseup', () => {
     if (!mapState.drag.active) return;
     mapState.drag.active = false;
-    dom.mapCanvas.classList.remove('dragging');
+    dom.mapCanvasWrap.classList.remove('dragging');
   });
 
   // Touch drag
-  dom.mapCanvas.addEventListener('touchstart', e => {
+  dom.mapCanvasWrap.addEventListener('touchstart', e => {
     const t = e.touches[0];
     mapState.drag = {
       active:    true,
@@ -305,16 +223,18 @@ function bindMapEvents() {
     };
     e.preventDefault();
   }, { passive: false });
-  dom.mapCanvas.addEventListener('touchmove', e => {
+  dom.mapCanvasWrap.addEventListener('touchmove', e => {
     if (!mapState.drag.active) return;
     const t = e.touches[0];
     mapState.pan.x = mapState.drag.startPanX + (t.clientX - mapState.drag.startX);
     mapState.pan.y = mapState.drag.startPanY + (t.clientY - mapState.drag.startY);
     clampPan();
-    mapState.dirty = true;
+    applyTransform();
     e.preventDefault();
   }, { passive: false });
-  dom.mapCanvas.addEventListener('touchend', () => {
+  dom.mapCanvasWrap.addEventListener('touchend', () => {
     mapState.drag.active = false;
   });
 }
+
+

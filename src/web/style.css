@@ -1296,14 +1296,21 @@ select:focus { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(200,144,
   position: relative;
   background: #08071a;
   min-height: 0;
-}
-
-#map-canvas {
-  display: block;
   cursor: grab;
-  image-rendering: pixelated;
 }
-#map-canvas.dragging { cursor: grabbing; }
+#map-canvas-wrap.dragging { cursor: grabbing; }
+
+#map-render-img {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: block;
+  max-width: none;
+  transform-origin: 0 0;
+  image-rendering: pixelated;
+  user-select: none;
+  -webkit-user-drag: none;
+}
 
 /* Loading overlay inside the canvas wrap */
 #map-spinner {

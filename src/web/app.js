@@ -78,7 +78,7 @@ const dom = {
 
   // Map view
   mapView:          $('rmap-view'),
-  mapCanvas:        $('map-canvas'),
+  mapRenderImg:     $('map-render-img'),
   mapCanvasWrap:    $('map-canvas-wrap'),
   mapWidthInput:    $('map-width-input'),
   mapSizeLabel:     $('map-size-label'),
