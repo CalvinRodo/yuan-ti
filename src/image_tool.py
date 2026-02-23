@@ -85,15 +85,55 @@ def convert_image_to_pngs(image_bytes: bytes, palette: Palette,
         print(f"  Saved {path} ({frame.width}x{frame.height})")
 
 
+def render_palette_view_png(palette: Palette, output_path: str,
+                            swatch_size: int = 32, columns: int = 16):
+    """Render a palette grid PNG with square swatches."""
+    try:
+        from PIL import Image, ImageDraw
+    except ImportError:
+        print("Error: Pillow is required.  Install with:  pip install Pillow",
+              file=sys.stderr)
+        sys.exit(1)
+
+    if swatch_size <= 0:
+        raise ValueError("swatch_size must be > 0")
+    if columns <= 0:
+        raise ValueError("columns must be > 0")
+
+    rows = (len(palette) + columns - 1) // columns
+    width = columns * swatch_size
+    height = rows * swatch_size
+
+    img = Image.new('RGB', (width, height), (0, 0, 0))
+    draw = ImageDraw.Draw(img)
+
+    for color_index in range(len(palette)):
+        color = palette.get_color(color_index)
+        col = color_index % columns
+        row = color_index // columns
+
+        x0 = col * swatch_size
+        y0 = row * swatch_size
+        x1 = x0 + swatch_size - 1
+        y1 = y0 + swatch_size - 1
+        draw.rectangle((x0, y0, x1, y1),
+                       fill=(color.red, color.green, color.blue))
+
+    img.save(output_path)
+    print(f"Saved palette view: {output_path} ({width}x{height})")
+
+
 def main():
     parser = argparse.ArgumentParser(
         description='Describe or convert Dark Sun image resources to PNG.')
 
-    src_group = parser.add_mutually_exclusive_group(required=True)
+    src_group = parser.add_mutually_exclusive_group(required=False)
     src_group.add_argument('--image', metavar='FILE',
                            help='Path to a raw image resource file')
     src_group.add_argument('--gff', metavar='FILE',
                            help='Path to a GFF file (extracts all BMP resources)')
+    parser.add_argument('--view-pal', action='store_true',
+                        help='Render a palette viewer PNG from --pal')
 
     parser.add_argument('--describe', action='store_true',
                         help='Print information about the image frames')
@@ -103,8 +143,39 @@ def main():
                         help='Output directory for PNGs (used with --gff)')
     parser.add_argument('--pal', metavar='FILE',
                         help='Path to a PAL resource file (required for conversion)')
+    parser.add_argument('--pal-output-png', metavar='PATH',
+                        help='Output PNG path for --view-pal (default: <pal>.palette.png)')
+    parser.add_argument('--pal-bit-depth', default='auto',
+                        help="Palette channel bit depth: 6, 8, or auto (default: auto)")
 
     args = parser.parse_args()
+
+    # ---- palette view mode ------------------------------------------------
+    if args.view_pal:
+        if args.image or args.gff:
+            parser.error("--view-pal cannot be combined with --image or --gff")
+        if not args.pal:
+            parser.error("--pal is required for --view-pal")
+        if not os.path.isfile(args.pal):
+            print(f"Error: palette file not found: {args.pal}", file=sys.stderr)
+            sys.exit(1)
+
+        bd = args.pal_bit_depth
+        if bd in ('6', '8'):
+            bd = int(bd)
+        elif bd != 'auto':
+            parser.error("--pal-bit-depth must be 6, 8, or auto")
+
+        with open(args.pal, 'rb') as f:
+            palette = Palette.from_pal_data(f.read(), bit_depth=bd)
+        if not output_path:
+            output_path = args.pal + '.palette.png'
+
+        render_palette_view_png(palette, output_path, swatch_size=32, columns=16)
+        return
+
+    if not args.image and not args.gff:
+        parser.error("one of --image, --gff, or --view-pal is required")
 
     # ---- single image file ------------------------------------------------
     if args.image:

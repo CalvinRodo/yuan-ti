@@ -91,19 +91,63 @@ class Palette:
     BYTES_PER_COLOR = 3
 
     @classmethod
-    def from_pal_data(cls, pal_data: bytes) -> 'Palette':
+    def from_pal_data(cls, pal_data: bytes,
+                      bit_depth: str | int = 'auto') -> 'Palette':
         """
-        Build a palette from raw PAL resource bytes.
-        Each color is 3 bytes (R, G, B) in the range 0-63; multiplied by 4
-        to bring into 0-252.
+        Build a palette from raw VGA PAL resource bytes.
+
+        Supported layouts (auto-detected when bit_depth='auto'):
+          - 768-byte  : 256 × 3 bytes R/G/B  (most common)
+          - 1024-byte : 256 × 4 bytes R/G/B/ignored  (32-bit padded)
+          - Any other multiple of 3 or 4 is read with the matching stride.
+
+        Bit depth:
+          'auto' (default): if any channel value exceeds 63 the data is
+                            treated as 8-bit (0-255); otherwise as 6-bit
+                            (0-63, scaled ×4 to reach 0-252).
+          6     : force 6-bit → ×4 scale.
+          8     : force 8-bit → use as-is.
         """
-        n_colors = len(pal_data) // cls.BYTES_PER_COLOR
+        if bit_depth not in ('auto', 6, 8):
+            raise ValueError(f"bit_depth must be 'auto', 6, or 8; got {bit_depth!r}")
+
+        size = len(pal_data)
+        # Detect stride: prefer 3-byte; fall back to 4-byte (RGBA padded)
+        if size % 3 == 0 and size % 4 != 0:
+            stride = 3
+        elif size % 4 == 0 and size % 3 != 0:
+            stride = 4
+        elif size % 3 == 0:
+            # Both divide evenly — use 3 unless the data is exactly 256×4
+            stride = 4 if size == 256 * 4 else 3
+        else:
+            # Fallback: try 3, then 4
+            stride = 3 if size % 3 == 0 else 4
+
+        n_colors = size // stride
+
+        # Auto bit-depth detection: scan the channel bytes
+        if bit_depth == 'auto':
+            max_val = 0
+            for i in range(n_colors):
+                base = i * stride
+                max_val = max(max_val,
+                              pal_data[base],
+                              pal_data[base + 1],
+                              pal_data[base + 2])
+            # Any value above 63 means this is already an 8-bit palette
+            resolved_depth = 8 if max_val > 63 else 6
+        else:
+            resolved_depth = int(bit_depth)
+
+        scale = 4 if resolved_depth == 6 else 1
+
         colors: List[Color] = []
         for i in range(n_colors):
-            base = i * cls.BYTES_PER_COLOR
-            red   = 4 * pal_data[base]
-            green = 4 * pal_data[base + 1]
-            blue  = 4 * pal_data[base + 2]
+            base  = i * stride
+            red   = min(255, scale * pal_data[base])
+            green = min(255, scale * pal_data[base + 1])
+            blue  = min(255, scale * pal_data[base + 2])
             colors.append(Color(red, green, blue))
         return cls(colors)
 

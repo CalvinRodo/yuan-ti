@@ -47,6 +47,10 @@
           <span class="mode-icon">&#9776;</span>
           <span class="mode-label">Text</span>
         </button>
+        <button class="mode-btn" data-mode="palette" title="Palette Viewer">
+          <span class="mode-icon">&#9632;</span>
+          <span class="mode-label">Palettes</span>
+        </button>
       </nav>
 
       <!-- ===== MAIN ===== -->
@@ -165,6 +169,9 @@
               </div>
             </div>
 
+            <!-- Palette viewer -->
+            <div id="palette-view" class="hidden"></div>
+
             <!-- All-resources table -->
             <div id="resource-table-wrap" class="hidden">
               <table id="resource-table">
@@ -240,5 +247,6 @@
   <script src="view-map.js"></script>
   <script src="view-spells.js"></script>
   <script src="view-text.js"></script>
+  <script src="view-palette.js"></script>
 </body>
 </html>

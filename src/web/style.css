@@ -340,6 +340,80 @@ select:focus { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(200,144,
 }
 
 /* ================================================================
+   PALETTE VIEW
+   ================================================================ */
+#palette-view {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 16px;
+  align-content: start;
+}
+
+.pal-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius2);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  transition: border-color .15s, box-shadow .15s, transform .1s;
+}
+.pal-card:hover {
+  border-color: var(--primary-dk);
+  box-shadow: 0 0 0 1px var(--primary-dk), 0 4px 18px rgba(0,0,0,.5);
+  transform: translateY(-2px);
+}
+
+.pal-title {
+  padding: 8px 10px 7px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--primary-lt);
+  letter-spacing: .04em;
+  border-bottom: 1px solid var(--border);
+  word-break: break-all;
+}
+
+/* Square wrapper that always shows the swatch at full width */
+.pal-swatch-wrap {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1;
+  background: #0a091a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.pal-swatch-wrap img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  image-rendering: pixelated;
+  opacity: 0;
+  transition: opacity .2s ease;
+}
+.pal-swatch-wrap img.loaded { opacity: 1; }
+
+.pal-spinner {
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  border: 2px solid var(--border2);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin .7s linear infinite;
+}
+
+.pal-error {
+  font-size: 11px;
+  color: var(--danger);
+  text-align: center;
+  padding: 8px;
+}
+
+/* ================================================================
    SPELL GRID
    ================================================================ */
 #spell-grid {

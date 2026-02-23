@@ -16,9 +16,9 @@ const state = {
   games: [],                // [{id, label, supported}] from /api/games
   gameUnsupported: false,   // true when selected game cannot be browsed
   // Per-mode selected GFF (spells is always locked to RESOURCE.GFF)
-  gffByMode:    { spells: 'RESOURCE.GFF', map: null, resources: null, images: null, text: null },
+  gffByMode:    { spells: 'RESOURCE.GFF', map: null, resources: null, images: null, text: null, palette: null },
   // Per-mode fetched GFF lists
-  gffListByMode:{ spells: ['RESOURCE.GFF'], map: [], resources: [], images: [], text: [] },
+  gffListByMode:{ spells: ['RESOURCE.GFF'], map: [], resources: [], images: [], text: [], palette: [] },
 
   resources:   [],
   pals:        [],    // per-GFF pals (for non-images modes)
@@ -72,6 +72,9 @@ const dom = {
   tableWrap:      $('resource-table-wrap'),
   resFilterBar:   $('res-filter-bar'),
   tableTbody:     $('resource-tbody'),
+
+  // Palette view
+  paletteView:      $('palette-view'),
 
   // Map view
   mapView:          $('rmap-view'),
@@ -156,8 +159,8 @@ async function populateGameSelect() {
 
 async function refreshGameData() {
   // Reset all cached GFF lists so they reload for the active game
-  state.gffListByMode = { spells: ['RESOURCE.GFF'], map: [], resources: [], images: [], text: [] };
-  state.gffByMode     = { spells: 'RESOURCE.GFF', map: null, resources: null, images: null, text: null };
+  state.gffListByMode = { spells: ['RESOURCE.GFF'], map: [], resources: [], images: [], text: [], palette: [] };
+  state.gffByMode     = { spells: 'RESOURCE.GFF', map: null, resources: null, images: null, text: null, palette: null };
   state.allPals       = [];
   state.resources     = [];
   state.pals          = [];
@@ -237,10 +240,16 @@ async function activateMode(mode) {
   closeDetailPane();
 
   // Show/hide toolbar groups
-  dom.modeGffGroup.classList.toggle('hidden', mode === 'spells');
+  dom.modeGffGroup.classList.toggle('hidden', mode === 'spells' || mode === 'palette');
   dom.imgViewGroup.classList.toggle('hidden', mode !== 'images');
-  // Palette is not useful for text mode
-  dom.palGroup.classList.toggle('hidden', mode === 'text');
+  // Palette selector is not useful in text or palette modes
+  dom.palGroup.classList.toggle('hidden', mode === 'text' || mode === 'palette');
+
+  // Palette mode renders directly from state.allPals — no GFF selection needed
+  if (mode === 'palette') {
+    renderContent();
+    return;
+  }
 
   if (mode !== 'spells') {
     await ensureGffList(mode);
@@ -447,6 +456,7 @@ function hideAllViews() {
   dom.textView.classList.add('hidden');
   dom.tableWrap.classList.add('hidden');
   dom.resFilterBar.classList.add('hidden');
+  dom.paletteView.classList.add('hidden');
   hideMapView();
 }
 
@@ -456,6 +466,12 @@ function hideAllViews() {
 function renderContent() {
   hideLoadingState();
   hideAllViews();
+
+  // Palette mode doesn't need a selected GFF — render straight from allPals
+  if (state.mode === 'palette') {
+    renderPaletteView();
+    return;
+  }
 
   if (!state.currentGff || state.resources.length === 0) {
     dom.emptyState.classList.remove('hidden');

@@ -576,6 +576,63 @@ def api_texts(name: str):
     return jsonify(result)
 
 
+@app.route('/api/gff/<name>/pal-png/<tag_url>/<int:number>')
+def api_pal_png(name: str, tag_url: str, number: int):
+    """Render a PAL or CPAL resource as a PNG palette grid.
+
+    Returns a 512×512 PNG: 16 columns × 16 rows of 32×32 pixel color swatches.
+
+    Query parameters
+    ----------------
+    game      : game id (default: dark_sun)
+    bit_depth : 6, 8, or auto (default: auto — detects from channel values)
+    """
+    try:
+        from PIL import Image as PilImage, ImageDraw
+    except ImportError:
+        abort(500, description="Pillow is not installed. Run: pip install pillow")
+
+    game_id        = request.args.get('game', DEFAULT_GAME)
+    bit_depth_raw  = request.args.get('bit_depth', 'auto')
+    if bit_depth_raw in ('6', '8'):
+        bit_depth: str | int = int(bit_depth_raw)
+    elif bit_depth_raw == 'auto':
+        bit_depth = 'auto'
+    else:
+        abort(400, description="bit_depth must be 6, 8, or auto")
+
+    tag = url_seg_to_tag(tag_url)
+    gff = load_gff(name, game_id)
+    try:
+        raw = gff.get_resource_data(tag, number)
+    except NoSuchResourceError:
+        abort(404)
+
+    try:
+        palette = Palette.from_pal_data(raw, bit_depth=bit_depth)
+    except Exception as exc:
+        abort(400, description=str(exc))
+
+    swatch  = 32
+    columns = 16
+    rows    = (len(palette) + columns - 1) // columns
+    img     = PilImage.new('RGB', (columns * swatch, rows * swatch), (0, 0, 0))
+    draw    = ImageDraw.Draw(img)
+
+    for idx in range(len(palette)):
+        c   = palette.get_color(idx)
+        col = idx % columns
+        row = idx // columns
+        x0, y0 = col * swatch, row * swatch
+        draw.rectangle((x0, y0, x0 + swatch - 1, y0 + swatch - 1),
+                       fill=(c.red, c.green, c.blue))
+
+    buf = io.BytesIO()
+    img.save(buf, format='PNG')
+    buf.seek(0)
+    return send_file(buf, mimetype='image/png')
+
+
 @app.route('/api/gff/<name>/raw/<tag_url>/<int:number>')
 def api_raw(name: str, tag_url: str, number: int):
     """Return the raw bytes of any resource as application/octet-stream."""
