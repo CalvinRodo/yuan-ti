@@ -124,6 +124,35 @@ const dom = {
 let palVersion = 0;
 
 // ---------------------------------------------------------------------------
+// URL bookmark helpers
+// ---------------------------------------------------------------------------
+
+/** Parse location.hash into a plain object of key→value strings. */
+function readUrlState() {
+  const raw = location.hash.slice(1); // strip leading '#'
+  if (!raw) return {};
+  return Object.fromEntries(
+    raw.split('&')
+       .map(part => part.split('=').map(decodeURIComponent))
+       .filter(([k]) => k)
+  );
+}
+
+/**
+ * Push current navigation state into location.hash without triggering a
+ * full page reload. Only the keys that are meaningful are written.
+ */
+function pushUrlState() {
+  const params = { game: state.game, mode: state.mode };
+  const gff = state.gffByMode[state.mode];
+  if (gff) params.gff = gff;
+  if (state.mode === 'images') params.view = state.imageView;
+  location.hash = Object.entries(params)
+    .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
+    .join('&');
+}
+
+// ---------------------------------------------------------------------------
 // Boot
 // ---------------------------------------------------------------------------
 document.addEventListener('DOMContentLoaded', () => {
@@ -135,8 +164,60 @@ document.addEventListener('DOMContentLoaded', () => {
 
 async function init() {
   bindEvents();
+
+  // Restore bookmarked state before fetching data so the first load goes
+  // straight to the right mode / file.
+  const saved = readUrlState();
+  if (saved.game) state.game = saved.game;
+  if (saved.mode) state.mode = saved.mode;
+  if (saved.view) state.imageView = saved.view;
+  if (saved.gff && saved.mode)
+    state.gffByMode[saved.mode] = saved.gff;
+
   await populateGameSelect();
+  // Sync the game <select> to the (possibly restored) state
+  dom.gameSelect.value = state.game;
+  const selectedGame = state.games.find(g => g.id === state.game);
+  state.gameUnsupported = selectedGame ? !selectedGame.supported : false;
+
   await refreshGameData();
+
+  // Keep the browser back/forward buttons working
+  window.addEventListener('hashchange', async () => {
+    const s = readUrlState();
+    // Only react when something genuinely navigated (not our own push)
+    const newGame = s.game || 'dark_sun';
+    const newMode = s.mode || 'spells';
+    const newGff  = s.gff  || null;
+    const newView = s.view || 'card';
+
+    let needsRefresh = false;
+    if (newGame !== state.game) {
+      state.game = newGame;
+      dom.gameSelect.value = state.game;
+      const g = state.games.find(g => g.id === state.game);
+      state.gameUnsupported = g ? !g.supported : false;
+      needsRefresh = true;
+    }
+
+    if (needsRefresh) {
+      if (newGff)  state.gffByMode[newMode] = newGff;
+      if (newView) state.imageView = newView;
+      state.mode = newMode;
+      await refreshGameData();
+      return;
+    }
+
+    if (newView !== state.imageView) state.imageView = newView;
+    if (newGff && newGff !== state.gffByMode[newMode])
+      state.gffByMode[newMode] = newGff;
+
+    if (newMode !== state.mode) {
+      await activateMode(newMode);
+    } else if (newGff && newGff !== state.currentGff) {
+      await loadGffForMode(newGff, state.mode);
+    }
+  });
 }
 
 async function populateGameSelect() {
@@ -201,11 +282,11 @@ function bindEvents() {
 
   dom.modeGffSelect.addEventListener('change', () => {
     const gff = dom.modeGffSelect.value;
-    if (gff) loadGffForMode(gff, state.mode);
+    if (gff) { loadGffForMode(gff, state.mode); pushUrlState(); }
   });
 
-  dom.imgCardBtn.addEventListener('click', () => setImageView('card'));
-  dom.imgListBtn.addEventListener('click', () => setImageView('list'));
+  dom.imgCardBtn.addEventListener('click', () => { setImageView('card'); pushUrlState(); });
+  dom.imgListBtn.addEventListener('click', () => { setImageView('list'); pushUrlState(); });
 
   dom.palSelect.addEventListener('change', onPalChange);
 
@@ -225,6 +306,7 @@ function bindEvents() {
     const selected = state.games.find(g => g.id === state.game);
     state.gameUnsupported = selected ? !selected.supported : false;
     await refreshGameData();
+    pushUrlState();
   });
 }
 
@@ -233,6 +315,7 @@ function bindEvents() {
 // ---------------------------------------------------------------------------
 async function activateMode(mode) {
   state.mode = mode;
+  pushUrlState();
 
   // Highlight active mode button
   dom.modeBtns.forEach(b => b.classList.toggle('active', b.dataset.mode === mode));

@@ -110,12 +110,8 @@ def render_region(
 
     # ---- Determine map dimensions -------------------------------------------
     n  = len(rmap_data)
-    sq = int(n ** 0.5)
-    if sq * sq == n:
-        map_w = map_h = sq
-    else:
-        map_w = DEFAULT_MAP_WIDTH
-        map_h = (n + map_w - 1) // map_w
+    map_w = DEFAULT_MAP_WIDTH
+    map_h = (n + map_w - 1) // map_w
 
     canvas_w = map_w * TILE_PIXEL_SIZE
     canvas_h = map_h * TILE_PIXEL_SIZE
