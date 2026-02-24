@@ -159,11 +159,15 @@ const _TAB_DEFS = {
 
   spells: {
     cols: [
-      { key: 'number', label: '#',          sortType: 'num' },
-      { key: 'name',   label: 'Name',       sortType: 'str' },
-      { key: 'desc',   label: 'Description',sortType: 'str', wide: true },
+      { key: '_sprite', label: '',           sortType: null, nosort: true, img: true },
+      { key: 'number',  label: '#',          sortType: 'num' },
+      { key: 'name',    label: 'Name',       sortType: 'str' },
+      { key: 'desc',    label: 'Description',sortType: 'str', wide: true },
     ],
     rowData: row => [
+      row.icon_number != null && row.sprite_gff
+        ? `/api/gff/${encodeURIComponent(row.sprite_gff)}/image/${row.sprite_tag_url}/${row.icon_number}?frame=0&game=${state.game}`
+        : null,
       row.number != null ? row.number : '—',
       row.name   || '—',
       row.desc   || '—',

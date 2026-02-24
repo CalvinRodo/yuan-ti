@@ -1204,6 +1204,19 @@ def _load_gamedata(kind: str, game_id: str) -> list:
     elif kind == 'spells':
         gff = try_gff('RESOURCE.GFF')
         result = parse_spells(gff) if gff else []
+        # Add icon_number using the same offset rules as /api/gff/<name>/spells
+        icon_numbers = {
+            d.number for d in gff.describe_resources() if d.tag.strip() == 'ICON'
+        } if gff else set()
+        for rec in result:
+            n = rec['number']
+            if PSIONICS_SPIN_START <= n <= PSIONICS_SPIN_END:
+                icon_n = PSIONICS_ICON_BASE + (n - PSIONICS_SPIN_START)
+            else:
+                icon_n = SPIN_ICON_OFFSET + n
+            rec['icon_number']   = icon_n if icon_n in icon_numbers else None
+            rec['sprite_gff']    = 'RESOURCE.GFF'
+            rec['sprite_tag_url'] = 'ICON'
     else:
         result = []
 
