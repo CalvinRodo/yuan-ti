@@ -22,6 +22,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from gff import GffFile, NoSuchResourceError, GFF_CHUNK_TYPES
 from image import ImageReading, Palette
 from ds1_parsers import parse_items, parse_monsters, parse_spells
+from gpl_parser import disassemble_gpl, list_scripts
 
 # ---------------------------------------------------------------------------
 # Paths & game library
@@ -1229,6 +1230,59 @@ def api_gamedata_spells():
     """Return all spell descriptions from SPIN resources in RESOURCE.GFF."""
     game_id = request.args.get('game', DEFAULT_GAME)
     return jsonify(_load_gamedata('spells', game_id))
+
+
+# ---------------------------------------------------------------------------
+# GPL script endpoints
+# ---------------------------------------------------------------------------
+
+_gpl_script_cache: dict = {}
+
+@app.route('/api/scripts')
+def api_scripts():
+    """List all GPL/MAS scripts in GPLDATA.GFF for a game."""
+    game_id = request.args.get('game', DEFAULT_GAME)
+    key = f'scripts:{game_id}'
+    if key not in _gpl_script_cache:
+        try:
+            gff = load_gff('GPLDATA.GFF', game_id)
+            scripts = []
+            for d in gff.describe_resources():
+                tag = d.tag.strip()
+                if tag in ('GPL', 'MAS'):
+                    scripts.append({
+                        'tag':    tag,
+                        'tag_url': tag_to_url_seg(d.tag),
+                        'number': d.number,
+                        'size':   d.size,
+                        'label':  f'{tag} #{d.number}',
+                    })
+            scripts.sort(key=lambda x: (x['tag'], x['number']))
+            _gpl_script_cache[key] = scripts
+        except Exception as exc:
+            return jsonify({'error': str(exc)}), 500
+    return jsonify(_gpl_script_cache[key])
+
+
+@app.route('/api/script/<tag_url>/<int:number>')
+def api_script_disasm(tag_url: str, number: int):
+    """Disassemble a single GPL or MAS script."""
+    game_id = request.args.get('game', DEFAULT_GAME)
+    # Convert URL segment back to a 4-char GFF tag (e.g. 'GPL_' -> 'GPL ')
+    tag = url_seg_to_tag(tag_url)          # 4-char with trailing space if needed
+    try:
+        gff  = load_gff('GPLDATA.GFF', game_id)
+        data = gff.get_resource_data(tag, number)
+    except NoSuchResourceError:
+        abort(404)
+    except Exception as exc:
+        return jsonify({'error': str(exc)}), 500
+    is_mas = tag.strip() == 'MAS'
+    try:
+        insts = disassemble_gpl(bytes(data), is_mas=is_mas)
+    except Exception as exc:
+        return jsonify({'error': str(exc)}), 500
+    return jsonify(insts)
 
 
 # ---------------------------------------------------------------------------

@@ -16,9 +16,9 @@ const state = {
   games: [],                // [{id, label, supported}] from /api/games
   gameUnsupported: false,   // true when selected game cannot be browsed
   // Per-mode selected GFF (spells is always locked to RESOURCE.GFF)
-  gffByMode:    { spells: 'RESOURCE.GFF', map: null, resources: null, images: null, text: null, palette: null, music: 'RESOURCE.GFF', sfx: 'RESOURCE.GFF', cinematic: null, data: null },
+  gffByMode:    { spells: 'RESOURCE.GFF', map: null, resources: null, images: null, text: null, palette: null, music: 'RESOURCE.GFF', sfx: 'RESOURCE.GFF', cinematic: null, data: null, scripts: null },
   // Per-mode fetched GFF lists
-  gffListByMode:{ spells: ['RESOURCE.GFF'], map: [], resources: [], images: [], text: [], palette: [], music: [], sfx: [], cinematic: [], data: [] },
+  gffListByMode:{ spells: ['RESOURCE.GFF'], map: [], resources: [], images: [], text: [], palette: [], music: [], sfx: [], cinematic: [], data: [], scripts: [] },
 
   resources:   [],
   pals:        [],    // per-GFF pals (for non-images modes)
@@ -237,8 +237,8 @@ async function populateGameSelect() {
 
 async function refreshGameData() {
   // Reset all cached GFF lists so they reload for the active game
-  state.gffListByMode = { spells: ['RESOURCE.GFF'], map: [], resources: [], images: [], text: [], palette: [], music: [], sfx: [], cinematic: [], data: [] };
-  state.gffByMode     = { spells: 'RESOURCE.GFF', map: null, resources: null, images: null, text: null, palette: null, music: 'RESOURCE.GFF', sfx: 'RESOURCE.GFF', cinematic: null, data: null };
+  state.gffListByMode = { spells: ['RESOURCE.GFF'], map: [], resources: [], images: [], text: [], palette: [], music: [], sfx: [], cinematic: [], data: [], scripts: [] };
+  state.gffByMode     = { spells: 'RESOURCE.GFF', map: null, resources: null, images: null, text: null, palette: null, music: 'RESOURCE.GFF', sfx: 'RESOURCE.GFF', cinematic: null, data: null, scripts: null };
   state.allPals       = [];
   state.resources     = [];
   state.pals          = [];
@@ -253,6 +253,7 @@ async function refreshGameData() {
   if (typeof sfxViewBuilt !== 'undefined') { sfxViewBuilt = false; sfxDataGff = null; }
   if (typeof cinematicViewBuilt !== 'undefined') cinematicViewBuilt = false;
   if (typeof teardownDataView    === 'function')  teardownDataView();
+  if (typeof teardownScriptsView === 'function')  teardownScriptsView();
 
   closeDetailPane();
   hideAllViews();
@@ -327,10 +328,10 @@ async function activateMode(mode) {
   closeDetailPane();
 
   // Show/hide toolbar groups
-  dom.modeGffGroup.classList.toggle('hidden', mode === 'spells' || mode === 'palette' || mode === 'cinematic' || mode === 'data');
+  dom.modeGffGroup.classList.toggle('hidden', mode === 'spells' || mode === 'palette' || mode === 'cinematic' || mode === 'data' || mode === 'scripts');
   dom.imgViewGroup.classList.toggle('hidden', mode !== 'images');
-  // Palette selector is not useful in text or palette or music/sfx/cinematic/data modes
-  dom.palGroup.classList.toggle('hidden', mode === 'text' || mode === 'palette' || mode === 'music' || mode === 'sfx' || mode === 'cinematic' || mode === 'data');
+  // Palette selector is not useful in text or palette or music/sfx/cinematic/data/scripts modes
+  dom.palGroup.classList.toggle('hidden', mode === 'text' || mode === 'palette' || mode === 'music' || mode === 'sfx' || mode === 'cinematic' || mode === 'data' || mode === 'scripts');
 
   // Tear down music player when leaving music or sfx mode
   if (mode !== 'music' && mode !== 'sfx' && typeof teardownMusicView === 'function') teardownMusicView();
@@ -350,6 +351,12 @@ async function activateMode(mode) {
 
   // Data mode — items/monsters/spells from dedicated API endpoints
   if (mode === 'data') {
+    renderContent();
+    return;
+  }
+
+  // Scripts mode — GPL/MAS browser with its own API
+  if (mode === 'scripts') {
     renderContent();
     return;
   }
@@ -600,6 +607,8 @@ function hideAllViews() {
   if (cv) cv.classList.add('hidden');
   const dv = document.getElementById('data-view');
   if (dv) dv.classList.add('hidden');
+  const scv = document.getElementById('scripts-view');
+  if (scv) scv.classList.add('hidden');
   hideMapView();
 }
 
@@ -637,6 +646,12 @@ function renderContent() {
   // Data browser — items / monsters / spells
   if (state.mode === 'data') {
     renderDataView();
+    return;
+  }
+
+  // Scripts browser — GPL / MAS disassembly
+  if (state.mode === 'scripts') {
+    renderScriptsView();
     return;
   }
 

@@ -67,6 +67,10 @@
           <span class="mode-icon">&#128218;</span>
           <span class="mode-label">Data</span>
         </button>
+        <button class="mode-btn" data-mode="scripts" title="GPL Script Browser">
+          <span class="mode-icon">&#128196;</span>
+          <span class="mode-label">Scripts</span>
+        </button>
       </nav>
 
       <!-- ===== MAIN ===== -->
@@ -192,6 +196,9 @@
             <!-- Game data browser (items / monsters / spells) -->
             <div id="data-view" class="hidden"></div>
 
+            <!-- GPL / MAS script browser -->
+            <div id="scripts-view" class="hidden"></div>
+
             <!-- All-resources table -->
             <div id="resource-table-wrap" class="hidden">
               <table id="resource-table">
@@ -271,5 +278,6 @@
   <script src="view-music.js"></script>
   <script src="view-cinematic.js"></script>
   <script src="view-data.js"></script>
+  <script src="view-scripts.js"></script>
 </body>
 </html>
