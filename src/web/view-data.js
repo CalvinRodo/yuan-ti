@@ -91,6 +91,7 @@ function _buildDataViewDOM(view) {
 const _TAB_DEFS = {
   items: {
     cols: [
+      { key: '_sprite',    label: '',         sortType: null,  nosort: true, img: true },
       { key: 'name',       label: 'Name',     sortType: 'str' },
       { key: 'type',       label: 'Type',     sortType: 'str' },
       { key: 'damage',     label: 'Damage',   sortType: 'str' },
@@ -101,6 +102,9 @@ const _TAB_DEFS = {
       { key: 'material',   label: 'Material', sortType: 'num' },
     ],
     rowData: row => [
+      row.port_num
+        ? `/api/gff/${encodeURIComponent(row.sprite_gff)}/image/${row.sprite_tag_url}/${row.port_num}?frame=0&game=${state.game}`
+        : null,
       row.name      || '—',
       row.type      || '—',
       row.damage    || '—',
@@ -118,6 +122,7 @@ const _TAB_DEFS = {
 
   monsters: {
     cols: [
+      { key: '_sprite',     label: '',        sortType: null,  nosort: true, img: true },
       { key: 'name',        label: 'Name',    sortType: 'str' },
       { key: 'hp',          label: 'HP',      sortType: 'num' },
       { key: 'psp',         label: 'PSP',     sortType: 'num' },
@@ -132,6 +137,9 @@ const _TAB_DEFS = {
       { key: 'cha',         label: 'CHA',     sortType: 'num' },
     ],
     rowData: row => [
+      row.bmp_num && row.sprite_gff
+        ? `/api/gff/${encodeURIComponent(row.sprite_gff)}/image/${row.sprite_tag_url}/${row.bmp_num}?frame=0&game=${state.game}`
+        : null,
       row.name  || '—',
       row.hp    != null ? row.hp    : '—',
       row.psp   != null ? row.psp   : '—',
@@ -205,9 +213,12 @@ function _renderTable() {
     def.cols.forEach((col, i) => {
       const th = document.createElement('th');
       th.textContent = col.label;
-      if (col.wide) th.classList.add('data-col-wide');
-      th.dataset.colIdx = i;
-      th.addEventListener('click', () => _sortBy(i));
+      if (col.wide)   th.classList.add('data-col-wide');
+      if (col.img)    th.classList.add('data-col-sprite-hdr');
+      if (!col.nosort) {
+        th.dataset.colIdx = i;
+        th.addEventListener('click', () => _sortBy(i));
+      }
       tr.appendChild(th);
     });
     thead.replaceChildren(tr);
@@ -223,14 +234,14 @@ function _renderTable() {
   const q = dataFilter.trim();
   let rows = q ? data.filter(row => def.filterRow(row, q)) : data;
 
-  // Sort
-  if (dataSortCol !== null) {
+  // Sort (skip sprite column)
+  if (dataSortCol !== null && !def.cols[dataSortCol].nosort) {
     const col = def.cols[dataSortCol];
     rows = [...rows].sort((a, b) => {
       const va = def.rowData(a)[dataSortCol];
       const vb = def.rowData(b)[dataSortCol];
       if (col.sortType === 'num') {
-        return dataSortDir * ((va === '—' ? Infinity : Number(va)) - (vb === '—' ? Infinity : Number(vb)));
+        return dataSortDir * ((va === '—' || va == null ? Infinity : Number(va)) - (vb === '—' || vb == null ? Infinity : Number(vb)));
       }
       return dataSortDir * String(va).localeCompare(String(vb));
     });
@@ -244,8 +255,22 @@ function _renderTable() {
     const tr = document.createElement('tr');
     def.rowData(row).forEach((cell, i) => {
       const td = document.createElement('td');
-      td.textContent = cell;
-      if (def.cols[i].wide) td.classList.add('data-col-wide');
+      const colDef = def.cols[i];
+      if (colDef.img) {
+        // Sprite thumbnail cell
+        td.classList.add('data-col-sprite');
+        if (cell) {
+          const img = document.createElement('img');
+          img.src   = cell;
+          img.alt   = '';
+          img.className = 'data-sprite-img';
+          img.onerror = () => { img.style.display = 'none'; };
+          td.appendChild(img);
+        }
+      } else {
+        td.textContent = cell;
+        if (colDef.wide) td.classList.add('data-col-wide');
+      }
       tr.appendChild(td);
     });
     frag.appendChild(tr);

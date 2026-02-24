@@ -1818,6 +1818,32 @@ select:focus { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(200,144,
   padding-block: 6px;
 }
 
+/* Sprite thumbnail column */
+#data-table th.data-col-sprite-hdr {
+  width: 52px;
+  min-width: 52px;
+  padding: 4px 6px;
+  cursor: default;
+}
+
+#data-table td.data-col-sprite {
+  width: 52px;
+  min-width: 52px;
+  padding: 3px 6px;
+  text-align: center;
+  vertical-align: middle;
+}
+
+.data-sprite-img {
+  display: block;
+  max-width: 46px;
+  max-height: 46px;
+  width: auto;
+  height: auto;
+  image-rendering: pixelated;
+  margin: 0 auto;
+}
+
 .data-spinner {
   display: flex;
   align-items: center;

@@ -1183,10 +1183,23 @@ def _load_gamedata(kind: str, game_id: str) -> list:
     if kind == 'items':
         gff = try_gff('GPLDATA.GFF')
         result = parse_items(gff) if gff else []
+        # Attach sprite metadata so the frontend can build image URLs
+        for rec in result:
+            rec['sprite_gff'] = 'GPLDATA.GFF'
+            rec['sprite_tag_url'] = tag_to_url_seg('PORT')
     elif kind == 'monsters':
         # DS1 uses SEGOBJEX.GFF, DS2 uses OBJEX.GFF
-        gff = try_gff('SEGOBJEX.GFF') or try_gff('OBJEX.GFF')
+        gff = None
+        sprite_gff_name = None
+        for candidate in ('SEGOBJEX.GFF', 'OBJEX.GFF'):
+            gff = try_gff(candidate)
+            if gff is not None:
+                sprite_gff_name = candidate
+                break
         result = parse_monsters(gff) if gff else []
+        for rec in result:
+            rec['sprite_gff'] = sprite_gff_name
+            rec['sprite_tag_url'] = tag_to_url_seg('BMP ')
     elif kind == 'spells':
         gff = try_gff('RESOURCE.GFF')
         result = parse_spells(gff) if gff else []

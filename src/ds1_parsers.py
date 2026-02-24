@@ -63,6 +63,12 @@ GFF_ITEM_OBJECT   = 1
 # NAME record size
 _NAME_SIZE = 25
 
+# OJFF struct: flags u16, xoffset i16, yoffset i16, xpos u16, ypos u16,
+#              zpos i8, object_index u8, bmp_id u16, script_id u16
+_OJFF_FMT   = '<HhhHHbBHH'
+_OJFF_SIZE  = struct.calcsize(_OJFF_FMT)   # 16
+_OJFF_BMP_IDX = 7  # index of bmp_id in the unpacked tuple
+
 # ---------------------------------------------------------------------------
 # Weapon / armour classification helpers
 # ---------------------------------------------------------------------------
@@ -154,6 +160,9 @@ def parse_items(gff) -> list[dict]:
             elif d['mod'] < 0:
                 damage += str(d['mod'])
 
+        # PORT resources in GPLDATA.GFF are 1-indexed relative to IT1R order
+        port_num = i + 1
+
         items.append({
             'index':       i,
             'name':        name,
@@ -166,6 +175,7 @@ def parse_items(gff) -> list[dict]:
             'material':    d['material'],
             'flags':       d['flags'],
             'legal_class': d['legal_class'],
+            'port_num':    port_num,
         })
 
     return items
@@ -224,6 +234,18 @@ def parse_monsters(gff) -> list[dict]:
         if not name:
             continue
 
+        # Resolve sprite via OJFF: obj_id is always -rdff_id for combat objects
+        bmp_num: Optional[int] = None
+        ojff_num = d.number  # abs(-rdff_id) == rdff_id
+        try:
+            ojff_raw = gff.get_resource_data('OJFF', ojff_num)
+            if len(ojff_raw) >= _OJFF_SIZE:
+                bmp_num = struct.unpack_from(_OJFF_FMT, ojff_raw)[_OJFF_BMP_IDX]
+                if bmp_num == 0:
+                    bmp_num = None
+        except Exception:
+            pass
+
         monsters.append({
             'rdff_id':       d.number,
             'name':          name,
@@ -242,6 +264,7 @@ def parse_monsters(gff) -> list[dict]:
             'cha':           s_cha,
             'icon':          icon,
             'flags':         flags,
+            'bmp_num':       bmp_num,
         })
 
     # Sort by name, deduplicate for display (keep unique rdff_id entries)
