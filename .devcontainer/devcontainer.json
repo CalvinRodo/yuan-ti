@@ -7,16 +7,18 @@
 	"features": {
 		"ghcr.io/devcontainers/features/github-cli:1": {},
 		"ghcr.io/devcontainers-extra/features/uv:1": {},
-	}
+	},
 
-	// Features to add to the dev container. More info: https://containers.dev/features.
-	// "features": {},
+	// Remap the container user's UID/GID to match the macOS host user.
+	// This is required when running under Podman on macOS so that bind-mounted
+	// workspace files (owned by the host UID) are writable inside the container.
+	"updateRemoteUserUID": true,
 
 	// Use 'forwardPorts' to make a list of ports inside the container available locally.
 	// "forwardPorts": [],
 
-	// Use 'postCreateCommand' to run commands after the container is created.
-	// "postCreateCommand": "pip3 install --user -r requirements.txt",
+	// Fix any lingering ownership mismatches after container creation.
+	"postCreateCommand": "sudo chown -R $(id -u):$(id -g) /workspaces/yuan-ti || true",
 
 	// Configure tool-specific properties.
 	// "customizations": {},

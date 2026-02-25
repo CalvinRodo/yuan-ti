@@ -141,14 +141,70 @@ class _Reader:
         v = self.get_halfword_be()
         return v if v < 0x8000 else v - 0x10000
 
+    # String tag bytes (from libgff/src/gpl/string.c)
+    _STR_INTRODUCE         = 0x01
+    _STR_UNCOMPRESSED      = 0x02
+    _STR_COMPRESSED        = 0x05
+
     def read_text(self) -> str:
-        """Read a null-terminated or newline-terminated string."""
+        """Read a GPL string.
+
+        GPL strings are preceded by a tag byte:
+          0x01 – INTRODUCE  → return a placeholder for the active NPC name
+          0x02 – raw (uncompressed) null-terminated string
+          0x05 – 7-bit compressed (one character per 7 bits, 1-bit initial offset)
+        """
+        if self.end:
+            return ''
+        tag = self.peek_byte()
+        if tag == self._STR_INTRODUCE:
+            self.get_byte()  # consume tag
+            return '<name>'
+        if tag == self._STR_COMPRESSED:
+            self.get_byte()  # consume tag
+            return self._read_compressed()
+        if tag == self._STR_UNCOMPRESSED:
+            self.get_byte()  # consume tag
+            parts = []
+            while not self.end:
+                b = self.get_byte()
+                if b == 0x00:
+                    break
+                parts.append(chr(b) if 0x20 <= b <= 0x7E else ' ')
+            return ''.join(parts)
+        # Unknown tag – fall back to treating bytes as a null-terminated string
         parts = []
         while not self.end:
             b = self.get_byte()
             if b == 0x00:
                 break
-            parts.append(chr(b) if 32 <= b < 127 else f'\\x{b:02x}')
+            parts.append(chr(b) if 0x20 <= b <= 0x7E else ' ')
+        return ''.join(parts)
+
+    def _read_compressed(self) -> str:
+        """Decode 7-bit packed GPL string (mirrors read_compressed in string.c).
+
+        Characters are packed as 7-bit values extracted with a rolling bit-shift.
+        idx starts at 1, increments each char, wraps to 0 after 7 (skipping a
+        byte-fetch on the wrap step), giving one char per 7 bits of stream data.
+        The sentinel value 0x03 terminates the string.
+        """
+        parts: list[str] = []
+        buffer = 0
+        idx = 1
+        while len(parts) < 4095:
+            if idx > 0:
+                if self.end:
+                    break
+                buffer = (buffer << 8) & 0xFF00
+                buffer |= self.get_byte()
+            inword = (buffer >> idx) & 0x7F
+            if inword == 0x03:   # end-of-string sentinel
+                break
+            parts.append(chr(inword) if 0x20 <= inword <= 0x7E else ' ')
+            idx += 1
+            if idx > 7:
+                idx = 0
         return ''.join(parts)
 
 
@@ -306,7 +362,7 @@ def _decode_expression(rdr: _Reader, depth: int = 0) -> str:
             result = _read_complex(rdr)
 
         else:
-            result = f'?{cop:#04x}'
+            result = f'??var 0x{cop:02X}'
 
     # -----------------------------------------------------------------------
     # After reading a value, check for an arithmetic operator chained to it.
@@ -336,7 +392,7 @@ def _decode_retval(rdr: _Reader, op: int) -> str:
     try:
         return _dispatch_op(rdr, op, in_retval=True)
     except Exception as exc:
-        return f'?retval_{op:#x}({exc})'
+        return f'?? retval 0x{op:02X}  ; {exc}'
 
 
 def _read_params(rdr: _Reader, n: int) -> str:
@@ -634,13 +690,15 @@ def _dispatch_op(rdr: _Reader, op: int, in_retval: bool = False) -> str:
         return _op_menu(rdr, in_retval)
 
     if op not in _OPCODE_TABLE:
-        return f'UNKNOWN_{op:#04x}'
+        ctx = ' '.join(f'{b:02X}' for b in rdr.data[rdr.pos:rdr.pos + 8])
+        return f'?? 0x{op:02X}  ; [{ctx}]'
 
     mnemonic, n_params = _OPCODE_TABLE[op]
 
     if n_params == -1:
-        # Unknown or unimplemented special: emit just mnemonic
-        return mnemonic
+        # Unimplemented special: show mnemonic + hex + raw following bytes
+        ctx = ' '.join(f'{b:02X}' for b in rdr.data[rdr.pos:rdr.pos + 6])
+        return f'{mnemonic}  ; 0x{op:02X} [{ctx}]'
 
     if n_params == 0:
         return mnemonic
@@ -677,8 +735,8 @@ def disassemble_gpl(data: bytes, is_mas: bool = False) -> list[dict]:
             text = _dispatch_op(rdr, op)
         except Exception as exc:
             text = f'<error: {exc}>'
-            insts.append({'addr': addr, 'op': f'ERR_{op:#04x}', 'args': str(exc),
-                          'line': f'ERR_{op:#04x}  ; {exc}',
+            insts.append({'addr': addr, 'op': f'?? 0x{op:02X}', 'args': str(exc),
+                          'line': f'?? 0x{op:02X}  ; {exc}',  # ERR',
                           'depth': max(0, depth), 'raw_op': op})
             # Don't stop — skip to the next byte and try to continue
             continue

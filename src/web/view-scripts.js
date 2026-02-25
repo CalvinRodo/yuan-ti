@@ -247,8 +247,15 @@ function _colorize(line) {
     return `<span class="sc-op-kw">${h}</span>`;
   }
 
-  // Error or unknown
-  if (h.startsWith('ERR_') || h.startsWith('UNKNOWN_') || h.startsWith('&lt;')) {
+  // Error or unknown (prefix ?? covers: unknown opcode, unknown var, decode error)
+  if (h.startsWith('??') || h.startsWith('ERR_') || h.startsWith('UNKNOWN_') || h.startsWith('&lt;')) {
+    // Split on first semicolon so the opcode is bold and the context is dimmed
+    const semi = h.indexOf(';');
+    if (semi > 0) {
+      const op  = h.slice(0, semi);
+      const ctx = h.slice(semi);
+      return `<span class="sc-op-err">${op}</span><span class="sc-op-ctx dim">${ctx}</span>`;
+    }
     return `<span class="sc-op-err">${h}</span>`;
   }
 
