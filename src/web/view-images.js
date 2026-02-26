@@ -13,6 +13,17 @@ let lazyObserver = null;
 // Sort state for the resource table
 let tableSort = { col: null, dir: 1 };
 
+// Animation state
+const animState = {
+  playing:    false,
+  timer:      null,
+  startFrame: 0,
+  endFrame:   0,
+};
+
+// Frame count cache for the Sprites view: "gff|tag_url|number" -> count
+const imageFrameCache = new Map();
+
 // ---------------------------------------------------------------------------
 // Detail pane resize + collapse
 // ---------------------------------------------------------------------------
@@ -41,6 +52,8 @@ function bindResourceTableEvents() {
 }
 
 function bindDetailPaneEvents() {
+  _bindAnimEvents();
+
   // Collapse / expand toggle
   dom.detailToggle.addEventListener('click', () => {
     const collapsed = dom.detailPane.classList.toggle('collapsed');
@@ -83,12 +96,14 @@ function bindDetailPaneEvents() {
 // ---------------------------------------------------------------------------
 
 function renderImageGrid() {
-  const imageResources = state.resources.filter(r => r.is_image);
+  let imageResources = state.resources.filter(r => r.is_image);
+  if (state.imageTagFilter)
+    imageResources = imageResources.filter(r => r.tag.trim() === state.imageTagFilter);
 
   if (imageResources.length === 0) {
     dom.imageGrid.innerHTML =
       '<div style="grid-column:1/-1;color:var(--text-faint);padding:32px 0;text-align:center;">' +
-      'No image resources (BMP, TILE, ICON) found in this GFF file.</div>';
+      (state.imageTagFilter ? `No ${state.imageTagFilter} image resources in this GFF file.` : 'No image resources (BMP, TILE, ICON) found in this GFF file.') + '</div>';
     dom.imageGrid.classList.remove('hidden');
     return;
   }
@@ -96,7 +111,10 @@ function renderImageGrid() {
   if (lazyObserver) { lazyObserver.disconnect(); lazyObserver = null; }
 
   const frag = document.createDocumentFragment();
-  imageResources.forEach(res => frag.appendChild(createImageCard(res)));
+  imageResources.forEach(res => {
+    const frameCount = imageFrameCache.get(`${state.currentGff}|${res.tag_url}|${res.number}`);
+    frag.appendChild(createImageCard(res, frameCount));
+  });
 
   dom.imageGrid.innerHTML = '';
   dom.imageGrid.appendChild(frag);
@@ -117,7 +135,7 @@ function renderImageGrid() {
   });
 }
 
-function createImageCard(res) {
+function createImageCard(res, frameCount) {
   const card = document.createElement('div');
   card.className = 'img-card';
   if (state.detail.resource?.tag_url === res.tag_url &&
@@ -134,6 +152,7 @@ function createImageCard(res) {
     `<img data-src="${src}" alt="${res.tag.trim()}-${res.number}">` +
     `<div class="card-spinner"></div>` +
     `<div class="card-error">Failed to load</div>` +
+    (frameCount > 1 ? `<span class="img-frame-badge">${frameCount}f</span>` : '') +
     `</div>` +
     `<div class="img-card-footer">` +
     `<div class="img-card-tag">${htmlEsc(res.tag.trim())}</div>` +
@@ -142,8 +161,8 @@ function createImageCard(res) {
     `</div>`;
 
   card.addEventListener('click', () => {
-    dom.imageGrid.querySelectorAll('.img-card.selected')
-      .forEach(c => c.classList.remove('selected'));
+    const container = card.closest('#image-grid, #img-sprite-view') || dom.imageGrid;
+    container.querySelectorAll('.img-card.selected').forEach(c => c.classList.remove('selected'));
     card.classList.add('selected');
     openDetailPane(res);
   });
@@ -167,7 +186,9 @@ function loadCardImage(img) {
 function renderImageList() {
   dom.content.scrollTop = 0;
   const gff            = state.currentGff;
-  const imageResources = state.resources.filter(r => r.is_image);
+  let imageResources   = state.resources.filter(r => r.is_image);
+  if (state.imageTagFilter)
+    imageResources = imageResources.filter(r => r.tag.trim() === state.imageTagFilter);
 
   if (!imageResources.length) {
     dom.imageListWrap.innerHTML =
@@ -286,9 +307,11 @@ function renderResourceTable() {
 // ---------------------------------------------------------------------------
 
 async function openDetailPane(res) {
+  stopAnimation();
   state.detail.resource   = res;
   state.detail.frames     = [];
   state.detail.frameIndex = 0;
+  state.detail.preloaded  = [];
 
   dom.detailTag.textContent  = res.tag.trim();
   dom.detailNum.textContent  = `#${res.number}`;
@@ -311,11 +334,18 @@ async function openDetailPane(res) {
 }
 
 function closeDetailPane() {
-  state.detail.resource = null;
+  stopAnimation();
+  state.detail.resource  = null;
+  state.detail.preloaded = [];
   dom.detailPane.classList.add('hidden');
-  dom.detailImg.src = '';
+  // Clear the canvas
+  const canvas = dom.detailImg;
+  const ctx = canvas.getContext('2d');
+  if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
+  canvas.style.display = 'none';
   dom.tableTbody.querySelectorAll('tr.selected').forEach(r => r.classList.remove('selected'));
   dom.imageGrid.querySelectorAll('.img-card.selected').forEach(c => c.classList.remove('selected'));
+  dom.imgSpriteView.querySelectorAll('.img-card.selected').forEach(c => c.classList.remove('selected'));
   if (dom.imageListTbody) {
     dom.imageListTbody.querySelectorAll('tr.selected').forEach(r => r.classList.remove('selected'));
   }
@@ -342,14 +372,60 @@ async function loadDetailImage(res) {
     }
   } catch { /* ignore */ }
 
-  renderFrameInPane(0);
+  const count = state.detail.frames.length;
+
+  // Preload all frames into memory so animation is seamless
+  const gff    = state.currentGff;
+  const numFrames = count || 1; // at least frame 0
+  let firstReady = false;
+
+  for (let i = 0; i < numFrames; i++) {
+    const img = new Image();
+    img.src   = imageUrl(gff, res.tag_url, res.number, i);
+    state.detail.preloaded[i] = img;
+    if (i === 0) {
+      img.onload = () => {
+        if (!firstReady) {
+          firstReady = true;
+          renderFrameInPane(0);
+        }
+      };
+      img.onerror = () => {
+        dom.detailImgSpinner.style.display = 'none';
+        const ctx = dom.detailImg.getContext('2d');
+        if (ctx) ctx.clearRect(0, 0, dom.detailImg.width, dom.detailImg.height);
+        dom.detailFrameInfo.textContent = '\u26a0 Failed to load';
+      };
+    }
+  }
+
+  // Configure animation controls
+  if (count > 1) {
+    dom.animControls.classList.remove('hidden');
+    animState.startFrame = 0;
+    animState.endFrame   = count - 1;
+    dom.animRangeStart.min   = 1;
+    dom.animRangeStart.max   = count;
+    dom.animRangeStart.value = 1;
+    dom.animRangeEnd.min     = 1;
+    dom.animRangeEnd.max     = count;
+    dom.animRangeEnd.value   = count;
+    if (count > 3) {
+      dom.animRange.classList.remove('hidden');
+    } else {
+      dom.animRange.classList.add('hidden');
+    }
+  } else {
+    dom.animControls.classList.add('hidden');
+  }
 }
 
 function renderFrameInPane(frameIdx) {
   const res = state.detail.resource;
   if (!res) return;
-  const frames = state.detail.frames;
-  const count  = frames.length;
+  const frames    = state.detail.frames;
+  const preloaded = state.detail.preloaded;
+  const count     = frames.length;
 
   frameIdx = Math.max(0, Math.min(frameIdx, Math.max(count - 1, 0)));
   state.detail.frameIndex = frameIdx;
@@ -357,37 +433,261 @@ function renderFrameInPane(frameIdx) {
   dom.detailPrev.disabled = (frameIdx <= 0);
   dom.detailNext.disabled = (frameIdx >= count - 1);
 
-  if (count > 0) {
-    const f = frames[frameIdx];
-    dom.detailFrameInfo.textContent = `${frameIdx + 1} / ${count}`;
-    dom.detailImgDims.textContent   = `${f.width} \u00d7 ${f.height} px`;
-  } else {
-    dom.detailFrameInfo.textContent = '';
-    dom.detailImgDims.textContent   = '';
+  if (animState.playing) {
+    dom.animStatus.textContent = `\u25b6 Frame ${frameIdx + 1}`;
   }
 
-  dom.detailImg.style.display        = 'none';
-  dom.detailImgSpinner.style.display = 'block';
+  const img = preloaded[frameIdx];
+  if (!img) return;
 
-  const src = imageUrl(state.currentGff, res.tag_url, res.number, frameIdx);
-  dom.detailImg.onload = () => {
+  const drawFrame = () => {
+    const scale = state.imageScale || 1;
+    const w = img.naturalWidth;
+    const h = img.naturalHeight;
+
+    const canvas = dom.detailImg;
+    if (canvas.width !== w || canvas.height !== h) {
+      canvas.width  = w;
+      canvas.height = h;
+    }
+    canvas.style.width  = (w * scale) + 'px';
+    canvas.style.height = (h * scale) + 'px';
+
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, w, h);
+    ctx.drawImage(img, 0, 0);
+
+    canvas.style.display        = 'block';
     dom.detailImgSpinner.style.display = 'none';
-    dom.detailImg.style.display        = 'block';
-    if (!frames.length) {
-      dom.detailImgDims.textContent =
-        `${dom.detailImg.naturalWidth} \u00d7 ${dom.detailImg.naturalHeight} px`;
+
+    if (count > 0) {
+      const f = frames[frameIdx];
+      dom.detailFrameInfo.textContent = `Frame ${frameIdx + 1} / ${count}`;
+      dom.detailImgDims.textContent   = `${w} \u00d7 ${h} px`;
+    } else {
+      dom.detailFrameInfo.textContent = '';
+      dom.detailImgDims.textContent   = `${w} \u00d7 ${h} px`;
     }
   };
-  dom.detailImg.onerror = () => {
-    dom.detailImgSpinner.style.display = 'none';
-    dom.detailImg.alt                  = '\u26a0 Failed to load';
-    dom.detailImg.style.display        = 'block';
-  };
-  dom.detailImg.src = src;
+
+  if (img.complete && img.naturalWidth > 0) {
+    drawFrame();
+  } else {
+    // Still loading — show spinner and draw once ready
+    dom.detailImg.style.display        = 'none';
+    dom.detailImgSpinner.style.display = 'block';
+    img.onload  = drawFrame;
+    img.onerror = () => {
+      dom.detailImgSpinner.style.display = 'none';
+      dom.detailFrameInfo.textContent    = '\u26a0 Failed to load';
+    };
+  }
 }
 
 function navigateFrame(delta) {
+  stopAnimation();
   renderFrameInPane(state.detail.frameIndex + delta);
+}
+
+// ---------------------------------------------------------------------------
+// Image type filter bar
+// ---------------------------------------------------------------------------
+
+function buildImageFilterBar() {
+  const tags = [...new Set(
+    state.resources.filter(r => r.is_image).map(r => r.tag.trim())
+  )].sort();
+
+  if (tags.length <= 1) {
+    dom.imgFilterBar.classList.add('hidden');
+    return;
+  }
+
+  dom.imgFilterBar.innerHTML = '';
+  const makeBtn = (label, value) => {
+    const btn = document.createElement('button');
+    btn.className = 'img-tag-btn' + (state.imageTagFilter === value ? ' active' : '');
+    btn.dataset.tag = value;
+    btn.textContent = label;
+    btn.addEventListener('click', () => {
+      state.imageTagFilter = value;
+      dom.imgFilterBar.querySelectorAll('.img-tag-btn')
+        .forEach(b => b.classList.toggle('active', b.dataset.tag === value));
+      renderContent();
+    });
+    return btn;
+  };
+  dom.imgFilterBar.appendChild(makeBtn('All', ''));
+  tags.forEach(t => dom.imgFilterBar.appendChild(makeBtn(t, t)));
+  dom.imgFilterBar.classList.remove('hidden');
+}
+
+// ---------------------------------------------------------------------------
+// Sprite sheet view (multi-frame images only)
+// ---------------------------------------------------------------------------
+
+async function renderSpriteView() {
+  const gff  = state.currentGff;
+  let imageResources = state.resources.filter(r => r.is_image);
+  if (state.imageTagFilter)
+    imageResources = imageResources.filter(r => r.tag.trim() === state.imageTagFilter);
+
+  // Check whether all frame counts are already in cache (seeded from resources list)
+  const uncached = imageResources.filter(res =>
+    !imageFrameCache.has(`${gff}|${res.tag_url}|${res.number}`)
+  );
+
+  if (uncached.length > 0) {
+    dom.imgSpriteView.innerHTML =
+      '<div class="sprite-loading"><div class="spinner"></div><span>Scanning frames\u2026</span></div>';
+    dom.imgSpriteView.classList.remove('hidden');
+
+    // Batch uncached ones — limit to 8 concurrent to avoid flooding the server
+    const CONCURRENCY = 8;
+    for (let i = 0; i < uncached.length; i += CONCURRENCY) {
+      await Promise.all(uncached.slice(i, i + CONCURRENCY).map(async res => {
+        const key = `${gff}|${res.tag_url}|${res.number}`;
+        try {
+          const r = await fetch(
+            `/api/gff/${encodeURIComponent(gff)}/image/${res.tag_url}/${res.number}/info` +
+            `?game=${state.game}&v=${palVersion}`);
+          const info = await r.json();
+          imageFrameCache.set(key, info.frames?.length ?? 1);
+        } catch {
+          imageFrameCache.set(key, 1);
+        }
+      }));
+    }
+
+    if (state.mode !== 'images' || state.imageView !== 'sprites') return;
+  } else {
+    dom.imgSpriteView.classList.remove('hidden');
+  }
+
+  const sprites = imageResources.filter(res =>
+    (imageFrameCache.get(`${gff}|${res.tag_url}|${res.number}`) ?? 1) > 1
+  );
+
+  if (sprites.length === 0) {
+    dom.imgSpriteView.innerHTML =
+      `<div class="img-empty">No sprite sheets found` +
+      (state.imageTagFilter ? ` for \u201c${state.imageTagFilter}\u201d` : '') +
+      `.</div>`;
+    return;
+  }
+
+  if (lazyObserver) { lazyObserver.disconnect(); lazyObserver = null; }
+
+  const frag = document.createDocumentFragment();
+  sprites.forEach(res => {
+    const frameCount = imageFrameCache.get(`${gff}|${res.tag_url}|${res.number}`);
+    frag.appendChild(createImageCard(res, frameCount));
+  });
+  dom.imgSpriteView.innerHTML = '';
+  dom.imgSpriteView.appendChild(frag);
+
+  lazyObserver = new IntersectionObserver(entries => {
+    entries.forEach(entry => {
+      if (!entry.isIntersecting) return;
+      const img = entry.target.querySelector('img[data-src]');
+      if (!img) return;
+      loadCardImage(img);
+      lazyObserver.unobserve(entry.target);
+    });
+  }, { rootMargin: '200px' });
+  dom.imgSpriteView.querySelectorAll('.img-card').forEach(card => lazyObserver.observe(card));
+}
+
+// ---------------------------------------------------------------------------
+// Animation
+// ---------------------------------------------------------------------------
+
+function _animGetDuration() {
+  const v = parseInt(dom.animDuration.value, 10);
+  return Number.isFinite(v) && v >= 50 ? Math.min(v, 10000) : 1000;
+}
+
+function _bindAnimEvents() {
+  dom.animPlay.addEventListener('click', startAnimation);
+  dom.animStop.addEventListener('click', stopAnimation);
+
+  // Sync range inputs to animState while not playing
+  dom.animRangeStart.addEventListener('change', () => {
+    if (animState.playing) return;
+    const count = state.detail.frames.length;
+    let v = parseInt(dom.animRangeStart.value, 10);
+    if (!Number.isFinite(v)) v = 1;
+    v = Math.max(1, Math.min(v, count));
+    dom.animRangeStart.value = v;
+    animState.startFrame = v - 1;
+    if (animState.startFrame > animState.endFrame) {
+      animState.endFrame = animState.startFrame;
+      dom.animRangeEnd.value = v;
+    }
+  });
+  dom.animRangeEnd.addEventListener('change', () => {
+    if (animState.playing) return;
+    const count = state.detail.frames.length;
+    let v = parseInt(dom.animRangeEnd.value, 10);
+    if (!Number.isFinite(v)) v = count;
+    v = Math.max(1, Math.min(v, count));
+    dom.animRangeEnd.value = v;
+    animState.endFrame = v - 1;
+    if (animState.endFrame < animState.startFrame) {
+      animState.startFrame = animState.endFrame;
+      dom.animRangeStart.value = v;
+    }
+  });
+}
+
+function startAnimation() {
+  if (animState.playing) return;
+  const frames = state.detail.frames;
+  if (!frames || frames.length < 2) return;
+
+  // Read current range from inputs
+  const count = frames.length;
+  let s = parseInt(dom.animRangeStart.value, 10) - 1;
+  let e = parseInt(dom.animRangeEnd.value, 10) - 1;
+  if (!Number.isFinite(s) || s < 0) s = 0;
+  if (!Number.isFinite(e) || e >= count) e = count - 1;
+  if (s > e) s = 0;
+  animState.startFrame = s;
+  animState.endFrame   = e;
+
+  // Start from current frame if it's in range, otherwise from start
+  if (state.detail.frameIndex < s || state.detail.frameIndex > e) {
+    renderFrameInPane(s);
+  }
+
+  animState.playing = true;
+  dom.animPlay.classList.add('hidden');
+  dom.animStop.classList.remove('hidden');
+  dom.animStatus.textContent = `\u25b6 Frame ${state.detail.frameIndex + 1}`;
+
+  animState.timer = setTimeout(_animTick, _animGetDuration());
+}
+
+function stopAnimation() {
+  animState.playing = false;
+  if (animState.timer) { clearTimeout(animState.timer); animState.timer = null; }
+  if (dom.animPlay) {
+    dom.animPlay.classList.remove('hidden');
+    dom.animStop.classList.add('hidden');
+    dom.animStatus.textContent = '';
+  }
+}
+
+function _animTick() {
+  if (!animState.playing) return;
+  const frames = state.detail.frames;
+  if (!frames || frames.length === 0) { stopAnimation(); return; }
+
+  let next = state.detail.frameIndex + 1;
+  if (next > animState.endFrame) next = animState.startFrame;
+  renderFrameInPane(next);
+
+  animState.timer = setTimeout(_animTick, _animGetDuration());
 }
 
 // ---------------------------------------------------------------------------

@@ -18,6 +18,7 @@ from flask import Blueprint, jsonify, send_file, abort, request
 from gff import NoSuchResourceError
 from config import DEFAULT_GAME
 from gff_cache import load_gff, find_palette
+from disk_cache import load_precomputed_json, precomputed_png_path
 
 bp = Blueprint('maps', __name__)
 
@@ -34,6 +35,13 @@ def api_rmap(name: str, number: int):
     array of 1-byte tile indices.
     """
     game_id = request.args.get('game', DEFAULT_GAME)
+
+    # Fast path: serve from precomputed disk cache when available.
+    stem    = os.path.splitext(name.upper())[0]
+    cached  = load_precomputed_json(game_id, 'maps', f'{stem}-{number}.json')
+    if cached is not None:
+        return jsonify(cached)
+
     gff     = load_gff(name, game_id)
 
     # DS1 stores maps as 'RMAP'; DS2 uses 'MAP '
@@ -79,6 +87,14 @@ def api_map_render(name: str):
         abort(500, description='Pillow is not installed. Run: pip install pillow')
 
     game_id = request.args.get('game', DEFAULT_GAME)
+
+    # Fast path: serve the precomputed PNG when available
+    # (only when no custom palette override is requested).
+    if not request.args.get('pal_gff') and not request.args.get('pal_num'):
+        stem   = os.path.splitext(name.upper())[0]
+        cached = precomputed_png_path(game_id, 'maps', f'{stem}.png')
+        if cached is not None:
+            return send_file(cached, mimetype='image/png')
     gff     = load_gff(name, game_id)
 
     # Load auxiliary GFFs silently — not all games have all of them
@@ -93,6 +109,17 @@ def api_map_render(name: str):
     pal_num_raw  = request.args.get('pal_num')
     pal_num      = int(pal_num_raw) if pal_num_raw is not None else None
     pal_tag_raw  = request.args.get('pal_tag', 'PAL')
+
+    # When no explicit palette is supplied, derive it from the region number:
+    # the GMAP resource number in the region GFF equals the region number, and
+    # the matching PAL lives in GPLDATA.GFF at that same number.
+    if pal_gff_name is None and pal_num is None:
+        for d in gff.describe_resources():
+            if d.tag == 'GMAP':
+                pal_gff_name = 'GPLDATA.GFF'
+                pal_num      = d.number
+                break
+
     palette      = find_palette(gff, pal_gff_name, pal_num, pal_tag_raw, game_id)
 
     if palette is None:

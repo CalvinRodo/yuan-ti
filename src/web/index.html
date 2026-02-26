@@ -71,6 +71,10 @@
           <span class="mode-icon">&#128196;</span>
           <span class="mode-label">Scripts</span>
         </button>
+        <button class="mode-btn" data-mode="npc" title="NPC / Monster Sprite Viewer">
+          <span class="mode-icon">&#9812;</span>
+          <span class="mode-label">Sprites</span>
+        </button>
       </nav>
 
       <!-- ===== MAIN ===== -->
@@ -86,8 +90,16 @@
           <div id="img-view-group" class="tb-group hidden">
             <label class="control-label">View</label>
             <div class="btn-pair">
-              <button id="img-card-btn" class="view-toggle active" title="Card view">&#8862; Cards</button>
-              <button id="img-list-btn" class="view-toggle"        title="List view">&#9776; List</button>
+              <button id="img-card-btn"    class="view-toggle active" title="Card view">&#8862; Cards</button>
+              <button id="img-list-btn"    class="view-toggle"        title="List view">&#9776; List</button>
+              <button id="img-sprites-btn" class="view-toggle"        title="Sprite sheets only">&#9673; Sprites</button>
+            </div>
+            <span class="tb-divider"></span>
+            <label class="control-label">Size</label>
+            <div class="btn-pair">
+              <button id="img-zoom-out" class="view-toggle" title="Smaller cards">&#8722;</button>
+              <span   id="img-zoom-label" class="img-zoom-label">M</span>
+              <button id="img-zoom-in"  class="view-toggle" title="Larger cards">+</button>
             </div>
           </div>
 
@@ -106,6 +118,9 @@
           </select>
           <span id="res-filter-count" class="res-filter-count"></span>
         </div>
+
+        <!-- Image type filter bar (images mode only) -->
+        <div id="img-filter-bar" class="hidden"></div>
 
         <!-- Split: content + detail pane -->
         <div id="split">
@@ -132,6 +147,8 @@
                 <tbody id="image-list-tbody"></tbody>
               </table>
             </div>
+
+            <div id="img-sprite-view" class="hidden"></div>
 
             <div id="spell-grid"      class="hidden"></div>
 
@@ -199,6 +216,9 @@
             <!-- GPL / MAS script browser -->
             <div id="scripts-view" class="hidden"></div>
 
+            <!-- NPC / Monster sprite viewer -->
+            <div id="npc-view" class="hidden"></div>
+
             <!-- All-resources table -->
             <div id="resource-table-wrap" class="hidden">
               <table id="resource-table">
@@ -241,9 +261,45 @@
                   <button id="detail-prev" class="frame-nav" aria-label="Previous frame">&#8249;</button>
                   <span id="detail-frame-info"></span>
                   <button id="detail-next" class="frame-nav" aria-label="Next frame">&#8250;</button>
+                  <label class="detail-scale-label" title="Pixel scale (nearest-neighbour)">
+                    <select id="detail-scale">
+                      <option value="1">1&times;</option>
+                      <option value="2">2&times;</option>
+                      <option value="3">3&times;</option>
+                      <option value="4">4&times;</option>
+                      <option value="6">6&times;</option>
+                      <option value="8">8&times;</option>
+                    </select>
+                  </label>
                 </div>
+
+                <!-- Animation controls (shown when ≥ 2 frames) -->
+                <div id="anim-controls" class="hidden">
+                  <div id="anim-toolbar">
+                    <button id="anim-play" class="anim-btn" title="Play animation">&#9654; Play</button>
+                    <button id="anim-stop" class="anim-btn anim-stop-btn hidden" title="Stop animation">&#9646;&#9646; Stop</button>
+                    <label class="anim-duration-wrap" title="Milliseconds displayed per frame">
+                      <input id="anim-duration" type="number" min="50" max="10000" value="1000" step="50">
+                      <span>ms&nbsp;/&nbsp;frame</span>
+                    </label>
+                    <span id="anim-status" class="anim-status"></span>
+                  </div>
+                  <!-- Frame range selector (shown when > 3 frames, e.g. character sheets) -->
+                  <div id="anim-range" class="hidden">
+                    <span class="anim-range-title">Range</span>
+                    <label class="anim-range-wrap">
+                      <span>From</span>
+                      <input id="anim-range-start" type="number" min="1" value="1">
+                    </label>
+                    <label class="anim-range-wrap">
+                      <span>To</span>
+                      <input id="anim-range-end" type="number" min="1" value="1">
+                    </label>
+                  </div>
+                </div>
+
                 <div id="detail-img-wrap">
-                  <img id="detail-img" alt="resource image">
+                  <canvas id="detail-img"></canvas>
                   <div id="detail-img-spinner" class="spinner"></div>
                 </div>
                 <div id="detail-img-dims" class="dim"></div>
@@ -279,5 +335,6 @@
   <script src="view-cinematic.js"></script>
   <script src="view-data.js"></script>
   <script src="view-scripts.js"></script>
+  <script src="view-sprites.js"></script>
 </body>
 </html>

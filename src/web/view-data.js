@@ -17,6 +17,11 @@ let dataSortDir    = 1; // 1 = asc, -1 = desc
 let monsterLoreCache  = null;   // array from /api/monster-lore
 let selectedMonsterId = null;   // rdff_id of the currently selected monster
 
+let itemSpriteLinks   = null;   // {item_index_str: bmp_num} from /api/item-sprite-links
+let _pickerBmpCache   = null;   // Item-type sprites cached for the sprite picker
+let _pickerDom        = null;   // the sprite picker popover element
+let _spriteGffName    = 'SEGOBJEX.GFF'; // actual GFF file holding sprites for current game
+
 // ---------------------------------------------------------------------------
 // Entry point
 // ---------------------------------------------------------------------------
@@ -38,6 +43,10 @@ function teardownDataView() {
   dataSortDir       = 1;
   monsterLoreCache  = null;
   selectedMonsterId = null;
+  itemSpriteLinks   = null;
+  _pickerBmpCache   = null;
+  _spriteGffName    = 'SEGOBJEX.GFF';
+  if (_pickerDom) { _pickerDom.remove(); _pickerDom = null; }
   // Do not reset dataViewBuilt — DOM can stay; we just flush per-game data
 }
 
@@ -108,6 +117,7 @@ const _TAB_DEFS = {
   items: {
     cols: [
       { key: '_sprite',    label: '',         sortType: null,  nosort: true, img: true },
+      { key: '_segobjex',  label: 'Sprite',   sortType: null,  nosort: true, spriteLink: true },
       { key: 'name',       label: 'Name',     sortType: 'str' },
       { key: 'type',       label: 'Type',     sortType: 'str' },
       { key: 'damage',     label: 'Damage',   sortType: 'str' },
@@ -117,10 +127,13 @@ const _TAB_DEFS = {
       { key: 'weight',     label: 'Weight',   sortType: 'num' },
       { key: 'material',   label: 'Material', sortType: 'num' },
     ],
-    rowData: row => [
-      row.port_num
-        ? `/api/gff/${encodeURIComponent(row.sprite_gff)}/image/${row.sprite_tag_url}/${row.port_num}?frame=0&game=${state.game}`
+    rowData: row => {
+      const iBmp = itemSpriteLinks ? (itemSpriteLinks[String(row.index)] ?? null) : null;
+      return [
+      iBmp != null
+        ? `/api/gff/${_spriteGffName}/image/BMP_/${iBmp}?frame=0&game=${state.game}`
         : null,
+      row.index,      // item_index for sprite link lookup
       row.name      || '—',
       row.type      || '—',
       row.damage    || '—',
@@ -129,7 +142,8 @@ const _TAB_DEFS = {
       row.range     != null ? row.range     : '—',
       row.weight    != null ? row.weight    : '—',
       row.material  != null ? row.material  : '—',
-    ],
+    ];
+    },
     filterRow: (row, q) =>
       (row.name  || '').toLowerCase().includes(q) ||
       (row.type  || '').toLowerCase().includes(q) ||
@@ -202,13 +216,34 @@ async function _loadTab(tab) {
   _showMonsterBrowser(isMonsters);
 
   if (!isMonsters) {
-    if (dataCache[tab] !== null) { _renderTable(); return; }
+    if (dataCache[tab] !== null) {
+      // Items need sprite links too; load lazily if missing
+      if (tab === 'items' && itemSpriteLinks === null) {
+        fetch(`/api/item-sprite-links?game=${state.game}`)
+          .then(r => r.ok ? r.json() : {})
+          .then(d => { itemSpriteLinks = d; _spriteGffName = d._gff_name || 'SEGOBJEX.GFF'; _renderTable(); })
+          .catch(() => { itemSpriteLinks = {}; });
+      }
+      _renderTable();
+      return;
+    }
     _showSpinner(true);
     _showError(null);
     try {
-      const r = await fetch(`/api/${tab}?game=${state.game}`);
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      dataCache[tab] = await r.json();
+      const fetches = [
+        fetch(`/api/${tab}?game=${state.game}`)
+          .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
+          .then(d => { dataCache[tab] = d; }),
+      ];
+      if (tab === 'items') {
+        fetches.push(
+          fetch(`/api/item-sprite-links?game=${state.game}`)
+            .then(r => r.ok ? r.json() : {})
+            .then(d => { itemSpriteLinks = d; _spriteGffName = d._gff_name || 'SEGOBJEX.GFF'; })
+            .catch(() => { itemSpriteLinks = {}; })
+        );
+      }
+      await Promise.all(fetches);
     } catch (e) {
       _showSpinner(false);
       _showError(`Failed to load ${tab}: ${e.message}`);
@@ -307,7 +342,7 @@ function _renderTable() {
       const td = document.createElement('td');
       const colDef = def.cols[i];
       if (colDef.img) {
-        // Sprite thumbnail cell
+        // PORT icon thumbnail cell
         td.classList.add('data-col-sprite');
         if (cell) {
           const img = document.createElement('img');
@@ -316,6 +351,44 @@ function _renderTable() {
           img.className = 'data-sprite-img';
           img.onerror = () => { img.style.display = 'none'; };
           td.appendChild(img);
+        }
+      } else if (colDef.spriteLink) {
+        // SEGOBJEX sprite link cell (cell = item_index)
+        td.classList.add('data-col-sprite', 'data-col-sprite-link');
+        const itemIndex = cell;
+        const bmpNum    = itemSpriteLinks ? (itemSpriteLinks[String(itemIndex)] ?? null) : null;
+        if (bmpNum != null) {
+          const img = document.createElement('img');
+          img.src       = `/api/gff/${_spriteGffName}/image/BMP_/${bmpNum}?frame=0&game=${state.game}&scale=2`;
+          img.alt       = '';
+          img.className = 'data-sprite-img';
+          img.title     = `BMP #${bmpNum} \u2014 click to view in sprite viewer`;
+          img.style.cursor = 'pointer';
+          img.onerror = () => { img.style.display = 'none'; };
+          img.addEventListener('click', () => {
+            if (typeof jumpToSprite === 'function') jumpToSprite(bmpNum);
+          });
+          td.appendChild(img);
+          const unlinkBtn = document.createElement('button');
+          unlinkBtn.className = 'data-sprite-unlink-btn';
+          unlinkBtn.title     = 'Unlink sprite';
+          unlinkBtn.innerHTML = '&#10005;';
+          unlinkBtn.addEventListener('click', ev => {
+            ev.stopPropagation();
+            _unlinkItemSprite(bmpNum, itemIndex, td);
+          });
+          td.appendChild(unlinkBtn);
+        } else {
+          const linkBtn = document.createElement('button');
+          linkBtn.className = 'data-sprite-link-btn';
+          linkBtn.title     = 'Link to sprite';
+          linkBtn.innerHTML = '&#128279;';
+          const item = (dataCache.items || []).find(x => x.index === itemIndex);
+          linkBtn.addEventListener('click', ev => {
+            ev.stopPropagation();
+            _showItemSpritePicker(itemIndex, item ? item.name : '', ev.currentTarget);
+          });
+          td.appendChild(linkBtn);
         }
       } else {
         td.textContent = cell;
@@ -365,6 +438,146 @@ function _showError(msg) {
     el.classList.remove('hidden');
   } else {
     el.classList.add('hidden');
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Item ↔ Sprite linking
+// ---------------------------------------------------------------------------
+
+function _getOrCreatePicker() {
+  if (_pickerDom) return _pickerDom;
+  const div = document.createElement('div');
+  div.id        = 'item-sprite-picker';
+  div.className = 'item-spr-picker hidden';
+  div.innerHTML = `
+    <div class="item-spr-picker-hdr">
+      <span id="item-spr-picker-title" class="item-spr-picker-ttl">Link sprite</span>
+      <button id="item-spr-picker-close" class="item-spr-picker-close" title="Close">&#10005;</button>
+    </div>
+    <input id="item-spr-picker-search" type="search" class="item-spr-picker-search" placeholder="Search sprites\u2026" autocomplete="off">
+    <div id="item-spr-picker-list" class="item-spr-picker-list"></div>`;
+  document.body.appendChild(div);
+  div.querySelector('#item-spr-picker-close').addEventListener('click', _hideItemSpritePicker);
+  document.addEventListener('mousedown', ev => {
+    if (!div.classList.contains('hidden') &&
+        !div.contains(ev.target) &&
+        !ev.target.closest('.data-sprite-link-btn')) {
+      _hideItemSpritePicker();
+    }
+  }, true);
+  div.querySelector('#item-spr-picker-search').addEventListener('input', ev => {
+    _populatePickerList(ev.target.value.toLowerCase().trim());
+  });
+  _pickerDom = div;
+  return div;
+}
+
+function _hideItemSpritePicker() {
+  if (_pickerDom) _pickerDom.classList.add('hidden');
+}
+
+async function _showItemSpritePicker(itemIndex, itemName, triggerEl) {
+  const picker = _getOrCreatePicker();
+  picker.dataset.itemIndex = String(itemIndex);
+  picker.querySelector('#item-spr-picker-title').textContent =
+    itemName ? `Link sprite for: ${itemName}` : 'Link sprite';
+  picker.querySelector('#item-spr-picker-search').value = '';
+
+  // Position near trigger element
+  const rect = triggerEl.getBoundingClientRect();
+  const left = Math.min(rect.right + 6, window.innerWidth - 250);
+  const top  = Math.min(rect.top,       window.innerHeight - 320);
+  picker.style.left = `${Math.max(4, left)}px`;
+  picker.style.top  = `${Math.max(4, top)}px`;
+  picker.classList.remove('hidden');
+
+  const listEl = picker.querySelector('#item-spr-picker-list');
+  if (!_pickerBmpCache) {
+    listEl.innerHTML = '<div class="item-spr-picker-msg">Loading\u2026</div>';
+    try {
+      const r   = await fetch(`/api/bmp-catalog?game=${state.game}`);
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const all = await r.json();
+      _pickerBmpCache = all.filter(e => e.type === 'Item');
+      if (all.length) _spriteGffName = all[0].gff_name || 'SEGOBJEX.GFF';
+    } catch (err) {
+      listEl.innerHTML = `<div class="item-spr-picker-msg" style="color:#c87f7f">Error loading sprites</div>`;
+      return;
+    }
+  }
+  _populatePickerList('');
+}
+
+function _populatePickerList(q) {
+  if (!_pickerDom || !_pickerBmpCache) return;
+  const listEl = _pickerDom.querySelector('#item-spr-picker-list');
+  const sprites = q
+    ? _pickerBmpCache.filter(e =>
+        (e.name || '').toLowerCase().includes(q) || String(e.bmp_num).includes(q))
+    : _pickerBmpCache;
+
+  if (sprites.length === 0) {
+    listEl.innerHTML = '<div class="item-spr-picker-msg dim">No Item-type sprites found.<br>Set sprite type to "Item" in the sprite viewer first.</div>';
+    return;
+  }
+  listEl.innerHTML = '';
+  const frag = document.createDocumentFragment();
+  sprites.forEach(spr => {
+    const btn  = document.createElement('button');
+    btn.className  = 'item-spr-picker-item';
+    const name = spr.name || (spr.rdff_names && spr.rdff_names.length ? spr.rdff_names[0] : `BMP #${spr.bmp_num}`);
+    btn.innerHTML = `
+      <img src="/api/gff/${spr.gff_name || _spriteGffName}/image/BMP_/${spr.bmp_num}?frame=0&game=${state.game}&scale=2"
+           alt="" onerror="this.style.display='none'" class="item-spr-picker-img">
+      <span class="item-spr-picker-name">${_esc(name)}</span>
+      <span class="dim" style="font-size:10px">#${spr.bmp_num}</span>`;
+    btn.addEventListener('click', async () => {
+      const itemIndex = Number(_pickerDom.dataset.itemIndex);
+      await _linkItemSprite(itemIndex, spr.bmp_num);
+      _hideItemSpritePicker();
+    });
+    frag.appendChild(btn);
+  });
+  listEl.appendChild(frag);
+}
+
+async function _linkItemSprite(itemIndex, bmpNum) {
+  try {
+    const r = await fetch(`/api/sprite-metadata?game=${state.game}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sprites: { [String(bmpNum)]: { item_index: itemIndex } } }),
+    });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    if (!itemSpriteLinks) itemSpriteLinks = {};
+    // Clear old bmp_num for this item_index
+    Object.keys(itemSpriteLinks).forEach(k => {
+      if (itemSpriteLinks[k] === bmpNum) delete itemSpriteLinks[k];
+    });
+    itemSpriteLinks[String(itemIndex)] = bmpNum;
+    // Update picker cache so newly linked sprites show correctly
+    if (_pickerBmpCache) {
+      _pickerBmpCache.forEach(e => { if (e.bmp_num === bmpNum) e.item_index = itemIndex; });
+    }
+    _renderTable();
+  } catch (err) {
+    console.error('Failed to link sprite:', err);
+  }
+}
+
+async function _unlinkItemSprite(bmpNum, itemIndex) {
+  try {
+    const r = await fetch(`/api/sprite-metadata?game=${state.game}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sprites: { [String(bmpNum)]: { item_index: null } } }),
+    });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    if (itemSpriteLinks) delete itemSpriteLinks[String(itemIndex)];
+    _renderTable();
+  } catch (err) {
+    console.error('Failed to unlink sprite:', err);
   }
 }
 
@@ -636,7 +849,7 @@ function _renderMonsterDetail(g, lore) {
 
   // Sprite URL
   const spriteUrl = (g.bmp_num && g.sprite_gff)
-    ? `/api/gff/${encodeURIComponent(g.sprite_gff)}/image/${g.sprite_tag_url}/${g.bmp_num}?frame=0&game=${state.game}`
+    ? `/api/gff/${encodeURIComponent(g.sprite_gff)}/image/${g.sprite_tag_url}/${g.bmp_num}?frame=0&scale=4&game=${state.game}`
     : null;
 
   // Helper: render a stat value, annotating game-extracted data when it differs

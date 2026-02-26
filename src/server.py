@@ -28,7 +28,7 @@ app = Flask(__name__, static_folder=WEB_DIR, static_url_path='')
 # Register route blueprints
 # ---------------------------------------------------------------------------
 
-from routes import gff, images, maps, text, audio, cinematics, gamedata, scripts
+from routes import gff, images, maps, text, audio, cinematics, gamedata, scripts, sprites
 
 app.register_blueprint(gff.bp)
 app.register_blueprint(images.bp)
@@ -38,6 +38,7 @@ app.register_blueprint(audio.bp)
 app.register_blueprint(cinematics.bp)
 app.register_blueprint(gamedata.bp)
 app.register_blueprint(scripts.bp)
+app.register_blueprint(sprites.bp)
 
 
 @app.route('/')

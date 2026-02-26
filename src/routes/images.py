@@ -20,8 +20,18 @@ from gff import NoSuchResourceError
 from image import ImageReading, Palette
 from config import DEFAULT_GAME, url_seg_to_tag
 from gff_cache import load_gff, find_palette
+from disk_cache import precomputed_image_path
 
 bp = Blueprint('images', __name__)
+
+
+
+def _scale_nearest(img, scale: int):
+    """Scale *img* by an integer factor using nearest-neighbour (pixel-perfect)."""
+    if scale <= 1:
+        return img
+    from PIL import Image as PilImage
+    return img.resize((img.width * scale, img.height * scale), PilImage.NEAREST)
 
 
 @bp.route('/api/gff/<name>/image/<tag_url>/<int:number>')
@@ -34,6 +44,7 @@ def api_image(name: str, tag_url: str, number: int):
     pal_num  : PAL resource number                   (optional)
     pal_tag  : 'PAL' or 'CPAL'                       (default: 'PAL')
     frame    : specific frame index; -1 = sprite-sheet of all frames (default)
+    scale    : integer pixel-doubling factor 1–8     (default: 1, nearest-neighbour)
     game     : game id                               (default: dark_sun)
     """
     try:
@@ -41,8 +52,27 @@ def api_image(name: str, tag_url: str, number: int):
     except ImportError:
         abort(500, description="Pillow is not installed. Run: pip install pillow")
 
-    game_id = request.args.get('game', DEFAULT_GAME)
-    tag     = url_seg_to_tag(tag_url)
+    game_id   = request.args.get('game', DEFAULT_GAME)
+    tag       = url_seg_to_tag(tag_url)
+    frame_idx = int(request.args.get('frame', '-1'))
+    scale     = max(1, min(8, int(request.args.get('scale', '1'))))
+
+    # Fast path: serve precomputed PNG when the palette override isn’t in use.
+    if not request.args.get('pal_gff') and not request.args.get('pal_num'):
+        stem   = os.path.splitext(name.upper())[0]
+        cached = precomputed_image_path(game_id, stem, tag, number, frame_idx)
+        if cached is not None:
+            if scale <= 1:
+                resp = send_file(cached, mimetype='image/png')
+                resp.headers['Cache-Control'] = 'public, max-age=86400, immutable'
+                return resp
+            img = _scale_nearest(PilImage.open(cached), scale)
+            buf = io.BytesIO()
+            img.save(buf, format='PNG')
+            buf.seek(0)
+            resp = send_file(buf, mimetype='image/png')
+            resp.headers['Cache-Control'] = 'public, max-age=86400'
+            return resp
 
     gff = load_gff(name, game_id)
     try:
@@ -54,7 +84,7 @@ def api_image(name: str, tag_url: str, number: int):
     pal_num_raw  = request.args.get('pal_num')
     pal_num      = int(pal_num_raw) if pal_num_raw is not None else None
     pal_tag_raw  = request.args.get('pal_tag', 'PAL')
-    frame_idx    = int(request.args.get('frame', '-1'))
+    # frame_idx already parsed above for the fast-path check
 
     palette = find_palette(gff, pal_gff_name, pal_num, pal_tag_raw, game_id)
 
@@ -85,10 +115,13 @@ def api_image(name: str, tag_url: str, number: int):
                     x_off += frame.width
                 img = sheet
 
+    img = _scale_nearest(img, scale)
     buf = io.BytesIO()
     img.save(buf, format='PNG')
     buf.seek(0)
-    return send_file(buf, mimetype='image/png')
+    resp = send_file(buf, mimetype='image/png')
+    resp.headers['Cache-Control'] = 'public, max-age=86400'
+    return resp
 
 
 @bp.route('/api/gff/<name>/image/<tag_url>/<int:number>/info')
@@ -103,10 +136,12 @@ def api_image_info(name: str, tag_url: str, number: int):
     except Exception as exc:
         return jsonify({'error': str(exc), 'frames': []})
 
-    return jsonify({
+    resp = jsonify({
         'frames': [{'index': i, 'width': f.width, 'height': f.height}
                    for i, f in enumerate(frames)]
     })
+    resp.headers['Cache-Control'] = 'public, max-age=86400'
+    return resp
 
 
 @bp.route('/api/gff/<name>/pal-png/<tag_url>/<int:number>')

@@ -32,6 +32,7 @@ from config import (
     tag_to_url_seg, url_seg_to_tag,
 )
 from gff_cache import load_gff
+from disk_cache import precomputed_audio_path
 
 bp = Blueprint('audio', __name__)
 
@@ -67,6 +68,14 @@ def api_audio(name: str, tag_url: str, number: int):
     game_id = request.args.get('game', DEFAULT_GAME)
     tag     = url_seg_to_tag(tag_url)
 
+    # Fast path: serve precomputed MP3 when available.
+    stem   = os.path.splitext(name.upper())[0]
+    tag_s  = tag.strip()
+    cached = precomputed_audio_path(game_id, stem, f'{tag_s}-{number}.mp3')
+    if cached is not None:
+        return send_file(cached, mimetype='audio/mpeg',
+                         download_name=f'{name}_{tag_s}_{number}.mp3')
+
     gff = load_gff(name, game_id)
     try:
         voc_data = gff.get_resource_data(tag, number)
@@ -96,6 +105,15 @@ def api_midi(name: str, tag_url: str, number: int):
     game_id     = request.args.get('game', DEFAULT_GAME)
     track_index = int(request.args.get('track_index', '0'))
     tag         = url_seg_to_tag(tag_url)
+
+    # Fast path: serve precomputed MIDI when available (track 0 only).
+    if track_index == 0:
+        stem   = os.path.splitext(name.upper())[0]
+        tag_s  = tag.strip()
+        cached = precomputed_audio_path(game_id, stem, f'{tag_s}-{number}.mid')
+        if cached is not None:
+            return send_file(cached, mimetype='audio/midi',
+                             download_name=f'{name}_{tag_s}_{number}.mid')
 
     gff = load_gff(name, game_id)
     try:

@@ -27,6 +27,7 @@ from config import (
 )
 from gff_cache import load_gff
 from ds1_parsers import parse_items, parse_monsters, parse_spells
+from disk_cache import load_precomputed_json
 
 bp = Blueprint('gamedata', __name__)
 
@@ -52,10 +53,19 @@ def _try_load_gff(game_dir: str, filename: str, game_id: str):
 
 
 def _load_gamedata(kind: str, game_id: str) -> list:
-    """Load and cache items / monsters / spells for *game_id*."""
+    """Load and cache items / monsters / spells for *game_id*.
+
+    Checks the precomputed disk cache first; falls back to live parsing.
+    """
     key = (kind, game_id)
     if key in _gamedata_cache:
         return _gamedata_cache[key]
+
+    # Fast path: return precomputed JSON if available.
+    cached = load_precomputed_json(game_id, 'gamedata', f'{kind}.json')
+    if cached is not None:
+        _gamedata_cache[key] = cached
+        return cached
 
     game     = GAMES.get(game_id, GAMES[DEFAULT_GAME])
     game_dir = game['dir']

@@ -8,7 +8,9 @@ OUT_DIR  := out
 
 .DEFAULT_GOAL := help
 
-.PHONY: help serve install install-ffmpeg extract list-resource list-gff extract-gff
+.PHONY: help serve install install-ffmpeg extract list-resource list-gff extract-gff \
+        precompute precompute-gff precompute-maps precompute-gamedata \
+        precompute-images precompute-audio
 
 help: ## Show this help message
 	@echo ""
@@ -34,6 +36,31 @@ install-ffmpeg: ## Install ffmpeg (required for VOC → MP3 audio conversion)
 
 extract: ## Extract ALL GFF files to ./out/<gff-name>/
 	bash extract.sh
+
+# ---------------------------------------------------------------------------
+# Pre-computation (build disk cache for the server)
+# ---------------------------------------------------------------------------
+
+PC_GAME  ?= all
+PC_FORCE ?=
+
+precompute: ## Pre-compute ALL steps for all games → precomputed/
+	$(PYTHON) $(SRC)/precompute.py --game=$(PC_GAME) --step=all $(if $(PC_FORCE),--force,)
+
+precompute-gff: ## Pre-compute GFF resource manifests only
+	$(PYTHON) $(SRC)/precompute.py --game=$(PC_GAME) --step=gff $(if $(PC_FORCE),--force,)
+
+precompute-maps: ## Pre-compute region map tiles + PNG renders only
+	$(PYTHON) $(SRC)/precompute.py --game=$(PC_GAME) --step=maps $(if $(PC_FORCE),--force,)
+
+precompute-gamedata: ## Pre-compute items / monsters / spells JSON only
+	$(PYTHON) $(SRC)/precompute.py --game=$(PC_GAME) --step=gamedata $(if $(PC_FORCE),--force,)
+
+precompute-images: ## Pre-compute all image resources as PNGs        [PC_GAME=, PC_FORCE=1]
+	$(PYTHON) $(SRC)/precompute.py --game=$(PC_GAME) --step=images $(if $(PC_FORCE),--force,)
+
+precompute-audio: ## Pre-compute audio/music/video (VOC MP3 XMI MIDI FLI MP4)
+	$(PYTHON) $(SRC)/precompute.py --game=$(PC_GAME) --step=audio $(if $(PC_FORCE),--force,)
 
 # ---------------------------------------------------------------------------
 

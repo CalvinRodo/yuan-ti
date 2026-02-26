@@ -12,6 +12,7 @@ GET /api/gff/<name>/raw/<tag_url>/<number>       – raw bytes of any resource
 
 import os
 import glob
+import struct
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
@@ -68,7 +69,9 @@ def api_gffs():
     elif cap == 'sfx':
         files = [f for f in files if has_tags(f, AUDIO_TAGS)]
 
-    return jsonify(files)
+    resp = jsonify(files)
+    resp.headers['Cache-Control'] = 'public, max-age=300'
+    return resp
 
 
 @bp.route('/api/gff/<name>/resources')
@@ -78,6 +81,15 @@ def api_resources(name: str):
     gff     = load_gff(name, game_id)
     result  = []
     for d in gff.describe_resources():
+        is_img = d.tag in IMAGE_TAGS
+        frame_count = None
+        if is_img:
+            try:
+                raw = gff.get_resource_data(d.tag, d.number)
+                n = struct.unpack_from('<H', raw, 4)[0]
+                frame_count = max(1, n) if n > 0 else 1
+            except Exception:
+                frame_count = 1
         result.append({
             'tag':         d.tag,
             'tag_url':     tag_to_url_seg(d.tag),
@@ -85,10 +97,13 @@ def api_resources(name: str):
             'size':        d.size,
             'offset':      d.offset,
             'description': GFF_CHUNK_TYPES.get(d.tag, 'Unknown'),
-            'is_image':    d.tag in IMAGE_TAGS,
+            'is_image':    is_img,
             'is_rmap':     d.tag.strip() in ('RMAP', 'MAP'),
+            'frame_count': frame_count,
         })
-    return jsonify(result)
+    resp = jsonify(result)
+    resp.headers['Cache-Control'] = 'public, max-age=300'
+    return resp
 
 
 @bp.route('/api/gff/<name>/pals')

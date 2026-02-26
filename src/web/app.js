@@ -16,19 +16,23 @@ const state = {
   games: [],                // [{id, label, supported}] from /api/games
   gameUnsupported: false,   // true when selected game cannot be browsed
   // Per-mode selected GFF (spells is always locked to RESOURCE.GFF)
-  gffByMode:    { spells: 'RESOURCE.GFF', map: null, resources: null, images: null, text: null, palette: null, music: 'RESOURCE.GFF', sfx: 'RESOURCE.GFF', cinematic: null, data: null, scripts: null },
+  gffByMode:    { spells: 'RESOURCE.GFF', map: null, resources: null, images: null, text: null, palette: null, music: 'RESOURCE.GFF', sfx: 'RESOURCE.GFF', cinematic: null, data: null, scripts: null, npc: null },
   // Per-mode fetched GFF lists
-  gffListByMode:{ spells: ['RESOURCE.GFF'], map: [], resources: [], images: [], text: [], palette: [], music: [], sfx: [], cinematic: [], data: [], scripts: [] },
+  gffListByMode:{ spells: ['RESOURCE.GFF'], map: [], resources: [], images: [], text: [], palette: [], music: [], sfx: [], cinematic: [], data: [], scripts: [], npc: [] },
 
   resources:   [],
   pals:        [],    // per-GFF pals (for non-images modes)
   allPals:     [],    // all pals across all GFFs (for images mode)
   selectedPal: null,
-  imageView:   'card',
+  imageView:      'card',
+  imageTagFilter: '',
+  imageCardZoom:  2,   // index into CARD_ZOOM_PRESETS
+  imageScale:  1,
   detail: {
     resource:   null,
     frames:     [],
     frameIndex: 0,
+    preloaded:  [],   // HTMLImageElement per frame, keyed by frameIndex
   },
   get currentGff() { return this.gffByMode[this.mode]; },
 };
@@ -49,6 +53,12 @@ const dom = {
   imgViewGroup:   $('img-view-group'),
   imgCardBtn:     $('img-card-btn'),
   imgListBtn:     $('img-list-btn'),
+  imgSpritesBtn:  $('img-sprites-btn'),
+  imgZoomOut:     $('img-zoom-out'),
+  imgZoomLabel:   $('img-zoom-label'),
+  imgZoomIn:      $('img-zoom-in'),
+  imgFilterBar:   $('img-filter-bar'),
+  imgSpriteView:  $('img-sprite-view'),
   palGroup:       $('pal-group'),
   palSelect:      $('pal-select'),
 
@@ -111,12 +121,47 @@ const dom = {
   detailImg:        $('detail-img'),
   detailImgSpinner: $('detail-img-spinner'),
   detailImgDims:    $('detail-img-dims'),
+  detailScale:      $('detail-scale'),
+
+  // Animation controls
+  animControls:     $('anim-controls'),
+  animPlay:         $('anim-play'),
+  animStop:         $('anim-stop'),
+  animDuration:     $('anim-duration'),
+  animStatus:       $('anim-status'),
+  animRange:        $('anim-range'),
+  animRangeStart:   $('anim-range-start'),
+  animRangeEnd:     $('anim-range-end'),
+
   detailHexView:    $('detail-hex-view'),
   hexInfo:          $('hex-info'),
   hexTruncated:     $('hex-truncated'),
   hexPre:           $('hex-pre'),
 };
 
+// Card size presets: [px, label]
+const CARD_ZOOM_PRESETS = [
+  [80,  'XS'],
+  [120, 'S'],
+  [148, 'M'],
+  [200, 'L'],
+  [280, 'XL'],
+  [400, '2X'],
+];
+
+function applyCardZoom(idx) {
+  idx = Math.max(0, Math.min(idx, CARD_ZOOM_PRESETS.length - 1));
+  state.imageCardZoom = idx;
+  const [px, label] = CARD_ZOOM_PRESETS[idx];
+  const cssVal = px + 'px';
+  dom.imageGrid.style.setProperty('--card-size', cssVal);
+  dom.imgSpriteView.style.setProperty('--card-size', cssVal);
+  dom.imgZoomLabel.textContent = label;
+  dom.imgZoomOut.disabled = (idx === 0);
+  dom.imgZoomIn.disabled  = (idx === CARD_ZOOM_PRESETS.length - 1);
+}
+
+// ---------------------------------------------------------------------------
 // Cache-bust suffix — incremented on every palette change
 let palVersion = 0;
 
@@ -237,8 +282,8 @@ async function populateGameSelect() {
 
 async function refreshGameData() {
   // Reset all cached GFF lists so they reload for the active game
-  state.gffListByMode = { spells: ['RESOURCE.GFF'], map: [], resources: [], images: [], text: [], palette: [], music: [], sfx: [], cinematic: [], data: [], scripts: [] };
-  state.gffByMode     = { spells: 'RESOURCE.GFF', map: null, resources: null, images: null, text: null, palette: null, music: 'RESOURCE.GFF', sfx: 'RESOURCE.GFF', cinematic: null, data: null, scripts: null };
+  state.gffListByMode = { spells: ['RESOURCE.GFF'], map: [], resources: [], images: [], text: [], palette: [], music: [], sfx: [], cinematic: [], data: [], scripts: [], npc: [] };
+  state.gffByMode     = { spells: 'RESOURCE.GFF', map: null, resources: null, images: null, text: null, palette: null, music: 'RESOURCE.GFF', sfx: 'RESOURCE.GFF', cinematic: null, data: null, scripts: null, npc: null };
   state.allPals       = [];
   state.resources     = [];
   state.pals          = [];
@@ -254,6 +299,7 @@ async function refreshGameData() {
   if (typeof cinematicViewBuilt !== 'undefined') cinematicViewBuilt = false;
   if (typeof teardownDataView    === 'function')  teardownDataView();
   if (typeof teardownScriptsView === 'function')  teardownScriptsView();
+  if (typeof teardownSpritesView === 'function')  teardownSpritesView();
 
   closeDetailPane();
   hideAllViews();
@@ -290,14 +336,21 @@ function bindEvents() {
     if (gff) { loadGffForMode(gff, state.mode); pushUrlState(); }
   });
 
-  dom.imgCardBtn.addEventListener('click', () => { setImageView('card'); pushUrlState(); });
-  dom.imgListBtn.addEventListener('click', () => { setImageView('list'); pushUrlState(); });
+  dom.imgCardBtn.addEventListener('click', () => { setImageView('card');    pushUrlState(); });
+  dom.imgListBtn.addEventListener('click', () => { setImageView('list');    pushUrlState(); });
+  dom.imgSpritesBtn.addEventListener('click', () => { setImageView('sprites'); pushUrlState(); });
+  dom.imgZoomOut.addEventListener('click', () => applyCardZoom(state.imageCardZoom - 1));
+  dom.imgZoomIn.addEventListener('click',  () => applyCardZoom(state.imageCardZoom + 1));
 
   dom.palSelect.addEventListener('change', onPalChange);
 
   dom.detailClose.addEventListener('click', closeDetailPane);
   dom.detailPrev.addEventListener('click', () => navigateFrame(-1));
   dom.detailNext.addEventListener('click', () => navigateFrame(1));
+  dom.detailScale.addEventListener('change', () => {
+    state.imageScale = parseInt(dom.detailScale.value, 10) || 1;
+    if (state.detail.resource?.is_image) renderFrameInPane(state.detail.frameIndex);
+  });
 
   document.addEventListener('keydown', e => {
     if (!state.detail.resource) return;
@@ -328,10 +381,10 @@ async function activateMode(mode) {
   closeDetailPane();
 
   // Show/hide toolbar groups
-  dom.modeGffGroup.classList.toggle('hidden', mode === 'spells' || mode === 'palette' || mode === 'cinematic' || mode === 'data' || mode === 'scripts');
+  dom.modeGffGroup.classList.toggle('hidden', mode === 'spells' || mode === 'palette' || mode === 'cinematic' || mode === 'data' || mode === 'scripts' || mode === 'npc');
   dom.imgViewGroup.classList.toggle('hidden', mode !== 'images');
-  // Palette selector is not useful in text or palette or music/sfx/cinematic/data/scripts modes
-  dom.palGroup.classList.toggle('hidden', mode === 'text' || mode === 'palette' || mode === 'music' || mode === 'sfx' || mode === 'cinematic' || mode === 'data' || mode === 'scripts');
+  // Palette selector is not useful in text or palette or music/sfx/cinematic/data/scripts/npc modes
+  dom.palGroup.classList.toggle('hidden', mode === 'text' || mode === 'palette' || mode === 'music' || mode === 'sfx' || mode === 'cinematic' || mode === 'data' || mode === 'scripts' || mode === 'npc');
 
   // Tear down music player when leaving music or sfx mode
   if (mode !== 'music' && mode !== 'sfx' && typeof teardownMusicView === 'function') teardownMusicView();
@@ -357,6 +410,12 @@ async function activateMode(mode) {
 
   // Scripts mode — GPL/MAS browser with its own API
   if (mode === 'scripts') {
+    renderContent();
+    return;
+  }
+
+  // NPC/Monster sprite viewer
+  if (mode === 'npc') {
     renderContent();
     return;
   }
@@ -456,6 +515,7 @@ async function loadGffForMode(gff, mode) {
   state.pals             = [];
   state.selectedPal      = null;
   state.detail.resource  = null;
+  state.imageTagFilter   = '';
 
   dom.resFilterTag.value         = '';
   dom.resFilterCount.textContent = '';
@@ -475,6 +535,13 @@ async function loadGffForMode(gff, mode) {
 
   state.resources = resources;
   state.pals      = pals;
+
+  // Seed the client frame-count cache from resources (avoids per-image /info requests later)
+  resources.forEach(res => {
+    if (res.is_image && res.frame_count != null) {
+      imageFrameCache.set(`${gff}|${res.tag_url}|${res.number}`, res.frame_count);
+    }
+  });
 
   // Supply map state
   const rmapResources   = resources.filter(r => r.is_rmap);
@@ -565,8 +632,11 @@ function buildFilterDataLists() {
 // ---------------------------------------------------------------------------
 function setImageView(view) {
   state.imageView = view;
-  dom.imgCardBtn.classList.toggle('active', view === 'card');
-  dom.imgListBtn.classList.toggle('active', view === 'list');
+  dom.imgCardBtn.classList.toggle('active',    view === 'card');
+  dom.imgListBtn.classList.toggle('active',    view === 'list');
+  dom.imgSpritesBtn.classList.toggle('active', view === 'sprites');
+  // Apply current zoom whenever we enter a card/sprite view
+  if (view !== 'list') applyCardZoom(state.imageCardZoom);
   if (state.mode === 'images') renderContent();
 }
 
@@ -594,6 +664,8 @@ function hideAllViews() {
   dom.emptyState.classList.add('hidden');
   dom.imageGrid.classList.add('hidden');
   dom.imageListWrap.classList.add('hidden');
+  dom.imgFilterBar.classList.add('hidden');
+  dom.imgSpriteView.classList.add('hidden');
   dom.spellGrid.classList.add('hidden');
   dom.textView.classList.add('hidden');
   dom.tableWrap.classList.add('hidden');
@@ -609,6 +681,8 @@ function hideAllViews() {
   if (dv) dv.classList.add('hidden');
   const scv = document.getElementById('scripts-view');
   if (scv) scv.classList.add('hidden');
+  const nv = document.getElementById('npc-view');
+  if (nv) nv.classList.add('hidden');
   hideMapView();
 }
 
@@ -655,6 +729,12 @@ function renderContent() {
     return;
   }
 
+  // NPC / Monster sprite viewer
+  if (state.mode === 'npc') {
+    if (typeof renderSpritesView === 'function') renderSpritesView();
+    return;
+  }
+
   if (!state.currentGff || state.resources.length === 0) {
     dom.emptyState.classList.remove('hidden');
     dom.emptyMsg.textContent = state.currentGff
@@ -670,8 +750,11 @@ function renderContent() {
     case 'text':      renderTextView(); break;
     case 'music':     renderMusicView(); break;
     case 'images':
-      if (state.imageView === 'list') renderImageList();
-      else                            renderImageGrid();
+      buildImageFilterBar();
+      applyCardZoom(state.imageCardZoom);
+      if (state.imageView === 'list')         renderImageList();
+      else if (state.imageView === 'sprites') renderSpriteView();
+      else                                    renderImageGrid();
       break;
   }
 }
@@ -686,9 +769,10 @@ function palParams() {
   return `&pal_gff=${encodeURIComponent(p.gff)}&pal_num=${p.number}&pal_tag=${encodeURIComponent(tag)}`;
 }
 
-function imageUrl(gff, tagUrl, number, frame = -1) {
+function imageUrl(gff, tagUrl, number, frame = -1, scale = 1) {
+  const s = (scale > 1) ? `&scale=${scale}` : '';
   return `/api/gff/${encodeURIComponent(gff)}/image/${tagUrl}/${number}`
-       + `?frame=${frame}&game=${state.game}${palParams()}&v=${palVersion}`;
+       + `?frame=${frame}&game=${state.game}${palParams()}${s}&v=${palVersion}`;
 }
 
 function rawUrl(gff, tagUrl, number) {

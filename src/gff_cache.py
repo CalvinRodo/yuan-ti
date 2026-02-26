@@ -18,7 +18,7 @@ from config import DEFAULT_GAME, resolve_game_dir
 # Evicts the oldest entry when the maximum size is reached.
 # ---------------------------------------------------------------------------
 _gff_cache: dict = {}
-MAX_CACHE = 10
+MAX_CACHE = 30
 
 
 def load_gff(name: str, game_id: str = DEFAULT_GAME) -> GffFile:
@@ -47,6 +47,10 @@ def find_palette(gff: GffFile,
     1. Explicit pal_gff + pal_num query params.
     2. First PAL resource in the same GFF.
     3. First PAL resource in RESOURCE.GFF.
+
+    For region map rendering the caller should supply
+    ``pal_gff='GPLDATA.GFF'`` and ``pal_num=<region_number>`` (the GMAP
+    resource number from the region GFF) so that source 1 is used.
 
     Returns None if no palette can be found.
     """
