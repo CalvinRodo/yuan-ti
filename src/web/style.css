@@ -3233,6 +3233,31 @@ select:focus { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(200,144,
   border: 1px solid var(--border);
   overflow: hidden;
 }
+/* When thumb contains linked mini-images — expand to column layout */
+.spr-li-thumb-group {
+  height: auto;
+  min-height: 36px;
+  flex-direction: column;
+  gap: 2px;
+  padding: 2px;
+}
+.spr-li-linked-thumbs {
+  display: flex;
+  gap: 2px;
+  justify-content: center;
+  align-items: center;
+}
+.spr-li-linked-img {
+  width: 14px;
+  height: 14px;
+  object-fit: contain;
+  image-rendering: pixelated;
+  border: 1px solid rgba(80, 80, 128, .5);
+  border-radius: 2px;
+  background: var(--surface);
+  opacity: .8;
+  flex-shrink: 0;
+}
 .spr-li-img {
   max-width: 100%;
   max-height: 100%;
@@ -3551,7 +3576,7 @@ select:focus { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(200,144,
 }
 
 .spr-sec {
-  margin-bottom: 16px;
+  /* sizing handled by .spr-sec-single / .spr-sec-multi sub-classes */
 }
 
 .spr-sec-linked {
@@ -3576,21 +3601,6 @@ select:focus { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(200,144,
 }
 .spr-link-sheet-head .dim { font-weight: 400; }
 
-.spr-sec-hdr {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 5px;
-  flex-wrap: wrap;
-}
-
-.spr-sec-name {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text);
-  min-width: 100px;
-}
-
 .spr-sec-desc { font-size: 11px; }
 
 .spr-section-title {
@@ -3604,6 +3614,13 @@ select:focus { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(200,144,
   background: var(--primary-dk);
   border-color: var(--primary);
   color: var(--primary-lt);
+}
+
+/* Play button sits inline inside the frame row */
+.spr-play-inline {
+  align-self: center;
+  margin-left: 4px;
+  flex-shrink: 0;
 }
 
 /* Frame row */
@@ -3659,4 +3676,505 @@ select:focus { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(200,144,
 .spr-anim-img {
   display: block;
   image-rendering: pixelated;
+}
+
+/* ================================================================
+   FRAME GROUPS — sheet blocks + custom sections
+   ================================================================ */
+
+/* Small button variant (used in section headers) */
+.spr-btn-sm {
+  padding: 1px 6px;
+  font-size: 11px;
+}
+
+/* Sheet blocks */
+.spr-sheet-block {
+  margin-bottom: 22px;
+}
+
+.spr-sheet-linked {
+  border-left: 3px solid #4a4a7a;
+  padding-left: 12px;
+  margin-left: 2px;
+}
+
+.spr-sheet-block-hdr {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 5px 0 7px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 10px;
+}
+
+/* Inline linked-sheet sub-header inside the combined block */
+.spr-linked-inline-hdr {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 22px 0 10px;
+  padding: 6px 0 7px;
+  border-top: 2px solid var(--primary-dk);
+  border-bottom: 1px solid var(--border);
+  opacity: .9;
+}
+
+.spr-sheet-bmp-lbl {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--primary-lt);
+  font-family: var(--font-mono);
+  flex-shrink: 0;
+}
+
+.spr-sheet-name-inp {
+  flex: 1;
+  min-width: 100px;
+  max-width: 220px;
+  font-size: 12px;
+  padding: 3px 7px;
+}
+
+.spr-sheet-fc {
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+/* ── Sections wrap: flex container so single-frame groups tile inline ── */
+.spr-sections-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  align-items: flex-start;
+}
+
+/* Multi-frame group: full-width block */
+.spr-sec-multi {
+  flex: 0 0 100%;
+  margin-bottom: 8px;
+}
+
+/* Single-frame group: inline tile (icon + name below) */
+.spr-sec-single {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 4px 5px 5px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  min-width: 0;
+  max-width: 120px;
+}
+
+.spr-sec-single.spr-sec-custom {
+  border-color: var(--primary-dk);
+}
+
+.spr-sec-single.spr-sec-editing {
+  border-color: var(--primary);
+  background: rgba(80,140,220,.12);
+}
+
+.spr-sec-multi.spr-sec-editing {
+  background: rgba(80,140,220,.06);
+  border-radius: 4px;
+  padding: 4px 6px;
+}
+
+/* Footer: name + action buttons, shown below the frame row */
+.spr-sec-footer {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.spr-sec-single .spr-sec-footer {
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  margin-top: 3px;
+}
+
+.spr-sec-multi .spr-sec-footer {
+  border-top: 1px solid var(--border);
+  padding-top: 4px;
+  margin-top: 5px;
+}
+
+/* Custom sections */
+.spr-sec-custom.spr-sec-multi {
+  border-left: 2px solid var(--primary-dk);
+  padding-left: 8px;
+}
+
+.spr-sec-ungrouped {
+  flex: 0 0 100%;
+  margin-bottom: 8px;
+  border-left: 2px dashed var(--border);
+  padding-left: 8px;
+  opacity: .75;
+}
+
+.spr-sec-name {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.spr-sec-single .spr-sec-name {
+  font-size: 10px;
+  text-align: center;
+  word-break: break-word;
+  min-width: 0;
+}
+
+.spr-sec-name-inp {
+  width: 140px;
+  font-size: 12px;
+  padding: 3px 7px;
+}
+
+.spr-sec-del-btn {
+  color: #c06060;
+}
+.spr-sec-del-btn:hover { color: #ff9090; }
+
+.spr-sec-mirror-btn {
+  font-size: 13px;
+  color: #9090c0;
+}
+.spr-sec-mirror-btn:hover { color: #b0b8f0; }
+.spr-sec-mirror-btn.active {
+  background: #2a3060;
+  border-color: #6070c0;
+  color: #a0b4ff;
+}
+
+.spr-sec-edit-btn {
+  color: #80b4e0;
+  font-size: 13px;
+  padding: 1px 4px;
+  line-height: 1;
+}
+.spr-sec-edit-btn:hover { color: #a8d0ff; }
+.spr-sec-edit-btn.active {
+  background: rgba(80,140,220,.2);
+  border-color: var(--primary);
+  color: var(--primary-lt);
+}
+
+.spr-sec-fc {
+  font-size: 10px;
+  margin-left: auto;
+}
+
+/* Link connector between primary and linked sheet blocks */
+.spr-sheet-link-connector {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 0;
+  padding: 0 8px;
+}
+.spr-sheet-link-conn-line {
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--primary-dk) 30%, var(--primary-dk) 70%, transparent);
+  opacity: .5;
+}
+.spr-sheet-link-conn-lbl {
+  font-size: 11px;
+  color: var(--primary);
+  white-space: nowrap;
+  flex-shrink: 0;
+  opacity: .8;
+}
+
+/* Frame selection mode */
+.spr-sel-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 7px 10px;
+  background: var(--surface3);
+  border: 1px solid var(--primary-dk);
+  border-radius: 4px;
+  margin: 0 0 10px;
+}
+
+.spr-sel-count {
+  min-width: 90px;
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+.spr-sel-name-inp {
+  width: 140px;
+  padding: 3px 7px;
+  font-size: 12px;
+}
+
+.spr-sel-mirror-lbl {
+  font-size: 11px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.spr-sel-toggle.active {
+  background: var(--primary-dk);
+  border-color: var(--primary);
+  color: var(--primary-lt);
+}
+
+.spr-sel-edit-lbl {
+  font-size: 11px;
+  font-weight: 600;
+  color: #d0a040;
+  flex-shrink: 0;
+}
+
+/* Selectable frame cells */
+.spr-fcell-selectable {
+  cursor: pointer !important;
+}
+.spr-fcell-selectable:hover {
+  border-color: var(--primary-dk);
+  background: var(--surface2);
+}
+.spr-fcell-sel {
+  border-color: var(--primary) !important;
+  background: rgba(70, 120, 200, 0.18) !important;
+  box-shadow: 0 0 0 2px var(--primary-dk);
+}
+
+/* ============================================================
+   Preferences page
+   ============================================================ */
+.prefs-page {
+  max-width: 560px;
+  padding: 28px 32px 40px;
+  margin: 0 auto;
+  color: var(--fg);
+}
+.prefs-title {
+  font-size: 20px;
+  font-weight: 700;
+  margin: 0 0 24px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 10px;
+  color: var(--primary-lt);
+}
+.prefs-section {
+  margin-bottom: 28px;
+}
+.prefs-section-title {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--fg-muted, #888);
+  margin: 0 0 14px;
+}
+.prefs-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 0;
+  border-top: 1px solid var(--border);
+}
+.prefs-label {
+  font-size: 13px;
+  font-weight: 600;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.prefs-hint {
+  font-size: 11px;
+  font-weight: 400;
+}
+.prefs-control {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.prefs-scale-btns {
+  display: flex;
+  gap: 4px;
+}
+.prefs-scale-btn {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--fg);
+  border-radius: 4px;
+  padding: 4px 10px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background .1s, border-color .1s, color .1s;
+}
+.prefs-scale-btn:hover {
+  background: var(--surface3, #333);
+  border-color: var(--primary-dk);
+}
+.prefs-scale-btn.active {
+  background: var(--primary-dk);
+  border-color: var(--primary);
+  color: var(--primary-lt);
+  font-weight: 700;
+}
+.prefs-current-val {
+  font-size: 13px;
+  color: var(--fg-muted, #888);
+  min-width: 28px;
+}
+.prefs-reset-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+}
+.prefs-saved-msg {
+  font-size: 12px;
+  color: #5c8;
+  transition: opacity .3s;
+}
+.prefs-saved-msg.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* ── Sprite sheet patterns ─────────────────────────────────────────── */
+
+.spr-pattern-name-badge {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--primary-lt);
+  background: rgba(80,140,220,.15);
+  border: 1px solid var(--primary-dk);
+  border-radius: 3px;
+  padding: 1px 6px;
+  font-family: var(--font-mono);
+  flex-shrink: 0;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.spr-pattern-save-btn,
+.spr-pattern-apply-btn {
+  font-size: 11px;
+  padding: 2px 7px;
+  opacity: .85;
+}
+.spr-pattern-save-btn:hover,
+.spr-pattern-apply-btn:hover {
+  opacity: 1;
+}
+
+.spr-pattern-panel {
+  background: var(--surface2);
+  border: 1px solid var(--primary-dk);
+  border-radius: 5px;
+  margin: 6px 0 10px;
+  padding: 8px 10px;
+  font-size: 12px;
+}
+.spr-pattern-panel.hidden {
+  display: none;
+}
+
+.spr-pattern-msg {
+  margin: 0 0 8px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.spr-pattern-form-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+
+.spr-pattern-name-inp {
+  flex: 1;
+  min-width: 140px;
+  max-width: 260px;
+  font-size: 12px;
+  padding: 3px 8px;
+}
+
+.spr-pattern-section-lbl {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--primary-lt);
+}
+
+.spr-pattern-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 6px;
+}
+
+.spr-pattern-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: var(--surface3, #282840);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 5px 9px;
+}
+
+.spr-pattern-item-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.spr-pattern-item-name {
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.spr-pattern-item-detail {
+  font-size: 11px;
+}
+
+.spr-pattern-item-btns {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+}
+
+.spr-pattern-del-btn {
+  color: var(--danger, #c55);
+  border-color: transparent;
+  background: transparent;
+  font-size: 13px;
+  padding: 2px 5px;
+}
+.spr-pattern-del-btn:hover {
+  border-color: var(--danger, #c55);
+  background: rgba(200,80,80,.12);
 }

@@ -71,9 +71,13 @@
           <span class="mode-icon">&#128196;</span>
           <span class="mode-label">Scripts</span>
         </button>
-        <button class="mode-btn" data-mode="npc" title="NPC / Monster Sprite Viewer">
+        <button class="mode-btn" data-mode="sprite" title="Sprite Viewer">
           <span class="mode-icon">&#9812;</span>
           <span class="mode-label">Sprites</span>
+        </button>
+        <button class="mode-btn" data-mode="prefs" title="Preferences">
+          <span class="mode-icon">&#9881;</span>
+          <span class="mode-label">Prefs</span>
         </button>
       </nav>
 
@@ -217,7 +221,10 @@
             <div id="scripts-view" class="hidden"></div>
 
             <!-- NPC / Monster sprite viewer -->
-            <div id="npc-view" class="hidden"></div>
+            <div id="sprite-view" class="hidden"></div>
+
+            <!-- Preferences -->
+            <div id="prefs-view" class="hidden"></div>
 
             <!-- All-resources table -->
             <div id="resource-table-wrap" class="hidden">
@@ -336,5 +343,6 @@
   <script src="view-data.js"></script>
   <script src="view-scripts.js"></script>
   <script src="view-sprites.js"></script>
+  <script src="view-prefs.js"></script>
 </body>
 </html>

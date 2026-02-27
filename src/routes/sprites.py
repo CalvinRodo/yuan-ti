@@ -276,10 +276,28 @@ def _build_catalog(game_id: str) -> list[dict]:
         linked     = saved.get('linked_bmps', [])
         notes      = saved.get('notes', '') or ''
         item_index = saved.get('item_index', None)
+        pattern_name = saved.get('pattern_name', None)
 
         sheet_def  = SHEET_DEFS.get(fc)
         sheet_type = sheet_def['type']     if sheet_def else None
         sections   = sheet_def['sections'] if sheet_def else None
+
+        # custom_sections: use saved value if present (even []); auto-seed from
+        # sheet_def when the key is absent from metadata (never been edited).
+        saved_custom = saved.get('custom_sections')   # None when key absent
+        if saved_custom is None and sheet_def:
+            custom_sections = [
+                {
+                    'id':       str(i + 1),
+                    'name':     s['name'],
+                    'frames':   list(s['frames']),
+                    'mirrored': False,
+                    'desc':     s.get('desc', ''),
+                }
+                for i, s in enumerate(sheet_def['sections'])
+            ]
+        else:
+            custom_sections = saved_custom if saved_custom is not None else []
 
         rdff_names = bmp_to_rdff.get(n, [])
 
@@ -293,9 +311,11 @@ def _build_catalog(game_id: str) -> list[dict]:
             'linked_bmps': linked,
             'notes':       notes,
             'sheet_type':  sheet_type,
-            'sections':    sections,
-            'item_index':  item_index,
-            'gff_name':    gff_name,
+            'sections':        sections,
+            'item_index':      item_index,
+            'gff_name':        gff_name,
+            'custom_sections': custom_sections,
+            'pattern_name':    pattern_name,
         })
 
     _catalog_cache[game_id] = catalog
@@ -422,6 +442,153 @@ def api_item_sprite_links():
         if e.get('item_index') is not None:
             links[str(e['item_index'])] = e['bmp_num']
     return jsonify(links)
+
+
+# ---------------------------------------------------------------------------
+# Sprite sheet patterns
+# ---------------------------------------------------------------------------
+
+_PATTERNS_FILE = os.path.join(
+    os.path.dirname(__file__), '..', 'json', 'sprite_patterns.json'
+)
+
+
+def _load_patterns() -> list[dict]:
+    """Load all saved patterns; returns a list (may be empty)."""
+    if not os.path.isfile(_PATTERNS_FILE):
+        return []
+    try:
+        with open(_PATTERNS_FILE, 'r', encoding='utf-8') as fh:
+            obj = json.load(fh)
+        return obj.get('patterns', [])
+    except Exception:
+        return []
+
+
+def _save_patterns_file(patterns: list[dict]) -> bool:
+    """Persist the patterns list. Returns True on success."""
+    os.makedirs(os.path.dirname(_PATTERNS_FILE), exist_ok=True)
+    obj = {'version': 1, 'patterns': patterns}
+    try:
+        with open(_PATTERNS_FILE, 'w', encoding='utf-8') as fh:
+            json.dump(obj, fh, indent=2)
+        return True
+    except Exception:
+        return False
+
+
+@bp.route('/api/sprite-patterns', methods=['GET'])
+def api_sprite_patterns_get():
+    """Return saved sprite sheet patterns.
+
+    Query params:
+      frame_count (optional int) — filter to patterns matching this frame count
+    """
+    patterns = _load_patterns()
+    fc_filter = request.args.get('frame_count')
+    if fc_filter is not None:
+        try:
+            fc = int(fc_filter)
+            patterns = [p for p in patterns if p.get('frame_count') == fc]
+        except ValueError:
+            pass
+    return jsonify(patterns)
+
+
+@bp.route('/api/sprite-patterns', methods=['POST'])
+def api_sprite_patterns_post():
+    """Create, update, or delete a sprite sheet pattern.
+
+    Body (save/update):
+      { "action": "save", "pattern": { "id": "...", "name": "...", "frame_count": N,
+                                        "sections": [...] } }
+      When id is absent or empty a new id is generated.
+
+    Body (delete):
+      { "action": "delete", "id": "..." }
+    """
+    body   = request.get_json(silent=True) or {}
+    action = body.get('action', 'save')
+    patterns = _load_patterns()
+
+    if action == 'delete':
+        pat_id = body.get('id')
+        if not pat_id:
+            abort(400, description='Missing pattern id')
+        patterns = [p for p in patterns if p.get('id') != pat_id]
+        ok = _save_patterns_file(patterns)
+        if not ok:
+            abort(500, description='Failed to write patterns file')
+        return jsonify({'ok': True, 'deleted': pat_id})
+
+    # save / update
+    pat = body.get('pattern')
+    if not pat or not isinstance(pat, dict):
+        abort(400, description='Missing pattern object')
+
+    # Match by id first, then fall back to name so re-saving under the same
+    # name updates the existing pattern rather than creating a duplicate.
+    idx_by_id   = next((i for i, p in enumerate(patterns) if p.get('id') == pat.get('id')), None)
+    idx_by_name = next((i for i, p in enumerate(patterns) if p.get('name') == pat.get('name')), None)
+
+    if idx_by_id is not None:
+        pat['id'] = patterns[idx_by_id]['id']
+        patterns[idx_by_id] = pat
+    elif idx_by_name is not None:
+        # Same name → reuse existing id so clients can track it
+        pat['id'] = patterns[idx_by_name]['id']
+        patterns[idx_by_name] = pat
+    else:
+        if not pat.get('id'):
+            existing_ids = {p['id'] for p in patterns}
+            candidate = 1
+            while str(candidate) in existing_ids:
+                candidate += 1
+            pat['id'] = str(candidate)
+        patterns.append(pat)
+
+    ok = _save_patterns_file(patterns)
+    if not ok:
+        abort(500, description='Failed to write patterns file')
+
+    # Propagate updated sections to every sprite that uses this pattern name
+    propagated = _propagate_pattern(pat)
+    return jsonify({'ok': True, 'pattern': pat, 'propagated': propagated})
+
+
+def _propagate_pattern(pat: dict) -> int:
+    """Re-apply updated pattern sections to all sprites whose pattern_name matches.
+
+    Returns the number of sprite entries updated across all games.
+    """
+    import copy as _copy
+    pat_name = pat.get('name')
+    new_sections = pat.get('sections', [])
+    if not pat_name:
+        return 0
+    total = 0
+    for game_id in list(_METADATA_PATHS.keys()):
+        sprites = _load_meta_file(game_id)
+        changed = False
+        for entry in sprites.values():
+            if entry.get('pattern_name') == pat_name:
+                # Re-stamp section IDs so they are consistent
+                id_map = {s.get('id', ''): str(i + 1)
+                          for i, s in enumerate(new_sections)}
+                new_cs = []
+                for i, s in enumerate(new_sections):
+                    sec = _copy.deepcopy(s)
+                    sec['id'] = str(i + 1)
+                    if sec.get('mirrorOf'):
+                        sec['mirrorOf'] = id_map.get(sec['mirrorOf'], sec['mirrorOf'])
+                    new_cs.append(sec)
+                entry['custom_sections'] = new_cs
+                changed = True
+                total += 1
+        if changed:
+            _save_meta_file(game_id, sprites)
+            _invalidate_catalog(game_id)
+    return total
 
 
 # ---------------------------------------------------------------------------

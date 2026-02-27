@@ -8,6 +8,23 @@
 'use strict';
 
 // ---------------------------------------------------------------------------
+// Global preferences (persisted to localStorage)
+// ---------------------------------------------------------------------------
+const PREFS_KEY = 'yuan-ti-prefs';
+const PREFS_DEFAULTS = {
+  spriteScale: 3,
+};
+const prefs = (() => {
+  try {
+    const saved = JSON.parse(localStorage.getItem(PREFS_KEY) || '{}');
+    return { ...PREFS_DEFAULTS, ...saved };
+  } catch { return { ...PREFS_DEFAULTS }; }
+})();
+function savePrefs() {
+  try { localStorage.setItem(PREFS_KEY, JSON.stringify(prefs)); } catch {}
+}
+
+// ---------------------------------------------------------------------------
 // State
 // ---------------------------------------------------------------------------
 const state = {
@@ -16,9 +33,9 @@ const state = {
   games: [],                // [{id, label, supported}] from /api/games
   gameUnsupported: false,   // true when selected game cannot be browsed
   // Per-mode selected GFF (spells is always locked to RESOURCE.GFF)
-  gffByMode:    { spells: 'RESOURCE.GFF', map: null, resources: null, images: null, text: null, palette: null, music: 'RESOURCE.GFF', sfx: 'RESOURCE.GFF', cinematic: null, data: null, scripts: null, npc: null },
+  gffByMode:    { spells: 'RESOURCE.GFF', map: null, resources: null, images: null, text: null, palette: null, music: 'RESOURCE.GFF', sfx: 'RESOURCE.GFF', cinematic: null, data: null, scripts: null, sprite: null },
   // Per-mode fetched GFF lists
-  gffListByMode:{ spells: ['RESOURCE.GFF'], map: [], resources: [], images: [], text: [], palette: [], music: [], sfx: [], cinematic: [], data: [], scripts: [], npc: [] },
+  gffListByMode:{ spells: ['RESOURCE.GFF'], map: [], resources: [], images: [], text: [], palette: [], music: [], sfx: [], cinematic: [], data: [], scripts: [], sprite: [] },
 
   resources:   [],
   pals:        [],    // per-GFF pals (for non-images modes)
@@ -189,6 +206,8 @@ function pushUrlState() {
   const gff = state.gffByMode[state.mode];
   if (gff) params.gff = gff;
   if (state.mode === 'images') params.view = state.imageView;
+  if (state.mode === 'sprite' && typeof selectedBmpNum !== 'undefined' && selectedBmpNum >= 0)
+    params.bmp = selectedBmpNum;
   location.hash = Object.entries(params)
     .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
     .join('&');
@@ -211,10 +230,13 @@ async function init() {
   // straight to the right mode / file.
   const saved = readUrlState();
   if (saved.game) state.game = saved.game;
-  if (saved.mode) state.mode = saved.mode;
+  // compat: old bookmarks may use 'npc'
+  if (saved.mode) state.mode = saved.mode === 'npc' ? 'sprite' : saved.mode;
   if (saved.view) state.imageView = saved.view;
   if (saved.gff && saved.mode)
     state.gffByMode[saved.mode] = saved.gff;
+  if (saved.bmp && state.mode === 'sprite')
+    if (typeof _pendingSelectBmp !== 'undefined') _pendingSelectBmp = Number(saved.bmp);
 
   await populateGameSelect();
   // Sync the game <select> to the (possibly restored) state
@@ -229,9 +251,10 @@ async function init() {
     const s = readUrlState();
     // Only react when something genuinely navigated (not our own push)
     const newGame = s.game || 'dark_sun';
-    const newMode = s.mode || 'spells';
+    const newMode = s.mode === 'npc' ? 'sprite' : (s.mode || 'spells');
     const newGff  = s.gff  || null;
     const newView = s.view || 'card';
+    const newBmp  = s.bmp  ? Number(s.bmp) : null;
 
     let needsRefresh = false;
     if (newGame !== state.game) {
@@ -253,11 +276,19 @@ async function init() {
     if (newView !== state.imageView) state.imageView = newView;
     if (newGff && newGff !== state.gffByMode[newMode])
       state.gffByMode[newMode] = newGff;
+    if (newBmp !== null && newMode === 'sprite' && typeof _pendingSelectBmp !== 'undefined')
+      _pendingSelectBmp = newBmp;
 
     if (newMode !== state.mode) {
       await activateMode(newMode);
     } else if (newGff && newGff !== state.currentGff) {
       await loadGffForMode(newGff, state.mode);
+    } else if (newBmp !== null && newMode === 'sprite') {
+      // Only jump to sprite if it's a different BMP than what's already selected
+      // (avoids re-rendering the detail pane when _selectEntry triggered this hashchange)
+      if (typeof selectedBmpNum === 'undefined' || selectedBmpNum !== newBmp) {
+        if (typeof _selectEntry === 'function') _selectEntry(newBmp);
+      }
     }
   });
 }
@@ -282,8 +313,8 @@ async function populateGameSelect() {
 
 async function refreshGameData() {
   // Reset all cached GFF lists so they reload for the active game
-  state.gffListByMode = { spells: ['RESOURCE.GFF'], map: [], resources: [], images: [], text: [], palette: [], music: [], sfx: [], cinematic: [], data: [], scripts: [], npc: [] };
-  state.gffByMode     = { spells: 'RESOURCE.GFF', map: null, resources: null, images: null, text: null, palette: null, music: 'RESOURCE.GFF', sfx: 'RESOURCE.GFF', cinematic: null, data: null, scripts: null, npc: null };
+  state.gffListByMode = { spells: ['RESOURCE.GFF'], map: [], resources: [], images: [], text: [], palette: [], music: [], sfx: [], cinematic: [], data: [], scripts: [], sprite: [] };
+  state.gffByMode     = { spells: 'RESOURCE.GFF', map: null, resources: null, images: null, text: null, palette: null, music: 'RESOURCE.GFF', sfx: 'RESOURCE.GFF', cinematic: null, data: null, scripts: null, sprite: null };
   state.allPals       = [];
   state.resources     = [];
   state.pals          = [];
@@ -381,10 +412,10 @@ async function activateMode(mode) {
   closeDetailPane();
 
   // Show/hide toolbar groups
-  dom.modeGffGroup.classList.toggle('hidden', mode === 'spells' || mode === 'palette' || mode === 'cinematic' || mode === 'data' || mode === 'scripts' || mode === 'npc');
+  dom.modeGffGroup.classList.toggle('hidden', mode === 'spells' || mode === 'palette' || mode === 'cinematic' || mode === 'data' || mode === 'scripts' || mode === 'sprite' || mode === 'prefs');
   dom.imgViewGroup.classList.toggle('hidden', mode !== 'images');
-  // Palette selector is not useful in text or palette or music/sfx/cinematic/data/scripts/npc modes
-  dom.palGroup.classList.toggle('hidden', mode === 'text' || mode === 'palette' || mode === 'music' || mode === 'sfx' || mode === 'cinematic' || mode === 'data' || mode === 'scripts' || mode === 'npc');
+  // Palette selector is not useful in text or palette or music/sfx/cinematic/data/scripts/sprite modes
+  dom.palGroup.classList.toggle('hidden', mode === 'text' || mode === 'palette' || mode === 'music' || mode === 'sfx' || mode === 'cinematic' || mode === 'data' || mode === 'scripts' || mode === 'sprite' || mode === 'prefs');
 
   // Tear down music player when leaving music or sfx mode
   if (mode !== 'music' && mode !== 'sfx' && typeof teardownMusicView === 'function') teardownMusicView();
@@ -414,12 +445,16 @@ async function activateMode(mode) {
     return;
   }
 
-  // NPC/Monster sprite viewer
-  if (mode === 'npc') {
+  // Sprite viewer
+  if (mode === 'sprite') {
     renderContent();
     return;
   }
-
+  // Preferences page
+  if (mode === 'prefs') {
+    renderContent();
+    return;
+  }
   // Music mode uses its own GFF selector (defaults to RESOURCE.GFF)
   if (mode === 'music') {
     await ensureGffList('music');
@@ -681,8 +716,10 @@ function hideAllViews() {
   if (dv) dv.classList.add('hidden');
   const scv = document.getElementById('scripts-view');
   if (scv) scv.classList.add('hidden');
-  const nv = document.getElementById('npc-view');
+  const nv = document.getElementById('sprite-view');
   if (nv) nv.classList.add('hidden');
+  const pv = document.getElementById('prefs-view');
+  if (pv) pv.classList.add('hidden');
   hideMapView();
 }
 
@@ -729,9 +766,15 @@ function renderContent() {
     return;
   }
 
-  // NPC / Monster sprite viewer
-  if (state.mode === 'npc') {
+  // Sprite viewer
+  if (state.mode === 'sprite') {
     if (typeof renderSpritesView === 'function') renderSpritesView();
+    return;
+  }
+
+  // Preferences page
+  if (state.mode === 'prefs') {
+    if (typeof renderPrefsView === 'function') renderPrefsView();
     return;
   }
 
