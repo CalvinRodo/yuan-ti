@@ -3658,6 +3658,11 @@ select:focus { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(200,144,
   max-height: 180px;
 }
 
+.spr-sec-single .spr-fimg {
+  max-width: 110px;
+  max-height: 110px;
+}
+
 .spr-flbl {
   font-size: 9px;
   font-family: var(--font-mono);
@@ -3673,9 +3678,177 @@ select:focus { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(200,144,
   border: 1px solid var(--primary-dk);
   border-radius: 6px;
 }
-.spr-anim-img {
+.spr-anim-canvas {
   display: block;
   image-rendering: pixelated;
+}
+
+/* Anchor picker */
+.spr-anchor-picker {
+  display: inline-grid;
+  grid-template-columns: repeat(3, 18px);
+  grid-template-rows: repeat(3, 18px);
+  gap: 1px;
+  margin-left: 6px;
+  flex-shrink: 0;
+  vertical-align: middle;
+}
+.spr-anchor-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  font-size: 10px;
+  line-height: 1;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  background: var(--surface);
+  color: var(--fg-muted, #888);
+  cursor: pointer;
+  transition: background .1s, border-color .1s, color .1s;
+}
+.spr-anchor-btn:hover {
+  background: var(--surface2);
+  border-color: var(--primary-dk);
+  color: var(--fg);
+}
+.spr-anchor-btn.active {
+  background: var(--primary-dk);
+  border-color: var(--primary);
+  color: var(--primary-lt);
+  font-weight: 700;
+}
+
+/* Bulk-mode "Select multiple" row */
+#spr-bulk-mode-row {
+  padding: 2px 0 0;
+}
+#spr-select-btn {
+  width: 100%;
+  text-align: left;
+  background: var(--surface2);
+  border-color: var(--border);
+  color: var(--text-dim);
+}
+#spr-select-btn.active {
+  background: var(--primary-dk);
+  border-color: var(--primary);
+  color: var(--primary-lt);
+}
+
+/* Bulk bar at bottom of sidebar */
+#spr-bulk-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 10px;
+  border-top: 1px solid var(--border);
+  background: var(--surface2);
+  flex-shrink: 0;
+}
+#spr-bulk-count {
+  flex: 1;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+/* List item selected state + checkbox */
+.spr-li.spr-li-selected { background: color-mix(in srgb, var(--primary-dk) 30%, var(--surface)); }
+.spr-li.spr-li-selected:hover { background: color-mix(in srgb, var(--primary-dk) 40%, var(--surface)); }
+.spr-li-check {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  min-width: 16px;
+  border: 1.5px solid var(--border);
+  border-radius: 3px;
+  background: var(--surface);
+  font-size: 11px;
+  color: transparent;
+  margin-right: 4px;
+  flex-shrink: 0;
+  align-self: center;
+}
+.spr-li-check.checked {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+}
+.spr-li-check.checked::after { content: '\2713'; }
+
+/* Pattern badge in list items */
+.spr-li-pattern-badge {
+  display: inline-block;
+  font-size: 10px;
+  padding: 1px 4px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--primary-dk) 35%, var(--surface));
+  border: 1px solid var(--primary-dk);
+  color: var(--primary-lt);
+  cursor: default;
+}
+
+/* Bulk apply panel */
+.spr-bulk-panel {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  height: 100%;
+  box-sizing: border-box;
+  overflow-y: auto;
+}
+.spr-bulk-panel-hdr {
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+.spr-bulk-entry-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.spr-bulk-entry {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.spr-bulk-entry-hdr {
+  padding: 6px 10px;
+  background: var(--surface2);
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  font-weight: 600;
+}
+.spr-bulk-entry-name { color: var(--text); }
+.spr-bulk-sheets {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.spr-bulk-sheet {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+}
+.spr-bulk-sheet:last-child { border-bottom: none; }
+.spr-bulk-sheet-lbl { flex: 1; }
+.spr-bulk-pat-sel {
+  flex: 1;
+  max-width: 200px;
+  font-size: 11px;
+  padding: 3px 6px;
+}
+.spr-bulk-actions {
+  display: flex;
+  gap: 8px;
+  padding-top: 4px;
 }
 
 /* ================================================================
@@ -3768,7 +3941,7 @@ select:focus { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(200,144,
   border: 1px solid var(--border);
   border-radius: 5px;
   min-width: 0;
-  max-width: 120px;
+  overflow: hidden;
 }
 
 .spr-sec-single.spr-sec-custom {

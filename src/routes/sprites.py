@@ -316,6 +316,7 @@ def _build_catalog(game_id: str) -> list[dict]:
             'gff_name':        gff_name,
             'custom_sections': custom_sections,
             'pattern_name':    pattern_name,
+            'plain_anchor':    saved.get('plain_anchor', None),
         })
 
     _catalog_cache[game_id] = catalog

@@ -11,7 +11,10 @@
 let spritesBuilt    = false;
 let spriteCatalog   = null;   // full list from /api/bmp-catalog
 let spritesByBmp    = {};     // bmp_num -> catalog entry (fast lookup)
-let spriteFilter    = { type: 'NPC', q: '', animated: 'all' };
+let spriteFilter    = { type: 'NPC', q: '', animated: 'all', patternFilter: 'all' };
+
+let _bulkMode      = false;         // multi-select mode active
+const _bulkSelected = new Set();    // canonical bmpNums currently selected
 let spriteFiltered  = [];
 let selectedBmpNum  = -1;
 
@@ -34,11 +37,20 @@ let _editingEntry   = null;       // which entry owns the section being edited (
 let _displayedEntry = null;       // primary entry currently shown in the frames panel
 let _canonicalMap   = {};         // bmpNum -> canonical (primary) bmpNum for its linked group
 
-let _patternsCache  = null;       // array of saved patterns (loaded lazily)
+let _patternsCache   = null;      // array of saved patterns (loaded lazily)
 let _patternPanelBmp = null;      // bmpNum whose pattern panel is currently open
+let _animAnchors     = new Map(); // anim-key → anchor string for non-custom sections (ephemeral)
+const _imgCache      = new Map(); // url → Promise<HTMLImageElement> (persists across renders)
 
 const SPRITE_TYPES  = ['PC', 'NPC', 'Monster', 'Scenery', 'Effect', 'Spell', 'Item', 'Unknown'];
 const ALL_TABS      = ['PC', 'NPC', 'Monster', 'Scenery', 'Effect', 'Spell', 'Item', 'Unknown', 'All'];
+
+// 3×3 anchor grid: [id, symbol, title]
+const ANCHOR_GRID = [
+  ['top-left',     '↖', 'Top-left'],     ['top-center',    '↑', 'Top-center'],    ['top-right',    '↗', 'Top-right'],
+  ['middle-left',  '←', 'Middle-left'],  ['center',        '·', 'Center'],         ['middle-right', '→', 'Middle-right'],
+  ['bottom-left',  '↙', 'Bottom-left'],  ['bottom-center', '↓', 'Bottom-center'], ['bottom-right', '↘', 'Bottom-right'],
+];
 
 // ---------------------------------------------------------------------------
 // Entry / teardown
@@ -78,8 +90,15 @@ function teardownSpritesView() {
   _editingEntry   = null;
   _displayedEntry = null;
   _canonicalMap   = {};
-  _patternsCache  = null;
+  _patternsCache   = null;
   _patternPanelBmp = null;
+  _animAnchors     = new Map();
+  _bulkMode        = false;
+  _bulkSelected.clear();
+  // Reset pattern filter button back to neutral state
+  spriteFilter.patternFilter = 'all';
+  const patBtn = document.getElementById('spr-pattern-filter-btn');
+  if (patBtn) { patBtn.textContent = '\u{1F3F7}\uFE0E Patterned'; patBtn.classList.remove('active'); patBtn.title = ''; }
   // Keep spritesBuilt — DOM survives; data re-fetched per game change
 }
 
@@ -99,6 +118,10 @@ function _buildSpritesDOM(view) {
         <button class="spr-anim-btn active" data-anim="all">All</button>
         <button class="spr-anim-btn" data-anim="animated">&#9654; Animated</button>
         <button class="spr-anim-btn" data-anim="static">&#9646; Static</button>
+        <button class="spr-anim-btn" id="spr-pattern-filter-btn" data-anim="">&#127991; Patterned</button>
+      </div>
+      <div id="spr-bulk-mode-row">
+        <button id="spr-select-btn" class="spr-btn spr-btn-sm">&#9635; Select multiple</button>
       </div>
     </div>
     <div id="spr-list-wrap">
@@ -107,6 +130,11 @@ function _buildSpritesDOM(view) {
       </div>
       <div id="spr-load-error" class="spr-status-msg spr-error-msg hidden"></div>
       <ul id="spr-list"></ul>
+    </div>
+    <div id="spr-bulk-bar" class="hidden">
+      <span id="spr-bulk-count">0 selected</span>
+      <button id="spr-bulk-apply-btn" class="spr-btn spr-btn-primary spr-btn-sm" disabled>Apply Pattern…</button>
+      <button id="spr-bulk-clear-btn" class="spr-btn spr-btn-sm">Clear</button>
     </div>
   </div>
 
@@ -129,14 +157,37 @@ function _buildSpritesDOM(view) {
     _applyFilter();
   });
 
-  // Animated filter buttons
+  // Animated / patterned filter buttons
   view.querySelector('#spr-anim-filter').addEventListener('click', ev => {
     const btn = ev.target.closest('.spr-anim-btn');
     if (!btn) return;
+    if (btn.id === 'spr-pattern-filter-btn') {
+      // Cycle: all → patterned → unpatterned → all
+      const next = { all: 'patterned', patterned: 'unpatterned', unpatterned: 'all' };
+      spriteFilter.patternFilter = next[spriteFilter.patternFilter] || 'all';
+      const labels = { all: '\u{1F3F7} Patterned', patterned: '\u{1F3F7} Patterned', unpatterned: '\u{1F3F7} Unpatterned' };
+      btn.textContent = labels[spriteFilter.patternFilter];
+      btn.classList.toggle('active', spriteFilter.patternFilter !== 'all');
+      btn.title = { all: '', patterned: 'Showing: has pattern', unpatterned: 'Showing: no pattern' }[spriteFilter.patternFilter];
+      _applyFilter();
+      return;
+    }
     spriteFilter.animated = btn.dataset.anim;
-    view.querySelectorAll('#spr-anim-filter .spr-anim-btn')
+    view.querySelectorAll('#spr-anim-filter .spr-anim-btn:not(#spr-pattern-filter-btn)')
       .forEach(b => b.classList.toggle('active', b === btn));
     _applyFilter();
+  });
+
+  // Bulk-select mode toggle
+  view.querySelector('#spr-select-btn').addEventListener('click', () => _toggleBulkMode(!_bulkMode));
+
+  // Bulk bar actions
+  view.querySelector('#spr-bulk-apply-btn').addEventListener('click', _openBulkApplyPanel);
+  view.querySelector('#spr-bulk-clear-btn').addEventListener('click', () => {
+    _bulkSelected.clear();
+    view.querySelectorAll('#spr-list .spr-li-selected').forEach(li => li.classList.remove('spr-li-selected'));
+    view.querySelectorAll('#spr-list .spr-li-check').forEach(chk => chk.classList.remove('checked'));
+    _updateBulkBar();
   });
 
   // Tab buttons (built after data loads, populated in _updateTabs)
@@ -146,7 +197,22 @@ function _buildSpritesDOM(view) {
   // Event delegation for list clicks
   view.querySelector('#spr-list').addEventListener('click', e => {
     const li = e.target.closest('.spr-li');
-    if (li) _selectEntry(Number(li.dataset.bmp));
+    if (!li) return;
+    const bmp = Number(li.dataset.bmp);
+    if (_bulkMode) {
+      if (_bulkSelected.has(bmp)) {
+        _bulkSelected.delete(bmp);
+        li.classList.remove('spr-li-selected');
+        li.querySelector('.spr-li-check')?.classList.remove('checked');
+      } else {
+        _bulkSelected.add(bmp);
+        li.classList.add('spr-li-selected');
+        li.querySelector('.spr-li-check')?.classList.add('checked');
+      }
+      _updateBulkBar();
+    } else {
+      _selectEntry(bmp);
+    }
   });
 }
 
@@ -262,12 +328,12 @@ function _buildCanonicalMap() {
 
 function _applyFilter() {
   if (!spriteCatalog) return;
-  const { type, q, animated } = spriteFilter;
-
   // Raw pass — a canonical entry is included if IT matches, OR any of its
   // subordinate linked peers would match (so searching a linked sheet's
   // name still surfaces the combined entry).
-  const rawFiltered = spriteCatalog.filter(e => {
+  const { type, q, animated, patternFilter } = spriteFilter;
+
+  let rawFiltered = spriteCatalog.filter(e => {
     // Type check — pass if this entry OR any linked peer matches the type
     if (type !== 'All' && e.type !== type) {
       const linkedTypeMatch = (e.linked_bmps || []).some(n => {
@@ -278,6 +344,12 @@ function _applyFilter() {
     }
     if (animated === 'animated' && e.frame_count <= 1) return false;
     if (animated === 'static'   && e.frame_count > 1)  return false;
+    if (patternFilter !== 'all') {
+      const anyHasPattern = !!(e.pattern_name ||
+        (e.linked_bmps || []).some(n => spritesByBmp[n]?.pattern_name));
+      if (patternFilter === 'patterned'   && !anyHasPattern) return false;
+      if (patternFilter === 'unpatterned' &&  anyHasPattern) return false;
+    }
     if (!q) return true;
     // Text search — also search linked peers' names/numbers
     const matchesQuery = entry => {
@@ -360,9 +432,10 @@ function _buildList() {
 }
 
 function _buildListItem(e) {
-  const isActive  = (_canonicalMap[selectedBmpNum] ?? selectedBmpNum) === e.bmp_num;
+  const isActive  = !_bulkMode && (_canonicalMap[selectedBmpNum] ?? selectedBmpNum) === e.bmp_num;
+  const isSelected = _bulkMode && _bulkSelected.has(e.bmp_num);
   const li = document.createElement('li');
-  li.className = 'spr-li' + (isActive ? ' active' : '');
+  li.className = 'spr-li' + (isActive ? ' active' : '') + (isSelected ? ' spr-li-selected' : '');
   li.dataset.bmp = e.bmp_num;
 
   const thumbUrl  = `/api/gff/${spriteGffName}/image/BMP_/${e.bmp_num}?frame=0&game=${state.game}&scale=2`;
@@ -377,7 +450,11 @@ function _buildListItem(e) {
       title="BMP #${n}${spritesByBmp[n]?.name ? ' – ' + spritesByBmp[n].name : ''}">`;
   }).join('');
 
+  const anyPatternName = e.pattern_name ||
+    linked.map(n => spritesByBmp[n]?.pattern_name).find(Boolean);
+
   li.innerHTML = `
+    ${_bulkMode ? `<div class="spr-li-check${isSelected ? ' checked' : ''}"></div>` : ''}
     <div class="spr-li-thumb${linked.length ? ' spr-li-thumb-group' : ''}">
       <img class="spr-li-img" data-src="${thumbUrl}" alt="" loading="lazy"
            onerror="this.style.display='none'">
@@ -390,6 +467,7 @@ function _buildListItem(e) {
         ${e.sheet_type ? `<span class="spr-sheet-badge">${_esc(_sheetLabel(e.sheet_type))}</span>` : ''}
         ${linked.length ? `<span class="spr-link-badge">&#128279;&thinsp;${linked.length + 1}</span>` : ''}
         ${totalFrames > 1 ? `<span class="spr-li-frames-badge" title="${totalFrames} frames total">&#9654;&thinsp;${totalFrames}</span>` : ''}
+        ${anyPatternName ? `<span class="spr-li-pattern-badge" title="Pattern: ${_esc(anyPatternName)}">&#127991;</span>` : ''}
         <span class="spr-li-num">#${e.bmp_num}</span>
       </div>
     </div>`;
@@ -766,10 +844,12 @@ function _appendLinkedSections(block, linkedEntry, primaryEntry) {
 
   // Sections
   const keySuffix = `_ls${linkedEntry.bmp_num}`;
+  // custom_sections === [] means explicitly cleared — don't fall back to sheet-def sections.
+  // (mirrors the same logic in _renderSheetBlock)
   const useCustom = !!(linkedEntry.custom_sections && linkedEntry.custom_sections.length);
   const sections  = useCustom
     ? linkedEntry.custom_sections
-    : (linkedEntry.sections || []);
+    : [];
   const keyPrefix = `${linkedEntry.bmp_num}${keySuffix}`;
 
   // Frames in a linked sheet are selectable when selection mode is active for that sheet
@@ -870,10 +950,14 @@ function _renderSheetBlock(entry, keySuffix, isPrimary, primaryEntry) {
   block.appendChild(patPanel);
 
   // --- Sections ---
+  // custom_sections === [] means the user explicitly cleared all groups — honour
+  // that instead of falling back to the sheet-def template (entry.sections).
+  // The server auto-seeds custom_sections for entries that were never edited, so
+  // the legacy entry.sections fallback is no longer needed.
   const useCustom = !!(entry.custom_sections && entry.custom_sections.length);
   const sections  = useCustom
     ? entry.custom_sections
-    : (entry.sections || []);  // legacy fallback (should rarely trigger)
+    : [];
   const keyPrefix = `${entry.bmp_num}${keySuffix}`;
 
   const secWrap = document.createElement('div');
@@ -946,8 +1030,39 @@ function _appendPlainStrip(container, entry, keyPrefix, isPrimary) {
     playBtn.id        = `spr-play-${key}`;
     playBtn.innerHTML = '&#9654;';
     playBtn.title     = 'Animate';
-    playBtn.addEventListener('click', () => _toggleAnim(key, entry.bmp_num, frames, playBtn));
+    playBtn.addEventListener('click', () => {
+      const anchor = entry.plain_anchor || 'bottom-center';
+      _toggleAnim(key, entry.bmp_num, frames, playBtn, anchor, false);
+    });
     titleDiv.appendChild(playBtn);
+
+    // Pin-edit toggle button
+    const pinBtn = document.createElement('button');
+    pinBtn.className = 'spr-play-btn spr-pin-edit-btn';
+    pinBtn.innerHTML = '&#8982;';  // ⌖ position indicator
+    pinBtn.title     = 'Set animation pin point';
+    titleDiv.appendChild(pinBtn);
+
+    // Anchor picker — hidden until toggled
+    const picker = _buildAnchorPicker(
+      entry.plain_anchor || 'bottom-center',
+      (newAnchor) => {
+        entry.plain_anchor = newAnchor;
+        _saveCustomSections(entry);
+        if (animTimers[key]) {
+          const { btn } = animTimers[key];
+          _stopAnim(key);
+          _startAnim(key, entry.bmp_num, frames, btn, newAnchor, false);
+        }
+      }
+    );
+    picker.classList.add('hidden');
+    titleDiv.appendChild(picker);
+
+    pinBtn.addEventListener('click', () => {
+      const nowVisible = picker.classList.toggle('hidden') === false;
+      pinBtn.classList.toggle('active', nowVisible);
+    });
   }
   container.appendChild(titleDiv);
 
@@ -963,11 +1078,10 @@ function _appendPlainStrip(container, entry, keyPrefix, isPrimary) {
     const preview = document.createElement('div');
     preview.className = 'spr-anim-wrap hidden';
     preview.id        = `spr-anim-${key}`;
-    const pImg = document.createElement('img');
-    pImg.className = 'spr-anim-img';
-    pImg.id        = `spr-anim-img-${key}`;
-    pImg.src       = _frameUrl(entry.bmp_num, 0);
-    preview.appendChild(pImg);
+    const canvas = document.createElement('canvas');
+    canvas.className = 'spr-anim-canvas';
+    canvas.id        = `spr-anim-canvas-${key}`;
+    preview.appendChild(canvas);
     container.appendChild(preview);
   }
 }
@@ -1017,25 +1131,24 @@ function _renderSectionEl(entry, sec, secIdx, keyPrefix, isCustom, primaryEntry)
     playBtn.id        = `spr-play-${key}`;
     playBtn.innerHTML = '&#9654;';
     playBtn.title     = 'Animate';
-    playBtn.addEventListener('click', () =>
-      _toggleAnim(key, entry.bmp_num, sec.frames, playBtn)
-    );
+    playBtn.addEventListener('click', () => {
+      const anchor = isCustom ? (sec.anchor || 'bottom-center') : (_animAnchors.get(key) || 'bottom-center');
+      _toggleAnim(key, entry.bmp_num, sec.frames, playBtn, anchor, isMirrored);
+    });
     row.appendChild(playBtn);
   }
 
   secEl.appendChild(row);
 
-  // --- Animation preview (multi-frame only) ---
+  // --- Animation preview canvas (multi-frame only) ---
   if (!isSingle) {
     const preview = document.createElement('div');
     preview.className = 'spr-anim-wrap hidden';
     preview.id        = `spr-anim-${key}`;
-    const pImg = document.createElement('img');
-    pImg.className = 'spr-anim-img';
-    pImg.id        = `spr-anim-img-${key}`;
-    if (isMirrored) pImg.style.transform = 'scaleX(-1)';
-    pImg.src       = _frameUrl(entry.bmp_num, sec.frames[0]);
-    preview.appendChild(pImg);
+    const canvas = document.createElement('canvas');
+    canvas.className = 'spr-anim-canvas';
+    canvas.id        = `spr-anim-canvas-${key}`;
+    preview.appendChild(canvas);
     secEl.appendChild(preview);
   }
 
@@ -1067,6 +1180,25 @@ function _renderSectionEl(entry, sec, secIdx, keyPrefix, isCustom, primaryEntry)
       descEl.textContent = sec.desc;
       footer.appendChild(descEl);
     }
+  }
+
+  // Anchor picker — only visible in edit (pencil) mode
+  if (!isSingle && isEditing) {
+    const curAnchor = isCustom ? (sec.anchor || 'bottom-center') : (_animAnchors.get(key) || 'bottom-center');
+    const picker = _buildAnchorPicker(curAnchor, (newAnchor) => {
+      if (isCustom) {
+        sec.anchor = newAnchor;
+        _saveCustomSections(entry);
+      } else {
+        _animAnchors.set(key, newAnchor);
+      }
+      if (animTimers[key]) {
+        const { btn } = animTimers[key];
+        _stopAnim(key);
+        _startAnim(key, entry.bmp_num, sec.frames, btn, newAnchor, isMirrored);
+      }
+    });
+    footer.appendChild(picker);
   }
 
   if (isCustom) {
@@ -1152,6 +1284,7 @@ function _saveCustomSections(entry) {
   _queueSave(entry.bmp_num, {
     custom_sections: JSON.parse(JSON.stringify(entry.custom_sections || [])),
     pattern_name:    entry.pattern_name || null,
+    plain_anchor:    entry.plain_anchor || null,
   });
 }
 
@@ -1435,6 +1568,199 @@ function _doApplyPattern(entry, pattern, primaryEntry) {
   _selFrames.clear(); _editingSecIdx = null; _editingEntry = null;
   _patternPanelBmp = null;
   _renderFrames(primaryEntry);
+}
+
+// ---------------------------------------------------------------------------
+// Bulk multi-select
+// ---------------------------------------------------------------------------
+
+function _toggleBulkMode(active) {
+  _bulkMode = active;
+  _bulkSelected.clear();
+  const btn = document.getElementById('spr-select-btn');
+  if (btn) btn.classList.toggle('active', active);
+  const bar = document.getElementById('spr-bulk-bar');
+  if (bar) bar.classList.toggle('hidden', !active);
+  _buildList();
+  if (!active) {
+    // Restore normal detail view
+    if (selectedBmpNum >= 0 && spritesByBmp[selectedBmpNum]) {
+      _showEmptyDetail(false);
+      _renderDetail(spritesByBmp[selectedBmpNum]);
+    } else {
+      _showEmptyDetail(true);
+    }
+  } else {
+    // Clear detail in bulk mode
+    const dc = document.getElementById('spr-detail-content');
+    if (dc) { dc.innerHTML = ''; dc.classList.add('hidden'); }
+    _showEmptyDetail(true);
+    _updateBulkBar();
+  }
+}
+
+function _updateBulkBar() {
+  const cnt   = document.getElementById('spr-bulk-count');
+  const apply = document.getElementById('spr-bulk-apply-btn');
+  const n = _bulkSelected.size;
+  if (cnt)   cnt.textContent = `${n} selected`;
+  if (apply) apply.disabled  = n === 0;
+}
+
+async function _openBulkApplyPanel() {
+  const detailContent = document.getElementById('spr-detail-content');
+  const detailEmpty   = document.getElementById('spr-detail-empty');
+  if (!detailContent) return;
+
+  const patterns = await _loadAllPatterns();
+
+  // Collect the selected entries and all their sheets
+  const entries = [..._bulkSelected].map(bmp => {
+    const e = spritesByBmp[bmp];
+    if (!e) return null;
+    const allSheets = [{ entry: e, isPrimary: true }];
+    (e.linked_bmps || []).forEach(n => {
+      const le = spritesByBmp[n];
+      if (le) allSheets.push({ entry: le, isPrimary: false });
+    });
+    return { entry: e, allSheets };
+  }).filter(Boolean);
+
+  const panel = document.createElement('div');
+  panel.className = 'spr-bulk-panel';
+
+  const panelHdr = document.createElement('div');
+  panelHdr.className = 'spr-bulk-panel-hdr';
+  panelHdr.innerHTML =
+    `<strong>Apply Patterns \u2014 ${entries.length} sprite${entries.length !== 1 ? 's' : ''}</strong>` +
+    `<span class="dim" style="font-size:11px;display:block;margin-top:2px">` +
+    `Select a pattern for each sheet. Only patterns with a matching frame count are shown.</span>`;
+  panel.appendChild(panelHdr);
+
+  // assignments: bmpNum → pattern object
+  const assignments = new Map();
+
+  const list = document.createElement('div');
+  list.className = 'spr-bulk-entry-list';
+
+  entries.forEach(({ entry: primaryE, allSheets }) => {
+    const entryRow = document.createElement('div');
+    entryRow.className = 'spr-bulk-entry';
+
+    const hdr = document.createElement('div');
+    hdr.className = 'spr-bulk-entry-hdr';
+    hdr.innerHTML =
+      `<span class="spr-bulk-entry-name">${_esc(_displayName(primaryE))}</span>` +
+      `<span class="dim" style="font-size:10px;margin-left:6px">#${primaryE.bmp_num}</span>`;
+    entryRow.appendChild(hdr);
+
+    const sheetsWrap = document.createElement('div');
+    sheetsWrap.className = 'spr-bulk-sheets';
+
+    allSheets.forEach(({ entry: sheetE }) => {
+      const fc = sheetE.frame_count;
+      const matching = patterns.filter(p => p.frame_count === fc);
+
+      const sheetRow = document.createElement('div');
+      sheetRow.className = 'spr-bulk-sheet';
+
+      const lbl = document.createElement('span');
+      lbl.className = 'spr-bulk-sheet-lbl';
+      lbl.innerHTML =
+        `BMP <strong>#${sheetE.bmp_num}</strong>` +
+        `<span class="dim" style="margin-left:4px">${fc} frame${fc !== 1 ? 's' : ''}</span>`;
+      sheetRow.appendChild(lbl);
+
+      if (matching.length === 0) {
+        const none = document.createElement('span');
+        none.className = 'dim';
+        none.style.fontSize = '11px';
+        none.textContent = 'No matching patterns';
+        sheetRow.appendChild(none);
+      } else {
+        const sel = document.createElement('select');
+        sel.className = 'spr-input spr-bulk-pat-sel';
+
+        const defOpt = document.createElement('option');
+        defOpt.value = '';
+        defOpt.textContent = sheetE.pattern_name
+          ? `\u2014 keep (${sheetE.pattern_name})`
+          : '\u2014 no change \u2014';
+        sel.appendChild(defOpt);
+
+        matching.forEach(p => {
+          const opt = document.createElement('option');
+          opt.value = p.name;
+          opt.textContent = p.name;
+          if (p.name === sheetE.pattern_name) opt.selected = true;
+          sel.appendChild(opt);
+        });
+
+        sel.addEventListener('change', () => {
+          if (sel.value) assignments.set(sheetE.bmp_num, matching.find(p => p.name === sel.value));
+          else           assignments.delete(sheetE.bmp_num);
+          applyBtn.disabled = assignments.size === 0;
+        });
+        sheetRow.appendChild(sel);
+      }
+
+      sheetsWrap.appendChild(sheetRow);
+    });
+
+    entryRow.appendChild(sheetsWrap);
+    list.appendChild(entryRow);
+  });
+
+  panel.appendChild(list);
+
+  const actions = document.createElement('div');
+  actions.className = 'spr-bulk-actions';
+
+  const applyBtn = document.createElement('button');
+  applyBtn.className   = 'spr-btn spr-btn-primary';
+  applyBtn.textContent = 'Apply pattern assignments';
+  applyBtn.disabled    = true;
+  applyBtn.addEventListener('click', async () => {
+    applyBtn.disabled    = true;
+    applyBtn.textContent = 'Applying\u2026';
+    await _applyBulkPatterns(assignments);
+    applyBtn.textContent = 'Done \u2713';
+    setTimeout(() => _toggleBulkMode(false), 700);
+  });
+
+  const cancelBtn = document.createElement('button');
+  cancelBtn.className   = 'spr-btn';
+  cancelBtn.textContent = 'Cancel';
+  cancelBtn.addEventListener('click', () => _toggleBulkMode(false));
+
+  actions.appendChild(applyBtn);
+  actions.appendChild(cancelBtn);
+  panel.appendChild(actions);
+
+  if (detailEmpty) detailEmpty.classList.add('hidden');
+  detailContent.innerHTML = '';
+  detailContent.appendChild(panel);
+  detailContent.classList.remove('hidden');
+}
+
+async function _applyBulkPatterns(assignments) {
+  for (const [bmpNum, pattern] of assignments) {
+    const e = spritesByBmp[bmpNum];
+    if (!e || !pattern) continue;
+    // Apply pattern data (without calling _renderFrames)
+    const origSections = pattern.sections || [];
+    const idMap = {};
+    origSections.forEach((s, i) => { idMap[s.id] = String(i + 1); });
+    e.custom_sections = origSections.map((s, i) => {
+      const copy = JSON.parse(JSON.stringify(s));
+      copy.id = String(i + 1);
+      if (copy.mirrorOf) copy.mirrorOf = idMap[copy.mirrorOf] || copy.mirrorOf;
+      return copy;
+    });
+    e.pattern_name = pattern.name;
+    _saveCustomSections(e);
+  }
+  await _flushSave();
 }
 
 // ---------------------------------------------------------------------------
@@ -1815,24 +2141,67 @@ function _setupLinkEditor(e) {
 // Animation
 // ---------------------------------------------------------------------------
 
-function _toggleAnim(key, bmpNum, frames, btn) {
+function _toggleAnim(key, bmpNum, frames, btn, anchor, mirrored) {
   if (animTimers[key]) {
     _stopAnim(key);
   } else {
-    _startAnim(key, bmpNum, frames, btn);
+    _startAnim(key, bmpNum, frames, btn, anchor, mirrored);
   }
 }
 
-function _startAnim(key, bmpNum, frames, btn) {
+async function _startAnim(key, bmpNum, frames, btn, anchor, mirrored) {
   const previewWrap = document.getElementById(`spr-anim-${key}`);
-  const previewImg  = document.getElementById(`spr-anim-img-${key}`);
-  if (!previewWrap || !previewImg) return;
+  const canvas      = document.getElementById(`spr-anim-canvas-${key}`);
+  if (!previewWrap || !canvas) return;
+
+  // Mark as loading so _stopAnim can cancel during async preload
+  animTimers[key] = { timer: null, btn, previewWrap, loading: true };
 
   previewWrap.classList.remove('hidden');
   btn.innerHTML = '&#9646;&#9646;';
   btn.classList.add('active');
 
+  // Preload all frame images to get natural dimensions
+  let imgs;
+  try {
+    imgs = await Promise.all(frames.map(fi => _loadFrameImage(bmpNum, fi)));
+  } catch (_) {
+    _stopAnim(key);
+    return;
+  }
+  // Bail if _stopAnim was called during the async load
+  if (!animTimers[key]) return;
+
+  const maxW = Math.max(...imgs.map(i => i.naturalWidth),  1);
+  const maxH = Math.max(...imgs.map(i => i.naturalHeight), 1);
+  canvas.width  = maxW;
+  canvas.height = maxH;
+  // Scale display size to match the fimg max (180 px)
+  const scale = Math.min(1, 180 / Math.max(maxW, maxH));
+  canvas.style.width  = `${Math.round(maxW * scale)}px`;
+  canvas.style.height = `${Math.round(maxH * scale)}px`;
+
+  const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+
+  const eff_anchor = anchor || 'bottom-center';
+
   let pos = 0;
+  const drawFrame = () => {
+    ctx.clearRect(0, 0, maxW, maxH);
+    const img = imgs[pos];
+    const [ox, oy] = _anchorOffset(eff_anchor, maxW, maxH, img.naturalWidth, img.naturalHeight);
+    if (mirrored) {
+      ctx.save();
+      ctx.translate(maxW, 0);
+      ctx.scale(-1, 1);
+      ctx.drawImage(img, maxW - ox - img.naturalWidth, oy);
+      ctx.restore();
+    } else {
+      ctx.drawImage(img, ox, oy);
+    }
+  };
+
   const tick = () => {
     const row = document.getElementById(`spr-row-${key}`);
     if (row) {
@@ -1840,22 +2209,78 @@ function _startAnim(key, bmpNum, frames, btn) {
         c.classList.toggle('active', i === pos)
       );
     }
-    previewImg.src = _frameUrl(bmpNum, frames[pos]);
+    drawFrame();
     pos = (pos + 1) % frames.length;
   };
   tick();
-  animTimers[key] = { timer: setInterval(tick, 150), btn, previewWrap };
+  const timer = setInterval(tick, 150);
+  animTimers[key] = { timer, btn, previewWrap };
 }
 
 function _stopAnim(key) {
   const entry = animTimers[key];
   if (!entry) return;
-  clearInterval(entry.timer);
+  if (entry.timer) clearInterval(entry.timer);
   delete animTimers[key];
   if (entry.previewWrap) entry.previewWrap.classList.add('hidden');
   if (entry.btn) { entry.btn.innerHTML = '&#9654;'; entry.btn.classList.remove('active'); }
   const row = document.getElementById(`spr-row-${key}`);
   if (row) row.querySelectorAll('.spr-fcell').forEach(c => c.classList.remove('active'));
+}
+
+// ---------------------------------------------------------------------------
+// Animation helpers
+// ---------------------------------------------------------------------------
+
+function _loadFrameImage(bmpNum, frameIdx) {
+  const url = _frameUrl(bmpNum, frameIdx);
+  if (!_imgCache.has(url)) {
+    _imgCache.set(url, new Promise((res, rej) => {
+      const img = new Image();
+      img.onload  = () => res(img);
+      img.onerror = () => rej(new Error(`img load failed: ${url}`));
+      img.src = url;
+    }));
+  }
+  return _imgCache.get(url);
+}
+
+/**
+ * Given a canvas size (cw×ch) and an image size (iw×ih), return the [x,y]
+ * draw offset so the image lands at the chosen anchor corner/edge.
+ */
+function _anchorOffset(anchor, cw, ch, iw, ih) {
+  const x = anchor.includes('right')  ? Math.max(0, cw - iw)
+           : anchor.includes('left')   ? 0
+           : Math.max(0, Math.round((cw - iw) / 2));  // center
+  const y = anchor.includes('top')    ? 0
+           : anchor.includes('bottom') ? Math.max(0, ch - ih)
+           : Math.max(0, Math.round((ch - ih) / 2));  // middle
+  return [x, y];
+}
+
+/**
+ * Build a 3×3 anchor-picker widget.
+ * onChange(anchor) is called with the new anchor string when a cell is clicked.
+ */
+function _buildAnchorPicker(currentAnchor, onChange) {
+  const wrap = document.createElement('div');
+  wrap.className = 'spr-anchor-picker';
+  wrap.title     = 'Pin animation anchor';
+  ANCHOR_GRID.forEach(([pos, sym, label]) => {
+    const btn = document.createElement('button');
+    btn.className   = `spr-anchor-btn${currentAnchor === pos ? ' active' : ''}`;
+    btn.textContent = sym;
+    btn.title       = label;
+    btn.dataset.anchor = pos;
+    btn.addEventListener('click', () => {
+      wrap.querySelectorAll('.spr-anchor-btn')
+          .forEach(b => b.classList.toggle('active', b.dataset.anchor === pos));
+      onChange(pos);
+    });
+    wrap.appendChild(btn);
+  });
+  return wrap;
 }
 
 function _stopAllAnims() {
@@ -1878,6 +2303,7 @@ function _queueSave(bmpNum, patch) {
       item_index:      e.item_index       ?? null,
       custom_sections: JSON.parse(JSON.stringify(e.custom_sections || [])),
       pattern_name:    e.pattern_name     || null,
+      plain_anchor:    e.plain_anchor     || null,
     };
   }
   Object.assign(savePending[key], patch);
@@ -1919,6 +2345,7 @@ async function _flushSave() {
           if ('item_index' in v)         e.item_index      = v.item_index;
           if (v.custom_sections != null) e.custom_sections = v.custom_sections;
           if ('pattern_name' in v)       e.pattern_name    = v.pattern_name;
+          if ('plain_anchor' in v)       e.plain_anchor    = v.plain_anchor || null;
           needsListUpdate.add(n);
         }
       });
