@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GFF Viewer</title>
+</head>
+<body>
+  <div id="app">
+    <header id="header">
+      <button id="btn-toggle-nav" class="collapse-btn" title="Toggle sidebar">&#9776;</button>
+      <div id="header-brand">
+        <span class="header-icon">&#9728;</span>
+        <h1>GFF Viewer</h1>
+      </div>
+      <div id="header-controls">
+        <label class="control-label" for="game-select">Game</label>
+        <select id="game-select">
+          <option value="dark_sun">Dark Sun: Shattered Lands</option>
+        </select>
+      </div>
+      <button id="btn-toggle-header" class="collapse-btn" title="Collapse title bar">&#8963;</button>
+    </header>
+
+    <div id="layout">
+      <nav id="mode-nav">
+        <button class="mode-btn active" data-mode="spells" title="Spell Viewer">
+          <span class="mode-icon">&#10022;</span>
+          <span class="mode-label">Spells</span>
+        </button>
+        <button class="mode-btn" data-mode="map" title="Map Viewer">
+          <span class="mode-icon">&#8862;</span>
+          <span class="mode-label">Map</span>
+        </button>
+        <button class="mode-btn" data-mode="resources" title="Resource Viewer">
+          <span class="mode-icon">&#8801;</span>
+          <span class="mode-label">Resources</span>
+        </button>
+        <button class="mode-btn" data-mode="images" title="Image Viewer">
+          <span class="mode-icon">&#9707;</span>
+          <span class="mode-label">Images</span>
+        </button>
+        <button class="mode-btn" data-mode="text" title="Text Viewer">
+          <span class="mode-icon">&#9776;</span>
+          <span class="mode-label">Text</span>
+        </button>
+        <button class="mode-btn" data-mode="palette" title="Palette Viewer">
+          <span class="mode-icon">&#9632;</span>
+          <span class="mode-label">Palettes</span>
+        </button>
+        <button class="mode-btn" data-mode="music" title="Music Player">
+          <span class="mode-icon">&#9835;</span>
+          <span class="mode-label">Music</span>
+        </button>
+        <button class="mode-btn" data-mode="sfx" title="Sound Effects">
+          <span class="mode-icon">&#128266;</span>
+          <span class="mode-label">SFX</span>
+        </button>
+        <button class="mode-btn" data-mode="cinematic" title="Cinematic Viewer">
+          <span class="mode-icon">&#127909;</span>
+          <span class="mode-label">Cinema</span>
+        </button>
+        <button class="mode-btn" data-mode="data" title="Game Data Browser">
+          <span class="mode-icon">&#128218;</span>
+          <span class="mode-label">Data</span>
+        </button>
+        <button class="mode-btn" data-mode="scripts" title="GPL Script Browser">
+          <span class="mode-icon">&#128196;</span>
+          <span class="mode-label">Scripts</span>
+        </button>
+        <button class="mode-btn" data-mode="sprite" title="Sprite Viewer">
+          <span class="mode-icon">&#9812;</span>
+          <span class="mode-label">Sprites</span>
+        </button>
+        <button class="mode-btn" data-mode="prefs" title="Preferences">
+          <span class="mode-icon">&#9881;</span>
+          <span class="mode-label">Prefs</span>
+        </button>
+      </nav>
+
+      <main id="main">
+        <div id="mode-toolbar">
+          <div id="mode-gff-group" class="tb-group hidden">
+            <label class="control-label" for="mode-gff-select">File</label>
+            <select id="mode-gff-select"></select>
+          </div>
+          <div id="pal-group" class="tb-group">
+            <label class="control-label" for="pal-select">Palette</label>
+            <select id="pal-select">
+              <option value="auto">Auto&#8209;detect</option>
+            </select>
+          </div>
+          <button id="btn-toggle-toolbar" class="collapse-btn" title="Hide toolbar">&#8963;</button>
+        </div>
+        <div id="toolbar-restore-tab" title="Show toolbar">&#9663; toolbar</div>
+
+        <div id="content-area">
+          <div id="game-container"></div>
+          <div id="dom-views" class="hidden"></div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

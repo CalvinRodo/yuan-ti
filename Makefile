@@ -10,7 +10,8 @@ OUT_DIR  := out
 
 .PHONY: help serve install install-ffmpeg extract list-resource list-gff extract-gff \
         precompute precompute-gff precompute-maps precompute-gamedata \
-        precompute-images precompute-audio
+        precompute-images precompute-audio \
+        phaser-install phaser-dev phaser-build
 
 help: ## Show this help message
 	@echo ""
@@ -76,3 +77,16 @@ extract-gff: ## Extract one GFF file to ./out/    [GFF=<name>]
 	$(PYTHON) $(SRC)/gff_tool.py \
 	    --gff=$(GAME_DIR)/$(GFF) \
 	    --extract-to-dir=$(OUT_DIR)/$(basename $(GFF))
+
+# ---------------------------------------------------------------------------
+# Phaser application (frontend)
+# ---------------------------------------------------------------------------
+
+phaser-install: ## Install Phaser app npm dependencies
+	cd phaser-app && npm install
+
+phaser-dev: ## Start the Phaser dev server (Vite) → http://localhost:5173
+	cd phaser-app && npm run dev
+
+phaser-build: ## Build the Phaser app for production → phaser-app/dist/
+	cd phaser-app && npm run build

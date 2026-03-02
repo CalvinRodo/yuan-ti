@@ -18,8 +18,11 @@ let monsterLoreCache  = null;   // array from /api/monster-lore
 let selectedMonsterId = null;   // rdff_id of the currently selected monster
 
 let itemSpriteLinks   = null;   // {item_index_str: bmp_num} from /api/item-sprite-links
+let monsterSpriteLinks = null;  // {rdff_id_str: [bmp_num, ...]} from /api/monster-sprite-links
 let _pickerBmpCache   = null;   // Item-type sprites cached for the sprite picker
+let _monsterPickerBmpCache = null; // All animated sprites for monster picker
 let _pickerDom        = null;   // the sprite picker popover element
+let _monsterPickerDom = null;   // the monster sprite picker popover element
 let _spriteGffName    = 'SEGOBJEX.GFF'; // actual GFF file holding sprites for current game
 
 // ---------------------------------------------------------------------------
@@ -44,9 +47,12 @@ function teardownDataView() {
   monsterLoreCache  = null;
   selectedMonsterId = null;
   itemSpriteLinks   = null;
+  monsterSpriteLinks = null;
   _pickerBmpCache   = null;
+  _monsterPickerBmpCache = null;
   _spriteGffName    = 'SEGOBJEX.GFF';
   if (_pickerDom) { _pickerDom.remove(); _pickerDom = null; }
+  if (_monsterPickerDom) { _monsterPickerDom.remove(); _monsterPickerDom = null; }
   // Do not reset dataViewBuilt — DOM can stay; we just flush per-game data
 }
 
@@ -254,8 +260,8 @@ async function _loadTab(tab) {
     return;
   }
 
-  // --- Monster browser: fetch game data + lore in parallel ---
-  if (dataCache.monsters !== null && monsterLoreCache !== null) {
+  // --- Monster browser: fetch game data + lore + sprite links in parallel ---
+  if (dataCache.monsters !== null && monsterLoreCache !== null && monsterSpriteLinks !== null) {
     _buildMonsterList();
     return;
   }
@@ -273,6 +279,13 @@ async function _loadTab(tab) {
         fetch(`/api/monster-lore?game=${state.game}`)
           .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
           .then(d => { monsterLoreCache = d; })
+      );
+    if (monsterSpriteLinks === null)
+      pending.push(
+        fetch(`/api/monster-sprite-links?game=${state.game}`)
+          .then(r => r.ok ? r.json() : {})
+          .then(d => { monsterSpriteLinks = d; if (d._gff_name) _spriteGffName = d._gff_name; })
+          .catch(() => { monsterSpriteLinks = {}; })
       );
     await Promise.all(pending);
   } catch (e) {
@@ -940,6 +953,51 @@ function _renderMonsterDetail(g, lore) {
   const hasNarrative     = Object.keys(narrative).length > 0;
   const simpleDesc       = cleanText(lore?.description || '');
 
+  // Linked sprite sheets
+  const linkedBmps = (monsterSpriteLinks && monsterSpriteLinks[String(g.rdff_id)]) || [];
+  const gffName    = (monsterSpriteLinks && monsterSpriteLinks._gff_name) || g.sprite_gff || _spriteGffName;
+
+  // Build linked sprite thumbnails HTML
+  function _buildLinkedSpritesHtml() {
+    let html = '<div class="mm-linked-sprites">';
+    html += '<div class="mm-linked-sprites-hdr">';
+    html += '<h4>Linked Sprite Sheets</h4>';
+    html += `<button class="mm-link-sprite-btn" data-rdff="${g.rdff_id}" title="Link a sprite sheet">&#128279; Link sprite&hellip;</button>`;
+    html += '</div>';
+
+    // Primary BMP (from OJFF)
+    if (g.bmp_num) {
+      html += '<div class="mm-linked-sprite-list">';
+      html += `<div class="mm-linked-sprite-card" data-bmp="${g.bmp_num}">`;
+      html += `<img src="/api/gff/${encodeURIComponent(gffName)}/image/BMP_/${g.bmp_num}?frame=0&scale=3&game=${state.game}" alt="" class="mm-linked-sprite-img" onerror="this.style.display='none'">`;
+      html += `<div class="mm-linked-sprite-info">`;
+      html += `<span class="mm-linked-sprite-label">BMP #${g.bmp_num}</span>`;
+      html += `<span class="mm-linked-sprite-tag">primary</span>`;
+      html += `</div>`;
+      html += `</div>`;
+    }
+
+    // Additional linked BMPs
+    linkedBmps.forEach(bmpNum => {
+      if (bmpNum === g.bmp_num) return; // skip if same as primary
+      html += `<div class="mm-linked-sprite-card" data-bmp="${bmpNum}">`;
+      html += `<img src="/api/gff/${encodeURIComponent(gffName)}/image/BMP_/${bmpNum}?frame=0&scale=3&game=${state.game}" alt="" class="mm-linked-sprite-img" onerror="this.style.display='none'">`;
+      html += `<div class="mm-linked-sprite-info">`;
+      html += `<span class="mm-linked-sprite-label">BMP #${bmpNum}</span>`;
+      html += `<button class="mm-unlink-sprite-btn" data-rdff="${g.rdff_id}" data-bmp="${bmpNum}" title="Unlink this sprite">&#10005;</button>`;
+      html += `</div>`;
+      html += `</div>`;
+    });
+
+    if (!g.bmp_num && linkedBmps.length === 0) {
+      html += '<p class="mm-linked-sprites-empty">No sprite sheets linked.</p>';
+    }
+
+    html += '</div>'; // end list
+    html += '</div>';
+    return html;
+  }
+
   det.innerHTML = `
 <div class="mm-entry">
   <div class="mm-header">
@@ -955,6 +1013,8 @@ function _renderMonsterDetail(g, lore) {
     <h4>In-Game Statistics</h4>
     <div class="mm-ability-grid">${abilityGrid}</div>
   </div>` : '' }
+
+  ${_buildLinkedSpritesHtml()}
 
   ${ hasDetailedStats ? buildStatTable(block1) + buildStatTable(block2) : '' }
 
@@ -973,4 +1033,197 @@ function _renderMonsterDetail(g, lore) {
     }
   </div>
 </div>`;
+
+  // --- Wire up linked sprite event handlers ---
+  // Click on sprite card → jump to sprite viewer
+  det.querySelectorAll('.mm-linked-sprite-card').forEach(card => {
+    card.style.cursor = 'pointer';
+    card.addEventListener('click', ev => {
+      if (ev.target.closest('.mm-unlink-sprite-btn')) return; // handled below
+      const bmp = Number(card.dataset.bmp);
+      if (typeof jumpToSprite === 'function') jumpToSprite(bmp);
+    });
+  });
+
+  // Unlink button
+  det.querySelectorAll('.mm-unlink-sprite-btn').forEach(btn => {
+    btn.addEventListener('click', async ev => {
+      ev.stopPropagation();
+      const rdffId = Number(btn.dataset.rdff);
+      const bmpNum = Number(btn.dataset.bmp);
+      await _unlinkMonsterSprite(rdffId, bmpNum);
+      // Re-render
+      const entry = (dataCache.monsters || []).find(m => m.rdff_id === rdffId);
+      if (entry) {
+        const l = _matchMonsterLore(entry.name);
+        _renderMonsterDetail(entry, l);
+      }
+    });
+  });
+
+  // Link button
+  det.querySelectorAll('.mm-link-sprite-btn').forEach(btn => {
+    btn.addEventListener('click', ev => {
+      const rdffId = Number(btn.dataset.rdff);
+      _showMonsterSpritePicker(rdffId, g.name, ev.currentTarget);
+    });
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Monster ↔ Sprite linking
+// ---------------------------------------------------------------------------
+
+async function _linkMonsterSprite(rdffId, bmpNum) {
+  try {
+    const r = await fetch(`/api/monster-sprite-links?game=${state.game}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rdff_id: rdffId, bmp_num: bmpNum, action: 'link' }),
+    });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const data = await r.json();
+    if (!monsterSpriteLinks) monsterSpriteLinks = {};
+    monsterSpriteLinks[String(rdffId)] = data.links;
+    // Re-render monster detail
+    const entry = (dataCache.monsters || []).find(m => m.rdff_id === rdffId);
+    if (entry) {
+      const lore = _matchMonsterLore(entry.name);
+      _renderMonsterDetail(entry, lore);
+    }
+  } catch (err) {
+    console.error('Failed to link monster sprite:', err);
+  }
+}
+
+async function _unlinkMonsterSprite(rdffId, bmpNum) {
+  try {
+    const r = await fetch(`/api/monster-sprite-links?game=${state.game}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rdff_id: rdffId, bmp_num: bmpNum, action: 'unlink' }),
+    });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const data = await r.json();
+    if (!monsterSpriteLinks) monsterSpriteLinks = {};
+    if (data.links.length > 0) {
+      monsterSpriteLinks[String(rdffId)] = data.links;
+    } else {
+      delete monsterSpriteLinks[String(rdffId)];
+    }
+  } catch (err) {
+    console.error('Failed to unlink monster sprite:', err);
+  }
+}
+
+function _getOrCreateMonsterPicker() {
+  if (_monsterPickerDom) return _monsterPickerDom;
+  const div = document.createElement('div');
+  div.id        = 'monster-sprite-picker';
+  div.className = 'item-spr-picker hidden';
+  div.innerHTML = `
+    <div class="item-spr-picker-hdr">
+      <span id="monster-spr-picker-title" class="item-spr-picker-ttl">Link sprite sheet</span>
+      <button id="monster-spr-picker-close" class="item-spr-picker-close" title="Close">&#10005;</button>
+    </div>
+    <input id="monster-spr-picker-search" type="search" class="item-spr-picker-search" placeholder="Search sprites\u2026" autocomplete="off">
+    <div id="monster-spr-picker-list" class="item-spr-picker-list"></div>`;
+  document.body.appendChild(div);
+  div.querySelector('#monster-spr-picker-close').addEventListener('click', _hideMonsterSpritePicker);
+  document.addEventListener('mousedown', ev => {
+    if (!div.classList.contains('hidden') &&
+        !div.contains(ev.target) &&
+        !ev.target.closest('.mm-link-sprite-btn')) {
+      _hideMonsterSpritePicker();
+    }
+  }, true);
+  div.querySelector('#monster-spr-picker-search').addEventListener('input', ev => {
+    _populateMonsterPickerList(ev.target.value.toLowerCase().trim());
+  });
+  _monsterPickerDom = div;
+  return div;
+}
+
+function _hideMonsterSpritePicker() {
+  if (_monsterPickerDom) _monsterPickerDom.classList.add('hidden');
+}
+
+async function _showMonsterSpritePicker(rdffId, monsterName, triggerEl) {
+  const picker = _getOrCreateMonsterPicker();
+  picker.dataset.rdffId = String(rdffId);
+  picker.querySelector('#monster-spr-picker-title').textContent =
+    monsterName ? `Link sprite for: ${monsterName}` : 'Link sprite sheet';
+  picker.querySelector('#monster-spr-picker-search').value = '';
+
+  // Position near trigger element
+  const rect = triggerEl.getBoundingClientRect();
+  const left = Math.min(rect.right + 6, window.innerWidth - 250);
+  const top  = Math.min(rect.top,       window.innerHeight - 320);
+  picker.style.left = `${Math.max(4, left)}px`;
+  picker.style.top  = `${Math.max(4, top)}px`;
+  picker.classList.remove('hidden');
+
+  const listEl = picker.querySelector('#monster-spr-picker-list');
+  if (!_monsterPickerBmpCache) {
+    listEl.innerHTML = '<div class="item-spr-picker-msg">Loading\u2026</div>';
+    try {
+      const r = await fetch(`/api/bmp-catalog?game=${state.game}`);
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const all = await r.json();
+      // Include all sprites with animation frames (exclude single scenery)
+      _monsterPickerBmpCache = all.filter(e => e.frame_count > 1);
+      if (all.length) _spriteGffName = all[0].gff_name || 'SEGOBJEX.GFF';
+    } catch (err) {
+      listEl.innerHTML = '<div class="item-spr-picker-msg" style="color:#c87f7f">Error loading sprites</div>';
+      return;
+    }
+  }
+  _populateMonsterPickerList('');
+}
+
+function _populateMonsterPickerList(q) {
+  if (!_monsterPickerDom || !_monsterPickerBmpCache) return;
+  const listEl = _monsterPickerDom.querySelector('#monster-spr-picker-list');
+  const rdffId = Number(_monsterPickerDom.dataset.rdffId);
+
+  // Get already linked BMPs + primary to exclude
+  const monster = (dataCache.monsters || []).find(m => m.rdff_id === rdffId);
+  const primaryBmp = monster ? monster.bmp_num : null;
+  const existingLinks = (monsterSpriteLinks && monsterSpriteLinks[String(rdffId)]) || [];
+  const excludeSet = new Set([...(primaryBmp ? [primaryBmp] : []), ...existingLinks]);
+
+  let sprites = _monsterPickerBmpCache.filter(e => !excludeSet.has(e.bmp_num));
+  if (q) {
+    sprites = sprites.filter(e =>
+      (e.name || '').toLowerCase().includes(q) ||
+      String(e.bmp_num).includes(q) ||
+      (e.rdff_names || []).some(n => n.toLowerCase().includes(q)) ||
+      (e.type || '').toLowerCase().includes(q));
+  }
+
+  if (sprites.length === 0) {
+    listEl.innerHTML = '<div class="item-spr-picker-msg dim">No matching sprites found.</div>';
+    return;
+  }
+
+  listEl.innerHTML = '';
+  const frag = document.createDocumentFragment();
+  sprites.slice(0, 100).forEach(spr => {
+    const btn  = document.createElement('button');
+    btn.className  = 'item-spr-picker-item';
+    const name = spr.name || (spr.rdff_names && spr.rdff_names.length ? spr.rdff_names[0] : `BMP #${spr.bmp_num}`);
+    const typeTag = spr.type && spr.type !== 'Unknown' ? `<span class="mm-linked-type-tag">${_esc(spr.type)}</span>` : '';
+    btn.innerHTML = `
+      <img src="/api/gff/${spr.gff_name || _spriteGffName}/image/BMP_/${spr.bmp_num}?frame=0&game=${state.game}&scale=2"
+           alt="" onerror="this.style.display='none'" class="item-spr-picker-img">
+      <span class="item-spr-picker-name">${_esc(name)}</span>
+      ${typeTag}
+      <span class="dim" style="font-size:10px">#${spr.bmp_num} (${spr.frame_count}f)</span>`;
+    btn.addEventListener('click', async () => {
+      await _linkMonsterSprite(rdffId, spr.bmp_num);
+      _hideMonsterSpritePicker();
+    });
+    frag.appendChild(btn);
+  });
+  listEl.appendChild(frag);
 }

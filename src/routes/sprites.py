@@ -593,6 +593,113 @@ def _propagate_pattern(pat: dict) -> int:
 
 
 # ---------------------------------------------------------------------------
+# Monster ↔ Sprite linking
+# ---------------------------------------------------------------------------
+
+_MONSTER_LINK_PATHS: dict[str, str] = {
+    'dark_sun': os.path.join(
+        os.path.dirname(__file__), '..', 'json', 'monster_sprite_links_dark_sun.json'
+    ),
+}
+
+
+def _monster_links_path(game_id: str) -> str | None:
+    return _MONSTER_LINK_PATHS.get(game_id)
+
+
+def _load_monster_links(game_id: str) -> dict[str, list[int]]:
+    """Load monster → BMP links; returns {rdff_id_str: [bmp_num, ...]}."""
+    path = _monster_links_path(game_id)
+    if not path or not os.path.isfile(path):
+        return {}
+    try:
+        with open(path, 'r', encoding='utf-8') as fh:
+            obj = json.load(fh)
+        return obj.get('links', {})
+    except Exception:
+        return {}
+
+
+def _save_monster_links(game_id: str, links: dict[str, list[int]]) -> bool:
+    """Persist the monster → BMP links dict.  Returns True on success."""
+    path = _monster_links_path(game_id)
+    if not path:
+        return False
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    obj = {'version': 1, 'game': game_id, 'links': links}
+    try:
+        with open(path, 'w', encoding='utf-8') as fh:
+            json.dump(obj, fh, indent=2)
+        return True
+    except Exception:
+        return False
+
+
+@bp.route('/api/monster-sprite-links', methods=['GET'])
+def api_monster_sprite_links_get():
+    """Return monster → BMP link mapping for a game.
+
+    Query params:  game (default: dark_sun)
+    Response: { "<rdff_id>": [bmp1, bmp2, ...], "_gff_name": "SEGOBJEX.GFF" }
+    """
+    game_id = request.args.get('game', DEFAULT_GAME)
+    if game_id not in GAMES:
+        abort(404, description=f'Unknown game: {game_id}')
+    links = _load_monster_links(game_id)
+    catalog = _build_catalog(game_id)
+    gff_name = catalog[0]['gff_name'] if catalog else 'SEGOBJEX.GFF'
+    return jsonify({**links, '_gff_name': gff_name})
+
+
+@bp.route('/api/monster-sprite-links', methods=['POST'])
+def api_monster_sprite_links_post():
+    """Add or remove a monster → BMP link.
+
+    Body: { "rdff_id": <int>, "bmp_num": <int>, "action": "link" | "unlink" }
+    """
+    game_id = request.args.get('game', DEFAULT_GAME)
+    if game_id not in GAMES:
+        abort(404, description=f'Unknown game: {game_id}')
+
+    body    = request.get_json(silent=True) or {}
+    rdff_id = body.get('rdff_id')
+    bmp_num = body.get('bmp_num')
+    action  = body.get('action', 'link')
+
+    if rdff_id is None or bmp_num is None:
+        abort(400, description='Missing rdff_id or bmp_num')
+    try:
+        rdff_id = int(rdff_id)
+        bmp_num = int(bmp_num)
+    except (TypeError, ValueError):
+        abort(400, description='rdff_id and bmp_num must be integers')
+
+    links = _load_monster_links(game_id)
+    key   = str(rdff_id)
+
+    if action == 'link':
+        existing = links.get(key, [])
+        if bmp_num not in existing:
+            existing.append(bmp_num)
+        links[key] = existing
+    elif action == 'unlink':
+        existing = links.get(key, [])
+        existing = [b for b in existing if b != bmp_num]
+        if existing:
+            links[key] = existing
+        else:
+            links.pop(key, None)
+    else:
+        abort(400, description=f'Unknown action: {action}')
+
+    ok = _save_monster_links(game_id, links)
+    if not ok:
+        abort(500, description='Failed to write monster sprite links file')
+
+    return jsonify({'ok': True, 'rdff_id': rdff_id, 'links': links.get(key, [])})
+
+
+# ---------------------------------------------------------------------------
 # Legacy endpoint
 # ---------------------------------------------------------------------------
 
