@@ -6,5 +6,6 @@ dark_sun_2
 **/__pycache__/
 soloscuro
 libgff
-src/json
+.DS_Store
+**/.DS_Store
 precomputed/

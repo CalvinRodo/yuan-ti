@@ -1,0 +1,1239 @@
+{
+  "version": 1,
+  "patterns": [
+    {
+      "name": "Melee, Die, Dead",
+      "frame_count": 11,
+      "sections": [
+        {
+          "frames": [
+            0,
+            1,
+            2
+          ],
+          "id": "1",
+          "name": "Attack  Front"
+        },
+        {
+          "frames": [
+            3,
+            4,
+            5
+          ],
+          "id": "2",
+          "name": "Attack Rear"
+        },
+        {
+          "frames": [
+            6,
+            7,
+            8
+          ],
+          "id": "3",
+          "name": "Attack Right"
+        },
+        {
+          "frames": [
+            6,
+            7,
+            8
+          ],
+          "id": "4",
+          "mirrorOf": "3",
+          "mirrored": true,
+          "name": "Attack Right \u21d4"
+        },
+        {
+          "frames": [
+            9
+          ],
+          "id": "5",
+          "name": "Dying"
+        },
+        {
+          "frames": [
+            10
+          ],
+          "id": "6",
+          "name": "Dead"
+        }
+      ],
+      "id": "5"
+    },
+    {
+      "name": "Drum Right 2 frames",
+      "frame_count": 2,
+      "sections": [
+        {
+          "frames": [
+            0,
+            1
+          ],
+          "id": "1",
+          "name": "Drum Right"
+        }
+      ],
+      "id": "7"
+    },
+    {
+      "name": "Drum Back 2 frames",
+      "frame_count": 2,
+      "sections": [
+        {
+          "frames": [
+            0,
+            1
+          ],
+          "id": "1",
+          "name": "Drum Back"
+        }
+      ],
+      "id": "8"
+    },
+    {
+      "name": "Struggle Chain 6 Frames",
+      "frame_count": 6,
+      "sections": [
+        {
+          "frames": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "id": "1",
+          "name": "Struggle Chain"
+        }
+      ],
+      "id": "9"
+    },
+    {
+      "name": "Drum Front",
+      "frame_count": 2,
+      "sections": [
+        {
+          "frames": [
+            0,
+            1
+          ],
+          "id": "1",
+          "name": "Drum Front"
+        }
+      ],
+      "id": "10"
+    },
+    {
+      "name": "Hammer Front",
+      "frame_count": 3,
+      "sections": [
+        {
+          "frames": [
+            0,
+            1,
+            2
+          ],
+          "id": "1",
+          "name": "Hammer Front"
+        }
+      ],
+      "id": "11"
+    },
+    {
+      "name": "Mix Right",
+      "frame_count": 3,
+      "sections": [
+        {
+          "frames": [
+            0,
+            1,
+            2
+          ],
+          "id": "1",
+          "name": "Mix Right"
+        },
+        {
+          "frames": [
+            0,
+            1,
+            2
+          ],
+          "id": "2",
+          "mirrorOf": "1",
+          "mirrored": true,
+          "name": "Mix Right \u21d4"
+        }
+      ],
+      "id": "18"
+    },
+    {
+      "name": "Sand Right",
+      "frame_count": 3,
+      "sections": [
+        {
+          "frames": [
+            0,
+            1,
+            2
+          ],
+          "id": "1",
+          "name": "Sand Right"
+        },
+        {
+          "frames": [
+            0,
+            1,
+            2
+          ],
+          "id": "2",
+          "mirrorOf": "1",
+          "mirrored": true,
+          "name": "Sand Right \u21d4"
+        }
+      ],
+      "id": "19"
+    },
+    {
+      "name": "Sand Front",
+      "frame_count": 3,
+      "sections": [
+        {
+          "frames": [
+            0,
+            1,
+            2
+          ],
+          "id": "1",
+          "name": "Sand Front"
+        }
+      ],
+      "id": "20"
+    },
+    {
+      "name": "Wash Front",
+      "frame_count": 4,
+      "sections": [
+        {
+          "frames": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "id": "1",
+          "name": "Wash Front"
+        }
+      ],
+      "id": "21"
+    },
+    {
+      "name": "Rock Punch",
+      "frame_count": 3,
+      "sections": [
+        {
+          "frames": [
+            0,
+            1,
+            2
+          ],
+          "id": "1",
+          "name": "Rock Punch Front"
+        }
+      ],
+      "id": "22"
+    },
+    {
+      "name": "Mine Right",
+      "frame_count": 5,
+      "sections": [
+        {
+          "frames": [
+            0,
+            1,
+            2,
+            3,
+            4
+          ],
+          "id": "2",
+          "mirrorOf": "1",
+          "mirrored": true,
+          "name": "Mine Right \u21d4"
+        },
+        {
+          "frames": [
+            0,
+            1,
+            2,
+            3,
+            4
+          ],
+          "id": "1",
+          "name": "Mine Right"
+        }
+      ],
+      "id": "23"
+    },
+    {
+      "name": "Climb Back",
+      "frame_count": 8,
+      "sections": [
+        {
+          "frames": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ],
+          "id": "1",
+          "name": "Climb Back"
+        }
+      ],
+      "id": "24"
+    },
+    {
+      "name": "4 Frame Spell Missile",
+      "frame_count": 36,
+      "sections": [
+        {
+          "anchor": "center",
+          "frames": [
+            16,
+            17,
+            18,
+            19
+          ],
+          "id": "1",
+          "mirrorOf": "3",
+          "mirrored": true,
+          "name": "East \u21d4"
+        },
+        {
+          "anchor": "center",
+          "frames": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "id": "2",
+          "name": "North"
+        },
+        {
+          "anchor": "center",
+          "frames": [
+            16,
+            17,
+            18,
+            19
+          ],
+          "id": "3",
+          "name": "East"
+        },
+        {
+          "frames": [
+            32,
+            33,
+            34,
+            35
+          ],
+          "id": "4",
+          "name": "South"
+        },
+        {
+          "frames": [
+            4,
+            5,
+            6,
+            7
+          ],
+          "id": "5",
+          "name": "NNE"
+        },
+        {
+          "anchor": "center",
+          "frames": [
+            4,
+            5,
+            6,
+            7
+          ],
+          "id": "6",
+          "mirrorOf": "5",
+          "mirrored": true,
+          "name": "NNE \u21d4"
+        },
+        {
+          "frames": [
+            8,
+            9,
+            10,
+            11
+          ],
+          "id": "7",
+          "name": "NE"
+        },
+        {
+          "frames": [
+            8,
+            9,
+            10,
+            11
+          ],
+          "id": "8",
+          "mirrorOf": "7",
+          "mirrored": true,
+          "name": "NE \u21d4"
+        },
+        {
+          "anchor": "center",
+          "frames": [
+            12,
+            13,
+            14,
+            15
+          ],
+          "id": "9",
+          "name": "ENE"
+        },
+        {
+          "anchor": "center",
+          "frames": [
+            12,
+            13,
+            14,
+            15
+          ],
+          "id": "10",
+          "mirrorOf": "9",
+          "mirrored": true,
+          "name": "ENE \u21d4"
+        },
+        {
+          "anchor": "center",
+          "frames": [
+            20,
+            21,
+            22,
+            23
+          ],
+          "id": "11",
+          "name": "ESE"
+        },
+        {
+          "anchor": "center",
+          "frames": [
+            20,
+            21,
+            22,
+            23
+          ],
+          "id": "12",
+          "mirrorOf": "11",
+          "mirrored": true,
+          "name": "ESE \u21d4"
+        },
+        {
+          "frames": [
+            24,
+            25,
+            26,
+            27
+          ],
+          "id": "13",
+          "name": "SE"
+        },
+        {
+          "frames": [
+            24,
+            25,
+            26,
+            27
+          ],
+          "id": "14",
+          "mirrorOf": "13",
+          "mirrored": true,
+          "name": "SE \u21d4"
+        },
+        {
+          "anchor": "center",
+          "frames": [
+            28,
+            29,
+            30,
+            31
+          ],
+          "id": "15",
+          "name": "SSE"
+        },
+        {
+          "frames": [
+            28,
+            29,
+            30,
+            31
+          ],
+          "id": "16",
+          "mirrorOf": "15",
+          "mirrored": true,
+          "name": "SSE \u21d4"
+        }
+      ],
+      "id": "25"
+    },
+    {
+      "name": "stand_walk",
+      "frame_count": 15,
+      "sections": [
+        {
+          "frames": [
+            11,
+            12,
+            13,
+            14
+          ],
+          "id": "1",
+          "mirrorOf": "5",
+          "mirrored": true,
+          "name": "Walk Right \u21d4"
+        },
+        {
+          "frames": [
+            1
+          ],
+          "id": "2",
+          "mirrored": false,
+          "name": "Stand Back"
+        },
+        {
+          "desc": "4-frame forward walk loop",
+          "frames": [
+            3,
+            4,
+            5,
+            6
+          ],
+          "id": "3",
+          "mirrored": false,
+          "name": "Walk Front"
+        },
+        {
+          "desc": "4-frame backward walk loop",
+          "frames": [
+            7,
+            8,
+            9,
+            10
+          ],
+          "id": "4",
+          "mirrored": false,
+          "name": "Walk Back"
+        },
+        {
+          "desc": "4-frame rightward walk loop",
+          "frames": [
+            11,
+            12,
+            13,
+            14
+          ],
+          "id": "5",
+          "mirrored": false,
+          "name": "Walk Right"
+        },
+        {
+          "frames": [
+            0
+          ],
+          "id": "6",
+          "name": "Stand Front"
+        },
+        {
+          "frames": [
+            2
+          ],
+          "id": "7",
+          "mirrored": false,
+          "name": "Stand Right"
+        },
+        {
+          "frames": [
+            2
+          ],
+          "id": "8",
+          "mirrorOf": "7",
+          "mirrored": true,
+          "name": "Stand Right \u21d4"
+        }
+      ],
+      "id": "29"
+    },
+    {
+      "name": "attack_ranged_death",
+      "frame_count": 14,
+      "sections": [
+        {
+          "desc": "3-frame melee - front",
+          "frames": [
+            0,
+            1,
+            2
+          ],
+          "id": "1",
+          "mirrored": false,
+          "name": "Attack Front"
+        },
+        {
+          "desc": "3-frame melee - back",
+          "frames": [
+            3,
+            4,
+            5
+          ],
+          "id": "2",
+          "mirrored": false,
+          "name": "Attack Back"
+        },
+        {
+          "desc": "3-frame melee - right",
+          "frames": [
+            6,
+            7,
+            8
+          ],
+          "id": "3",
+          "mirrored": false,
+          "name": "Attack Right"
+        },
+        {
+          "frames": [
+            6,
+            7,
+            8
+          ],
+          "id": "9",
+          "mirrorOf": "3",
+          "mirrored": true,
+          "name": "Attack Left \u21d4"
+        },
+        {
+          "frames": [
+            9
+          ],
+          "id": "4",
+          "name": "Ranged Front"
+        },
+        {
+          "frames": [
+            10
+          ],
+          "id": "5",
+          "name": "Ranged Back"
+        },
+        {
+          "frames": [
+            11
+          ],
+          "id": "6",
+          "name": "Ranged right"
+        },
+        {
+          "frames": [
+            11
+          ],
+          "id": "10",
+          "mirrorOf": "6",
+          "mirrored": true,
+          "name": "Ranged Lef \u21d4"
+        },
+        {
+          "frames": [
+            12
+          ],
+          "id": "7",
+          "name": "Dying"
+        },
+        {
+          "frames": [
+            13
+          ],
+          "id": "8",
+          "name": "Dead"
+        }
+      ],
+      "id": "30"
+    },
+    {
+      "name": "invis_stand_walk_death",
+      "frame_count": 17,
+      "sections": [
+        {
+          "frames": [
+            16
+          ],
+          "id": "1",
+          "name": "Dead"
+        },
+        {
+          "frames": [
+            15
+          ],
+          "id": "2",
+          "name": "Dying"
+        },
+        {
+          "frames": [
+            11,
+            12,
+            13,
+            14
+          ],
+          "id": "3",
+          "name": "Walk Right"
+        },
+        {
+          "frames": [
+            11,
+            12,
+            13,
+            14
+          ],
+          "id": "4",
+          "mirrorOf": "3",
+          "mirrored": true,
+          "name": "Walk Left \u21d4"
+        },
+        {
+          "frames": [
+            7,
+            8,
+            9,
+            10
+          ],
+          "id": "5",
+          "name": "Walk Back"
+        },
+        {
+          "frames": [
+            3,
+            4,
+            5,
+            6
+          ],
+          "id": "6",
+          "name": "Walk Front"
+        },
+        {
+          "frames": [
+            0
+          ],
+          "id": "7",
+          "name": "Stand Front"
+        },
+        {
+          "frames": [
+            1
+          ],
+          "id": "8",
+          "name": "Stand Back"
+        },
+        {
+          "frames": [
+            2
+          ],
+          "id": "9",
+          "name": "Stand Right"
+        },
+        {
+          "frames": [
+            2
+          ],
+          "id": "10",
+          "mirrorOf": "9",
+          "mirrored": true,
+          "name": "Stand Left \u21d4"
+        }
+      ],
+      "id": "31"
+    },
+    {
+      "name": "invis_attack_ranged",
+      "frame_count": 12,
+      "sections": [
+        {
+          "desc": "3-frame weapon - front",
+          "frames": [
+            0,
+            1,
+            2
+          ],
+          "id": "1",
+          "mirrored": false,
+          "name": "Attack Front"
+        },
+        {
+          "desc": "3-frame weapon - back",
+          "frames": [
+            3,
+            4,
+            5
+          ],
+          "id": "2",
+          "mirrored": false,
+          "name": "Attack Back"
+        },
+        {
+          "desc": "3-frame weapon - right",
+          "frames": [
+            6,
+            7,
+            8
+          ],
+          "id": "3",
+          "mirrored": false,
+          "name": "Attack Right"
+        },
+        {
+          "frames": [
+            6,
+            7,
+            8
+          ],
+          "id": "4",
+          "mirrorOf": "3",
+          "mirrored": true,
+          "name": "Attack Left \u21d4"
+        },
+        {
+          "frames": [
+            9
+          ],
+          "id": "5",
+          "name": "Ranged Front"
+        },
+        {
+          "frames": [
+            10
+          ],
+          "id": "6",
+          "name": "Ranged Back"
+        },
+        {
+          "frames": [
+            11
+          ],
+          "id": "7",
+          "name": "Ranged Right"
+        },
+        {
+          "frames": [
+            11
+          ],
+          "id": "8",
+          "mirrorOf": "7",
+          "mirrored": true,
+          "name": "Ranged Left \u21d4"
+        }
+      ],
+      "id": "32"
+    },
+    {
+      "name": "3_attack",
+      "frame_count": 9,
+      "sections": [
+        {
+          "desc": "3-frame melee - front",
+          "frames": [
+            0,
+            1,
+            2
+          ],
+          "id": "1",
+          "mirrored": false,
+          "name": "Attack Front"
+        },
+        {
+          "desc": "3-frame melee - back",
+          "frames": [
+            3,
+            4,
+            5
+          ],
+          "id": "2",
+          "mirrored": false,
+          "name": "Attack Back"
+        },
+        {
+          "desc": "3-frame melee - right",
+          "frames": [
+            6,
+            7,
+            8
+          ],
+          "id": "3",
+          "mirrored": false,
+          "name": "Attack Right"
+        },
+        {
+          "frames": [
+            6,
+            7,
+            8
+          ],
+          "id": "4",
+          "mirrorOf": "3",
+          "mirrored": true,
+          "name": "Attack Right \u21d4"
+        }
+      ],
+      "id": "1"
+    },
+    {
+      "name": "stand_walk_emerge",
+      "frame_count": 19,
+      "sections": [
+        {
+          "frames": [
+            0
+          ],
+          "id": "1",
+          "name": "Stand Front"
+        },
+        {
+          "frames": [
+            1
+          ],
+          "id": "2",
+          "name": "Stand Back"
+        },
+        {
+          "frames": [
+            2
+          ],
+          "id": "3",
+          "name": "Stand Right"
+        },
+        {
+          "frames": [
+            2
+          ],
+          "id": "9",
+          "mirrorOf": "3",
+          "mirrored": true,
+          "name": "Stand Right \u21d4"
+        },
+        {
+          "frames": [
+            3,
+            4,
+            5,
+            6
+          ],
+          "id": "4",
+          "name": "Walk Front"
+        },
+        {
+          "frames": [
+            7,
+            8,
+            9,
+            10
+          ],
+          "id": "5",
+          "name": "Walk Back"
+        },
+        {
+          "frames": [
+            11,
+            12,
+            13,
+            14
+          ],
+          "id": "6",
+          "name": "Walk Right"
+        },
+        {
+          "frames": [
+            11,
+            12,
+            13,
+            14
+          ],
+          "id": "8",
+          "mirrorOf": "6",
+          "mirrored": true,
+          "name": "Walk Right \u21d4"
+        },
+        {
+          "frames": [
+            15,
+            16,
+            17,
+            18
+          ],
+          "id": "7",
+          "name": "Emerge"
+        }
+      ],
+      "id": "2"
+    },
+    {
+      "name": "5_uni_walk",
+      "frame_count": 5,
+      "sections": [
+        {
+          "frames": [
+            0,
+            1,
+            2,
+            3,
+            4
+          ],
+          "id": "1",
+          "name": "Walk"
+        }
+      ],
+      "id": "6"
+    },
+    {
+      "name": "3_uni_attack",
+      "frame_count": 3,
+      "sections": [
+        {
+          "frames": [
+            0,
+            1,
+            2
+          ],
+          "id": "1",
+          "name": "Attack"
+        }
+      ],
+      "id": "13"
+    },
+    {
+      "name": "4_uni_walk",
+      "frame_count": 4,
+      "sections": [
+        {
+          "frames": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "id": "1",
+          "name": "Walk"
+        }
+      ],
+      "id": "3"
+    },
+    {
+      "name": "4_uni_attack",
+      "frame_count": 4,
+      "sections": [
+        {
+          "frames": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "id": "1",
+          "name": "Attack"
+        }
+      ],
+      "id": "4"
+    },
+    {
+      "name": "walk_attack",
+      "frame_count": 24,
+      "sections": [
+        {
+          "anchor": "bottom-center",
+          "desc": "4-frame melee - front",
+          "frames": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "id": "1",
+          "mirrored": false,
+          "name": "Attack Front"
+        },
+        {
+          "anchor": "center",
+          "desc": "4-frame melee - back",
+          "frames": [
+            4,
+            5,
+            6,
+            7
+          ],
+          "id": "2",
+          "mirrored": false,
+          "name": "Attack Back"
+        },
+        {
+          "desc": "4-frame melee - right",
+          "frames": [
+            8,
+            9,
+            10,
+            11
+          ],
+          "id": "3",
+          "mirrored": false,
+          "name": "Attack Right"
+        },
+        {
+          "frames": [
+            8,
+            9,
+            10,
+            11
+          ],
+          "id": "7",
+          "mirrorOf": "3",
+          "mirrored": true,
+          "name": "Attack Left \u21d4"
+        },
+        {
+          "desc": "4-frame walk loop - front",
+          "frames": [
+            12,
+            13,
+            14,
+            15
+          ],
+          "id": "4",
+          "mirrored": false,
+          "name": "Walk Front"
+        },
+        {
+          "desc": "4-frame walk loop - back",
+          "frames": [
+            16,
+            17,
+            18,
+            19
+          ],
+          "id": "5",
+          "mirrored": false,
+          "name": "Walk Back"
+        },
+        {
+          "desc": "4-frame walk loop - right",
+          "frames": [
+            20,
+            21,
+            22,
+            23
+          ],
+          "id": "6",
+          "mirrored": false,
+          "name": "Walk Right"
+        },
+        {
+          "frames": [
+            20,
+            21,
+            22,
+            23
+          ],
+          "id": "8",
+          "mirrorOf": "6",
+          "mirrored": true,
+          "name": "Walk Left \u21d4"
+        }
+      ],
+      "id": "14"
+    },
+    {
+      "name": "attack_ranged",
+      "frame_count": 12,
+      "sections": [
+        {
+          "desc": "3-frame weapon - front",
+          "frames": [
+            0,
+            1,
+            2
+          ],
+          "id": "1",
+          "mirrored": false,
+          "name": "Attack Front"
+        },
+        {
+          "desc": "3-frame weapon - back",
+          "frames": [
+            3,
+            4,
+            5
+          ],
+          "id": "2",
+          "mirrored": false,
+          "name": "Attack Back"
+        },
+        {
+          "desc": "3-frame weapon - right",
+          "frames": [
+            6,
+            7,
+            8
+          ],
+          "id": "3",
+          "mirrored": false,
+          "name": "Attack Right"
+        },
+        {
+          "frames": [
+            6,
+            7,
+            8
+          ],
+          "id": "4",
+          "mirrorOf": "3",
+          "mirrored": true,
+          "name": "Attack Left \u21d4"
+        },
+        {
+          "frames": [
+            9
+          ],
+          "id": "5",
+          "name": "Ranged Front"
+        },
+        {
+          "frames": [
+            10
+          ],
+          "id": "6",
+          "name": "Ranged Back"
+        },
+        {
+          "frames": [
+            11
+          ],
+          "id": "7",
+          "name": "Ranged Right"
+        },
+        {
+          "frames": [
+            11
+          ],
+          "id": "8",
+          "mirrorOf": "7",
+          "mirrored": true,
+          "name": "Ranged Left \u21d4"
+        }
+      ],
+      "id": "12"
+    }
+  ]
+}

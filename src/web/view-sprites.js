@@ -27,6 +27,7 @@ let saveStatus      = 'saved'; // 'saved' | 'saving' | 'unsaved'
 let linkObserver    = null;   // IntersectionObserver for list thumb lazy load
 let _itemsCache     = null;   // items data from /api/items (lazy loaded)
 let _pendingSelectBmp = null; // set externally to auto-select a BMP after catalog loads
+let _pendingSelectGroup = null; // set externally to pre-select a group key after preview renders
 let spriteGffName   = 'SEGOBJEX.GFF'; // actual GFF file for this game's sprites
 
 let _selMode        = false;      // frame-selection mode active
@@ -40,7 +41,25 @@ let _canonicalMap   = {};         // bmpNum -> canonical (primary) bmpNum for it
 let _patternsCache   = null;      // array of saved patterns (loaded lazily)
 let _patternPanelBmp = null;      // bmpNum whose pattern panel is currently open
 let _animAnchors     = new Map(); // anim-key → anchor string for non-custom sections (ephemeral)
+let _selectedGroupRef = null;     // key string of the currently displayed group in middle pane
 const _imgCache      = new Map(); // url → Promise<HTMLImageElement> (persists across renders)
+
+// Preview pane state
+let _previewBmpNum     = -1;      // bmpNum currently shown in preview
+let _previewAnimTimers = {};      // key → {timer, canvas} for anim-list animations
+let _previewSpeed      = 150;     // ms per frame for preview animations
+let _previewZoomScale  = 1;       // display scale for zoom canvas (1/2/3/4/6)
+let _previewZoomTimer  = null;    // setInterval handle for zoom animation
+let _previewZoomGen    = 0;       // incremented on every _startZoomAnim call to cancel stale async calls
+
+// PC preview state
+let _pcState = 'stand';  // 'stand'|'walk'|'attack'|'ranged'|'dying'|'dead'
+let _pcDir   = 'front';  // 'front'|'back'|'right'|'left'
+let _pcInvis = false;    // invisible toggle
+
+// Monster preview state
+let _monState    = null;  // null = auto (first directional or first uni)
+let _monDir      = 'front'; // 'front'|'back'|'right'|'left'
 
 const SPRITE_TYPES  = ['PC', 'NPC', 'Monster', 'Scenery', 'Effect', 'Spell', 'Item', 'Unknown'];
 const ALL_TABS      = ['PC', 'NPC', 'Monster', 'Scenery', 'Effect', 'Spell', 'Item', 'Unknown', 'All'];
@@ -60,6 +79,8 @@ function renderSpritesView() {
   const view = document.getElementById('sprite-view');
   if (!view) return;
   view.classList.remove('hidden');
+  const contentEl = document.getElementById('content');
+  if (contentEl) contentEl.classList.add('sprites-active');
 
   if (!spritesBuilt) {
     _buildSpritesDOM(view);
@@ -74,6 +95,8 @@ function renderSpritesView() {
 }
 
 function teardownSpritesView() {
+  const contentEl = document.getElementById('content');
+  if (contentEl) contentEl.classList.remove('sprites-active');
   _stopAllAnims();
   if (linkObserver) { linkObserver.disconnect(); linkObserver = null; }
   spriteCatalog  = null;
@@ -93,6 +116,20 @@ function teardownSpritesView() {
   _patternsCache   = null;
   _patternPanelBmp = null;
   _animAnchors     = new Map();
+  _selectedGroupRef = null;
+  _pendingSelectGroup = null;
+  _stopAllPreviewAnims();
+  _previewBmpNum    = -1;
+  _previewAnimTimers = {};
+  _previewSpeed      = 150;
+  _previewZoomScale  = 1;
+  _previewZoomTimer  = null;
+  _previewZoomGen    = 0;
+  _pcState = 'stand';
+  _pcDir   = 'front';
+  _pcInvis = false;
+  _monState = null;
+  _monDir   = 'front';
   _bulkMode        = false;
   _bulkSelected.clear();
   // Reset pattern filter button back to neutral state
@@ -133,6 +170,10 @@ function _buildSpritesDOM(view) {
     </div>
     <div id="spr-bulk-bar" class="hidden">
       <span id="spr-bulk-count">0 selected</span>
+      <select id="spr-bulk-type-sel" class="spr-input spr-bulk-type-sel" disabled>
+        <option value="">Set type…</option>
+      </select>
+      <button id="spr-bulk-type-btn" class="spr-btn spr-btn-primary spr-btn-sm" disabled>Apply Type</button>
       <button id="spr-bulk-apply-btn" class="spr-btn spr-btn-primary spr-btn-sm" disabled>Apply Pattern…</button>
       <button id="spr-bulk-clear-btn" class="spr-btn spr-btn-sm">Clear</button>
     </div>
@@ -148,6 +189,47 @@ function _buildSpritesDOM(view) {
       <p>Select a sprite from the list</p>
     </div>
     <div id="spr-detail-content" class="hidden"></div>
+  </div>
+
+  <div id="spr-preview-col">
+    <div id="spr-preview-empty" class="spr-detail-placeholder">
+      <span class="spr-ph-icon">&#128065;</span>
+      <p>Preview</p>
+    </div>
+    <div id="spr-preview-content" class="hidden">
+      <div id="spr-preview-zoom">
+        <div id="spr-preview-zoom-hdr">
+          <span id="spr-preview-zoom-title" class="spr-preview-title">Preview</span>
+          <span id="spr-preview-zoom-info" class="dim"></span>
+          <div id="spr-preview-speed-ctl">
+            <label class="dim" style="font-size:10px">Speed</label>
+            <input id="spr-preview-speed" type="range" min="50" max="500" step="10" value="150">
+          </div>
+        </div>
+        <div id="spr-preview-group-picker"></div>
+        <div id="spr-preview-dpad-north" class="spr-preview-dpad-north hidden">
+          <button class="spr-btn spr-btn-sm pc-dir-btn" data-dir="back">&#9650; Back</button>
+        </div>
+        <div id="spr-preview-dpad-mid" class="spr-preview-dpad-mid">
+          <button class="spr-btn spr-btn-sm pc-dir-btn hidden" id="spr-dpad-west" data-dir="left">&#9664; Left</button>
+          <div id="spr-preview-zoom-stage">
+            <canvas id="spr-preview-zoom-canvas"></canvas>
+          </div>
+          <button class="spr-btn spr-btn-sm pc-dir-btn hidden" id="spr-dpad-east" data-dir="right">Right &#9654;</button>
+        </div>
+        <div id="spr-preview-dpad-south" class="spr-preview-dpad-south hidden">
+          <button class="spr-btn spr-btn-sm pc-dir-btn" data-dir="front">&#9660; Front</button>
+        </div>
+        <div id="spr-preview-zoom-scale-bar">
+          <span class="dim" style="font-size:10px;margin-right:2px">Scale</span>
+          <button class="spr-btn spr-btn-sm spr-zoom-scale-btn active" data-scale="1">1&times;</button>
+          <button class="spr-btn spr-btn-sm spr-zoom-scale-btn" data-scale="2">2&times;</button>
+          <button class="spr-btn spr-btn-sm spr-zoom-scale-btn" data-scale="3">3&times;</button>
+          <button class="spr-btn spr-btn-sm spr-zoom-scale-btn" data-scale="4">4&times;</button>
+          <button class="spr-btn spr-btn-sm spr-zoom-scale-btn" data-scale="6">6&times;</button>
+        </div>
+      </div>
+    </div>
   </div>
 </div>`;
 
@@ -176,12 +258,25 @@ function _buildSpritesDOM(view) {
     view.querySelectorAll('#spr-anim-filter .spr-anim-btn:not(#spr-pattern-filter-btn)')
       .forEach(b => b.classList.toggle('active', b === btn));
     _applyFilter();
+    if (typeof pushUrlState === 'function') pushUrlState();
   });
 
   // Bulk-select mode toggle
   view.querySelector('#spr-select-btn').addEventListener('click', () => _toggleBulkMode(!_bulkMode));
 
   // Bulk bar actions
+  // Populate bulk type selector
+  const bulkTypeSel = view.querySelector('#spr-bulk-type-sel');
+  SPRITE_TYPES.forEach(t => {
+    const opt = document.createElement('option');
+    opt.value = t; opt.textContent = t;
+    bulkTypeSel.appendChild(opt);
+  });
+  bulkTypeSel.addEventListener('change', () => {
+    const typeBtn = view.querySelector('#spr-bulk-type-btn');
+    if (typeBtn) typeBtn.disabled = !bulkTypeSel.value || _bulkSelected.size === 0;
+  });
+  view.querySelector('#spr-bulk-type-btn').addEventListener('click', _applyBulkType);
   view.querySelector('#spr-bulk-apply-btn').addEventListener('click', _openBulkApplyPanel);
   view.querySelector('#spr-bulk-clear-btn').addEventListener('click', () => {
     _bulkSelected.clear();
@@ -193,6 +288,43 @@ function _buildSpritesDOM(view) {
   // Tab buttons (built after data loads, populated in _updateTabs)
   // Save button
   view.querySelector('#spr-save-btn').addEventListener('click', _flushSave);
+
+  // Preview pane: scale buttons
+  view.querySelector('#spr-preview-zoom-scale-bar').addEventListener('click', ev => {
+    const btn = ev.target.closest('.spr-zoom-scale-btn');
+    if (!btn) return;
+    _previewZoomScale = Number(btn.dataset.scale);
+    view.querySelectorAll('.spr-zoom-scale-btn').forEach(b =>
+      b.classList.toggle('active', b === btn)
+    );
+    _resizeZoomCanvas();
+  });
+
+  // Preview pane: speed slider
+  view.querySelector('#spr-preview-speed').addEventListener('input', ev => {
+    _previewSpeed = Number(ev.target.value);
+    // Restart all running preview animations with new speed
+    _restartAllPreviewAnims();
+  });
+
+  // PC / Monster d-pad direction buttons (event delegation across all four dpad zones)
+  ['spr-preview-dpad-north', 'spr-preview-dpad-mid', 'spr-preview-dpad-south'].forEach(id => {
+    view.querySelector(`#${id}`)?.addEventListener('click', ev => {
+      const btn = ev.target.closest('.pc-dir-btn[data-dir]');
+      if (!btn) return;
+      const e = _previewBmpNum >= 0 ? spritesByBmp[_previewBmpNum] : null;
+      if (!e) return;
+      if (_isPCEntry(e)) {
+        _pcDir = btn.dataset.dir;
+        _refreshPCDpadButtons();
+        _updatePCPreview(_getPCSheets(e));
+      } else if (_isMonsterEntry(e)) {
+        _monDir = btn.dataset.dir;
+        _refreshMonsterDpadButtons(true);
+        _updateMonsterPreview(_classifyMonsterSections(e));
+      }
+    });
+  });
 
   // Event delegation for list clicks
   view.querySelector('#spr-list').addEventListener('click', e => {
@@ -283,6 +415,7 @@ function _buildTabs() {
         b.classList.toggle('active', b === btn)
       );
       _applyFilter();
+      if (typeof pushUrlState === 'function') pushUrlState();
     });
     container.appendChild(btn);
   });
@@ -324,6 +457,79 @@ function _buildCanonicalMap() {
       }
     });
   });
+}
+
+/**
+ * Build a flat ordered list of groups for entry e (and its linked sheets).
+ * Each item: { key, label, entry, sec, frames, anchor, mirrored, isSingle }
+ *   key      — unique string used as <option value>
+ *   label    — human-readable dropdown label
+ *   entry    — the sheet entry the group belongs to
+ *   sec      — the custom_sections object (or null for plain/ungrouped strips)
+ *   secIdx   — original index inside entry.custom_sections (or null)
+ *   frames   — frame indices array
+ *   anchor   — anchor string (default 'bottom-center')
+ *   mirrored — bool
+ *   isSingle — true when only 1 frame
+ */
+function _collectGroups(primaryEntry) {
+  const groups = [];
+
+  const addSheet = (entry, keySuffix) => {
+    const useCustom = !!(entry.custom_sections && entry.custom_sections.length);
+    const sections  = useCustom ? entry.custom_sections : [];
+    const keyPfx    = `${entry.bmp_num}${keySuffix}`;
+    const sheetLbl  = (entry.bmp_num === primaryEntry.bmp_num)
+      ? `BMP #${entry.bmp_num}` : `BMP #${entry.bmp_num}`;
+
+    if (sections.length === 0) {
+      // Plain strip — all frames
+      const frames = Array.from({ length: entry.frame_count }, (_, i) => i);
+      groups.push({
+        key:      `${keyPfx}_plain`,
+        label:    `${sheetLbl} — All frames (${entry.frame_count})`,
+        entry, sec: null, secIdx: null,
+        frames, anchor: entry.plain_anchor || 'bottom-center',
+        mirrored: false, isSingle: entry.frame_count === 1,
+      });
+    } else {
+      // Ungrouped orphans
+      const usedFrames = new Set(sections.flatMap(s => s.frames || []));
+      const orphans    = Array.from({ length: entry.frame_count }, (_, i) => i)
+                               .filter(i => !usedFrames.has(i));
+      if (orphans.length) {
+        groups.push({
+          key:      `${keyPfx}_ungrouped`,
+          label:    `${sheetLbl} — Ungrouped (${orphans.length})`,
+          entry, sec: null, secIdx: null,
+          frames: orphans, anchor: 'bottom-center',
+          mirrored: false, isSingle: orphans.length === 1,
+        });
+      }
+      // Named sections
+      _sortedSections(sections).forEach(sec => {
+        const origIdx = entry.custom_sections.indexOf(sec);
+        const secName = sec.name || `Group ${origIdx + 1}`;
+        groups.push({
+          key:      `${keyPfx}_${origIdx}`,
+          label:    `${sheetLbl} — ${secName} (${sec.frames.length}f)`,
+          entry, sec, secIdx: origIdx,
+          frames: sec.frames,
+          anchor: sec.anchor || 'bottom-center',
+          mirrored: !!sec.mirrored, isSingle: sec.frames.length === 1,
+        });
+      });
+    }
+  };
+
+  addSheet(primaryEntry, '');
+  if (primaryEntry.type !== 'Item') {
+    (primaryEntry.linked_bmps || []).forEach(n => {
+      const le = spritesByBmp[n];
+      if (le) addSheet(le, `_ls${le.bmp_num}`);
+    });
+  }
+  return groups;
 }
 
 function _applyFilter() {
@@ -503,9 +709,10 @@ function _selectEntry(bmpNum) {
   _highlightListItem(canonical);
   pushUrlState();
   const e = spritesByBmp[canonical];
-  if (!e) { _showEmptyDetail(true); return; }
+  if (!e) { _showEmptyDetail(true); _showEmptyPreview(true); return; }
   _showEmptyDetail(false);
   _renderDetail(e);
+  _renderPreview(e);
 }
 
 function _highlightListItem(bmpNum) {
@@ -521,6 +728,12 @@ function _highlightListItem(bmpNum) {
 function _showEmptyDetail(on) {
   document.getElementById('spr-detail-empty')?.classList.toggle('hidden', !on);
   document.getElementById('spr-detail-content')?.classList.toggle('hidden', on);
+}
+
+function _showEmptyPreview(on) {
+  document.getElementById('spr-preview-empty')?.classList.toggle('hidden', !on);
+  document.getElementById('spr-preview-content')?.classList.toggle('hidden', on);
+  if (on) _stopAllPreviewAnims();
 }
 
 function _renderDetail(e) {
@@ -725,9 +938,10 @@ function _renderFrames(e) {
     _editingSecIdx = null;
     _editingEntry  = null;
     _patternPanelBmp = null;
+    _selectedGroupRef = null;
   }
 
-  // Build one combined block: primary + all linked sheets folded in
+  // --- Build the full sheet block (all groups always visible) ---
   const block = _renderSheetBlock(e, '', true, e);
 
   // Append linked sheets inline into the same block (not for Items)
@@ -744,10 +958,43 @@ function _renderFrames(e) {
   _renderSelToolbar(area, e);
 }
 
+/** Hide all section elements except the one matching selectedKey. */
+function _applyGroupFilter(block, selectedKey, groups) {
+  if (!selectedKey || !groups.length) return;
+
+  // Show/hide .spr-sec elements — they carry data-sec-key set in _renderSectionEl/_appendPlainStrip
+  block.querySelectorAll('[data-sec-key]').forEach(el => {
+    el.classList.toggle('hidden', el.dataset.secKey !== selectedKey);
+  });
+
+  // Show/hide linked-sheet sub-headers: only show if the selected group belongs to that sheet
+  const selectedGroup = groups.find(g => g.key === selectedKey);
+  block.querySelectorAll('.spr-linked-inline-hdr[data-bmp-hdr]').forEach(hdr => {
+    const hdrBmp = Number(hdr.dataset.bmpHdr);
+    const show = selectedGroup && selectedGroup.entry.bmp_num === hdrBmp;
+    hdr.classList.toggle('hidden', !show);
+  });
+  // Similarly show/hide the linked-sheet's pattern panel
+  block.querySelectorAll('.spr-pattern-panel[data-bmp-pp]').forEach(pp => {
+    const ppBmp = Number(pp.dataset.bmpPp);
+    const show = selectedGroup && selectedGroup.entry.bmp_num === ppBmp;
+    if (!show) pp.classList.add('hidden');
+  });
+
+  // Hide the primary sheet header if the selected group belongs to a linked sheet
+  const primaryHdr = block.querySelector('.spr-sheet-primary > .spr-sheet-block-hdr');
+  if (primaryHdr && selectedGroup && selectedGroup.entry.bmp_num !== (groups[0]?.entry.bmp_num)) {
+    primaryHdr.classList.add('hidden');
+  } else if (primaryHdr) {
+    primaryHdr.classList.remove('hidden');
+  }
+}
+
 function _appendLinkedSections(block, linkedEntry, primaryEntry) {
   // Inline divider that acts as the linked-sheet sub-header
   const divider = document.createElement('div');
   divider.className = 'spr-linked-inline-hdr';
+  divider.dataset.bmpHdr = String(linkedEntry.bmp_num);  // for _applyGroupFilter
 
   const bmpLbl = document.createElement('span');
   bmpLbl.className = 'spr-sheet-bmp-lbl';
@@ -787,8 +1034,9 @@ function _appendLinkedSections(block, linkedEntry, primaryEntry) {
 
   // Pattern buttons for linked sheet
   const lnkPatPanel = document.createElement('div');
-  lnkPatPanel.className = 'spr-pattern-panel hidden';
-  lnkPatPanel.id        = `spr-pp-${linkedEntry.bmp_num}`;
+  lnkPatPanel.className    = 'spr-pattern-panel hidden';
+  lnkPatPanel.id           = `spr-pp-${linkedEntry.bmp_num}`;
+  lnkPatPanel.dataset.bmpPp = String(linkedEntry.bmp_num);  // for _applyGroupFilter
 
   const lnkSavePatBtn = document.createElement('button');
   lnkSavePatBtn.className = 'spr-btn spr-btn-sm spr-pattern-save-btn';
@@ -994,6 +1242,7 @@ function _appendOrphanStrip(container, entry, keyPrefix, isPrimary, sections) {
 
   const sec = document.createElement('div');
   sec.className = 'spr-sec spr-sec-ungrouped';
+  sec.dataset.secKey = key;   // for _applyGroupFilter
 
   const hdr = document.createElement('div');
   hdr.className = 'spr-sec-hdr';
@@ -1016,55 +1265,45 @@ function _appendOrphanStrip(container, entry, keyPrefix, isPrimary, sections) {
 }
 
 function _appendPlainStrip(container, entry, keyPrefix, isPrimary) {
-  const key     = `${keyPrefix}_plain`;
+  const key = `${keyPrefix}_plain`;
+
+  // Wrapper with sec-key tag so _applyGroupFilter can show/hide it
+  const wrap = document.createElement('div');
+  wrap.dataset.secKey = key;
+
   const titleDiv = document.createElement('div');
   titleDiv.className = 'spr-section-title';
   const titleTxt = document.createElement('span');
   titleTxt.textContent = `Frames (${entry.frame_count})`;
   titleDiv.appendChild(titleTxt);
+  wrap.appendChild(titleDiv);
 
+  // Anchor picker — in a collapsible row below the title, toggled by a button
   if (entry.frame_count > 1) {
-    const frames  = Array.from({ length: entry.frame_count }, (_, i) => i);
-    const playBtn = document.createElement('button');
-    playBtn.className = 'spr-play-btn';
-    playBtn.id        = `spr-play-${key}`;
-    playBtn.innerHTML = '&#9654;';
-    playBtn.title     = 'Animate';
-    playBtn.addEventListener('click', () => {
-      const anchor = entry.plain_anchor || 'bottom-center';
-      _toggleAnim(key, entry.bmp_num, frames, playBtn, anchor, false);
-    });
-    titleDiv.appendChild(playBtn);
+    const anchorToggle = document.createElement('button');
+    anchorToggle.className = 'spr-btn spr-btn-sm spr-anchor-toggle-btn';
+    anchorToggle.innerHTML = '&#x2316;'; // ⌖
+    anchorToggle.title = 'Set animation anchor';
+    titleDiv.appendChild(anchorToggle);
 
-    // Pin-edit toggle button
-    const pinBtn = document.createElement('button');
-    pinBtn.className = 'spr-play-btn spr-pin-edit-btn';
-    pinBtn.innerHTML = '&#8982;';  // ⌖ position indicator
-    pinBtn.title     = 'Set animation pin point';
-    titleDiv.appendChild(pinBtn);
-
-    // Anchor picker — hidden until toggled
-    const picker = _buildAnchorPicker(
+    const anchorRow = document.createElement('div');
+    anchorRow.className = 'spr-anchor-row hidden';
+    anchorRow.appendChild(_buildAnchorPicker(
       entry.plain_anchor || 'bottom-center',
       (newAnchor) => {
         entry.plain_anchor = newAnchor;
         _saveCustomSections(entry);
-        if (animTimers[key]) {
-          const { btn } = animTimers[key];
-          _stopAnim(key);
-          _startAnim(key, entry.bmp_num, frames, btn, newAnchor, false);
-        }
+        _refreshPreviewGroup(key);
       }
-    );
-    picker.classList.add('hidden');
-    titleDiv.appendChild(picker);
+    ));
+    wrap.appendChild(anchorRow);
 
-    pinBtn.addEventListener('click', () => {
-      const nowVisible = picker.classList.toggle('hidden') === false;
-      pinBtn.classList.toggle('active', nowVisible);
+    anchorToggle.addEventListener('click', () => {
+      const nowHidden = !anchorRow.classList.contains('hidden');
+      anchorRow.classList.toggle('hidden', nowHidden);
+      anchorToggle.classList.toggle('active', !nowHidden);
     });
   }
-  container.appendChild(titleDiv);
 
   const row = document.createElement('div');
   row.className = 'spr-frame-row';
@@ -1072,18 +1311,9 @@ function _appendPlainStrip(container, entry, keyPrefix, isPrimary) {
   for (let i = 0; i < entry.frame_count; i++) {
     row.appendChild(_makeFrameCell(entry.bmp_num, i, key, false, isPrimary));
   }
-  container.appendChild(row);
+  wrap.appendChild(row);
 
-  if (entry.frame_count > 1) {
-    const preview = document.createElement('div');
-    preview.className = 'spr-anim-wrap hidden';
-    preview.id        = `spr-anim-${key}`;
-    const canvas = document.createElement('canvas');
-    canvas.className = 'spr-anim-canvas';
-    canvas.id        = `spr-anim-canvas-${key}`;
-    preview.appendChild(canvas);
-    container.appendChild(preview);
-  }
+  container.appendChild(wrap);
 }
 
 // Sort a sections array by the first frame index (display order only — does not mutate)
@@ -1112,47 +1342,20 @@ function _renderSectionEl(entry, sec, secIdx, keyPrefix, isCustom, primaryEntry)
     isEditing ? 'spr-sec-editing' : '',
   ].filter(Boolean).join(' ');
   secEl.dataset.secIdx = secIdx;
+  secEl.dataset.secKey = key;   // used by _applyGroupFilter
 
   const isMirrored = !!sec.mirrored;
 
-  // --- Frame row (play button lives here, next to the frames) ---
-  // Frames are always selectable — _makeFrameCell itself guards with _selMode && _selBmpNum===bmpNum
+  // --- Frame row ---
   const row = document.createElement('div');
   row.className = 'spr-frame-row';
   row.id        = `spr-row-${key}`;
   sec.frames.forEach(fi =>
     row.appendChild(_makeFrameCell(entry.bmp_num, fi, key, isMirrored, true))
   );
-
-  // Play button — inline, right after the last frame cell (multi-frame only)
-  if (!isSingle) {
-    const playBtn = document.createElement('button');
-    playBtn.className = 'spr-play-btn spr-play-inline';
-    playBtn.id        = `spr-play-${key}`;
-    playBtn.innerHTML = '&#9654;';
-    playBtn.title     = 'Animate';
-    playBtn.addEventListener('click', () => {
-      const anchor = isCustom ? (sec.anchor || 'bottom-center') : (_animAnchors.get(key) || 'bottom-center');
-      _toggleAnim(key, entry.bmp_num, sec.frames, playBtn, anchor, isMirrored);
-    });
-    row.appendChild(playBtn);
-  }
-
   secEl.appendChild(row);
 
-  // --- Animation preview canvas (multi-frame only) ---
-  if (!isSingle) {
-    const preview = document.createElement('div');
-    preview.className = 'spr-anim-wrap hidden';
-    preview.id        = `spr-anim-${key}`;
-    const canvas = document.createElement('canvas');
-    canvas.className = 'spr-anim-canvas';
-    canvas.id        = `spr-anim-canvas-${key}`;
-    preview.appendChild(canvas);
-    secEl.appendChild(preview);
-  }
-
-  // --- Footer: name → edit → (mirror + delete in edit mode only) ---
+  // --- Footer: name → anchor picker → edit → (mirror + delete in edit mode only) ---
   const footer = document.createElement('div');
   footer.className = 'spr-sec-footer';
 
@@ -1166,7 +1369,13 @@ function _renderSectionEl(entry, sec, secIdx, keyPrefix, isCustom, primaryEntry)
     let nTimer;
     nameInp.addEventListener('input', () => {
       clearTimeout(nTimer);
-      nTimer = setTimeout(() => { sec.name = nameInp.value; _saveCustomSections(entry); }, 400);
+      nTimer = setTimeout(() => {
+        sec.name = nameInp.value;
+        _saveCustomSections(entry);
+        // Refresh group picker label
+        const opt = document.querySelector(`#spr-group-picker-sel option[value="${key}"]`);
+        if (opt) opt.textContent = `${_sheetBmpLabel(entry, primaryEntry)} — ${sec.name || 'Group ' + (secIdx + 1)} (${sec.frames.length}f)`;
+      }, 400);
     });
     footer.appendChild(nameInp);
   } else {
@@ -1182,7 +1391,7 @@ function _renderSectionEl(entry, sec, secIdx, keyPrefix, isCustom, primaryEntry)
     }
   }
 
-  // Anchor picker — only visible in edit (pencil) mode
+  // Anchor picker — only visible while editing, updates preview pane
   if (!isSingle && isEditing) {
     const curAnchor = isCustom ? (sec.anchor || 'bottom-center') : (_animAnchors.get(key) || 'bottom-center');
     const picker = _buildAnchorPicker(curAnchor, (newAnchor) => {
@@ -1192,11 +1401,8 @@ function _renderSectionEl(entry, sec, secIdx, keyPrefix, isCustom, primaryEntry)
       } else {
         _animAnchors.set(key, newAnchor);
       }
-      if (animTimers[key]) {
-        const { btn } = animTimers[key];
-        _stopAnim(key);
-        _startAnim(key, entry.bmp_num, sec.frames, btn, newAnchor, isMirrored);
-      }
+      // Refresh preview pane animation for this group
+      _refreshPreviewGroup(key);
     });
     footer.appendChild(picker);
   }
@@ -1600,11 +1806,31 @@ function _toggleBulkMode(active) {
 }
 
 function _updateBulkBar() {
-  const cnt   = document.getElementById('spr-bulk-count');
-  const apply = document.getElementById('spr-bulk-apply-btn');
+  const cnt     = document.getElementById('spr-bulk-count');
+  const apply   = document.getElementById('spr-bulk-apply-btn');
+  const typeSel = document.getElementById('spr-bulk-type-sel');
+  const typeBtn = document.getElementById('spr-bulk-type-btn');
   const n = _bulkSelected.size;
-  if (cnt)   cnt.textContent = `${n} selected`;
-  if (apply) apply.disabled  = n === 0;
+  if (cnt)     cnt.textContent = `${n} selected`;
+  if (apply)   apply.disabled  = n === 0;
+  if (typeSel) typeSel.disabled = n === 0;
+  if (typeBtn) typeBtn.disabled = n === 0 || !(typeSel && typeSel.value);
+}
+
+function _applyBulkType() {
+  const sel = document.getElementById('spr-bulk-type-sel');
+  if (!sel || !sel.value || _bulkSelected.size === 0) return;
+  const newType = sel.value;
+  for (const bmp of _bulkSelected) {
+    const e = spritesByBmp[bmp];
+    if (!e) continue;
+    e.type = newType;
+    _queueSave(bmp, { type: newType });
+    _updateListItem(bmp);
+  }
+  _updateTabCounts();
+  sel.value = '';
+  _toggleBulkMode(false);
 }
 
 async function _openBulkApplyPanel() {
@@ -1945,6 +2171,10 @@ function _makeFrameCell(bmpNum, frameIdx, secKey, mirrored, selectable) {
     wrap.classList.add('spr-fcell-selectable');
     if (_selFrames.has(frameIdx)) wrap.classList.add('spr-fcell-sel');
     wrap.addEventListener('click', () => _toggleFrameSel(bmpNum, frameIdx));
+  } else {
+    // Click frame cell to show it zoomed in preview pane
+    wrap.style.cursor = 'pointer';
+    wrap.addEventListener('click', () => _showPreviewFrame(bmpNum, frameIdx));
   }
 
   const img = document.createElement('img');
@@ -2232,8 +2462,8 @@ function _stopAnim(key) {
 // Animation helpers
 // ---------------------------------------------------------------------------
 
-function _loadFrameImage(bmpNum, frameIdx) {
-  const url = _frameUrl(bmpNum, frameIdx);
+function _loadFrameImage(bmpNum, frameIdx, scale) {
+  const url = _frameUrl(bmpNum, frameIdx, scale ?? prefs.spriteScale);
   if (!_imgCache.has(url)) {
     _imgCache.set(url, new Promise((res, rej) => {
       const img = new Image();
@@ -2380,6 +2610,675 @@ function _setSaveStatus(status, msg) {
   el.textContent  = info.text;
   el.className    = `spr-save-status ${info.cls}`;
   if (btn) btn.disabled = (status === 'saved' || status === 'saving');
+}
+
+// ---------------------------------------------------------------------------
+// Preview pane (3rd column)
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// PC preview helpers
+// ---------------------------------------------------------------------------
+
+/** Returns true if the entry is a PC character with a full 4-sheet group. */
+function _isPCEntry(e) {
+  return e.type === 'PC' && (e.linked_bmps || []).length >= 3;
+}
+
+/**
+ * Classify the sheets in a PC group into { visWalk, visAtk, invisWalk, invisAtk }.
+ * Visible: walk15 + attack14 types. Invisible: the remaining two sheets.
+ */
+function _getPCSheets(e) {
+  const allBmps = [e.bmp_num, ...(e.linked_bmps || [])];
+  const sheets  = allBmps.map(n => spritesByBmp[n]).filter(Boolean);
+
+  const WALK_TYPES   = ['walk15', 'combined24'];
+  const ATTACK_TYPES = ['attack14', 'attack12', 'attack9'];
+
+  const visWalk = sheets.find(s => WALK_TYPES.includes(s.sheet_type)) || null;
+  const visAtk  = sheets.find(s => ATTACK_TYPES.includes(s.sheet_type)) || null;
+
+  const visNums    = new Set([visWalk?.bmp_num, visAtk?.bmp_num].filter(n => n != null));
+  const invisSheets = sheets.filter(s => !visNums.has(s.bmp_num));
+
+  let invisWalk = null, invisAtk = null;
+  for (const s of invisSheets) {
+    const secs = s.custom_sections || [];
+    const hasWalkOrStand = secs.some(sec => /walk|stand/i.test(sec.name) && !sec.mirrored);
+    const hasAtk         = secs.some(sec => /attack|weapon|ranged/i.test(sec.name) && !sec.mirrored);
+    if (hasWalkOrStand && !invisWalk) invisWalk = s;
+    else if (hasAtk && !invisAtk)     invisAtk  = s;
+    else if (!invisWalk) invisWalk = s; // fallback
+  }
+  return { visWalk, visAtk, invisWalk, invisAtk };
+}
+
+/**
+ * Find a matching animation section in `sheet` for the given state + direction.
+ * Returns { frames, mirrored } or null.
+ */
+function _findPCSection(sheet, stateKey, dirKey) {
+  if (!sheet) return null;
+  const secs = (sheet.custom_sections || []).filter(s => !s.mirrored);
+
+  const STATE_RE = {
+    stand:  /stand/i,
+    walk:   /walk/i,
+    attack: /attack|weapon|fist|melee/i,
+    ranged: /ranged/i,
+    dying:  /dying|die(?!.*dead)/i,
+    dead:   /^dead\b|dead$/i,
+  };
+  const DIR_RE = {
+    front: /front/i,
+    back:  /back|rear/i,
+    right: /right/i,
+    left:  /right/i, // left = right mirrored
+  };
+
+  const stateRe = STATE_RE[stateKey];
+  if (!stateRe) return null;
+
+  const dirless = ['dying', 'dead'];
+  if (dirless.includes(stateKey)) {
+    const sec = secs.find(s => stateRe.test(s.name));
+    return sec ? { frames: sec.frames, mirrored: false } : null;
+  }
+
+  const dirRe = DIR_RE[dirKey];
+  if (!dirRe) return null;
+
+  const sec = secs.find(s => stateRe.test(s.name) && dirRe.test(s.name));
+  return sec ? { frames: sec.frames, mirrored: dirKey === 'left' } : null;
+}
+
+/**
+ * Get the animation {bmpNum, frames, mirrored} for a PC state, trying the
+ * visible or invisible pair based on _pcInvis.  Falls back to the other pair.
+ */
+function _getPCAnimForState(stateKey, dirKey, invis, pcSheets) {
+  const walkSheet = invis ? pcSheets.invisWalk : pcSheets.visWalk;
+  const atkSheet  = invis ? pcSheets.invisAtk  : pcSheets.visAtk;
+  // Fallbacks
+  const walkFb = invis ? pcSheets.visWalk : pcSheets.invisWalk;
+  const atkFb  = invis ? pcSheets.visAtk  : pcSheets.invisAtk;
+
+  const sheetOrder = {
+    stand:  [walkSheet, atkSheet, walkFb, atkFb],
+    walk:   [walkSheet, atkSheet, walkFb, atkFb],
+    attack: [atkSheet,  walkSheet, atkFb, walkFb],
+    ranged: [atkSheet,  walkSheet, atkFb, walkFb],
+    dying:  [atkSheet,  walkSheet, atkFb, walkFb],
+    dead:   [atkSheet,  walkSheet, atkFb, walkFb],
+  };
+
+  for (const sheet of (sheetOrder[stateKey] || [])) {
+    if (!sheet) continue;
+    const result = _findPCSection(sheet, stateKey, dirKey);
+    if (result) return { bmpNum: sheet.bmp_num, frames: result.frames, mirrored: result.mirrored };
+  }
+  return null;
+}
+
+/** Show/hide and highlight d-pad direction buttons for current PC state + dir. */
+function _refreshPCDpadButtons() {
+  const isDirState = !['dying', 'dead'].includes(_pcState);
+  const north = document.getElementById('spr-preview-dpad-north');
+  const south = document.getElementById('spr-preview-dpad-south');
+  const west  = document.getElementById('spr-dpad-west');
+  const east  = document.getElementById('spr-dpad-east');
+  if (north) north.classList.toggle('hidden', !isDirState);
+  if (south) south.classList.toggle('hidden', !isDirState);
+  if (west)  west.classList.toggle('hidden', !isDirState);
+  if (east)  east.classList.toggle('hidden', !isDirState);
+  if (!isDirState) return;
+  // Update active state
+  document.querySelectorAll('.pc-dir-btn[data-dir]').forEach(b => {
+    b.classList.toggle('active', b.dataset.dir === _pcDir);
+  });
+}
+
+/** Build the PC state + invisible controls in #spr-preview-group-picker. */
+function _buildPCPreviewController(e) {
+  const container = document.getElementById('spr-preview-group-picker');
+  if (!container) return;
+  container.innerHTML = '';
+
+  const pcSheets = _getPCSheets(e);
+
+  // State buttons
+  const stateBar = document.createElement('div');
+  stateBar.className = 'pc-state-bar';
+
+  const STATES = [
+    { key: 'stand',  label: 'Stand'  },
+    { key: 'walk',   label: 'Walk'   },
+    { key: 'attack', label: 'Attack' },
+    { key: 'ranged', label: 'Ranged' },
+    { key: 'dying',  label: 'Dying'  },
+    { key: 'dead',   label: 'Dead'   },
+  ];
+  STATES.forEach(({ key, label }) => {
+    const btn = document.createElement('button');
+    btn.className = 'spr-btn spr-btn-sm pc-state-btn' + (_pcState === key ? ' active' : '');
+    btn.textContent = label;
+    btn.addEventListener('click', () => {
+      _pcState = key;
+      _buildPCPreviewController(e);
+      _refreshPCDpadButtons();
+      _updatePCPreview(pcSheets);
+    });
+    stateBar.appendChild(btn);
+  });
+  container.appendChild(stateBar);
+
+  // Invisible toggle
+  const invisRow = document.createElement('div');
+  invisRow.className = 'pc-invis-row';
+  const invisBtn = document.createElement('button');
+  invisBtn.className = 'spr-btn spr-btn-sm pc-invis-btn' + (_pcInvis ? ' active' : '');
+  invisBtn.innerHTML = '&#128373;&#xFE0E; Invisible';
+  // Disable if no invisible sheets are present
+  const hasInvis = !!(pcSheets.invisWalk || pcSheets.invisAtk);
+  invisBtn.disabled = !hasInvis;
+  invisBtn.title    = hasInvis ? 'Toggle invisible sprite variant' : 'No invisible sheets in group';
+  invisBtn.addEventListener('click', () => {
+    _pcInvis = !_pcInvis;
+    _buildPCPreviewController(e);
+    _updatePCPreview(pcSheets);
+  });
+  invisRow.appendChild(invisBtn);
+  container.appendChild(invisRow);
+
+  // Update d-pad visibility + active highlights
+  _refreshPCDpadButtons();
+}
+
+/** Trigger zoom animation for the current PC state/dir/invis. */
+function _updatePCPreview(pcSheets) {
+  const anim = _getPCAnimForState(_pcState, _pcDir, _pcInvis, pcSheets);
+  if (!anim) {
+    const canvas = document.getElementById('spr-preview-zoom-canvas');
+    if (canvas) { canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height); }
+    const info = document.getElementById('spr-preview-zoom-info');
+    if (info) info.textContent = 'No animation found';
+    return;
+  }
+  const anchor = anim.frames.length === 1 ? 'bottom-center' : 'bottom-center';
+  _startZoomAnim(anim.bmpNum, anim.frames, anim.mirrored, anchor);
+}
+
+// ---------------------------------------------------------------------------
+// Monster preview helpers
+// ---------------------------------------------------------------------------
+
+/** Returns true if the entry is a Monster or NPC with custom sections. */
+function _isMonsterEntry(e) {
+  return e.type === 'Monster' || e.type === 'NPC';
+}
+
+// Regexes identifying standard directional section names
+const _MON_DIR_RE   = /\b(front|back|rear|right|left)\b/i;
+const _MON_STATE_RE = /^(stand|walk|burrow|attack|weapon|melee|ranged)/i;
+
+/**
+ * Collect all monsteranimation sections across all sheets (primary + linked).
+ * Returns an object:
+ *   { directional: Map<stateKey, { front, back, right }>, uni: [{label, bmpNum, frames, mirrored}] }
+ *
+ * "directional" covers sections whose name starts with a state word AND contains
+ * a direction word (front/back/rear/right/left).
+ * Everything else is "uni" — shown as individual action buttons.
+ */
+function _classifyMonsterSections(e) {
+  const allBmps = [e.bmp_num, ...(e.linked_bmps || [])];
+  const sheets  = allBmps.map(n => spritesByBmp[n]).filter(Boolean);
+
+  // state key normalisation
+  const _stateKey = name => {
+    const m = name.match(_MON_STATE_RE);
+    if (!m) return null;
+    const w = m[1].toLowerCase();
+    if (w === 'weapon' || w === 'melee') return 'attack';
+    if (w === 'burrow') return 'walk';
+    return w;
+  };
+
+  const _dirKey = name => {
+    const m = name.match(_MON_DIR_RE);
+    if (!m) return null;
+    const d = m[1].toLowerCase();
+    return d === 'rear' ? 'back' : d;
+  };
+
+  // directional[stateKey][dirKey] = { bmpNum, frames, mirrored }
+  const directional = {};
+  // uni sections that are not directional
+  const uni = [];
+  // track which stateKeys have all 3 directions (to expose d-pad)
+  const dirCount = {};
+
+  for (const sheet of sheets) {
+    const secs = (sheet.custom_sections || []);
+    for (const sec of secs) {
+      const name     = sec.name || '';
+      const isMirror = !!sec.mirrored;
+      const sk = _stateKey(name);
+      const dk = _dirKey(name);
+
+      if (sk && dk && !isMirror) {
+        // directional section
+        if (!directional[sk]) directional[sk] = {};
+        // prefer non-mirror; don't overwrite existing
+        if (!directional[sk][dk]) {
+          directional[sk][dk] = { bmpNum: sheet.bmp_num, frames: sec.frames, mirrored: false };
+          dirCount[sk] = (dirCount[sk] || 0) + 1;
+        }
+      } else if (!isMirror) {
+        // possible directional state without a standard direction suffix,
+        // OR a completely custom section name — treat as uni
+        const alreadyDir = sk && dk; // covered above
+        if (!alreadyDir) {
+          // deduplicate by (name, bmpNum)
+          const key = `${sheet.bmp_num}:${name}`;
+          if (!uni.find(u => u._key === key)) {
+            uni.push({ _key: key, label: name || `Group`, bmpNum: sheet.bmp_num, frames: sec.frames, mirrored: false });
+          }
+        }
+      }
+    }
+  }
+
+  return { directional, uni };
+}
+
+/**
+ * Get frames for the current monster directional state+dir, or for a uni key.
+ * stateKey: string matching a key in directional, or null if showing a uni action.
+ * uniKey: null | string (the _key of the chosen uni section).
+ */
+function _getMonsterAnim(classified, stateKey, dirKey, uniKey) {
+  if (uniKey) {
+    const u = classified.uni.find(u => u._key === uniKey);
+    return u ? { bmpNum: u.bmpNum, frames: u.frames, mirrored: false } : null;
+  }
+  if (!stateKey) return null;
+  const dirMap = classified.directional[stateKey];
+  if (!dirMap) return null;
+
+  // Try requested direction, then fallback order
+  const fallbacks = { front: ['front','back','right'], back: ['back','front','right'], right: ['right','left','front'], left: ['right','left','front'] };
+  for (const d of (fallbacks[dirKey] || ['front','back','right'])) {
+    if (dirMap[d]) {
+      const res = dirMap[d];
+      const mirrored = (dirKey === 'left' && d === 'right') || (dirKey === 'right' && d === 'left');
+      return { bmpNum: res.bmpNum, frames: res.frames, mirrored };
+    }
+  }
+  return null;
+}
+
+/** Show/hide and highlight monster d-pad direction buttons. */
+function _refreshMonsterDpadButtons(isDirState) {
+  const north = document.getElementById('spr-preview-dpad-north');
+  const south = document.getElementById('spr-preview-dpad-south');
+  const west  = document.getElementById('spr-dpad-west');
+  const east  = document.getElementById('spr-dpad-east');
+  if (north) north.classList.toggle('hidden', !isDirState);
+  if (south) south.classList.toggle('hidden', !isDirState);
+  if (west)  west.classList.toggle('hidden', !isDirState);
+  if (east)  east.classList.toggle('hidden', !isDirState);
+  if (!isDirState) return;
+  document.querySelectorAll('.pc-dir-btn[data-dir]').forEach(b => {
+    b.classList.toggle('active', b.dataset.dir === _monDir);
+  });
+}
+
+/** Build the Monster state controls in #spr-preview-group-picker. */
+function _buildMonsterPreviewController(e) {
+  const container = document.getElementById('spr-preview-group-picker');
+  if (!container) return;
+  container.innerHTML = '';
+
+  const classified = _classifyMonsterSections(e);
+  const dirStates  = Object.keys(classified.directional);
+  const uniSecs    = classified.uni;
+
+  // Auto-select initial state
+  const isDirectionalState = dirStates.includes(_monState);
+  const isUniState         = typeof _monState === 'string' && _monState.startsWith('uni:');
+  if (!isDirectionalState && !isUniState) {
+    _monState = dirStates[0] || (uniSecs.length ? `uni:${uniSecs[0]._key}` : null);
+  }
+
+  const stateBar = document.createElement('div');
+  stateBar.className = 'pc-state-bar';
+
+  // Directional state buttons
+  const STATE_LABELS = { stand: 'Stand', walk: 'Walk', attack: 'Attack', ranged: 'Ranged' };
+  dirStates.forEach(sk => {
+    const btn = document.createElement('button');
+    btn.className   = 'spr-btn spr-btn-sm pc-state-btn' + (_monState === sk ? ' active' : '');
+    btn.textContent = STATE_LABELS[sk] || sk.charAt(0).toUpperCase() + sk.slice(1);
+    btn.addEventListener('click', () => {
+      _monState = sk;
+      container.querySelectorAll('.pc-state-btn,.pc-uni-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      _refreshMonsterDpadButtons(true);
+      _updateMonsterPreview(classified);
+    });
+    stateBar.appendChild(btn);
+  });
+
+  // Uni action buttons
+  uniSecs.forEach(u => {
+    const btn = document.createElement('button');
+    const uKey = `uni:${u._key}`;
+    btn.className   = 'spr-btn spr-btn-sm pc-uni-btn' + (_monState === uKey ? ' active' : '');
+    btn.textContent = u.label;
+    btn.title       = `${u.frames.length}f — BMP #${u.bmpNum}`;
+    btn.addEventListener('click', () => {
+      _monState = uKey;
+      container.querySelectorAll('.pc-state-btn,.pc-uni-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      _refreshMonsterDpadButtons(false);
+      _updateMonsterPreview(classified);
+    });
+    stateBar.appendChild(btn);
+  });
+
+  if (stateBar.children.length === 0) {
+    const hint = document.createElement('span');
+    hint.className   = 'dim';
+    hint.style.fontSize = '11px';
+    hint.textContent = 'No named sections';
+    stateBar.appendChild(hint);
+  }
+  container.appendChild(stateBar);
+
+  // Show/hide d-pad for initial state
+  _refreshMonsterDpadButtons(dirStates.includes(_monState));
+}
+
+/** Trigger zoom animation for the current monster state/dir. */
+function _updateMonsterPreview(classified) {
+  const isUni = typeof _monState === 'string' && _monState.startsWith('uni:');
+  const uniKey = isUni ? _monState.slice(4) : null;
+  const anim = _getMonsterAnim(classified, isUni ? null : _monState, _monDir, uniKey);
+  if (!anim) {
+    const canvas = document.getElementById('spr-preview-zoom-canvas');
+    if (canvas) { const ctx = canvas.getContext('2d'); ctx.clearRect(0,0,canvas.width,canvas.height); }
+    const info = document.getElementById('spr-preview-zoom-info');
+    if (info) info.textContent = 'No animation found';
+    return;
+  }
+  _startZoomAnim(anim.bmpNum, anim.frames, anim.mirrored, 'bottom-center');
+}
+
+function _renderPreview(e) {
+  _stopAllPreviewAnims();
+  _previewBmpNum = e.bmp_num;
+  _showEmptyPreview(false);
+
+  // PC mode: show state/direction/invisible controller
+  if (_isPCEntry(e)) {
+    _buildPCPreviewController(e);
+    _updatePCPreview(_getPCSheets(e));
+    return;
+  }
+
+  // Monster/NPC mode: show state/direction controller
+  if (_isMonsterEntry(e)) {
+    _monState = null; // reset so auto-select picks fresh
+    _buildMonsterPreviewController(e);
+    _updateMonsterPreview(_classifyMonsterSections(e));
+    return;
+  }
+
+  // Hide d-pad when not in PC/Monster mode
+  ['spr-preview-dpad-north','spr-preview-dpad-south'].forEach(id =>
+    document.getElementById(id)?.classList.add('hidden')
+  );
+  document.getElementById('spr-dpad-west')?.classList.add('hidden');
+  document.getElementById('spr-dpad-east')?.classList.add('hidden');
+
+  const groups = _collectGroups(e);
+
+  // Group picker in sidebar
+  _buildPreviewGroupPicker(groups);
+
+  // Zoom canvas: play selected group (or first multi-frame group)
+  const zoomG = _selectedGroupRef
+    ? groups.find(g => g.key === _selectedGroupRef)
+    : groups.find(g => !g.isSingle) || groups[0];
+  if (zoomG) {
+    _startZoomAnim(zoomG.entry.bmp_num, zoomG.frames, zoomG.mirrored, zoomG.anchor);
+  } else {
+    _drawPreviewFrame(e.bmp_num, 0);
+  }
+}
+
+/** Build (or rebuild) the group selector dropdown in #spr-preview-group-picker. */
+function _buildPreviewGroupPicker(groups) {
+  const container = document.getElementById('spr-preview-group-picker');
+  if (!container) return;
+  container.innerHTML = '';
+
+  const multiFrame = groups.filter(g => !g.isSingle);
+  if (multiFrame.length <= 1) {
+    _selectedGroupRef = multiFrame.length === 1 ? multiFrame[0].key : null;
+    return;
+  }
+
+  // Preserve selection if still valid
+  if (_selectedGroupRef && !multiFrame.find(g => g.key === _selectedGroupRef)) {
+    _selectedGroupRef = null;
+  }
+
+  const bar = document.createElement('div');
+  bar.className = 'spr-group-picker-bar';
+
+  const lbl = document.createElement('label');
+  lbl.textContent = 'Group:';
+  bar.appendChild(lbl);
+
+  const sel = document.createElement('select');
+  sel.className = 'spr-input spr-group-picker-sel';
+  sel.id        = 'spr-group-picker-sel';
+
+  multiFrame.forEach(g => {
+    const opt = document.createElement('option');
+    opt.value       = g.key;
+    opt.textContent = g.label;
+    if (g.key === _selectedGroupRef || (!_selectedGroupRef && g === multiFrame[0])) opt.selected = true;
+    sel.appendChild(opt);
+  });
+
+  // Sync state to first option if nothing selected
+  if (!_selectedGroupRef) _selectedGroupRef = multiFrame[0].key;
+
+  // Consume any pending group selection from URL restore
+  if (_pendingSelectGroup) {
+    const pending = multiFrame.find(g => g.key === _pendingSelectGroup);
+    if (pending) {
+      _selectedGroupRef = _pendingSelectGroup;
+      sel.value = _selectedGroupRef;
+    }
+    _pendingSelectGroup = null;
+  }
+
+  sel.addEventListener('change', () => {
+    _selectedGroupRef = sel.value || null;
+    // Update zoom canvas
+    const g = _selectedGroupRef ? groups.find(x => x.key === _selectedGroupRef) : null;
+    if (g) {
+      _startZoomAnim(g.entry.bmp_num, g.frames, g.mirrored, g.anchor);
+    }
+    if (typeof pushUrlState === 'function') pushUrlState();
+  });
+
+  bar.appendChild(sel);
+  container.appendChild(bar);
+}
+
+function _stopAllPreviewAnims() {
+  _stopZoomAnim();
+  _previewAnimTimers = {};
+}
+
+function _stopZoomAnim() {
+  _previewZoomGen++; // invalidate any in-flight _startZoomAnim call
+  if (_previewZoomTimer !== null) {
+    clearInterval(_previewZoomTimer);
+    _previewZoomTimer = null;
+  }
+}
+
+/** Start (or restart) the zoom canvas animation for the given frames. */
+async function _startZoomAnim(bmpNum, frames, mirrored, anchor) {
+  _stopZoomAnim(); // also bumps _previewZoomGen
+  const myGen = _previewZoomGen;
+  if (!frames || frames.length === 0) return;
+
+  const canvas = document.getElementById('spr-preview-zoom-canvas');
+  const info   = document.getElementById('spr-preview-zoom-info');
+  if (!canvas) return;
+
+  let imgs;
+  try {
+    imgs = await Promise.all(frames.map(fi => _loadFrameImage(bmpNum, fi, 1)));
+  } catch (_) { return; }
+
+  // Bail out if a newer call has already taken over
+  if (myGen !== _previewZoomGen) return;
+
+  const maxW = Math.max(...imgs.map(i => i.naturalWidth),  1);
+  const maxH = Math.max(...imgs.map(i => i.naturalHeight), 1);
+  if (info) info.textContent = `${maxW} × ${maxH} px  (BMP #${bmpNum})`;
+
+  canvas.width  = maxW;
+  canvas.height = maxH;
+  canvas.style.transform = mirrored ? 'scaleX(-1)' : '';
+  _resizeZoomCanvas();
+
+  const anc = anchor || 'bottom-center';
+  const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+
+  const drawFrame = img => {
+    ctx.clearRect(0, 0, maxW, maxH);
+    const [ox, oy] = _anchorOffset(anc, maxW, maxH, img.naturalWidth, img.naturalHeight);
+    ctx.drawImage(img, ox, oy);
+  };
+
+  if (frames.length === 1) {
+    drawFrame(imgs[0]);
+    return;
+  }
+
+  let pos = 0;
+  const draw = () => { drawFrame(imgs[pos]); pos = (pos + 1) % imgs.length; };
+  draw();
+  _previewZoomTimer = setInterval(draw, _previewSpeed);
+}
+
+/** Resize the zoom canvas display size using current _previewZoomScale. */
+function _resizeZoomCanvas() {
+  const canvas = document.getElementById('spr-preview-zoom-canvas');
+  if (!canvas || canvas.width === 0) return;
+  canvas.style.width  = `${canvas.width  * _previewZoomScale}px`;
+  canvas.style.height = `${canvas.height * _previewZoomScale}px`;
+}
+
+function _restartAllPreviewAnims() {
+  if (_previewBmpNum < 0) return;
+  const e = spritesByBmp[_previewBmpNum];
+  if (!e) return;
+
+  // PC mode: restart with current state/dir/invis
+  if (_isPCEntry(e)) {
+    _updatePCPreview(_getPCSheets(e));
+    return;
+  }
+
+  // Monster mode: restart with current state/dir
+  if (_isMonsterEntry(e)) {
+    _updateMonsterPreview(_classifyMonsterSections(e));
+    return;
+  }
+
+  const groups = _collectGroups(e);
+  const zoomG = _selectedGroupRef
+    ? groups.find(g => g.key === _selectedGroupRef)
+    : groups.find(g => !g.isSingle) || groups[0];
+  if (zoomG) _startZoomAnim(zoomG.entry.bmp_num, zoomG.frames, zoomG.mirrored, zoomG.anchor);
+}
+
+/**
+ * Restart a single preview animation when its anchor changes.
+ * Called by anchor-picker onChange handlers in the middle pane.
+ */
+function _refreshPreviewGroup(key) {
+  if (_previewBmpNum < 0) return;
+  const e = spritesByBmp[_previewBmpNum];
+  if (!e) return;
+
+  const groups = _collectGroups(e);
+  const g = groups.find(gr => gr.key === key);
+  if (!g) return;
+
+  // Restart the zoom canvas if this group is currently displayed there
+  const zoomIsThisGroup = _selectedGroupRef === key ||
+    (!_selectedGroupRef && (groups.filter(x => !x.isSingle)[0]?.key === key));
+  if (zoomIsThisGroup) {
+    _startZoomAnim(g.entry.bmp_num, g.frames, g.mirrored, g.anchor);
+  }
+}
+
+/** Return a short label for a sprite sheet relative to the primary entry. */
+function _sheetBmpLabel(entry, primaryEntry) {
+  return `BMP #${entry.bmp_num}`;
+}
+
+async function _drawPreviewFrame(bmpNum, frameIdx) {
+  _previewBmpNum = bmpNum;
+
+  const canvas = document.getElementById('spr-preview-zoom-canvas');
+  const info   = document.getElementById('spr-preview-zoom-info');
+  if (!canvas) return;
+
+  let img;
+  try {
+    img = await _loadFrameImage(bmpNum, frameIdx, 1);
+  } catch (_) {
+    if (info) info.textContent = 'Failed to load frame';
+    return;
+  }
+
+  const w = img.naturalWidth;
+  const h = img.naturalHeight;
+  if (info) info.textContent = `${w} × ${h} px  (BMP #${bmpNum})`;
+
+  canvas.width  = w;
+  canvas.height = h;
+  canvas.style.transform = '';
+  _resizeZoomCanvas();
+
+  const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  ctx.clearRect(0, 0, w, h);
+  ctx.drawImage(img, 0, 0);
+}
+
+function _showPreviewFrame(bmpNum, frameIdx) {
+  _stopZoomAnim();  // pause animation and show a specific frame
+  _drawPreviewFrame(bmpNum, frameIdx);
+  // Highlight the clicked cell
+  document.querySelectorAll('#spr-detail-content .spr-fcell').forEach(c => {
+    c.classList.toggle('spr-fcell-previewing',
+      Number(c.dataset.bmpNum) === bmpNum && Number(c.dataset.pos) === frameIdx);
+  });
 }
 
 // ---------------------------------------------------------------------------

@@ -1442,6 +1442,15 @@ select:focus { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(200,144,
   overflow: hidden;
 }
 
+/* Strip padding/scrolling from content area when the sprite viewer is active */
+#content.sprites-active {
+  padding: 0;
+  overflow: hidden;
+}
+#content.sprites-active #sprite-view {
+  height: 100%;
+}
+
 /* Full-height flex column that fills #content */
 #rmap-view {
   display: flex;
@@ -3183,6 +3192,7 @@ select:focus { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(200,144,
 
 #spr-list-wrap {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
 }
 
@@ -3392,6 +3402,7 @@ select:focus { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(200,144,
 /* Detail content */
 #spr-detail-content {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding: 14px 18px 28px;
 }
@@ -3604,9 +3615,22 @@ select:focus { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(200,144,
 .spr-sec-desc { font-size: 11px; }
 
 .spr-section-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-size: 12px;
   font-weight: 600;
   color: var(--text-dim);
+  margin-bottom: 6px;
+}
+
+.spr-anchor-toggle-btn {
+  font-size: 11px;
+  padding: 1px 5px;
+  line-height: 1;
+}
+
+.spr-anchor-row {
   margin-bottom: 6px;
 }
 
@@ -3752,6 +3776,14 @@ select:focus { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(200,144,
   flex: 1;
   font-size: 11px;
   color: var(--text-dim);
+}
+
+.spr-bulk-type-sel {
+  width: auto;
+  max-width: 110px;
+  font-size: 11px;
+  padding: 3px 6px;
+  flex-shrink: 0;
 }
 
 /* List item selected state + checkbox */
@@ -4350,4 +4382,229 @@ select:focus { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(200,144,
 .spr-pattern-del-btn:hover {
   border-color: var(--danger, #c55);
   background: rgba(200,80,80,.12);
+}
+
+/* ================================================================
+   SPRITE VIEWER — Preview pane (3rd column)
+   ================================================================ */
+
+#spr-preview-col {
+  width: 340px;
+  min-width: 260px;
+  max-width: 440px;
+  border-left: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: var(--surface);
+}
+
+#spr-preview-content {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  padding: 10px 14px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+/* Zoomed view */
+#spr-preview-zoom {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+#spr-preview-zoom-hdr {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 6px;
+  flex-wrap: wrap;
+}
+
+#spr-preview-speed-ctl {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+#spr-preview-speed {
+  width: 80px;
+  accent-color: var(--primary);
+}
+
+.spr-preview-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--primary-lt);
+}
+
+#spr-preview-zoom-stage {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 12px;
+  min-height: 120px;
+  overflow: auto;
+}
+
+#spr-preview-zoom-canvas {
+  display: block;
+  image-rendering: pixelated;
+  flex-shrink: 0;
+}
+
+#spr-preview-zoom-scale-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 8px;
+  border-top: 1px solid var(--border);
+  background: var(--surface2);
+  flex-shrink: 0;
+}
+
+.spr-zoom-scale-btn {
+  min-width: 28px;
+  font-size: 11px;
+  padding: 2px 5px;
+}
+
+.spr-zoom-scale-btn.active {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+}
+
+/* Highlight frame cell being previewed */
+.spr-fcell-previewing {
+  border-color: #80d0ff !important;
+  background: rgba(128, 208, 255, .12) !important;
+  box-shadow: 0 0 0 2px rgba(128, 208, 255, .3);
+}
+
+/* Group picker bar at top of frames column */
+.spr-group-picker-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0 10px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 12px;
+  flex-shrink: 0;
+}
+.spr-group-picker-bar label {
+  font-size: 11px;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+.spr-group-picker-sel {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  padding: 4px 8px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  cursor: pointer;
+  outline: none;
+}
+.spr-group-picker-sel:focus {
+  border-color: var(--primary);
+}
+
+/* ================================================================
+   PC Preview Controller
+   ================================================================ */
+
+/* State buttons row */
+.pc-state-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 8px 0 6px;
+}
+.pc-state-btn {
+  flex: 1 0 auto;
+  min-width: 50px;
+  text-align: center;
+}
+.pc-state-btn.active {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+}
+
+/* Invisible toggle row */
+.pc-invis-row {
+  padding: 4px 0 8px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 4px;
+}
+.pc-invis-btn.active {
+  background: var(--surface2);
+  border-color: var(--primary);
+  color: var(--primary-lt);
+}
+
+/* D-pad: north + south rows (contain a single centered direction button) */
+.spr-preview-dpad-north,
+.spr-preview-dpad-south {
+  display: flex;
+  justify-content: center;
+  padding: 2px 0;
+}
+
+/* D-pad: mid row = [west btn] [zoom stage] [east btn] */
+.spr-preview-dpad-mid {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.spr-preview-dpad-mid #spr-preview-zoom-stage {
+  flex: 1;
+  min-width: 0;
+}
+#spr-dpad-west,
+#spr-dpad-east {
+  flex-shrink: 0;
+  writing-mode: horizontal-tb;
+}
+
+/* Direction buttons shared style */
+.pc-dir-btn {
+  font-size: 12px;
+  padding: 5px 8px;
+  min-width: 36px;
+}
+.pc-dir-btn.active {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+}
+
+/* Monster uni action buttons */
+.pc-uni-btn {
+  flex: 1 0 auto;
+  min-width: 60px;
+  text-align: center;
+  border-style: dashed;
+  font-style: italic;
+}
+.pc-uni-btn.active {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+  border-style: solid;
+  font-style: normal;
 }

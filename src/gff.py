@@ -38,108 +38,124 @@ from typing import Dict, List, Optional, Tuple
 # ---------------------------------------------------------------------------
 GFF_CHUNK_TYPES: Dict[str, str] = {
     # ── GFF structure ────────────────────────────────────────────────────
-    'GFFI': 'GFF file index / resource directory',
+    'FORM': 'GFF internal chunk',
+    'GFFI': 'GFFI internal chunk',
+    'GFRE': 'GFF internal chunk',
+    'GTOC': 'GFF internal chunk',
 
     # ── Items ────────────────────────────────────────────────────────────
-    'IT1R': 'Item data record',
+    'IT1R': 'IT1R',
 
     # ── Text ─────────────────────────────────────────────────────────────
-    'NAME': 'Name string',
+    'NAME': 'NAME',
     'TEXT': 'Text resource',
-    'MERR': 'Error message text',
-    'ETME': 'Event timer entry',
-    'SPIN': 'Spell information',
+    'MERR': 'text error file',
+    'ETME': 'copyright notice',
+    'SPIN': 'Spell text.',
 
     # ── Images (all use PAL palette) ─────────────────────────────────────
-    'BMP ': 'Bitmap',
-    'CBMP': 'Compressed bitmap',
-    'PORT': 'Portrait image',
-    'WALL': 'Wall / background image',
-    'ICON': 'Icon resource',
-    'TILE': 'Tile graphic',
-    'FONT': 'Font',
-    'PAL ': 'VGA 256-color palette',
-    'CPAL': 'Compressed / alternate color palette',
-    'CMAT': 'Color material table',
+    'BMP ': 'Bitmap (GIL bitmap table, 1+ bitmaps)',
+    'BMAP': '3DX Bump map (GIL bitmap table, 1 bitmap)',
+    'CBMP': 'Color Bit Map',
+    'PORT': 'Portrait',
+    'WALL': 'WALL?',
+    'ICON': 'Icon resource (GIL bitmap table, 1-4 bitmaps)',
+    'TILE': 'Tile graphic (GIL bitmap table, 1 bitmap)',
+    'FONT': 'Font (GIL font)',
+    'PAL ': 'VGA 256 color palette',
+    'CPAL': 'CPAL?',
+    'CMAT': 'CMAT?',
 
     # ── Animation ────────────────────────────────────────────────────────
-    'SCMD': 'Animation script',
-    'SJMP': 'OENGINE animation jump table',
-    'VECT': 'Vector / animation data',
+    'SCMD': 'Animation script command table',
+    'SJMP': 'OENGINE animation script jump table',
+    'VECT': 'VECT?   rotate vector?',
 
     # ── Objects ──────────────────────────────────────────────────────────
-    'OJFF': 'Embedded object GFF',
-    'MONR': 'Monster record',
-    'PSIN': 'Psionic power entry',
-    'PSST': 'Psionic power status',
+    'OJFF': 'Object data?',
+    'MONR': 'monsters by region ids and level',
+    'PSIN': 'psionic and sphere selection',
+    'PSST': 'psionc list bytes',
 
     # ── Map data ─────────────────────────────────────────────────────────
     'ETAB': 'Object entry table',
     'GMAP': 'Region map flags',
     'RMAP': 'Region tile map',
     'MAP ': 'Map data',
-    'RDAT': 'Region data',
+    'RDAT': 'Names?',
     'RNME': 'Region name',
 
     # ── Window / UI data ─────────────────────────────────────────────────
     'WIND': 'Window resource',
     'BUTN': 'Button resource',
-    'APFM': 'Application frame',
+    'APFM': 'Application frame resource',
     'EBOX': 'Edit box resource',
-    'ACCL': 'Accelerator resource',
+    'ACCL': 'Accelertor resource',
     'SBAR': 'Scroll-bar resource',
     'MENU': 'Menu resource',
     'DBOX': 'Dialog box resource',
 
     # ── GPL scripting ────────────────────────────────────────────────────
-    'GPLI': 'GPL symbol export index',
-    'GPLX': 'GPL index file',
-    'MAS ': 'Compiled MAS files',
-    'GPL ': 'Compiled GPL code',
+    'GPLI': 'Compiled GPL file ID for subs',
+    'GPLX': 'GPL index file (GPLSHELL)',
+    'MAS ': 'Compiled MAS (GPL master) files',
+    'GPL ': 'Compiled GPL files',
 
     # ── Characters ───────────────────────────────────────────────────────
-    'CHAR': 'Character data',
+    'CHAR': 'saved character slot.',
+    'CACT': 'valid char id (0 if entry is invalid.)',
 
     # ── Spell / combat status ────────────────────────────────────────────
-    'SPST': 'Spell status record',
+    'SPST': 'spell list bit-mask',
 
     # ── Saveable object data (RDFF) ──────────────────────────────────────
-    'RDFF': 'Saveable object data (item / combat / char / mini / player / entity)',
+    'RDFF': 'RDFF?',
+    'FNFO': 'FNFO: Appears to have the object data for the game.',
 
     # ── Audio ────────────────────────────────────────────────────────────
-    'BVOC': 'Background audio sample (Creative Voice File)',
-    'FVOC': 'Foreground audio sample (Creative Voice File)',
-    'GSEQ': 'Global audio/sync sequence',
-    'LSEQ': 'Local audio sequence',
-    'CSEQ': 'Cinematic sequence (cutscene / scripted playback control)',
-    'PSEQ': 'Playback sequence (audio/visual sync blocks)',
-    'MSEQ': 'XMIDI music sequence',
-    'PLYL': 'Playlist',
+    'BVOC': 'Background play samples',
+    'FVOC': 'Foreground play samples',
+    'GSEQ': 'GENERAL MIDI',
+    'LSEQ': 'LAPC',
+    'FSEQ': 'FM',
+    'CSEQ': 'Clock Sequences',
+    'PSEQ': 'PCSPKR',
+    'MSEQ': 'XMIDI sequence files (.XMI)',
+    'PLYL': 'PLYL?',
+    'VPLY': 'VPLY?',
     'MGTL': 'Global timbre library',
     'SINF': 'Sound card info',
 
     # ── Cinematics ───────────────────────────────────────────────────────
-    'ACF ': 'Cinematic binary',
-    'BMA ': 'Cinematic binary file',
+    'ACF ': 'Cinematic Binary Script File',
+    'BMA ': 'Cinematic Binary File',
 
     # ── Audio drivers ────────────────────────────────────────────────────
-    'ADV ': 'AIL audio driver',
-    'DADV': 'AIL .COM driver',
-    'DRV ': 'Run-time loadable driver',
+    'ADV ': 'AIL Audio Driver',
+    'DADV': 'AIL and .COM drivers (MEL version 1.x only)',
+    'DRV ': 'Run-time loadable code/data module',
+
+    # ── Save entries ─────────────────────────────────────────────────────
+    'STXT': 'name of the save file entry',
+    'SAVE': 'save entries...',
+    'POS ': 'save entry pos (not part of original engine.)',
+    'ROBJ': 'save entry region (not part of original engine.)',
+    'TRIG': 'save entry triggers (not part of original engine.)',
+    'GDAT': 'save entry GPL data (not part of original engine.)',
+    'PLAY': 'save entry player data (not part of original engine.)',
+    'RENT': 'save entry entity data (not part of original engine.)',
 
     # ── Misc ─────────────────────────────────────────────────────────────
-    'ALL ': 'All-resource data block',
-    'CACT': 'Combat / character action',
-    'DATA': 'Generic data block',
-    'EDAT': '3DX environment database',
-    'FNFO': 'Font info',
+    'ALL ': 'ALL',
+    'DATA': 'DATA?',
+    'EDAT': '3DX Environment database',
     'GREQ': 'Global requirement',
     'GSEC': 'Global secondary data',
-    'OMAP': 'Opacity map',
+    'OMAP': 'Opacity map (GIL bitmap table, 1 bitmap)',
     'POBJ': 'PolyMesh object database',
     'PREF': 'Preferences',
-    'TMAP': 'Texture map',
-    'TXRF': 'Texture map reference',
+    'TMAP': 'Texture map (GIL bitmap table, 1 bitmap)',
+    'TXRF': 'Texture map (GIL bitmap table, 1 bitmap)',
     'CMAP': 'Color map table',
 }
 

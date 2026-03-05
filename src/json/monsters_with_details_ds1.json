@@ -1,0 +1,767 @@
+[
+  {
+    "name": "Lesser Air Elemental",
+    "description": "Creatures of Shattered Lands\nLesser air elementals are virtually indistinguishable from\nMany of the monsters in SHATTEREDLANDSappear for the first time in an AD&D(cid:226) the harmless dust devils and sirocco winds that\ncomputer fantasy role-playing game and must be described in greater detail. frequently blow across the Athasian desert. They use\nThey appear in the next section, “Detailed Descriptions of New Monsters.” their near invisibility to their advantage. They are the\nfastest of the lesser elementals and use their speed\nwhen attacking.",
+    "section": "Bestiary - Elemental"
+  },
+  {
+    "name": "Air Elemental",
+    "description": "Common air elementals appear as amorphous, shifting\nAptly called landsharks, bulettes are terrifying predators clouds when they answer summons to the Prime\nthat live only on meat. When attacking, they employ Material Plane. They strike their opponents with strong,\ntheir large jaws and front feet. focused blasts of air that, like giant, invisible fists, do\nmoderate amounts of damage.",
+    "section": "Bestiary - Elemental"
+  },
+  {
+    "name": "Lesser Earth Elemental",
+    "description": "DAGGORAN Made from coalesced sand, silt, or rock, lesser earth\nelementals are the mightiest elementals that low-level\nPlease refer to page 36 in the next section, “Detailed Descriptions of New\nconjurers can summon. The lesser earth elementals\nMonsters,” for a complete profile of daggorans.\ndon’t do as much damage as common earth elementals,\nbut are still formidable foes.\nDAGOLARSLIME\nPlease refer to page 37 in the next section, “Detailed Descriptions of New",
+    "section": "Bestiary - Elemental"
+  },
+  {
+    "name": "Earth Elemental",
+    "description": "Monsters,” for a complete profile of Dagolar slimes.\nCommon earth elementals appear on the Prime Material\nPlane as very large humanoids made of dirt, stones,\nDARKSPIDER\nprecious metals, and gems. They pound their victims\nPlease refer to page 38 in the next section, “Detailed Descriptions of New\nwith their huge fists, inflicting significant amounts of\nMonsters,” for a complete profile of dark spiders.\ndamage in the process.\nDUNEREAPER\nContinues...\nPlease refer to page 39 in the next section, “Detailed Descriptions of New\nMonsters,” for a complete profile of dune reapers.\n\n31 32\nELEMENTAL, cont. GREATERSHADOW\nFIRE Please refer to page 41 in the next section, “Detailed Descriptions of New\nMonsters,” for a complete profile of greater shadows.",
+    "section": "Bestiary - Elemental"
+  },
+  {
+    "name": "Lesser Fire Elemental",
+    "description": "These creatures from the elemental plane of fire are the MAGERA\nmost spirited and mischievous of all the lesser elementals. Please refer to page 42 in the next section, “Detailed Descriptions of New\nIn combat, lesser fire elementals move up against targets Monsters,” for a complete profile of magera.\nto burn them, or use their flame tongues to sear them.\nMASTYRIAL",
+    "section": "Bestiary - Elemental"
+  },
+  {
+    "name": "Fire Elemental",
+    "description": "Please refer to page 43 in the next section, “Detailed Descriptions of New\nOn the Prime Material Plane, common fire elementals\nMonsters,” for a complete profile of mastyrials.\nappear as tall sheets of flame. Fire elementals have two\narm-like appendages, one on each side of their bodies.\nMOUNTAINSTALKER\nIn combat, they lash out with their ever-moving limbs,\nPlease refer to page 44 in the next section, “Detailed Descriptions of New\nsearing their opponents with tongues of flame.\nMonsters,” for a complete profile of mountain stalkers.",
+    "section": "Bestiary - Elemental"
+  },
+  {
+    "name": "Lesser Water Elemental",
+    "description": "Otyughs, also known as gulguthra, are terrifying crea-\nAll water elementals, including the lesser ones, are looked\ntures that lurk in heaps of dung and decay, waiting\nupon with awe and respect on Athas because of their link\nfor something to disturb them. They attack with two\nwith the life-giving fluid. Lesser water elementals use their\nridged tentacles which can smash opponents or grapple\nflowing motion as a basic form of attack. Gathering speed\nthem to death.\nas they go, they use their entire bodies to ram and inflict\nlarge amounts of damage on their victims.\nPSURLON",
+    "section": "Bestiary - Elemental"
+  },
+  {
+    "name": "Water Elemental",
+    "description": "Common water elementals appear on the Prime Material Monsters,” for a complete profile of psurlons.\nPlane as high-crested waves. Their arms appear as waves,\none thrust out on each side of the body. When water ele- SANDHOWLER\nmentals strike, they lash out with these wave-like arms. Please refer to page 47 in the next section, “Detailed Descriptions of New\nMonsters,” for a complete profile of sand howlers.\nFIREEEL\nPlease refer to page 40 in the next section, “Detailed Descriptions of New SCREAMERBEETLE\nMonsters,” for a complete profile of fire eels. Please refer to page 48 in the next section, “Detailed Descriptions of New\nMonsters,” for a complete profile of screamer beetles.",
+    "section": "Bestiary - Elemental"
+  },
+  {
+    "name": "Bulette",
+    "description": "Aptly called landsharks, bulettes are terrifying predators\nthat live only on meat. When attacking, they employ\ntheir large jaws and front feet.\nDAGGORAN\nPlease refer to page 36 in the next section, “Detailed Descriptions of New\nMonsters,” for a complete profile of daggorans.\nDAGOLARSLIME\nPlease refer to page 37 in the next section, “Detailed Descriptions of New\nMonsters,” for a complete profile of Dagolar slimes.\nDARKSPIDER\nPlease refer to page 38 in the next section, “Detailed Descriptions of New\nMonsters,” for a complete profile of dark spiders.\nDUNEREAPER\nPlease refer to page 39 in the next section, “Detailed Descriptions of New\nMonsters,” for a complete profile of dune reapers.",
+    "section": "Bestiary - Creatures"
+  },
+  {
+    "name": "Genie",
+    "description": "Genies have the upper torso of humans, and the lower\nbodies of whirlwinds. They pummel their victims with\na powerful tornado-like force. Their ability to use\nillusions and become invisible makes them virtually\nimpossible to capture.",
+    "section": "Bestiary - Creatures"
+  },
+  {
+    "name": "Otyugh",
+    "description": "Otyughs, also known as gulguthra, are terrifying crea-\ntures that lurk in heaps of dung and decay, waiting\nfor something to disturb them. They attack with two\nridged tentacles which can smash opponents or grapple\nthem to death.\nPSURLON\nPlease refer to page 45 in the next section, “Detailed Descriptions of New\nMonsters,” for a complete profile of psurlons.\nSANDHOWLER\nPlease refer to page 47 in the next section, “Detailed Descriptions of New\nMonsters,” for a complete profile of sand howlers.\nSCREAMERBEETLE\nPlease refer to page 48 in the next section, “Detailed Descriptions of New\nMonsters,” for a complete profile of screamer beetles.",
+    "section": "Bestiary - Creatures"
+  },
+  {
+    "name": "Shadow",
+    "description": "Shadows are undead creatures that drain strength\nfrom their victims with their touch. Their chilling\ngrasp does light damage to their victims, in addition\nto weakening them.",
+    "section": "Bestiary - Creatures"
+  },
+  {
+    "name": "So-Ut (rampager)",
+    "description": "The so-ut, or rampagers, are fierce creatures that live\nonly for the sake of destruction. They know no fear and\nhate anything associated with man. They are huge, six-\nlegged creatures with gray scales covering their whole\nbodies. In melee, so-uts are terrible foes; they are able\nto attack with both foreclaws, and each claw secretes an\nacidic poison. This corrosive poison destroys both\narmor and weapons.",
+    "section": "Bestiary - Creatures"
+  },
+  {
+    "name": "Red Slaad",
+    "description": "These large, red frog-like beings are vicious combatants\nthat are quick to attack all other creatures. Red slaads\nattack with two claws and a furious bite. They some-\ntimes resist magic and have been known to heal damage\nthey have acquired in combat.",
+    "section": "Bestiary - Creatures"
+  },
+  {
+    "name": "Blue Slaad",
+    "description": "Blue slaads are ruthless warriors that specialize in mass\ncombat. Blue slaads have two razor-sharp bone rakes\nsticking out from the backs of their hands, and they are\nimmune to normal weapons, making them very\ndangerous opponents. Beware of their deadly poison.",
+    "section": "Bestiary - Creatures"
+  },
+  {
+    "name": "Slig",
+    "description": "Sligs are distant cousins of goblins and hobgoblins;\nthough somewhat larger, they are just as ferocious. Sligs\nlove combat and delight in devising inventive methods to\ndestroy their opponents. Sligs prefer to use hand weapons\nbut can bite when necessary. They bear a striking\nresemblance to slaads, though no one can explain why.",
+    "section": "Bestiary - Creatures"
+  },
+  {
+    "name": "Tanar’ri, Greater— Babau",
+    "description": "Greater tanar’ris are commonly known as babaus. They\nare horrid creatures that look much like huge skeletons\ncovered with dark, form-fitting leather. They also have\nlarge, ugly horns protruding from the backs of their\nskulls, and long, wicked claws covered with dirt, blood,\nand decaying flesh. Their movements are very quick,\nsharp, and mechanical, emphasizing their cold,\ninhuman nature. Beware of their deadly poison.",
+    "section": "Bestiary - Creatures"
+  },
+  {
+    "name": "Tanar’ri, True— Vrock",
+    "description": "True tanar’ris are commonly known as vrocks. Vrocks\nlook like crosses between large humans and vultures.\nThese creatures have strong, sinewy limbs covered\nwith fine, gray feathers; long, unseemly necks; and\nrepulsive vulture heads. Vicious fighters, vrocks attack\nmultiple times in a single melee round with their\nwicked claws and beaks.\nTARI(RATMAN)\nPlease refer to page 52 in the next section, “Detailed Descriptions of New\nMonsters,” for a complete profile of Taris.",
+    "section": "Bestiary - Creatures"
+  },
+  {
+    "name": "Thri-Kreen (mantiswarrior)",
+    "description": "The thri-kreen are carnivorous insect-men that roam\ndeserts and dry lands. Thri-kreen are extremely agile,\nand can dodge most any missile attack. Even unarmed,\nthri-kreen are dangerous in combat because they attack\nwith all four of their insectile claws. Thri-kreen have a par-\nalyzing bite that can stop unwary victims in their tracks.\nTYRIANSLIME\nPlease refer to page 53 in the next section, “Detailed Descriptions of New\nMonsters,” for a complete profile of Tyrian slimes.\nUNDERMOUNTAINFOLK(MINDHOME)\nPlease refer to page 54 in the next section, “Detailed Descriptions of New\nMonsters,” for a complete profile of Undermountain folk.",
+    "section": "Bestiary - Creatures"
+  },
+  {
+    "name": "Wyvern",
+    "description": "Distant cousins to dragons, wyverns are huge flying\nlizards with poisonous stingers in their tails. In combat,\nwyverns prefer to be in the air and seize any\nopportunity to take flight.",
+    "section": "Bestiary - Creatures"
+  },
+  {
+    "name": "Xorn",
+    "description": "Xorns, natives of the elemental plane of earth, feed on\nprecious metals deep underground. In combat they can\nfight two different ways. Against a single opponent, they\nbend the two nearest legs deeply, angling their bodies\n45 degrees toward the enemy. In this way all four arms\ncan reach the victim. Against several opponents they\ncan attack with their arms in all directions, each at a\ndifferent target.",
+    "section": "Bestiary - Creatures"
+  },
+  {
+    "name": "Zombie",
+    "description": "Zombies are mindless, animated corpses controlled by\ntheir creator, usually an evil wizard or priest. They\nalways move in a straight line toward their opponents,\nwith arms outstretched, seeking to claw or pummel their\nvictims to death.",
+    "section": "Bestiary - Creatures"
+  },
+  {
+    "name": "Daggoran",
+    "description": "Appearance:Daggorans are large frog-like times killing it with the shrapnel created\ncreatures with gold-colored skin. Their eyes from the explosion. If the victim survives the\nare green with yellow pupils. Located initial attack, the daggoran rushes in to\nbetween the daggorans’ shoulders is a green attack with its mouth, causing 2-12 (2d6)\ncrystalline growth. Daggorans are creatures of points of damage per hit.\nthe deserts near Draj. They are often trained \nHabitat/Society:Daggorans are social\nand used as trackers by Drajian guards creatures, living and hunting in packs, much\nbecause of the daggorans’ innate ability to like wolves of other worlds. The hierarchy\n“pick up” and track the psionic signature of within a pack is strict with only the strongest\nmost intelligent and psionic creatures. daggoran as the leader. Whenever a\n\nCombat:Daggorans can opt to jump up to daggoran wishes to vie for the position of\ntheir movement distance. This hop will pack leader, a battle to the death ensues.\nclear any object up to one-third as high as The victor quite obviously becomes the pack\nthe length of the leap and requires only a leader, while the loser becomes a meal for\nsingle round to accomplish. A jumping the rest of the pack.\ndaggoran can attack in midair or at the end \nEcology:Daggorans have proven to be\nof its leap. valuable hunters of the Athasian deserts\nDaggorans frequently hunt in packs during as they help keep the population of rodents\ntimes when food is scarce — generally the and other small animals down to a tolerable\nway of life in the desert. These packs are level. Unfortunately, thri-kreen consider\nlikely (60% chance) to follow and attack prey. daggorans a delicacy and as such, the\ndaggoran population has been hunted to\nIn the wild, when a daggoran comes upon a\nnear extinction.\npotential meal it usually launches an attack",
+    "section": "Bestiary - Detailed Descriptions",
+    "details": {
+      "source_section": "Detailed Descriptions of New Monsters",
+      "stats": {
+        "number_appearing": "2-8",
+        "armor_class": "7 se they attack",
+        "movement": "9, Hop 9 Thri-kreen have a par-",
+        "hit_dice": "4 s in their tracks.",
+        "thac0": "17",
+        "attacks": "1",
+        "frequency": "Common",
+        "damage": "2-12 (bite)",
+        "organization": "Pack",
+        "special_attacks": "Psionics",
+        "activity_cycle": "Any",
+        "special_defenses": "Nil",
+        "diet": "Omnivore",
+        "magic_resistance": "Nil",
+        "intelligence": "Semi- (2-4)",
+        "size": "M (4’-6’ long)",
+        "treasure": "Nil",
+        "morale": "Average (11)",
+        "alignment": "Neutral",
+        "xp_value": "1,400 lk."
+      },
+      "psionics": "Level Dis/Sci/Dev Attack/Defense Score PSPs\n1     1/1/3  Nil/M   13   30\nPsychokinesis —Sciences:detonate; with its detonate psionic ability (which orig-\nhuge flying\nDevotions:ballistic attack, control body, inates from the crystalline growth on its\ntails. In combat,\ninertial barrier.       back) at the ground near a victim, some-\ne any",
+      "narrative": {
+        "appearance": "Daggorans are large frog-like times killing it with the shrapnel created creatures with gold-colored skin. Their eyes from the explosion. If the victim survives the are green with yellow pupils. Located initial attack, the daggoran rushes in to between the daggorans’ shoulders is a green attack with its mouth, causing 2-12 (2d6) crystalline growth. Daggorans are creatures of points of damage per hit. earth, feed on",
+        "habitat_society": "Daggorans are social bat they can and used as trackers by Drajian guards creatures, living and hunting in packs, much le opponent, they because of the daggorans’ innate ability to like wolves of other worlds. The hierarchy g their bodies “pick up” and track the psionic signature of within a pack is strict with only the strongest all four arms most intelligent and psionic creatures. daggoran as the leader. Whenever a",
+        "combat": "Daggorans can opt to jump up to daggoran wishes to vie for the position of ions, each at a their movement distance. This hop will pack leader, a battle to the death ensues. clear any object up to one-third as high as The victor quite obviously becomes the pack the length of the leap and requires only a leader, while the loser becomes a meal for single round to accomplish. A jumping the rest of the pack.",
+        "ecology": "Daggorans have proven to be ontrolled by of its leap. valuable hunters of the Athasian deserts priest. They Daggorans frequently hunt in packs during as they help keep the population of rodents eir opponents, times when food is scarce — generally the and other small animals down to a tolerable way of life in the desert. These packs are level. Unfortunately, thri-kreen consider or pummel their likely (60% chance) to follow and attack prey. daggorans a delicacy and as such, the daggoran population has been hunted to In the wild, when a daggoran comes upon a near extinction. potential meal it usually launches an attack 38"
+      },
+      "raw": "   DAGGORAN               NO. APPEARING: 2-8\nven unarmed,\n                          ARMORCLASS: 7\nse they attack\n                          MOVEMENT: 9, Hop 9\nThri-kreen have a par-\n                          HITDICE:  4\ns in their tracks.\n                          THACØ:    17\n   Climate/Terrain: Wastelands, Tablelands NO. OFATTACKS: 1\n   FREQUENCY: Common      DAMAGE/ATTACK: 2-12 (bite)\n   ORGANIZATION: Pack     SPECIALATTACKS: Psionics\nd Descriptions of New ACTIVITYCYCLE: Any SPECIALDEFENSES: Nil\n   DIET:     Omnivore     MAGICRESISTANCE: Nil\n   INTELLIGENCE: Semi- (2-4) SIZE:  M (4’-6’ long)\n   TREASURE: Nil          MORALE:   Average (11)\nd Descriptions of New ALIGNMENT: Neutral XP VALUE: 1,400\nlk.\n   PSIONICSUMMARY: Level Dis/Sci/Dev Attack/Defense Score PSPs\n                 1     1/1/3  Nil/M   13   30\n  Psychokinesis —Sciences:detonate; with its detonate psionic ability (which orig-\nhuge flying\n  Devotions:ballistic attack, control body, inates from the crystalline growth on its\n tails. In combat,\n  inertial barrier.       back) at the ground near a victim, some-\ne any\n  Appearance:Daggorans are large frog-like times killing it with the shrapnel created\n  creatures with gold-colored skin. Their eyes from the explosion. If the victim survives the\n  are green with yellow pupils. Located initial attack, the daggoran rushes in to\n  between the daggorans’ shoulders is a green attack with its mouth, causing 2-12 (2d6)\n  crystalline growth. Daggorans are creatures of points of damage per hit.\n earth, feed on\n  the deserts near Draj. They are often trained Habitat/Society:Daggorans are social\nbat they can and used as trackers by Drajian guards creatures, living and hunting in packs, much\nle opponent, they because of the daggorans’ innate ability to like wolves of other worlds. The hierarchy\ng their bodies “pick up” and track the psionic signature of within a pack is strict with only the strongest\n all four arms most intelligent and psionic creatures. daggoran as the leader. Whenever a\nponents they Combat:Daggorans can opt to jump up to daggoran wishes to vie for the position of\nions, each at a their movement distance. This hop will pack leader, a battle to the death ensues.\n  clear any object up to one-third as high as The victor quite obviously becomes the pack\n  the length of the leap and requires only a leader, while the loser becomes a meal for\n  single round to accomplish. A jumping the rest of the pack.\n  daggoran can attack in midair or at the end Ecology:Daggorans have proven to be\nontrolled by of its leap. valuable hunters of the Athasian deserts\n priest. They Daggorans frequently hunt in packs during as they help keep the population of rodents\neir opponents, times when food is scarce — generally the and other small animals down to a tolerable\n  way of life in the desert. These packs are level. Unfortunately, thri-kreen consider\nor pummel their\n  likely (60% chance) to follow and attack prey. daggorans a delicacy and as such, the\n                          daggoran population has been hunted to\n  In the wild, when a daggoran comes upon a\n                          near extinction.\n  potential meal it usually launches an attack\n                                             38"
+    }
+  },
+  {
+    "name": "Dagolar Slime",
+    "description": "Appearance:Dagolar slimes are Tyrian The second secretion is a highly corrosive\nslimes genetically altered by the evil acid. This acidic secretion dissolves metal at\npsionicist, Dagolar. These slimes are a surprising rate. The acid is also caustic to\nhideous, amorphous creatures that are the flesh and bone. Bone is dissolved on contact\nbane of intelligent beings. Dagolar slimes and exposed flesh suffers 2-12 (2d6) points\nhave greenish-colored “bodies” with red of damage per hit.\nhighlights. In the middle of a Dagolar slime As if the secretions weren’t enough, a Dagolar\nrests a human-like brain covered with slime. slime also has limited psionic attack abilities.\nLike most slimes, these creatures have the\n\nHabitat/Society:Dagolar slimes are\nability to move along walls and ceilings.\nsolitary, asexual creatures. Reproduction\n\nCombat:When a Dagolar slime attacks, it happens when a Dagolar slime encounters a\nenvelops the head of its prey and dissolves victim with an especially active brain pattern\naway the skull to get at the brain. A Dagolar (i.e., a psionicist). Once the victim is\nslime has two types of secretions. The first is incapacitated, the slime does not consume\na fast-drying, sticky substance that entangles the brain but rather removes it from the\nits prey into motionlessness. This secretion victim. At this point the Dagolar divides its\nis the slimes’ usual first attack. The spraying slime “body” and through some unknown\nof this secretion acts like a webspell but process “transplants” the new brain into its\naffects one target rather than an area. The new offspring.\nvictim must make a saving throw versus\n\nEcology:Dagolar slimes pose a threat to\nbreath weapon. A successful save indicates\nall intelligent creatures and, as such, are\nusually killed when encountered.",
+    "section": "Bestiary - Detailed Descriptions",
+    "details": {
+      "source_section": "Detailed Descriptions of New Monsters",
+      "stats": {
+        "number_appearing": "1-3",
+        "armor_class": "2",
+        "movement": "6",
+        "hit_dice": "7",
+        "thac0": "13",
+        "attacks": "1",
+        "damage": "2-12 (Acid)",
+        "climate_terrain": "Subterranean",
+        "special_attacks": "Launch",
+        "frequency": "Uncommon    secretion,",
+        "organization": "Solitary           psionics",
+        "activity_cycle": "Any",
+        "special_defenses": "I th m r m u",
+        "diet": "Carnivore (Brains)",
+        "magic_resistance": "Nil",
+        "intelligence": "Animal (1)",
+        "size": "M (4’-7’ in diamete",
+        "treasure": "Nil",
+        "morale": "Average (10)",
+        "alignment": "Neutral (Evil)",
+        "xp_value": "7,000"
+      },
+      "psionics": "Le\n1\nvel Dis\n1\n/S\n/1\nci\n/\n/\n3\nDev\nP\nA\ns\nt\nC\nta\n,\nc\nP\nk\nB\n/D\n,\ne\nE\nf\nW\nen\n/\ns\nM\ne  Sc\n1\no\n5\nre  P\n6\nS\n0\nPs\nTelepathy— Sciences: psionic blast; that the victim h\nDevotions:mind blank, ego whip, failure indicates tha\npsychic crush.          and cannot move.",
+      "narrative": {
+        "appearance": "Dagolar slimes are Tyrian The second secre slimes genetically altered by the evil acid. This aci psionicist, Dagolar. These slimes are a surprising ra hideous, amorphous creatures that are the flesh and b bane of intelligent beings. Dagolar slimes and expose have greenish-colored “bodies” with red of damage per highlights. In the middle of a Dagolar slime As if th rests a human-like brain covered with slime. slime al Like most slimes, these creatures have the ability to move along walls and ceilings. Habitat/Soc solitary, asexual creatures.",
+        "combat": "When a Dagolar slime attacks, it happens when envelops the head of its prey and dissolves victim wi away the skull to get at the brain. A Dagolar (i.e., slime has two types of secretions. The first is incap a fast-drying, sticky substance that entangles the br its prey into motionlessness. This secretion victim. is the slimes’ usual first attack. The spraying slime of this secretion acts like a webspell but process “t affects one target rather than an area. The new offsp victim must make a saving throw versus",
+        "ecology": "Dagolar slimes pose a breath weapon. A successful save indicates all intelligent creatures and usually killed when encounter 39"
+      },
+      "raw": "    DAGOLAR                NO. APPEARING: 1-3\n    SLIMES                 ARMORCLASS: 2\n                           MOVEMENT: 6\n                           HITDICE:  7\n                           THACØ:    13\n                           NO. OFATTACKS: 1\n                           DAMAGE/ATTACK: 2-12 (Acid)\n    CLIMATE/TERRAIN: Subterranean SPECIALATTACKS: Launch\n    FREQUENCY: Uncommon    secretion,\n    ORGANIZATION: Solitary           psionics\n    ACTIVITYCYCLE: Any     SPECIALDEFENSES: I th m r m u\n    DIET:     Carnivore (Brains) MAGICRESISTANCE: Nil\n    INTELLIGENCE: Animal (1) SIZE:   M (4’-7’ in diamete\n    TREASURE: Nil          MORALE:   Average (10)\n    ALIGNMENT: Neutral (Evil) XP VALUE: 7,000\n    PSIONICSUMMARY: Le\n                  1\n                  vel Dis\n                        1\n                        /S\n                        /1\n                        ci\n                         /\n                         /\n                         3\n                         Dev\n                             P\n                              A\n                              s\n                              t\n                              C\n                              ta\n                               ,\n                               c\n                               P\n                                k\n                                B\n                                /D\n                                 ,\n                                 e\n                                 E\n                                 f\n                                  W\n                                  en\n                                   /\n                                   s\n                                   M\n                                   e  Sc\n                                       1\n                                       o\n                                       5\n                                        re  P\n                                            6\n                                            S\n                                             0\n                                             Ps\n   Telepathy— Sciences: psionic blast; that the victim h\n   Devotions:mind blank, ego whip, failure indicates tha\n   psychic crush.          and cannot move.\n   Appearance:Dagolar slimes are Tyrian The second secre\n   slimes genetically altered by the evil acid. This aci\n   psionicist, Dagolar. These slimes are a surprising ra\n   hideous, amorphous creatures that are the flesh and b\n   bane of intelligent beings. Dagolar slimes and expose\n   have greenish-colored “bodies” with red of damage per\n   highlights. In the middle of a Dagolar slime As if th\n   rests a human-like brain covered with slime. slime al\n   Like most slimes, these creatures have the\n   ability to move along walls and ceilings. Habitat/Soc\n                           solitary, asexual creatures.\n   Combat:When a Dagolar slime attacks, it happens when\n   envelops the head of its prey and dissolves victim wi\n   away the skull to get at the brain. A Dagolar (i.e.,\n   slime has two types of secretions. The first is incap\n   a fast-drying, sticky substance that entangles the br\n   its prey into motionlessness. This secretion victim.\n   is the slimes’ usual first attack. The spraying slime\n   of this secretion acts like a webspell but process “t\n   affects one target rather than an area. The new offsp\n   victim must make a saving throw versus\n                           Ecology:Dagolar slimes pose a\n   breath weapon. A successful save indicates\n                           all intelligent creatures and\n                           usually killed when encounter\n   39"
+    }
+  },
+  {
+    "name": "Dark Spider",
+    "description": "Appearance:Dark spiders are intelligent, \nHabitat/Society:There seem to be three\nsubterranean arachnids. A portion of the types of spiders in a tribe. The first, and\ndark spider population has a wide range of most common, is the warrior spider. The\npsionic abilities, and some have even warrior spider has limited psionic abilities,\nmastered defiler magic. They form small relying on its melee attacks to defeat its\ntribes ruled by the psionic elite (queen). victims. The second type of dark spider is\nMagically, their powers can rival that of a the mage spider. The mage spider is known\nsixth-level defiler. Dark spiders often lay to use up to sixth level defiler magic and\nsnares made from their webs. In rare some psionics. The last and most feared\ninstances, the spiders have been known to dark spider is the queen spider. The queen\ntrade silk for live food. A number of mer- spider is an extremely powerful and skilled\nchant houses are rumored to trade slaves for psionicist/defiler.\nthe valuable silk. \nEcology:The dark spiders have no natural\n\nCombat:In melee, dark spiders attack with enemies, but many acquired ones. Their\ntwo forelegs and a poison bite. The forelegs young are born in web sacks, located in the\ndo 1d10 points of damage and the bite does lair’s hatchery. The poison is highly prized\n1d6 points of damage, plus poison. Their by assassins and alchemists.\npoison (type F) is deadly if a save versus\npoison is not made.",
+    "section": "Bestiary - Detailed Descriptions",
+    "details": {
+      "source_section": "Detailed Descriptions of New Monsters",
+      "stats": {
+        "number_appearing": "2-20",
+        "armor_class": "2",
+        "movement": "18",
+        "hit_dice": "6",
+        "thac0": "15",
+        "attacks": "3",
+        "damage": "1-10 (foreleg)/1-10 (foreleg)/ es “sticky”                         1-6 (bite)+poison",
+        "special_attacks": "See below",
+        "climate_terrain": "Subterranean",
+        "special_defenses": "Nil",
+        "frequency": "Very rare",
+        "magic_resistance": "Nil",
+        "organization": "Tribe",
+        "size": "M (4’-6’ long)",
+        "activity_cycle": "Any",
+        "morale": "Elite (14)",
+        "diet": "Carnivore",
+        "xp_value": "Warrior: 975, Mage: 2,000",
+        "intelligence": "High to exceptional (13-16) Queen: 8 HD — 3,000",
+        "treasure": "Q (x2)                 Psionicist — add 2,000",
+        "alignment": "Neutral     PSIONICS: 20%"
+      },
+      "psionics": null,
+      "narrative": {
+        "appearance": "Dark spiders are intelligent, Habitat/Society:There seem to be three t the victim is entangled subterranean arachnids. A portion of the types of spiders in a tribe. The first, and dark spider population has a wide range of most common, is the warrior spider. The tion is a highly corrosive psionic abilities, and some have even warrior spider has limited psionic abilities, dic secretion dissolves metal at mastered defiler magic. They form small relying on its melee attacks to defeat its te. The acid is also caustic to tribes ruled by the psionic elite (queen). victims. The second type of dark spider is one. Bone is dissolved on contact Magically, their powers can rival that of a the mage spider. The mage spider is known d flesh suffers 2-12 (2d6) points sixth-level defiler. Dark spiders often lay to use up to sixth level defiler magic and hit. snares made from their webs. In rare some psionics. The last and most feared e secretions weren’t enough, a Dagolar instances, the spiders have been known to dark spider is the queen spider. The queen so has limited psionic attack abilities. trade silk for live food. A number of mer- spider is an extremely powerful and skilled chant houses are rumored to trade slaves for psionicist/defiler.",
+        "ecology": "The dark spiders have no natural Reproduction",
+        "combat": "In melee, dark spiders attack with enemies, but many acquired ones. Their th an especially active brain pattern two forelegs and a poison bite. The forelegs young are born in web sacks, located in the a psionicist). Once the victim is do 1d10 points of damage and the bite does lair’s hatchery. The poison is highly prized acitated, the slime does not consume 1d6 points of damage, plus poison. Their by assassins and alchemists. ain but rather removes it from the poison (type F) is deadly if a save versus At this point the Dagolar divides its poison is not made. “body” and through some unknown ransplants” the new brain into its ring. threat to , as such, are ed. 40"
+      },
+      "raw": "   DARK                   NO. APPEARING: 2-20\n   SPIDER                 ARMORCLASS: 2\n                          MOVEMENT: 18\n                          HITDICE:  6\n                          THACØ:    15\n                          NO. OFATTACKS: 3\n                          DAMAGE/ATTACK: 1-10 (foreleg)/1-10 (foreleg)/\nes “sticky”                         1-6 (bite)+poison\n                          SPECIALATTACKS: See below\n   CLIMATE/TERRAIN: Subterranean SPECIALDEFENSES: Nil\ns u ti n n e g t w o e c a r p u o sh n i s ng and FREQUENCY: Very rare MAGICRESISTANCE: Nil\n   ORGANIZATION: Tribe    SIZE:     M (4’-6’ long)\nr) ACTIVITYCYCLE: Any     MORALE:   Elite (14)\n   DIET:     Carnivore    XP VALUE: Warrior: 975, Mage: 2,000\n   INTELLIGENCE: High to exceptional (13-16) Queen: 8 HD — 3,000\n   TREASURE: Q (x2)                 Psionicist — add 2,000\n   ALIGNMENT: Neutral     PSIONICS: 20%\nas dodged the spray, while Appearance:Dark spiders are intelligent, Habitat/Society:There seem to be three\nt the victim is entangled subterranean arachnids. A portion of the types of spiders in a tribe. The first, and\n  dark spider population has a wide range of most common, is the warrior spider. The\ntion is a highly corrosive psionic abilities, and some have even warrior spider has limited psionic abilities,\ndic secretion dissolves metal at mastered defiler magic. They form small relying on its melee attacks to defeat its\nte. The acid is also caustic to tribes ruled by the psionic elite (queen). victims. The second type of dark spider is\none. Bone is dissolved on contact Magically, their powers can rival that of a the mage spider. The mage spider is known\nd flesh suffers 2-12 (2d6) points sixth-level defiler. Dark spiders often lay to use up to sixth level defiler magic and\n hit. snares made from their webs. In rare some psionics. The last and most feared\ne secretions weren’t enough, a Dagolar instances, the spiders have been known to dark spider is the queen spider. The queen\nso has limited psionic attack abilities. trade silk for live food. A number of mer- spider is an extremely powerful and skilled\n  chant houses are rumored to trade slaves for psionicist/defiler.\niety:Dagolar slimes are the valuable silk. Ecology:The dark spiders have no natural\nReproduction\na Dagolar slime encounters a Combat:In melee, dark spiders attack with enemies, but many acquired ones. Their\nth an especially active brain pattern two forelegs and a poison bite. The forelegs young are born in web sacks, located in the\na psionicist). Once the victim is do 1d10 points of damage and the bite does lair’s hatchery. The poison is highly prized\nacitated, the slime does not consume 1d6 points of damage, plus poison. Their by assassins and alchemists.\nain but rather removes it from the poison (type F) is deadly if a save versus\nAt this point the Dagolar divides its poison is not made.\n “body” and through some unknown\nransplants” the new brain into its\nring.\n threat to\n, as such, are\ned.\n                                             40"
+    }
+  },
+  {
+    "name": "Dune Reaper",
+    "description": "Appearance:These dune denizens prowl \nHabitat/Society:Dune reapers roam the\nthe sandy wastes. They like to leap from the wastes in small packs, searching for food.\nsand to ambush and impale victims on their They often lie in wait near a caravan route\nscythe-like limbs. Common to the desert for days, and then ambush the caravan\nnear the city-state of Draj, dune reapers when it wanders within range. They have no\nare often captured for fighting in the permanent lairs and they mate twice a year.\ngladiatorial arena. \nEcology:Dune reapers eat anything —\n\nCombat:The dune reaper attacks with two plant or animal. The pack will fight to the\nscythe-like limbs doing 3d6 points of death when food is the issue. This tenacity\ndamage (+7 for exceptional strength). It also makes them prized in the arena.\nalso has a bite attack for 2d6 points of\ndamage. They are known to be resistant to\nmagic attacks.",
+    "section": "Bestiary - Detailed Descriptions",
+    "details": {
+      "source_section": "Detailed Descriptions of New Monsters",
+      "stats": {
+        "number_appearing": "5-30 (5d6)",
+        "armor_class": "2",
+        "movement": "12 (jump 9)",
+        "hit_dice": "8",
+        "thac0": "13",
+        "attacks": "5",
+        "damage": "3-18 (claw)/3-",
+        "climate_terrain": "Any             2-12 (bite)",
+        "frequency": "Common",
+        "special_attacks": "+7 to damage",
+        "organization": "Pack",
+        "special_defenses": "Nil",
+        "activity_cycle": "Day",
+        "magic_resistance": "10%",
+        "diet": "Omnivore",
+        "size": "L (8’-10’ tall)",
+        "intelligence": "Animal (1)",
+        "morale": "Fearless (19-20)",
+        "treasure": "Nil",
+        "xp_value": "4,000",
+        "alignment": "Neutral     PSIONICS: Nil"
+      },
+      "psionics": null,
+      "narrative": {
+        "appearance": "These dune denizens prowl Habitat/Society: the sandy wastes. They like to leap from the wastes i sand to ambush and impale victims on their They often scythe-like limbs. Common to the desert for days, and near the city-state of Draj, dune reapers when it wan are often captured for fighting in the permanent lair",
+        "ecology": "Dune reapers eat anyt",
+        "combat": "The dune reaper attacks with two plant or anim scythe-like limbs doing 3d6 points of death when food damage (+7 for exceptional strength). It also makes t also has a bite attack for 2d6 points of damage. They are known to be resistant to magic attacks. 41"
+      },
+      "raw": "    DUNE                   NO. APPEARING: 5-30 (5d6)\n    REAPER                 ARMORCLASS: 2\n                           MOVEMENT: 12 (jump 9)\n                           HITDICE:  8\n                           THACØ:    13\n                           NO. OFATTACKS: 5\n                           DAMAGE/ATTACK: 3-18 (claw)/3-\n    CLIMATE/TERRAIN: Any             2-12 (bite)\n    FREQUENCY: Common      SPECIALATTACKS: +7 to damage\n    ORGANIZATION: Pack     SPECIALDEFENSES: Nil\n    ACTIVITYCYCLE: Day     MAGICRESISTANCE: 10%\n    DIET:     Omnivore     SIZE:     L (8’-10’ tall)\n    INTELLIGENCE: Animal (1) MORALE: Fearless (19-20)\n    TREASURE: Nil          XP VALUE: 4,000\n    ALIGNMENT: Neutral     PSIONICS: Nil\n   Appearance:These dune denizens prowl Habitat/Society:\n   the sandy wastes. They like to leap from the wastes i\n   sand to ambush and impale victims on their They often\n   scythe-like limbs. Common to the desert for days, and\n   near the city-state of Draj, dune reapers when it wan\n   are often captured for fighting in the permanent lair\n   gladiatorial arena.     Ecology:Dune reapers eat anyt\n   Combat:The dune reaper attacks with two plant or anim\n   scythe-like limbs doing 3d6 points of death when food\n   damage (+7 for exceptional strength). It also makes t\n   also has a bite attack for 2d6 points of\n   damage. They are known to be resistant to\n   magic attacks.\n   41"
+    }
+  },
+  {
+    "name": "Fire Eel",
+    "description": "Appearance:The fire eel is a six-foot-long, \nHabitat/Society:Nil\nfish-like snake that is very aggressive. \nEcology:Fire eels roam the sandy wastes\n\nCombat:Fire eels can breathe a stream of searching for food. Not a social animal,\nfire 10’ long. Their favorite mode of attack is the fire eel lives a solitary life when it is\nto burrow near a target, expose their heads not breeding.\nand “breathe” upon the intended victim. If\nthe victim survives, the eels plunge back\ninto the sand and attack from a different\nlocation. The breath from a fire eel does 6d6\npoints of damage. The fire eel bites for 3d8\npoints of damage.",
+    "section": "Bestiary - Detailed Descriptions",
+    "details": {
+      "source_section": "Detailed Descriptions of New Monsters",
+      "stats": {
+        "number_appearing": "1-3",
+        "armor_class": "4",
+        "movement": "9",
+        "hit_dice": "6",
+        "thac0": "15",
+        "attacks": "1 18 (claw)/",
+        "climate_terrain": "Sandy Wastes",
+        "damage": "3-24 (bite)",
+        "frequency": "Rare",
+        "special_attacks": "Breathe fire",
+        "organization": "Solitary",
+        "special_defenses": "Nil",
+        "activity_cycle": "Any",
+        "magic_resistance": "Nil",
+        "diet": "Carnivore",
+        "size": "M (6’ long)",
+        "intelligence": "Non- (0)",
+        "morale": "Average (8)",
+        "treasure": "Nil",
+        "xp_value": "2,000",
+        "alignment": "Nil         PSIONICS: Nil"
+      },
+      "psionics": null,
+      "narrative": {
+        "appearance": "The fire eel is a six-foot-long, Habitat/Society:Nil",
+        "ecology": "Fire eels roam the sandy wastes n small packs, searching for food.",
+        "combat": "Fire eels can breathe a stream of searching for food. Not a social animal, lie in wait near a caravan route fire 10’ long. Their favorite mode of attack is the fire eel lives a solitary life when it is then ambush the caravan to burrow near a target, expose their heads not breeding. ders within range. They have no and “breathe” upon the intended victim. If s and they mate twice a year. the victim survives, the eels plunge back hing — into the sand and attack from a different al. The pack will fight to the location. The breath from a fire eel does 6d6 is the issue. This tenacity points of damage. The fire eel bites for 3d8 hem prized in the arena. points of damage. 42"
+      },
+      "raw": "   FIRE                   NO. APPEARING: 1-3\n   EEL                    ARMORCLASS: 4\n                          MOVEMENT: 9\n                          HITDICE:  6\n                          THACØ:    15\n                          NO. OFATTACKS: 1\n18 (claw)/\n   CLIMATE/TERRAIN: Sandy Wastes\n                          DAMAGE/ATTACK: 3-24 (bite)\n   FREQUENCY: Rare        SPECIALATTACKS: Breathe fire\n   ORGANIZATION: Solitary SPECIALDEFENSES: Nil\n   ACTIVITYCYCLE: Any     MAGICRESISTANCE: Nil\n   DIET:     Carnivore    SIZE:     M (6’ long)\n   INTELLIGENCE: Non- (0) MORALE:   Average (8)\n   TREASURE: Nil          XP VALUE: 2,000\n   ALIGNMENT: Nil         PSIONICS: Nil\n  Appearance:The fire eel is a six-foot-long, Habitat/Society:Nil\nDune reapers roam the fish-like snake that is very aggressive. Ecology:Fire eels roam the sandy wastes\nn small packs, searching for food.\n  Combat:Fire eels can breathe a stream of searching for food. Not a social animal,\n lie in wait near a caravan route\n  fire 10’ long. Their favorite mode of attack is the fire eel lives a solitary life when it is\n then ambush the caravan\n  to burrow near a target, expose their heads not breeding.\nders within range. They have no\n  and “breathe” upon the intended victim. If\ns and they mate twice a year.\n  the victim survives, the eels plunge back\nhing — into the sand and attack from a different\nal. The pack will fight to the location. The breath from a fire eel does 6d6\n is the issue. This tenacity points of damage. The fire eel bites for 3d8\nhem prized in the arena. points of damage.\n                                             42"
+    }
+  },
+  {
+    "name": "Greater Shadow",
+    "description": "Appearance:Greater shadows are more \nHabitat/Society:Greater shadows travel\npowerful versions of shadows. Greater in loosely organized packs that freely\nshadows are undetectable in all but the roam ancient ruins, caverns, graveyards,\nbrightest of surroundings, as they appear to and dungeons.\nbe nothing more than shadows. In bright \nEcology:Greater shadows were once\nlight they can be clearly seen. powerful humanoids exposed to the\n\nCombat:The greater shadow is primarily Negative Material Plane. It has been\nfrom the Negative Material Plane. This gives rumored that greater shadows are really\nit the ability to drain the life force from its muls who have been cursed by the touch\nvictim. The chilling touch of a greater of a shadow.\nshadow inflicts 2d6 points of damage and\ndrains 1 strength point from its victim. The\ngreater shadow is immune to sleep, charm,and\nholdspells, and it is unaffected by cold-based\nattacks. They can be turned by clerics.",
+    "section": "Bestiary - Detailed Descriptions",
+    "details": {
+      "source_section": "Detailed Descriptions of New Monsters",
+      "stats": {
+        "number_appearing": "1-2",
+        "armor_class": "4",
+        "movement": "18",
+        "hit_dice": "6",
+        "thac0": "15",
+        "climate_terrain": "Any ruins or subterranean NO. OFATT",
+        "damage": "2-12 (touch)+S",
+        "frequency": "Very rare",
+        "special_attacks": "Strength drai",
+        "organization": "Solitary",
+        "special_defenses": "+1 or better",
+        "activity_cycle": "Night or darkness",
+        "magic_resistance": "Ni",
+        "diet": "Living creatures",
+        "size": "M (6’ tall)",
+        "intelligence": "Average (10-12)",
+        "morale": "Elite (13)",
+        "treasure": "F",
+        "xp_value": "1,400",
+        "alignment": "Chaotic evil PSIONICS: Nil"
+      },
+      "psionics": null,
+      "narrative": {
+        "appearance": "Greater shadows are more Habitat/Society:G powerful versions of shadows. Greater in loosely orga shadows are undetectable in all but the roam ancient brightest of surroundings, as they appear to and dung",
+        "ecology": "Great light they can be clearly seen. powerful humanoids ex",
+        "combat": "The greater shadow is primarily Negative Mater from the Negative Material Plane. This gives rumored it the ability to drain the life force from its muls victim. The chilling touch of a greater of a shadow. shadow inflicts 2d6 points of damage and drains 1 strength point from its victim. The greater shadow is immune to sleep, charm,and holdspells, and it is unaffected by cold-based attacks. They can be turned by clerics. 43"
+      },
+      "raw": "    GREATER                NO. APPEARING: 1-2\n    SHADOW                 ARMORCLASS: 4\n                           MOVEMENT: 18\n                           HITDICE:  6\n                           THACØ:    15\n    CLIMATE/TERRAIN: Any ruins or subterranean NO. OFATT\n              chambers     DAMAGE/ATTACK: 2-12 (touch)+S\n    FREQUENCY: Very rare   SPECIALATTACKS: Strength drai\n    ORGANIZATION: Solitary SPECIALDEFENSES: +1 or better\n    ACTIVITYCYCLE: Night or darkness MAGICRESISTANCE: Ni\n    DIET:     Living creatures SIZE: M (6’ tall)\n    INTELLIGENCE: Average (10-12) MORALE: Elite (13)\n    TREASURE: F            XP VALUE: 1,400\n    ALIGNMENT: Chaotic evil PSIONICS: Nil\n   Appearance:Greater shadows are more Habitat/Society:G\n   powerful versions of shadows. Greater in loosely orga\n   shadows are undetectable in all but the roam ancient\n   brightest of surroundings, as they appear to and dung\n   be nothing more than shadows. In bright Ecology:Great\n   light they can be clearly seen. powerful humanoids ex\n   Combat:The greater shadow is primarily Negative Mater\n   from the Negative Material Plane. This gives rumored\n   it the ability to drain the life force from its muls\n   victim. The chilling touch of a greater of a shadow.\n   shadow inflicts 2d6 points of damage and\n   drains 1 strength point from its victim. The\n   greater shadow is immune to sleep, charm,and\n   holdspells, and it is unaffected by cold-based\n   attacks. They can be turned by clerics.\n   43"
+    }
+  },
+  {
+    "name": "Magera",
+    "description": "Appearance:The magera are a tribal race \nHabitat/Society:Magera tribes are found\nthat typically live in caves. They frequently anywhere from caverns to mountaintops.\nraid caravans and poorly defended villages. The tribes have 10-20 males, 12-18 females,\nThose with higher intelligence have been and 2-8 children. The tribe leader is usually\nknown to master defiler magic, up to fifth a defiler of up to 5th level. Magera live\nlevel. Those with the greatest psionic ability by raiding and scavenging, and eat just\noften become leaders. about anything.\n\nCombat:Magera attack with their fists \nEcology:The magera plague mankind,\ndoing 1d8+8 points of damage. lusting for gold, gems, and jewelry as well\nas human flesh. They are evil-natured\ncreatures that join other monsters to prey\non the weak.",
+    "section": "Bestiary - Detailed Descriptions",
+    "details": {
+      "source_section": "Detailed Descriptions of New Monsters",
+      "stats": {
+        "number_appearing": "5-30",
+        "armor_class": "6",
+        "movement": "15",
+        "hit_dice": "6",
+        "thac0": "15",
+        "attacks": "2",
+        "climate_terrain": "Table Lands, Mountains,",
+        "damage": "1-8 (fist) or by weapon",
+        "special_attacks": "+8 to damage",
+        "frequency": "Uncommon",
+        "special_defenses": "Nil",
+        "organization": "Tribe",
+        "magic_resistance": "Nil",
+        "activity_cycle": "Any",
+        "size": "L (6’-10’ tall)",
+        "diet": "Omnivore",
+        "morale": "Average (10)",
+        "intelligence": "Low to very (5-11)",
+        "xp_value": "Warrior: 270, Mage: 650",
+        "treasure": "R, S                   Psionicist — add 2,000",
+        "alignment": "Lawful neutral or lawful evil PSIONICS: 10% reater shadows travel"
+      },
+      "psionics": null,
+      "narrative": {
+        "appearance": "The magera are a tribal race Habitat/Society:Magera tribes are found ruins, caverns, graveyards, that typically live in caves. They frequently anywhere from caverns to mountaintops. eons. raid caravans and poorly defended villages. The tribes have 10-20 males, 12-18 females, er shadows were once Those with higher intelligence have been and 2-8 children. The tribe leader is usually posed to the known to master defiler magic, up to fifth a defiler of up to 5th level. Magera live level. Those with the greatest psionic ability by raiding and scavenging, and eat just ial Plane. It has been often become leaders.   about anything. that greater shadows are really",
+        "combat": "Magera attack with their fists Ecology:The magera plague mankind, doing 1d8+8 points of damage. lusting for gold, gems, and jewelry as well as human flesh. They are evil-natured creatures that join other monsters to prey on the weak. 44"
+      },
+      "raw": "   MAGERA                 NO. APPEARING: 5-30\n                          ARMORCLASS: 6\n                          MOVEMENT: 15\n                          HITDICE:  6\n                          THACØ:    15\nACKS: 2                   NO. OFATTACKS: 2\npecial CLIMATE/TERRAIN: Table Lands, Mountains, DAMAGE/ATTACK: 1-8 (fist) or by weapon\nn            Subterranean SPECIALATTACKS: +8 to damage\n weapon to hit FREQUENCY: Uncommon SPECIALDEFENSES: Nil\nl  ORGANIZATION: Tribe    MAGICRESISTANCE: Nil\n   ACTIVITYCYCLE: Any     SIZE:     L (6’-10’ tall)\n   DIET:     Omnivore     MORALE:   Average (10)\n   INTELLIGENCE: Low to very (5-11) XP VALUE: Warrior: 270, Mage: 650\n   TREASURE: R, S                   Psionicist — add 2,000\n   ALIGNMENT: Lawful neutral or lawful evil PSIONICS: 10%\nreater shadows travel\nnized packs that freely Appearance:The magera are a tribal race Habitat/Society:Magera tribes are found\nruins, caverns, graveyards, that typically live in caves. They frequently anywhere from caverns to mountaintops.\neons. raid caravans and poorly defended villages. The tribes have 10-20 males, 12-18 females,\ner shadows were once Those with higher intelligence have been and 2-8 children. The tribe leader is usually\nposed to the known to master defiler magic, up to fifth a defiler of up to 5th level. Magera live\n  level. Those with the greatest psionic ability by raiding and scavenging, and eat just\nial Plane. It has been\n  often become leaders.   about anything.\nthat greater shadows are really\nwho have been cursed by the touch Combat:Magera attack with their fists Ecology:The magera plague mankind,\n  doing 1d8+8 points of damage. lusting for gold, gems, and jewelry as well\n                          as human flesh. They are evil-natured\n                          creatures that join other monsters to prey\n                          on the weak.\n                                             44"
+    }
+  },
+  {
+    "name": "Mastyrial",
+    "description": "Appearance:Similar to their smaller \nHabitat/Society:Mastyrials live in under-\ncousins, the scorpions, the mastyrials are ground burrows or ruins. Each lair may\nsome of the deadliest beasts in the desert. (20% chance) have 4-20 mastyrial eggs.\n\nCombat:For the most part they lie buried in These beasts eat any living creature that is\nthe sand, hibernating. However, when a unfortunate enough to stray too close to\nvictim is within range, the mastyrial bursts their lair.\nout and attacks, attempting to impale the \nEcology:These creatures contribute to the\ntarget with its poisonous tail. The poison ecosystem by feeding on giant versions of\ninflicts 30 points of damage, 15 points of insects such as spiders and ants. Alchemists\ndamage if a saving throw is made. The and assassins prize the mastyrial’s venom\nmastyrial also attacks with its two claws because of its potency.\ndoing 1-10 points of damage and a bite\ndoing 2-12 points of damage. The mastyrial\nregenerates 3 hit points per round.",
+    "section": "Bestiary - Detailed Descriptions",
+    "details": {
+      "source_section": "Detailed Descriptions of New Monsters",
+      "stats": {
+        "number_appearing": "1-3",
+        "armor_class": "0",
+        "movement": "15",
+        "hit_dice": "12",
+        "thac0": "9",
+        "attacks": "3 D (p A in M c A h G e E r / ) A / TTACK: 1-10 (pincher)/1-1 2-12(bite)/1-6 (sti",
+        "climate_terrain": "Any",
+        "special_attacks": "Poison sting",
+        "frequency": "Uncommon",
+        "special_defenses": "Regeneration A I D O N C R I T E T G E T I A V L : L N IT I I G Y",
+        "treasure": "D",
+        "xp_value": "10,000",
+        "alignment": "Nil         PSIONICS: Nil"
+      },
+      "psionics": null,
+      "narrative": {
+        "appearance": "Similar to their smaller Habitat/Society:M cousins, the scorpions, the mastyrials are ground bur some of the deadliest beasts in the desert. (20% chan",
+        "combat": "For the most part they lie buried in These bea the sand, hibernating. However, when a unfortunate en victim is within range, the mastyrial bursts their la",
+        "ecology": "The target with its poisonous tail. The poison ecosystem inflicts 30 points of damage, 15 points of insects su damage if a saving throw is made. The and assassins p mastyrial also attacks with its two claws because of doing 1-10 points of damage and a bite doing 2-12 points of damage. The mastyrial regenerates 3 hit points per round. 45"
+      },
+      "raw": "    MASTYRIAL              NO. APPEARING: 1-3\n                           ARMORCLASS: 0\n                           MOVEMENT: 15\n                           HITDICE:  12\n                           THACØ:    9\n                           NO. OFATTACKS: 3\n                           D\n                           (p\n                           A\n                            in\n                            M\n                            c\n                             A\n                             h\n                             G\n                             e\n                             E\n                              r\n                              /\n                              )\n                              A\n                              /\n                               TTACK: 1-10 (pincher)/1-1\n                                     2-12(bite)/1-6 (sti\n    CLIMATE/TERRAIN: Any   SPECIALATTACKS: Poison sting\n    FREQUENCY: Uncommon    SPECIALDEFENSES: Regeneration\n    A I D O N C R I T E T G E T I A V L : L N IT I I G Y\n    TREASURE: D            XP VALUE: 10,000\n    ALIGNMENT: Nil         PSIONICS: Nil\n   Appearance:Similar to their smaller Habitat/Society:M\n   cousins, the scorpions, the mastyrials are ground bur\n   some of the deadliest beasts in the desert. (20% chan\n   Combat:For the most part they lie buried in These bea\n   the sand, hibernating. However, when a unfortunate en\n   victim is within range, the mastyrial bursts their la\n   out and attacks, attempting to impale the Ecology:The\n   target with its poisonous tail. The poison ecosystem\n   inflicts 30 points of damage, 15 points of insects su\n   damage if a saving throw is made. The and assassins p\n   mastyrial also attacks with its two claws because of\n   doing 1-10 points of damage and a bite\n   doing 2-12 points of damage. The mastyrial\n   regenerates 3 hit points per round.\n   45"
+    }
+  },
+  {
+    "name": "Mountain Stalker",
+    "description": "Appearance:Mountain stalkers are weird \nHabitat/Society:The mountain stalkers\nvariants of beasthead giants; stalkers have shy away from any organized settlement.\na group of tentacles instead of forearms. However, they are not above attacking a\nSkilled climbers, they populate the much weaker force if stumbled upon.\nmountains west of Draj. Mountain stalkers have no regard for any\n\nCombat:Mountain stalkers attack with form of life, except other mountain stalkers.\ntheir tentacles doing 3d6+7 points of \nEcology:Mountain stalkers can survive on\ndamage per attack. This attack makes almost any type of animal or plant diet.\nthem deadly in combat. They prefer meat to vegetation. The lives of\nmountain stalkers are very hazardous, thus\nthey have a short life expectancy.",
+    "section": "Bestiary - Detailed Descriptions",
+    "details": {
+      "source_section": "Detailed Descriptions of New Monsters",
+      "stats": {
+        "number_appearing": "5-10 (1d6+4)",
+        "armor_class": "4",
+        "movement": "15",
+        "hit_dice": "10",
+        "thac0": "11",
+        "attacks": "4",
+        "climate_terrain": "Mountainous",
+        "damage": "3-18 (x4) (tentacles) nger)",
+        "frequency": "Uncommon",
+        "special_attacks": "+7 to damage",
+        "organization": "Clans",
+        "special_defenses": "Nil",
+        "activity_cycle": "Day",
+        "magic_resistance": "Nil Z E A C N T Y I C O C E N L : E : : S N C A o n a o l r y n i n t - a i v r ( y 0 o ) re S M M IZ A O E G R : I A C LE R : ESISTANCE: N S b M t l i u e l ( a n 5 d t ’ - y w 6 ’ ( e 1 l a o 1 p n ) o g n ) s T I D N R I T E E E T A L : S L U IG R E E N : CE: L O J o ( m I w ) n ( i 5 vo -7 r ) e S X M I P Z O E R V : A A L L E U : E: 5 E L , l ( 0 i 1 t 0 e 0 0 ( ’- 1 1 6 5 ) ’ tall)",
+        "alignment": "Neutral evil PSIONICS: Nil"
+      },
+      "psionics": null,
+      "narrative": {
+        "appearance": "Mountain stalkers are weird Habitat/Society:The mountain stalkers variants of beasthead giants; stalkers have shy away from any organized settlement. astyrials live in under- a group of tentacles instead of forearms. However, they are not above attacking a rows or ruins. Each lair may Skilled climbers, they populate the much weaker force if stumbled upon. ce) have 4-20 mastyrial eggs. mountains west of Draj. Mountain stalkers have no regard for any The psurlons were a highly conquest of Athas. The night was chosen Astral intelligent and technologically advanced race. carefully. When the moon was full and at its Their earthworm-like bodies have humanoid zenith, all psurlons across Athas “linked up” legs and arms that end in cloven-hoofed feet and sent forth their psychic energy. What the and black, talon-like claws (respectively). The psurlons did not realize was that the fabric of head of a psurlon appears much like that of the prime material plane could not contain an earthworm with a large gaping maw, such a psychic force. A rift in the planes was 12 (claw)/ ringed with teeth-like projections. Like ripped open and all psurlons were sucked earthworms, psurlons have no eyes but use into the astral plane. The force that pulled cs some other sense to “see.” Psurlons are them into the astral plane was so great that weapons to usually garbed in richly colored robes. each of the psurlons was knocked into a arm, Currently, these creatures are trapped on the catatonic state for a period of 100 years. astral plane. Evil psionicists seeking greater When the psurlons awoke from this state, the knowledge usually summon a psurlon (with rift had long since repaired itself. The the use of the summon planar creature psurlons were trapped with no way back to psychoportive science). The price for psurlon Athas or any other place on the prime materi- 00 knowledge is often quite high, and in many al plane. The fabric of the astral plane seems cases results in the death of the psionicist. to be much stronger than that of the prime, re PSPs Many times after summoning a psurlon and for the psurlons cannot conjure up the mas- gaining its knowledge, the summoner sive convergence like that which caused their attempts to slay it and send it back to the entrapment. Over the centuries, the psurlons astral plane. However, psurlons never forget a have lost the ability to conjure up the massive broken deal and often track down the original convergence but their determination to return Sciences:disintegrate; summoner and extract their due payment. to Athas has only grown. When a psurlon is levitation, animate shadow, summoned, it will almost always attempt to",
+        "combat": "Mountain stalkers attack with form of life, except other mountain stalkers. ough to stray too close to Through centuries of magical find a way to stay on the prime material plane experimentation, the rugged hide the so that it can try to bring its people back. psurlons have developed provides the creatures with a natural Armor Class of Ø. A psurlons’ community consists of 10-100 The use of armor is disdained as it interferes males with a like number of females. Young — Sciences:clairaudience, with their psurlon abilities. number half of the female population. ; Devotions:combat mind, Psurlon communities are led by a psurlon pirit sense. Psurlons are very dangerous foes in combat adept who has 18 hit dice and a much with many options at their disposal. They stronger psionic ability. Psurlon females disdain the use of weapons, preferring to fight as psurlon males. es:psychic clone, rend their victims apart using their claws t; Devotions:convergence, psionic and teeth. When engaged in melee combat, Psurlons normally feed on the flesh of other psurlons attack with each claw, causing 3- creatures, preferably that of other sentient ce, wrench. 12 (d10+2) points of damage, and a vicious races. They especially like the flesh of bite for 2-16 (2d8) points of damage. The halflings and humans.",
+        "ecology": "Mountain stalkers can survive on ir. damage per attack. This attack makes almost any type of animal or plant diet. se creatures contribute to the them deadly in combat.  They prefer meat to vegetation. The lives of by feeding on giant versions of mountain stalkers are very hazardous, thus ch as spiders and ants. Alchemists they have a short life expectancy. rize the mastyrial’s venom its potency. 46 Psurlons have an average life span however, is their massive psionic ability. of 5000 years. Like most intelligent preda-",
+        "habitat_society": "Psurlons existed on Athas tors, psurlons are usually at the top of the many thousands of years ago. At the height food chain. However, psurlons seem to be of their evolution, psurlons, in their eternal something of a delicacy to Athasian rocs. quest for knowledge and power, devised a This of course causes psurlons to react means to psychically link up with all psurlons poorly whenever one of these great birds of throughout Athas. With this ability, the prey is in the area. psurlons planned to attempt a worldwide 48"
+      },
+      "raw": "   MOUNTAIN               NO. APPEARING: 5-10 (1d6+4)\n   STALKER                ARMORCLASS: 4\n                          MOVEMENT: 15\n                          HITDICE:  10\n                          THACØ:    11\n                          NO. OFATTACKS: 4\n0  CLIMATE/TERRAIN: Mountainous\n                          DAMAGE/ATTACK: 3-18 (x4) (tentacles)\nnger)\n   FREQUENCY: Uncommon\n                          SPECIALATTACKS: +7 to damage\n   ORGANIZATION: Clans    SPECIALDEFENSES: Nil\n, immune to ACTIVITYCYCLE: Day MAGICRESISTANCE: Nil\n Z E A C N T Y I C O C E N L : E : : S N C A o n a o l r y n i n t - a i v r ( y 0 o ) re S M M IZ A O E G R : I A C LE R : ESISTANCE: N S b M t l i u e l ( a n 5 d t ’ - y w 6 ’ ( e 1 l a o 1 p n ) o g n ) s T I D N R I T E E E T A L : S L U IG R E E N : CE: L O J o ( m I w ) n ( i 5 vo -7 r ) e S X M I P Z O E R V : A A L L E U : E: 5 E L , l ( 0 i 1 t 0 e 0 0 ( ’- 1 1 6 5 ) ’ tall)\n   ALIGNMENT: Neutral evil\n                          PSIONICS: Nil\n  Appearance:Mountain stalkers are weird Habitat/Society:The mountain stalkers\n  variants of beasthead giants; stalkers have shy away from any organized settlement.\nastyrials live in under-\n  a group of tentacles instead of forearms. However, they are not above attacking a\nrows or ruins. Each lair may\n  Skilled climbers, they populate the much weaker force if stumbled upon.\nce) have 4-20 mastyrial eggs.\n  mountains west of Draj. Mountain stalkers have no regard for any\nsts eat any living creature that is Combat:Mountain stalkers attack with form of life, except other mountain stalkers.\nough to stray too close to\n  their tentacles doing 3d6+7 points of Ecology:Mountain stalkers can survive on\nir.\n  damage per attack. This attack makes almost any type of animal or plant diet.\nse creatures contribute to the\n  them deadly in combat.  They prefer meat to vegetation. The lives of\nby feeding on giant versions of\n                          mountain stalkers are very hazardous, thus\nch as spiders and ants. Alchemists\n                          they have a short life expectancy.\nrize the mastyrial’s venom\nits potency.\n                                             46\n  Appearance: The psurlons were a highly conquest of Athas. The night was chosen\nAstral\n  intelligent and technologically advanced race. carefully. When the moon was full and at its\n  Their earthworm-like bodies have humanoid zenith, all psurlons across Athas “linked up”\n  legs and arms that end in cloven-hoofed feet and sent forth their psychic energy. What the\n  and black, talon-like claws (respectively). The psurlons did not realize was that the fabric of\n  head of a psurlon appears much like that of the prime material plane could not contain\n  an earthworm with a large gaping maw, such a psychic force. A rift in the planes was\n12 (claw)/ ringed with teeth-like projections. Like ripped open and all psurlons were sucked\n  earthworms, psurlons have no eyes but use into the astral plane. The force that pulled\ncs\n  some other sense to “see.” Psurlons are them into the astral plane was so great that\n weapons to\n  usually garbed in richly colored robes. each of the psurlons was knocked into a\narm, Currently, these creatures are trapped on the catatonic state for a period of 100 years.\n  astral plane. Evil psionicists seeking greater When the psurlons awoke from this state, the\n  knowledge usually summon a psurlon (with rift had long since repaired itself. The\n  the use of the summon planar creature psurlons were trapped with no way back to\n  psychoportive science). The price for psurlon Athas or any other place on the prime materi-\n00\n  knowledge is often quite high, and in many al plane. The fabric of the astral plane seems\n  cases results in the death of the psionicist. to be much stronger than that of the prime,\nre PSPs\n  Many times after summoning a psurlon and for the psurlons cannot conjure up the mas-\n  gaining its knowledge, the summoner sive convergence like that which caused their\n  attempts to slay it and send it back to the entrapment. Over the centuries, the psurlons\n  astral plane. However, psurlons never forget a have lost the ability to conjure up the massive\n  broken deal and often track down the original convergence but their determination to return\nSciences:disintegrate;\n  summoner and extract their due payment. to Athas has only grown. When a psurlon is\n levitation, animate shadow,\n                          summoned, it will almost always attempt to\nrier. Combat: Through centuries of magical\n                          find a way to stay on the prime material plane\n  experimentation, the rugged hide the\n                          so that it can try to bring its people back.\n  psurlons have developed provides the\n  creatures with a natural Armor Class of Ø. A psurlons’ community consists of 10-100\n  The use of armor is disdained as it interferes males with a like number of females. Young\n— Sciences:clairaudience,\n  with their psurlon abilities. number half of the female population.\n; Devotions:combat mind,\n                          Psurlon communities are led by a psurlon\npirit sense. Psurlons are very dangerous foes in combat\n                          adept who has 18 hit dice and a much\n  with many options at their disposal. They\n                          stronger psionic ability. Psurlon females\n  disdain the use of weapons, preferring to\n                          fight as psurlon males.\nes:psychic clone, rend their victims apart using their claws\nt; Devotions:convergence, psionic and teeth. When engaged in melee combat, Psurlons normally feed on the flesh of other\n  psurlons attack with each claw, causing 3- creatures, preferably that of other sentient\nce, wrench.\n  12 (d10+2) points of damage, and a vicious races. They especially like the flesh of\n  bite for 2-16 (2d8) points of damage. The halflings and humans.\n  most dangerous ability of the psurlons, Ecology: Psurlons have an average life span\n  however, is their massive psionic ability. of 5000 years. Like most intelligent preda-\n  Habitat/Society: Psurlons existed on Athas tors, psurlons are usually at the top of the\n  many thousands of years ago. At the height food chain. However, psurlons seem to be\n  of their evolution, psurlons, in their eternal something of a delicacy to Athasian rocs.\n  quest for knowledge and power, devised a This of course causes psurlons to react\n  means to psychically link up with all psurlons poorly whenever one of these great birds of\n  throughout Athas. With this ability, the prey is in the area.\n  psurlons planned to attempt a worldwide\n                                             48"
+    }
+  },
+  {
+    "name": "Psurlon",
+    "description": "PSURLON NO. APPEARING: 1 (1-4 on the Astral\nPlane)\nARMORCLASS: 0\nMOVEMENT: 9\nHITDICE: 10 (Adept has 18)\nTHACØ: 11\nNO. OFATTACKS: 3\nDAMAGE/ATTACK: 3-12 (claw)/3-12 (claw)/\n2-16 (bite)\nCLIMATE/TERRAIN: Astral Plane SPECIALATTACKS: Psionics\nFREQUENCY: Rare SPECIALDEFENSES: +1 or better weapons to\nORGANIZATION: Community hit,\nACTIVITYCYCLE: Any immune to sleep, charm,\nor hold spells\nDIET: Carnivore\nINTELLIGENCE: Genius (17-18)\nMAGICRESISTANCE: 45%\nTREASURE: V\nSIZE: M\nALIGNMENT: Lawful evil\nMORALE: Elite (13-14)\nXP VALUE: 21,000, Adept: 32,000\nPSIONICSUMMARY: Level Dis/Sci/Dev Attack/Defense Score PSPs\n10 4/5/15 PsC, II/All 18 200\nAdept: 18 6/9/23 PsC, II/All 22 400\nTelepathy— Sciences:mass domination, Psychokinesis — Sciences:disintegrate;\nsuperior invisibility; Devotions:id insin- Devotions: levitation, animate shadow,\nuation, mental barrier, contact, psychic inertial barrier.\ncrush, life detection, conceal thoughts.\nPsurlon adepts also have:\nPsychoportation— Sciences:banishment; Clairsentience — Sciences:clairaudience,\nDevotions: astral projection, time/space clairvoyance; Devotions:combat mind,\nanchor. danger sense, poison sense, spirit sense.\nPsychometabolism— Sciences:life Metapsionics — Sciences:psychic clone,\ndraining; Devotions:body control, mind over ultrablast; Devotions:convergence, psionic\nbody, enhanced strength, flesh armor. inflation, splice, wrench.",
+    "section": "Bestiary - Detailed Descriptions",
+    "details": {
+      "source_section": "Detailed Descriptions of New Monsters",
+      "stats": {
+        "number_appearing": "1 (1-4 on the",
+        "armor_class": "0",
+        "movement": "9",
+        "hit_dice": "10 (Adept has 18)",
+        "thac0": "11",
+        "attacks": "3",
+        "damage": "3-12 (claw)/3-2-16 (bite)",
+        "climate_terrain": "Astral Plane",
+        "special_attacks": "Psioni",
+        "frequency": "Rare",
+        "special_defenses": "+1 or better",
+        "organization": "Community hit,",
+        "activity_cycle": "Any               immune to sleep, ch",
+        "diet": "Carnivore              or hold spells",
+        "intelligence": "Genius (17-18)",
+        "magic_resistance": "45%",
+        "treasure": "V",
+        "size": "M",
+        "alignment": "Lawful evil",
+        "morale": "Elite (13-14)",
+        "xp_value": "21,000, Adept: 32,0"
+      },
+      "psionics": "Level Dis/Sci/Dev Attack/Defense Sco\n10   4/5/15 PsC, II/All 18 200\nAdept: 18 6/9/23 PsC, II/All 22 400\nTelepathy— Sciences:mass domination, Psychokinesis —\nsuperior invisibility; Devotions:id insin- Devotions:\nuation, mental barrier, contact, psychic inertial bar\ncrush, life detection, conceal thoughts.\nPsurlon adepts also have:\nPsychoportation— Sciences:banishment; Clairsentience\nDevotions: astral projection, time/space clairvoyance\nanchor.                 danger sense, poison sense, s\nPsychometabolism— Sciences:life Metapsionics — Scienc\ndraining; Devotions:body control, mind over ultrablas\nbody, enhanced strength, flesh armor. inflation, spli\n47",
+      "narrative": {},
+      "raw": "    PSURLON                NO. APPEARING: 1 (1-4 on the\n                           Plane)\n                           ARMORCLASS: 0\n                           MOVEMENT: 9\n                           HITDICE:  10 (Adept has 18)\n                           THACØ:    11\n                           NO. OFATTACKS: 3\n                           DAMAGE/ATTACK: 3-12 (claw)/3-\n                                     2-16 (bite)\n    CLIMATE/TERRAIN: Astral Plane SPECIALATTACKS: Psioni\n    FREQUENCY: Rare        SPECIALDEFENSES: +1 or better\n    ORGANIZATION: Community hit,\n    ACTIVITYCYCLE: Any               immune to sleep, ch\n    DIET:     Carnivore              or hold spells\n    INTELLIGENCE: Genius (17-18) MAGICRESISTANCE: 45%\n    TREASURE: V            SIZE:     M\n    ALIGNMENT: Lawful evil\n                           MORALE:   Elite (13-14)\n                           XP VALUE: 21,000, Adept: 32,0\n    PSIONICSUMMARY: Level Dis/Sci/Dev Attack/Defense Sco\n                  10   4/5/15 PsC, II/All 18 200\n             Adept: 18 6/9/23 PsC, II/All 22 400\n   Telepathy— Sciences:mass domination, Psychokinesis —\n   superior invisibility; Devotions:id insin- Devotions:\n   uation, mental barrier, contact, psychic inertial bar\n   crush, life detection, conceal thoughts.\n                           Psurlon adepts also have:\n   Psychoportation— Sciences:banishment; Clairsentience\n   Devotions: astral projection, time/space clairvoyance\n   anchor.                 danger sense, poison sense, s\n   Psychometabolism— Sciences:life Metapsionics — Scienc\n   draining; Devotions:body control, mind over ultrablas\n   body, enhanced strength, flesh armor. inflation, spli\n   47"
+    }
+  },
+  {
+    "name": "Sand Howler",
+    "description": "Appearance:Travelling as packs of desert- \nHabitat/Society:Howlers live and hunt in\ndwelling animals, howlers are known for the packs. Each pack is led by a single, large,\nchilling screams they unleash while male howler. In the lair of a pack of howlers\npursuing prey. A number of mercenaries there is a 20% chance that any given pair of\nhave managed to domesticate young howlers will have 1-2 young howlers.\nhowlers and use them to capture runaway Although at this point the young howlers\nslaves. will not fight, they can be trained to serve as\n\nCombat:The howlers roam the desert in war beasts or hunting animals.\npacks and are rarely seen alone. Howler \nEcology:Howlers are valuable hunters in\nattack with two foreclaws doing 1d3 points Athas. During the last few years, they\nof damage and with a bite for 1d6 points of have been hunted almost to extinction in\ndamage. The most feared attack form of the the tablelands.\nhowler is its ability to paralyze victims with\nits many eyes.",
+    "section": "Bestiary - Detailed Descriptions",
+    "details": {
+      "source_section": "Detailed Descriptions of New Monsters",
+      "stats": {
+        "number_appearing": "2-16",
+        "armor_class": "5",
+        "movement": "12",
+        "hit_dice": "4+2",
+        "thac0": "17",
+        "attacks": "3",
+        "damage": "1-3 (claw)/1-3",
+        "climate_terrain": "Sand Wastes, Tablelands 1-6 (bite)",
+        "frequency": "Uncommon",
+        "special_attacks": "Paralyzing ga",
+        "organization": "Pack",
+        "special_defenses": "Nil",
+        "activity_cycle": "Any",
+        "magic_resistance": "Nil",
+        "diet": "Carnivore",
+        "size": "M (4’ long)",
+        "intelligence": "Animal (1)",
+        "morale": "Average (9)",
+        "treasure": "Nil",
+        "xp_value": "420",
+        "alignment": "Neutral     PSIONICS: Nil"
+      },
+      "psionics": null,
+      "narrative": {
+        "appearance": "Travelling as packs of desert- Habitat/Soc dwelling animals, howlers are known for the packs. Ea chilling screams they unleash while male howler. In t pursuing prey. A number of mercenaries there is a 20% have managed to domesticate young howlers will have 1 howlers and use them to capture runaway Although at t slaves.                 will not fight, they can be t",
+        "combat": "The howlers roam the desert in war beasts or h",
+        "ecology": "Howle attack with two foreclaws doing 1d3 points Athas. Dur of damage and with a bite for 1d6 points of have been damage. The most feared attack form of the the tablel howler is its ability to paralyze victims with its many eyes. 49"
+      },
+      "raw": "    SAND                   NO. APPEARING: 2-16\n    HOWLER                 ARMORCLASS: 5\n                           MOVEMENT: 12\n                           HITDICE:  4+2\n                           THACØ:    17\n                           NO. OFATTACKS: 3\n                           DAMAGE/ATTACK: 1-3 (claw)/1-3\n    CLIMATE/TERRAIN: Sand Wastes, Tablelands 1-6 (bite)\n    FREQUENCY: Uncommon    SPECIALATTACKS: Paralyzing ga\n    ORGANIZATION: Pack     SPECIALDEFENSES: Nil\n    ACTIVITYCYCLE: Any     MAGICRESISTANCE: Nil\n    DIET:     Carnivore    SIZE:     M (4’ long)\n    INTELLIGENCE: Animal (1) MORALE: Average (9)\n    TREASURE: Nil          XP VALUE: 420\n    ALIGNMENT: Neutral     PSIONICS: Nil\n   Appearance:Travelling as packs of desert- Habitat/Soc\n   dwelling animals, howlers are known for the packs. Ea\n   chilling screams they unleash while male howler. In t\n   pursuing prey. A number of mercenaries there is a 20%\n   have managed to domesticate young howlers will have 1\n   howlers and use them to capture runaway Although at t\n   slaves.                 will not fight, they can be t\n   Combat:The howlers roam the desert in war beasts or h\n   packs and are rarely seen alone. Howler Ecology:Howle\n   attack with two foreclaws doing 1d3 points Athas. Dur\n   of damage and with a bite for 1d6 points of have been\n   damage. The most feared attack form of the the tablel\n   howler is its ability to paralyze victims with\n   its many eyes.\n   49"
+    }
+  },
+  {
+    "name": "Screamer Beetle",
+    "description": "Appearance:Screamer beetles are very \nEcology:The screamer beetles form small\ndeceptive in their beauty. The multi-colored packs to overcome their victims. The main\nchitinous shells are prized by art collectors concern of the pack is food, thus they have\nand alchemists. been known to attack caravans.\n\nCombat:Screamer beetles hunt in small\npacks and generate psionic blasts from their\nabdomen that can harm, or even kill, targets.\nIn melee, they attack with their two\nmandibles, doing 1d8 points of damage.",
+    "section": "Bestiary - Detailed Descriptions",
+    "details": {
+      "source_section": "Detailed Descriptions of New Monsters",
+      "stats": {
+        "number_appearing": "1-6",
+        "armor_class": "2",
+        "movement": "9",
+        "hit_dice": "3",
+        "thac0": "17",
+        "climate_terrain": "Any",
+        "attacks": "1",
+        "frequency": "Common",
+        "damage": "1-8 (mandibles)",
+        "organization": "Pack",
+        "special_attacks": "Psionic blast ze",
+        "activity_cycle": "Night",
+        "special_defenses": "Nil",
+        "diet": "Carnivore",
+        "magic_resistance": "Nil",
+        "intelligence": "Nil (0)",
+        "size": "S (4’ long)",
+        "treasure": "Nil",
+        "morale": "Steady (12)",
+        "alignment": "Neutral",
+        "xp_value": "175"
+      },
+      "psionics": "Level Dis/Sci/Dev Attack/Defense Score PSPs\n1     1/1/3  PS/M    13   60",
+      "narrative": {
+        "habitat_society": "Nil",
+        "appearance": "Screamer beetles are very Ecology:The screamer beetles form small he lair of a pack of howlers deceptive in their beauty. The multi-colored packs to overcome their victims. The main chance that any given pair of chitinous shells are prized by art collectors concern of the pack is food, thus they have -2 young howlers. and alchemists. been known to attack caravans. his point the young howlers",
+        "combat": "Screamer beetles hunt in small rained to serve as packs and generate psionic blasts from their unting animals. abdomen that can harm, or even kill, targets. rs are valuable hunters in In melee, they attack with their two ing the last few years, they mandibles, doing 1d8 points of damage. hunted almost to extinction in ands. 50"
+      },
+      "raw": "   SCREAMER               NO. APPEARING: 1-6\n   BEETLE                 ARMORCLASS: 2\n                          MOVEMENT: 9\n                          HITDICE:  3\n                          THACØ:    17\n   CLIMATE/TERRAIN: Any   NO. OFATTACKS: 1\n (claw)/ FREQUENCY: Common DAMAGE/ATTACK: 1-8 (mandibles)\n   ORGANIZATION: Pack     SPECIALATTACKS: Psionic blast\nze\n   ACTIVITYCYCLE: Night   SPECIALDEFENSES: Nil\n   DIET:     Carnivore    MAGICRESISTANCE: Nil\n   INTELLIGENCE: Nil (0)  SIZE:     S (4’ long)\n   TREASURE: Nil          MORALE:   Steady (12)\n   ALIGNMENT: Neutral     XP VALUE: 175\n   PSIONICSUMMARY: Level Dis/Sci/Dev Attack/Defense Score PSPs\n                 1     1/1/3  PS/M    13   60\niety:Howlers live and hunt in Telepathy— Sciences:psionic blast. Habitat/Society:Nil\nch pack is led by a single, large, Appearance:Screamer beetles are very Ecology:The screamer beetles form small\nhe lair of a pack of howlers deceptive in their beauty. The multi-colored packs to overcome their victims. The main\n chance that any given pair of chitinous shells are prized by art collectors concern of the pack is food, thus they have\n-2 young howlers. and alchemists. been known to attack caravans.\nhis point the young howlers\n  Combat:Screamer beetles hunt in small\nrained to serve as\n  packs and generate psionic blasts from their\nunting animals. abdomen that can harm, or even kill, targets.\nrs are valuable hunters in In melee, they attack with their two\ning the last few years, they mandibles, doing 1d8 points of damage.\n hunted almost to extinction in\nands.\n                                             50"
+    }
+  },
+  {
+    "name": "Ssurran",
+    "description": "Appearance:Ssurrans are a reptilian race of \nHabitat/Society:Ssurrans roam Athas,\nnomads. Some are simple hunters, while seeking shelter and food for the tribe. There\nothers have taken up raiding. Ssurran have been cases when multiple tribes have\nshamans can advance to be sixth level joined together against a common threat.\nclerics, typically of earth or fire. They have The ssurrans are led by a council of elders,\nadapted to the heat of the Athasian day and who commonly are the priests of the tribe.\nare active even during the blazing mid-day \nEcology:The ssurrans have few natural\nheat. enemies. They prey on human, demihuman,\n\nCombat:Ssurrans attack with their claws or humanoid settlements if nearby. The\ndoing 1d8+4 points of damage, or with any ssurran eggs are inedible, as is their flesh,\nweapons available. but their skin is sometimes worked as scale\narmor (AC 6) that is resistant to heat.",
+    "section": "Bestiary - Detailed Descriptions",
+    "details": {
+      "source_section": "Detailed Descriptions of New Monsters",
+      "stats": {
+        "number_appearing": "5-30",
+        "armor_class": "4",
+        "movement": "12",
+        "hit_dice": "6",
+        "thac0": "15",
+        "attacks": "1",
+        "damage": "1-8 (claws) +4 C FR L E IM Q A U T E E N /T CY E : RRAIN: A U n n y",
+        "organization": "Tribe",
+        "magic_resistance": "Nil",
+        "activity_cycle": "Any",
+        "size": "M (4’-6’ tall)",
+        "diet": "Carnivore",
+        "intelligence": "Average (10)",
+        "morale": "Average (10)",
+        "treasure": "R, S         1 X , P 4 0 V 0 ALUE:   Warrior: 420, Shama",
+        "alignment": "Lawful neutral or lawful evil PSIONICS: N"
+      },
+      "psionics": null,
+      "narrative": {
+        "appearance": "Ssurrans are a reptilian race of Habitat/S nomads. Some are simple hunters, while seeking shelte others have taken up raiding. Ssurran have been cases shamans can advance to be sixth level joined together clerics, typically of earth or fire. They have The ss adapted to the heat of the Athasian day and who commo",
+        "ecology": "Th heat.                   enemies. They prey on human,",
+        "combat": "Ssurrans attack with their claws or humanoid s doing 1d8+4 points of damage, or with any ssurran egg weapons available.      but their skin is sometimes w armor (AC 6) that is resistan 51"
+      },
+      "raw": "    SSURRAN                NO. APPEARING: 5-30\n                           ARMORCLASS: 4\n                           MOVEMENT: 12\n                           HITDICE:  6\n                           THACØ:    15\n                           NO. OFATTACKS: 1\n                           DAMAGE/ATTACK: 1-8 (claws) +4\n    C FR L E IM Q A U T E E N /T CY E : RRAIN: A U n n y\n    ORGANIZATION: Tribe\n                           MAGICRESISTANCE: Nil\n    ACTIVITYCYCLE: Any\n                           SIZE:     M (4’-6’ tall)\n    DIET:     Carnivore\n    INTELLIGENCE: Average (10)\n                           MORALE:   Average (10)\n    TREASURE: R, S         1\n                           X\n                           ,\n                           P\n                           4 0\n                            V\n                            0\n                             ALUE:   Warrior: 420, Shama\n    ALIGNMENT: Lawful neutral or lawful evil PSIONICS: N\n   Appearance:Ssurrans are a reptilian race of Habitat/S\n   nomads. Some are simple hunters, while seeking shelte\n   others have taken up raiding. Ssurran have been cases\n   shamans can advance to be sixth level joined together\n   clerics, typically of earth or fire. They have The ss\n   adapted to the heat of the Athasian day and who commo\n   are active even during the blazing mid-day Ecology:Th\n   heat.                   enemies. They prey on human,\n   Combat:Ssurrans attack with their claws or humanoid s\n   doing 1d8+4 points of damage, or with any ssurran egg\n   weapons available.      but their skin is sometimes w\n                           armor (AC 6) that is resistan\n   51"
+    }
+  },
+  {
+    "name": "Strine",
+    "description": "Appearance:The strine looks like a large, \nHabitat/Society:Strines live in sandy,\narmored porcupine. A lone hunter of the rocky areas. Strines mate once a year and\nfoothills, the strine depends on its thick the males leave before the young are born.\ncovering of spines for protection. \nEcology:Strines feed on insects and small\n\nCombat:When hunting, this slow creature animals. They also feed on vegetation, and\nlaunches four spines doing 1-6 points of are very fond of cactus.\ndamage each, as well as attacking with a\nvicious bite for 2-12 points of damage.",
+    "section": "Bestiary - Detailed Descriptions",
+    "details": {
+      "source_section": "Detailed Descriptions of New Monsters",
+      "stats": {
+        "number_appearing": "1",
+        "armor_class": "2",
+        "movement": "6",
+        "hit_dice": "6",
+        "thac0": "13 or by weapon",
+        "climate_terrain": "Sandy Wastes, Stone",
+        "attacks": "1",
+        "damage": "2-12 (bite) common S S P P E E C C I I A A L L A D T E T F A E C N K S S E : S: N H fir i a e l l - f b d a a se m d a a g t e t a fr c o k m s O FR R E G Q A U N E I N ZA C T Y I : ON: S R o a l r i e tary S SP P E E C C I I A A L L A D T E T F A E C N K S S E : S: N La il unches spines",
+        "activity_cycle": "Any",
+        "magic_resistance": "Nil",
+        "diet": "Carnivore",
+        "size": "M (4’ long)",
+        "intelligence": "Animal (1)",
+        "morale": "Average (8)",
+        "treasure": "Nil",
+        "xp_value": "1,400",
+        "alignment": "Neutral     PSIONICS: Nil"
+      },
+      "psionics": null,
+      "narrative": {
+        "appearance": "The strine looks like a large, Habitat/Society:Strines live in sandy, ociety:Ssurrans roam Athas, armored porcupine. A lone hunter of the rocky areas. Strines mate once a year and r and food for the tribe. There foothills, the strine depends on its thick the males leave before the young are born.",
+        "ecology": "Strines feed on insects and small",
+        "combat": "When hunting, this slow creature animals. They also feed on vegetation, and urrans are led by a council of elders, launches four spines doing 1-6 points of are very fond of cactus. nly are the priests of the tribe. damage each, as well as attacking with a e ssurrans have few natural vicious bite for 2-12 points of damage. demihuman, ettlements if nearby. The s are inedible, as is their flesh, orked as scale t to heat. 52"
+      },
+      "raw": "   STRINE                 NO. APPEARING: 1\n                          ARMORCLASS: 2\n                          MOVEMENT: 6\n                          HITDICE:  6\n                          THACØ:    13\n or by weapon\n   CLIMATE/TERRAIN: Sandy Wastes, Stone NO. OFATTACKS: 1\n             Barrens, Rocky Badlands DAMAGE/ATTACK: 2-12 (bite)\n common S S P P E E C C I I A A L L A D T E T F A E C N K S S E : S: N H fir i a e l l - f b d a a se m d a a g t e t a fr c o k m s O FR R E G Q A U N E I N ZA C T Y I : ON: S R o a l r i e tary S SP P E E C C I I A A L L A D T E T F A E C N K S S E : S: N La il unches spines\n   ACTIVITYCYCLE: Any     MAGICRESISTANCE: Nil\n   DIET:     Carnivore    SIZE:     M (4’ long)\n   INTELLIGENCE: Animal (1) MORALE: Average (8)\nn: TREASURE: Nil          XP VALUE: 1,400\nil ALIGNMENT: Neutral     PSIONICS: Nil\n  Appearance:The strine looks like a large, Habitat/Society:Strines live in sandy,\nociety:Ssurrans roam Athas, armored porcupine. A lone hunter of the rocky areas. Strines mate once a year and\nr and food for the tribe. There foothills, the strine depends on its thick the males leave before the young are born.\n when multiple tribes have covering of spines for protection. Ecology:Strines feed on insects and small\n against a common threat. Combat:When hunting, this slow creature animals. They also feed on vegetation, and\nurrans are led by a council of elders, launches four spines doing 1-6 points of are very fond of cactus.\nnly are the priests of the tribe. damage each, as well as attacking with a\ne ssurrans have few natural vicious bite for 2-12 points of damage.\ndemihuman,\nettlements if nearby. The\ns are inedible, as is their flesh,\norked as scale\nt to heat.\n                                             52"
+    }
+  },
+  {
+    "name": "Styr",
+    "description": "Appearance:The styr is a summoned \nHabitat/Society: The styr is usually\ncreature from the elemental plane of earth. summoned to guard treasure chambers.\nThe styr resembles a four-faced statue, with Many adventurers seeking treasure in\nfour arms and legs. ruins have fallen before the relentless\n\nCombat: Having four heads makes it impos- attacks of the styr.\nsible to be surprised and allows the styr to \nEcology: Styr are not natural creatures and\nattack four times for 2d10 points of damage play no part in the world’s ecology. They\neach. The styr can also breathe fire inflicting neither eat nor sleep, and “live” until their\n3d6 points of damage. bodies are destroyed or banished.",
+    "section": "Bestiary - Detailed Descriptions",
+    "details": {
+      "source_section": "Detailed Descriptions of New Monsters",
+      "stats": {
+        "number_appearing": "1",
+        "armor_class": "0",
+        "movement": "6",
+        "hit_dice": "14",
+        "thac0": "7",
+        "attacks": "4",
+        "climate_terrain": "Any",
+        "damage": "2-20 (fist)",
+        "frequency": "Very rare",
+        "special_attacks": "Fire breath",
+        "organization": "Solitary",
+        "special_defenses": "+1 or better",
+        "activity_cycle": "Any",
+        "magic_resistance": "30%",
+        "diet": "Nil",
+        "size": "L (9’ tall)",
+        "intelligence": "Semi (2-4)",
+        "morale": "Fearless (19-20)",
+        "treasure": "Nil",
+        "xp_value": "13,000",
+        "alignment": "Neutral     PSIONICS: Nil"
+      },
+      "psionics": null,
+      "narrative": {
+        "appearance": "The styr is a summoned Habitat/Society: Th creature from the elemental plane of earth. summoned The styr resembles a four-faced statue, with Many adv four arms and legs.     ruins have fallen before the",
+        "combat": "Having four heads makes it impos- attacks of",
+        "ecology": "attack four times for 2d10 points of damage play no p each. The styr can also breathe fire inflicting neith 3d6 points of damage.   bodies are destroyed or banis 53"
+      },
+      "raw": "    STYR                   NO. APPEARING: 1\n                           ARMORCLASS: 0\n                           MOVEMENT: 6\n                           HITDICE:  14\n                           THACØ:    7\n                           NO. OFATTACKS: 4\n    CLIMATE/TERRAIN: Any   DAMAGE/ATTACK: 2-20 (fist)\n    FREQUENCY: Very rare   SPECIALATTACKS: Fire breath\n    ORGANIZATION: Solitary SPECIALDEFENSES: +1 or better\n    ACTIVITYCYCLE: Any     MAGICRESISTANCE: 30%\n    DIET:     Nil          SIZE:     L (9’ tall)\n    INTELLIGENCE: Semi (2-4) MORALE: Fearless (19-20)\n    TREASURE: Nil          XP VALUE: 13,000\n    ALIGNMENT: Neutral     PSIONICS: Nil\n   Appearance:The styr is a summoned Habitat/Society: Th\n   creature from the elemental plane of earth. summoned\n   The styr resembles a four-faced statue, with Many adv\n   four arms and legs.     ruins have fallen before the\n   Combat: Having four heads makes it impos- attacks of\n   sible to be surprised and allows the styr to Ecology:\n   attack four times for 2d10 points of damage play no p\n   each. The styr can also breathe fire inflicting neith\n   3d6 points of damage.   bodies are destroyed or banis\n   53"
+    }
+  },
+  {
+    "name": "Tari",
+    "description": "Appearance: Commonly referred to as \nHabitat/Society: The Tari gather in small\nratmen by humans, the Tari are small, furry, tribes, living in sewers and garbage heaps.\nhumanoid scavengers. They are capable of They move among these areas looking for\nthriving on food and water too polluted for food and items to protect the tribe.\nhumans to drink. \nEcology: Fearful and suspicious, the Tari\n\nCombat: While Tari will normally flee from avoid contact with others. They are only\nanything bigger than themselves, if forced to hostile if they greatly outnumber a victim.\nfight they will use any weapon available or Tari mate once a year.\nbite for 1d3 points of damage. The Tari tend\nto carry diseases, so a Tari bite has a 5%\nchance of infecting its intended victim with a\nserious disease, unless a save versus poison\nis made.",
+    "section": "Bestiary - Detailed Descriptions",
+    "details": {
+      "source_section": "Detailed Descriptions of New Monsters",
+      "stats": {
+        "number_appearing": "5-30",
+        "armor_class": "6",
+        "movement": "12",
+        "hit_dice": "3",
+        "thac0": "17",
+        "attacks": "1",
+        "climate_terrain": "Any",
+        "damage": "1-3 (bite), or by weapon",
+        "frequency": "Uncommon",
+        "special_attacks": "Disease",
+        "organization": "Pack",
+        "special_defenses": "Nil",
+        "activity_cycle": "Night",
+        "magic_resistance": "Nil",
+        "diet": "Scavenger",
+        "size": "S (4’ tall)",
+        "intelligence": "Average (8-10)",
+        "morale": "Average (9)",
+        "treasure": "Lair: C, Individual: M",
+        "xp_value": "175",
+        "alignment": "Neutral     PSIONICS: Nil"
+      },
+      "psionics": null,
+      "narrative": {
+        "appearance": "Commonly referred to as Habitat/Society: The Tari gather in small to guard treasure chambers. ratmen by humans, the Tari are small, furry, tribes, living in sewers and garbage heaps. enturers seeking treasure in humanoid scavengers. They are capable of They move among these areas looking for relentless thriving on food and water too polluted for food and items to protect the tribe.",
+        "ecology": "Fearful and suspicious, the Tari",
+        "combat": "While Tari will normally flee from avoid contact with others. They are only art in the world’s ecology. They anything bigger than themselves, if forced to hostile if they greatly outnumber a victim. er eat nor sleep, and “live” until their fight they will use any weapon available or Tari mate once a year. hed. bite for 1d3 points of damage. The Tari tend to carry diseases, so a Tari bite has a 5% chance of infecting its intended victim with a serious disease, unless a save versus poison is made. 54"
+      },
+      "raw": "   TARI                   NO. APPEARING: 5-30\n   (RATMAN)               ARMORCLASS: 6\n                          MOVEMENT: 12\n                          HITDICE:  3\n                          THACØ:    17\n                          NO. OFATTACKS: 1\n   CLIMATE/TERRAIN: Any   DAMAGE/ATTACK: 1-3 (bite), or by weapon\n   FREQUENCY: Uncommon    SPECIALATTACKS: Disease\n weapon to hit ORGANIZATION: Pack SPECIALDEFENSES: Nil\n   ACTIVITYCYCLE: Night   MAGICRESISTANCE: Nil\n   DIET:     Scavenger    SIZE:     S (4’ tall)\n   INTELLIGENCE: Average (8-10) MORALE: Average (9)\n   TREASURE: Lair: C, Individual: M XP VALUE: 175\n   ALIGNMENT: Neutral     PSIONICS: Nil\ne styr is usually Appearance: Commonly referred to as Habitat/Society: The Tari gather in small\nto guard treasure chambers. ratmen by humans, the Tari are small, furry, tribes, living in sewers and garbage heaps.\nenturers seeking treasure in humanoid scavengers. They are capable of They move among these areas looking for\nrelentless thriving on food and water too polluted for food and items to protect the tribe.\nthe styr. humans to drink. Ecology: Fearful and suspicious, the Tari\n Styr are not natural creatures and Combat: While Tari will normally flee from avoid contact with others. They are only\nart in the world’s ecology. They anything bigger than themselves, if forced to hostile if they greatly outnumber a victim.\ner eat nor sleep, and “live” until their fight they will use any weapon available or Tari mate once a year.\nhed. bite for 1d3 points of damage. The Tari tend\n  to carry diseases, so a Tari bite has a 5%\n  chance of infecting its intended victim with a\n  serious disease, unless a save versus poison\n  is made.\n                                             54"
+    }
+  },
+  {
+    "name": "Tyrian Slime",
+    "description": "Appearance: This monster resembles any The second secretion is a highly corrosive\nnumber of other slimes. It is largely acid. This acidic secretion dissolves metal at\ncomposed of bluish green amoeba-like cells a surprising rate (chain mail in two rounds,\nthat allow it to seep through dark, damp plate mail in three; and magical armor adds\nsubterranean areas beneath Athas. These one additional round per each plus to Armor\ncreatures, like most others of their kind, can Class). The acid is also caustic to flesh and\nooze beneath door cracks and move about bone. Bone is dissolved on contact and\nthe ceilings and walls. This allows them to exposed flesh suffers 2-12 (2d6) points of\ndrop on unsuspecting prey. damage per hit.\n\nCombat: When Tyrian slimes attack, they \nHabitat/Society: The Tyrian slime is a\nenvelop their prey and dissolve it. A Tyrian solitary, asexual creature. It reproduces by\nslime has two types of secretions. The first is dividing itself and is occasionally\na fast-drying, sticky substance that entangles encountered with its own divided offspring.\nits prey into motionlessness. This secretion The Tyrian slime lives to eat and reproduce.\nis the slime’s usual first attack. The spraying \nEcology: Dissolving all types of carrion\nof this secretion acts like a webspell but and refuse, the Tyrian slime is sometimes\naffects one target rather than an area. The tolerated as a sort of groundskeeper.\nvictim must make a saving throw versus However, because of its instinctual\nbreath weapon. A successful save indicates reactions, the Tyrian slime occasionally\nthat the victim has dodged the spray, while manages to catch neighboring creatures\nfailure indicates that the victim is entangled and would-be feeders off-guard, and\nand cannot move. attacks them.",
+    "section": "Bestiary - Detailed Descriptions",
+    "details": {
+      "source_section": "Detailed Descriptions of New Monsters",
+      "stats": {
+        "number_appearing": "1-3",
+        "armor_class": "2",
+        "movement": "9",
+        "hit_dice": "5",
+        "thac0": "15",
+        "attacks": "1",
+        "damage": "2-12 (acid)",
+        "special_attacks": "Launch “stick",
+        "climate_terrain": "Subterranean, Mud Flats",
+        "special_defenses": "Immune to cr",
+        "frequency": "Uncommon              thrusting weapons,",
+        "organization": "Solitary           to fire and acid",
+        "activity_cycle": "Any",
+        "magic_resistance": "Nil",
+        "diet": "Omnivore",
+        "size": "M (4’-6’ in diamete",
+        "intelligence": "Non (0)",
+        "morale": "Average (10)",
+        "treasure": "Nil",
+        "xp_value": "2,000",
+        "alignment": "Neutral     PSIONICS: Nil"
+      },
+      "psionics": null,
+      "narrative": {
+        "appearance": "This monster resembles any The second sec number of other slimes. It is largely acid. This acid composed of bluish green amoeba-like cells a surprisi that allow it to seep through dark, damp plate mail i subterranean areas beneath Athas. These one additiona creatures, like most others of their kind, can Class) ooze beneath door cracks and move about bone. Bone is the ceilings and walls. This allows them to exposed f drop on unsuspecting prey. damage per hit.",
+        "combat": "When Tyrian slimes attack, they Habitat/Socie envelop their prey and dissolve it. A Tyrian solitary slime has two types of secretions. The first is divid a fast-drying, sticky substance that entangles encoun its prey into motionlessness. This secretion The Tyri is the slime’s usual first attack. The spraying Ecolo of this secretion acts like a webspell but and refuse affects one target rather than an area. The tolerated victim must make a saving throw versus However, becau breath weapon. A successful save indicates reactions, that the victim has dodged the spray, while manages t failure indicates that the victim is entangled and wo and cannot move.        attacks them."
+      },
+      "raw": "    TYRIAN                 NO. APPEARING: 1-3\n    SLIME                  ARMORCLASS: 2\n                           MOVEMENT: 9\n                           HITDICE:  5\n                           THACØ:    15\n                           NO. OFATTACKS: 1\n                           DAMAGE/ATTACK: 2-12 (acid)\n                           SPECIALATTACKS: Launch “stick\n    CLIMATE/TERRAIN: Subterranean, Mud Flats\n                           SPECIALDEFENSES: Immune to cr\n    FREQUENCY: Uncommon              thrusting weapons,\n    ORGANIZATION: Solitary           to fire and acid\n    ACTIVITYCYCLE: Any     MAGICRESISTANCE: Nil\n    DIET:     Omnivore     SIZE:     M (4’-6’ in diamete\n    INTELLIGENCE: Non (0)  MORALE:   Average (10)\n    TREASURE: Nil          XP VALUE: 2,000\n    ALIGNMENT: Neutral     PSIONICS: Nil\n   Appearance: This monster resembles any The second sec\n   number of other slimes. It is largely acid. This acid\n   composed of bluish green amoeba-like cells a surprisi\n   that allow it to seep through dark, damp plate mail i\n   subterranean areas beneath Athas. These one additiona\n   creatures, like most others of their kind, can Class)\n   ooze beneath door cracks and move about bone. Bone is\n   the ceilings and walls. This allows them to exposed f\n   drop on unsuspecting prey. damage per hit.\n   Combat: When Tyrian slimes attack, they Habitat/Socie\n   envelop their prey and dissolve it. A Tyrian solitary\n   slime has two types of secretions. The first is divid\n   a fast-drying, sticky substance that entangles encoun\n   its prey into motionlessness. This secretion The Tyri\n   is the slime’s usual first attack. The spraying Ecolo\n   of this secretion acts like a webspell but and refuse\n   affects one target rather than an area. The tolerated\n   victim must make a saving throw versus However, becau\n   breath weapon. A successful save indicates reactions,\n   that the victim has dodged the spray, while manages t\n   failure indicates that the victim is entangled and wo\n   and cannot move.        attacks them."
+    }
+  },
+  {
+    "name": "Undermountain Folk (Mindhome)",
+    "description": "Appearance: These small humanoids are \nEcology: If taken from the communal\nknown as the Undermountain folk by the groups, individuals usually go into a cata-\nsurface dwellers. They are a reclusive, shy tonic state and therefore are rarely sought\nbreed that dwell in the caverns beneath after. The Undermountain folk eat fungus\nUndermountain. Undermountain folk and other subterranean plant life found\nbelong to Mindhomes. Their complexion is beneath Undermountain.\nlight blue, with no body hair. They have\ninfravision with a range of 120 feet.\n\nCombat: When trapped and forced to fight,\nUndermountain folk will use psionics to\ndefend themselves, as well as anything\nwithin reach. The Mindhomes are in\nconstant telepathic link with each other.\nMind-affecting spells do not work against\nthem since they are telepathically linked.",
+    "section": "Bestiary - Detailed Descriptions",
+    "details": {
+      "source_section": "Detailed Descriptions of New Monsters",
+      "stats": {
+        "number_appearing": "2-20",
+        "armor_class": "6",
+        "movement": "9",
+        "hit_dice": "2+1",
+        "thac0": "19",
+        "attacks": "1",
+        "climate_terrain": "Subterranean",
+        "damage": "by weapon",
+        "frequency": "Very Rare",
+        "special_attacks": "Psionics",
+        "organization": "hive",
+        "special_defenses": "Immune to enchantment/",
+        "activity_cycle": "Any           charm spells",
+        "diet": "Herbivore",
+        "magic_resistance": "Nil",
+        "intelligence": "Average (8-10)",
+        "size": "S (3’ tall)",
+        "treasure": "Lair: B, Individual: R",
+        "morale": "Average (10)",
+        "alignment": "Neutral",
+        "xp_value": "650"
+      },
+      "psionics": "Le\n4\nvel Dis\n2\n/S\n/2\nci\n/\n/\n9\nDev  At\nE\nta\nW\nck\n/M\n/D\n,\ne\nT\nfe\nW\nnse Sc\n1\no\n5\nre  P\n9\nS\n2\nPs",
+      "narrative": {
+        "habitat_society": "Mindhomes are com- ic secretion dissolves metal at Devotions: ego whip, contact, ESP, send munal groups, telepathically linked to each ng rate (chain mail in two rounds, thoughts, sound link, taste link. other. Those with similar views support one n three; and magical armor adds Clairsentience — Sciences:clairvoyance; another, creating a unified mind. Those who l round per each plus to Armor Devotions: danger sense, know location, find independent thought are outcasts from . The acid is also caustic to flesh and spirit sense. the communal group. dissolved on contact and",
+        "appearance": "These small humanoids are Ecology: If taken from the communal lesh suffers 2-12 (2d6) points of known as the Undermountain folk by the groups, individuals usually go into a cata- surface dwellers. They are a reclusive, shy tonic state and therefore are rarely sought ty: The Tyrian slime is a breed that dwell in the caverns beneath after. The Undermountain folk eat fungus , asexual creature. It reproduces by Undermountain. Undermountain folk and other subterranean plant life found ing itself and is occasionally belong to Mindhomes. Their complexion is beneath Undermountain. tered with its own divided offspring. light blue, with no body hair. They have an slime lives to eat and reproduce. infravision with a range of 120 feet. gy: Dissolving all types of carrion",
+        "combat": "When trapped and forced to fight, , the Tyrian slime is sometimes Undermountain folk will use psionics to as a sort of groundskeeper. defend themselves, as well as anything se of its instinctual within reach. The Mindhomes are in the Tyrian slime occasionally constant telepathic link with each other. o catch neighboring creatures Mind-affecting spells do not work against uld-be feeders off-guard, and them since they are telepathically linked."
+      },
+      "raw": "   UNDERMOUNTAIN          NO. APPEARING: 2-20\n   FOLK (MINDHOME)        ARMORCLASS: 6\n                          MOVEMENT: 9\n                          HITDICE:  2+1\n                          THACØ:    19\n                          NO. OFATTACKS: 1\n   CLIMATE/TERRAIN: Subterranean\n                          DAMAGE/ATTACK: by weapon\n   FREQUENCY: Very Rare\ny” secretions             SPECIALATTACKS: Psionics\n   ORGANIZATION: hive\nushing and                SPECIALDEFENSES: Immune to enchantment/\nImmune ACTIVITYCYCLE: Any           charm spells\n   DIET:     Herbivore    MAGICRESISTANCE: Nil\n   INTELLIGENCE: Average (8-10) SIZE: S (3’ tall)\nr) TREASURE: Lair: B, Individual: R MORALE: Average (10)\n   ALIGNMENT: Neutral     XP VALUE: 650\n   PSIONICSUMMARY: Le\n                 4\n                 vel Dis\n                       2\n                       /S\n                       /2\n                       ci\n                        /\n                        /\n                        9\n                        Dev  At\n                             E\n                             ta\n                              W\n                              ck\n                               /M\n                               /D\n                                ,\n                                e\n                                T\n                                fe\n                                 W\n                                 nse Sc\n                                      1\n                                      o\n                                      5\n                                       re  P\n                                           9\n                                           S\n                                            2\n                                            Ps\nretion is a highly corrosive Telepathy — Sciences:tower of iron will; Habitat/Society: Mindhomes are com-\nic secretion dissolves metal at Devotions: ego whip, contact, ESP, send munal groups, telepathically linked to each\nng rate (chain mail in two rounds, thoughts, sound link, taste link. other. Those with similar views support one\nn three; and magical armor adds Clairsentience — Sciences:clairvoyance; another, creating a unified mind. Those who\nl round per each plus to Armor Devotions: danger sense, know location, find independent thought are outcasts from\n. The acid is also caustic to flesh and spirit sense. the communal group.\n dissolved on contact and\n  Appearance: These small humanoids are Ecology: If taken from the communal\nlesh suffers 2-12 (2d6) points of\n  known as the Undermountain folk by the groups, individuals usually go into a cata-\n  surface dwellers. They are a reclusive, shy tonic state and therefore are rarely sought\nty: The Tyrian slime is a breed that dwell in the caverns beneath after. The Undermountain folk eat fungus\n, asexual creature. It reproduces by Undermountain. Undermountain folk and other subterranean plant life found\ning itself and is occasionally belong to Mindhomes. Their complexion is beneath Undermountain.\ntered with its own divided offspring.\n  light blue, with no body hair. They have\nan slime lives to eat and reproduce.\n  infravision with a range of 120 feet.\ngy: Dissolving all types of carrion\n  Combat: When trapped and forced to fight,\n, the Tyrian slime is sometimes\n  Undermountain folk will use psionics to\n as a sort of groundskeeper.\n  defend themselves, as well as anything\nse of its instinctual\n  within reach. The Mindhomes are in\n the Tyrian slime occasionally\n  constant telepathic link with each other.\no catch neighboring creatures\n  Mind-affecting spells do not work against\nuld-be feeders off-guard, and\n  them since they are telepathically linked."
+    }
+  }
+]

@@ -10,9 +10,9 @@
 // ---------------------------------------------------------------------------
 // Global preferences (persisted to localStorage)
 // ---------------------------------------------------------------------------
-const PREFS_KEY = 'yuan-ti-prefs';
+const PREFS_KEY = 'yuan-ti-prefs-v2';
 const PREFS_DEFAULTS = {
-  spriteScale: 3,
+  spriteScale: 1,
 };
 const prefs = (() => {
   try {
@@ -206,8 +206,16 @@ function pushUrlState() {
   const gff = state.gffByMode[state.mode];
   if (gff) params.gff = gff;
   if (state.mode === 'images') params.view = state.imageView;
-  if (state.mode === 'sprite' && typeof selectedBmpNum !== 'undefined' && selectedBmpNum >= 0)
-    params.bmp = selectedBmpNum;
+  if (state.mode === 'sprite') {
+    if (typeof selectedBmpNum !== 'undefined' && selectedBmpNum >= 0)
+      params.bmp = selectedBmpNum;
+    if (typeof spriteFilter !== 'undefined' && spriteFilter.type)
+      params.sprType = spriteFilter.type;
+    if (typeof spriteFilter !== 'undefined' && spriteFilter.animated && spriteFilter.animated !== 'all')
+      params.sprAnim = spriteFilter.animated;
+    if (typeof _selectedGroupRef !== 'undefined' && _selectedGroupRef)
+      params.sprGroup = _selectedGroupRef;
+  }
   location.hash = Object.entries(params)
     .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
     .join('&');
@@ -237,6 +245,11 @@ async function init() {
     state.gffByMode[saved.mode] = saved.gff;
   if (saved.bmp && state.mode === 'sprite')
     if (typeof _pendingSelectBmp !== 'undefined') _pendingSelectBmp = Number(saved.bmp);
+  if (state.mode === 'sprite') {
+    if (saved.sprType && typeof spriteFilter !== 'undefined') spriteFilter.type = saved.sprType;
+    if (saved.sprAnim && typeof spriteFilter !== 'undefined') spriteFilter.animated = saved.sprAnim;
+    if (saved.sprGroup && typeof _pendingSelectGroup !== 'undefined') _pendingSelectGroup = saved.sprGroup;
+  }
 
   await populateGameSelect();
   // Sync the game <select> to the (possibly restored) state
@@ -255,6 +268,9 @@ async function init() {
     const newGff  = s.gff  || null;
     const newView = s.view || 'card';
     const newBmp  = s.bmp  ? Number(s.bmp) : null;
+    const newSprType  = s.sprType  || null;
+    const newSprAnim  = s.sprAnim  || null;
+    const newSprGroup = s.sprGroup || null;
 
     let needsRefresh = false;
     if (newGame !== state.game) {
@@ -278,6 +294,17 @@ async function init() {
       state.gffByMode[newMode] = newGff;
     if (newBmp !== null && newMode === 'sprite' && typeof _pendingSelectBmp !== 'undefined')
       _pendingSelectBmp = newBmp;
+    if (newMode === 'sprite') {
+      if (newSprType && typeof spriteFilter !== 'undefined' && newSprType !== spriteFilter.type) {
+        spriteFilter.type = newSprType;
+        if (typeof _applyFilter === 'function') _applyFilter();
+      }
+      if (newSprAnim !== null && typeof spriteFilter !== 'undefined' && (newSprAnim || 'all') !== spriteFilter.animated) {
+        spriteFilter.animated = newSprAnim || 'all';
+        if (typeof _applyFilter === 'function') _applyFilter();
+      }
+      if (newSprGroup && typeof _pendingSelectGroup !== 'undefined') _pendingSelectGroup = newSprGroup;
+    }
 
     if (newMode !== state.mode) {
       await activateMode(newMode);
