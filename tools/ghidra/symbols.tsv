@@ -437,3 +437,9 @@
 22F8:047C	func	palette_cycle_step	rotate active ranges up by one
 0980:5814	func	vga_flip_pages	-1: swap the shown page (A000/A400)
 8015:0208	func	main_menu_open	BMP 20028/20029, WIND 3000
+1A0A:0672	func	music_request	play track n with 5 s fades unless it is already playing (also GPL MUSIC)
+35D1:0265	func	music_change	ms, n: fade out the current track, start n, fade it in
+35D1:012D	func	music_fade	ms, 0x32 fade in from 0 / 0x33 fade out
+35D1:000A	func	music_set_volume	0-100
+3592:000E	func	music_start_track	n, if its flags at DS:1676+3n allow
+6BB8:0A41	func	region_load_rdat	RDAT n (49 bytes) to 4931:025D: colour cycles, music at +0x2F

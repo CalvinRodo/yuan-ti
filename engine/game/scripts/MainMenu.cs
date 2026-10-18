@@ -20,6 +20,9 @@ public partial class MainMenu : RetroScreen
 
     private const int WindowNumber = 3000;
     private const int PaletteNumber = 1001;
+
+    /// <summary>The menu's music (<c>8015:0208</c> calls <c>1A0A:0672(0x11)</c>).</summary>
+    private const int MusicNumber = 17;
     private static readonly (int Bmp, int X, int Y)[] Backdrop = [(20028, 47, 25), (20029, 4, 45)];
 
     /// <summary>What the menu's buttons do, in window order.</summary>
@@ -37,6 +40,7 @@ public partial class MainMenu : RetroScreen
             GetTree().CallDeferred(SceneTree.MethodName.ChangeSceneToFile, "res://scenes/main.tscn");
             return;
         }
+        Music.Instance?.ChangeTo("RESOURCE.GFF", MusicNumber);
         GffFile resources = Session.Open("RESOURCE.GFF");
         Palette palette = Palette.FromBytes(resources.Read("PAL ", PaletteNumber).Span);
 

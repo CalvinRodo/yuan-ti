@@ -15,7 +15,7 @@ DOTNET   ?= $(or $(shell command -v dotnet 2>/dev/null),$(HOME)/.dotnet/dotnet)
 .PHONY: help serve install install-ffmpeg extract list-resource list-gff extract-gff \
         precompute precompute-gff precompute-maps precompute-gamedata \
         precompute-images precompute-audio \
-        gpl unpack-exe decomp engine-build engine-test engine-run engine-edit engine-compare engine-scripts engine-cine
+        gpl unpack-exe decomp engine-build engine-test engine-run engine-edit engine-compare engine-scripts engine-cine engine-music
 
 help: ## Show this help message
 	@echo ""
@@ -106,7 +106,7 @@ decomp: unpack-exe ## Decompile DSUN.EXE with headless Ghidra -> out/decomp/  [G
 # Godot / C# engine (engine/)
 
 # Godot builds and loads C# with the same SDK, found through DOTNET_ROOT and PATH.
-ENGINE_TARGETS := engine-build engine-test engine-run engine-edit engine-compare engine-scripts engine-cine
+ENGINE_TARGETS := engine-build engine-test engine-run engine-edit engine-compare engine-scripts engine-cine engine-music
 $(ENGINE_TARGETS): export DOTNET_ROOT := $(patsubst %/,%,$(dir $(realpath $(DOTNET))))
 $(ENGINE_TARGETS): export PATH := $(DOTNET_ROOT):$(PATH)
 $(ENGINE_TARGETS): export DOTNET_CLI_TELEMETRY_OPTOUT := 1
@@ -134,6 +134,10 @@ engine-compare: ## Check the C# GFF, image, region and GPL decoding against the 
 
 engine-cine: ## Play a cinematic without a screen, saving snapshots to out/cine  [CINE=0|1|100]
 	$(DOTNET) run --project engine/tools/DarkSun.CineDump -- $(GAME_DIR) $(or $(CINE),0) $(OUT_DIR)/cine
+
+engine-music: ## Render music to out/music.wav  [MUSIC=1-23 or 26-29, FILE=RESOURCE.GFF|CINE.GFF, SECONDS=60]
+	mkdir -p $(OUT_DIR)
+	$(DOTNET) run --project engine/tools/DarkSun.MusicRender -- $(GAME_DIR) $(or $(FILE),RESOURCE.GFF) $(or $(MUSIC),17) $(OUT_DIR)/music.wav $(or $(SECONDS),60)
 
 engine-scripts: ## Run every game script in the C# interpreter with a logging host  [V=-v]
 	$(DOTNET) run --project engine/tools/DarkSun.ScriptRun -- $(GAME_DIR) $(V)

@@ -257,14 +257,24 @@ executable, not in the data.
 
 ## 8. Milestone 7: audio
 
-- [ ] Music: XMIDI → MIDI (port `xmi_tool.py`), played through a C# SoundFont
-      synthesizer (e.g. MeltySynth) with a bundled freely licensed General MIDI
-      SoundFont; an OPL (AdLib) emulation option later for the original sound.
+- [x] Music: an XMIDI sequencer (`DarkSun.Data.Audio.XmidiSequencer`: 120 Hz
+      ticks, note durations, live FOR/NEXT loops, callbacks) drives MeltySynth
+      (`DarkSun.Game.Audio.MusicPlayer`) with a SoundFont found on the system
+      or configured; the Godot `Music` autoload streams it. The General MIDI
+      versions (`GSEQ`) are played. Fades and track changes follow
+      `35D1:0265`/`012D`.
+- [ ] Bundle (or offer to download) a good freely licensed SoundFont, for
+      systems without one; a volume setting.
+- [ ] An OPL (AdLib) emulation option for the original sound (`ADV` drivers,
+      `TIMB` timbres), and MT-32 (`LSEQ`).
 - [ ] Sound effects: decode `BVOC` (Creative `.VOC`, as `precompute.py`
       already extracts) and any other sample resources to Godot
       `AudioStreamWAV`.
-- [ ] Which music plays where: find the region, combat and event music
-      selection (GPL commands or engine code).
+- [x] Which music plays where: the menu plays 17; a region plays the track
+      in its `RDAT` record (`+0x2F`); cinematics play 26–29 (`CINE.GFF`).
+      GPL's `MUSIC` command exists but no script uses it.
+- [ ] Combat and event music (`870B:0584` plays `4931:028C` again; other
+      callers of `35D1:01D3`), and the per-track flags at `DS:1676`.
 
 ---
 
@@ -279,7 +289,7 @@ executable, not in the data.
       the music's XMIDI callbacks, as in DSUN.EXE.
 - [ ] Cinematic op 0x7F (`9944:1AD7`, 12 arguments; only in the ending's
       first script): not decoded, so that picture is shown still.
-- [ ] Cinematic music (GSEQ 26–29; ops 0x64–0x66), with the audio layer (M7).
+- [x] Cinematic music (GSEQ 26–29; ops 0x64–0x66).
 - [ ] Full playthrough with a checklist of every region, quest and ending;
       compare doubtful behaviour against the original in DOSBox.
 

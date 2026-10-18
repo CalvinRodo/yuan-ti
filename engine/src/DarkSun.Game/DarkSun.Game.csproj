@@ -3,4 +3,7 @@
   <ItemGroup>
     <ProjectReference Include="..\DarkSun.Data\DarkSun.Data.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="MeltySynth" Version="2.4.1" />
+  </ItemGroup>
 </Project>

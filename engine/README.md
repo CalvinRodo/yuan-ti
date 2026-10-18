@@ -15,6 +15,7 @@ stored in this repository. The plan is in
 | `tests/` | xUnit tests for the two libraries. |
 | `tools/DarkSun.Dump` | Hashes every resource, image frame, palette and region render in the game files, and lists every script, for `make engine-compare`. |
 | `tools/DarkSun.ScriptRun` | Runs the new-game script, every region script and every trigger they register, for `make engine-scripts`. |
+| `tools/DarkSun.MusicRender` | Renders a piece of the music to a WAV file, for `make engine-music`. |
 | `tools/DarkSun.CineDump` | Plays a cinematic without a screen and saves snapshots (PPM), for `make engine-cine`. |
 | `DarkSun.sln` | All of the above; the Godot project points to it (`dotnet/project/solution_directory`). |
 | `Directory.Build.props` | Settings shared by every project (target framework, nullable, language version). |
@@ -30,6 +31,14 @@ with `dotnet test` and reused by tools.
 - Godot 4.7.2, **.NET edition**. The Makefile expects it in
   `~/.local/opt/Godot_v4.7.2-stable_mono_linux_x86_64/`; override with
   `GODOT=/path/to/godot`.
+- For music, a General MIDI SoundFont (`.sf2`). The engine uses, in order:
+  the `DARKSUN_SOUNDFONT` environment variable, `soundfont` under `[audio]`
+  in `user://settings.cfg`, any `.sf2` in the Godot user data folder or the
+  game folder, then the system's (`/usr/share/sounds/sf2`,
+  `/usr/share/soundfonts`, …; FluidR3_GM is preferred over the small
+  TimGM6mb that Debian and Ubuntu install by default). Without one the game is
+  silent. Synthesis is done by [MeltySynth](https://github.com/sinshu/meltysynth)
+  (MIT licence), from NuGet.
 - A copy of the game. The engine looks, in order, at the `DARKSUN_DIR`
   environment variable, the folder chosen on the start screen (saved in
   `user://settings.cfg`), and the repository's `dark_sun/` folder.
@@ -45,6 +54,7 @@ make engine-run     # run the game
 make engine-edit    # open the Godot editor
 make engine-compare # check the C# file-format and script decoding against the Python tools
 make engine-scripts # run every game script in the C# interpreter (V=-v lists the world commands)
+make engine-music   # render music to out/music.wav (MUSIC=n, FILE=RESOURCE.GFF or CINE.GFF, SECONDS=60)
 make engine-cine    # play a cinematic headless, snapshots in out/cine (CINE=0 intro, 1 arrival, 100 ending)
 ```
 
@@ -64,11 +74,12 @@ $GODOT --headless --path engine/game -- --check-menu
 ```
 
 Starting the game plays the intro (`CINE.GFF` scripts 1–8: the SSI and AD&D
-logos, the title, the sword falling to Athas, the story scroll). Any key or
-click skips it; `-- --no-intro` leaves it out. There is no music yet, but
-the cinematics keep the music's timing. Then comes the original main menu:
+logos, the title, the sword falling to Athas, the story scroll) with its
+music. Any key or click skips it; `-- --no-intro` leaves it out. Then comes the original main menu:
 Start Game (or S) plays the arrival cinematic and starts a new game, and
-Exit (E) quits. Create Characters (C) and Load Saved Game (L) aren't ported
+Exit (E) quits. The music changes as in the original: the menu's
+theme (17), each region's own track (its `RDAT` record), with 5-second fades
+between them. Create Characters (C) and Load Saved Game (L) aren't ported
 yet. Arrow keys and Enter work too. Esc in the region viewer returns to the
 menu. The start screen only appears when the game files can't be found.
 

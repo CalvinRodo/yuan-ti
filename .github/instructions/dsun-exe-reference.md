@@ -712,3 +712,27 @@ Ops 2, 9–0x13, 0x17, 0x18, 0x2C, 0x3D, 0x3E, 0x50–0x5A, 0x5C–0x5E, 0x67 an
   (Start Game, Create Characters, Load Saved Game, Exit to DOS) and its
   accelerators are `ACCL` 8100 (S s C c L l E e → 8100–8107). The handlers
   are in a table at `8015:01D8`.
+
+### Music
+
+* Sequences are XMIDI, in four versions per track: `GSEQ` (General MIDI:
+  GM programs, drums on channel 10), `LSEQ` (MT-32 / LAPC-1 programs),
+  `PSEQ` and `CSEQ`. `RESOURCE.GFF` holds tracks 1–23 and `CINE.GFF` holds
+  26–29. They are played by the Miles AIL driver (`33A5`) at 120 ticks a second.
+* **What plays when:**
+  * The main menu plays 17 (`8015:0208` → `1A0A:0672(0x11)`).
+  * Entering a region plays the byte at `+0x2F` of its `RDAT` record
+    (`6BB8:0A41` loads the 49 bytes to `4931:025D`; `6BB8:030E` →
+    `35D1:0265(5000, 4931:028C)`). For example, region 42 plays 2.
+  * The record also holds two colour-cycling ranges (first, count,
+    speed × 10) at `+0` and `+3`.
+  * GPL `MUSIC` (op 0x5F, `1A0A:0672`) is used by no shipped script.
+* **Changes and fades:**
+  * `1A0A:0672(n)` does nothing if n is already playing; otherwise it calls
+    `35D1:0265(5000, n)`. That fades out what plays over 5000 ms, stops it,
+    starts n at volume 0 and fades it in over 5000 ms.
+  * `35D1:012D(ms, 0x32)` sets the volume to 0 and then ramps to the music
+    volume; `(ms, 0x33)` ramps to 0.
+  * `3592:000E(n)` starts a track if its flags at `DS:1676 + 3n` allow it
+    (bit 4); bit 2 hands it to a hook.
+

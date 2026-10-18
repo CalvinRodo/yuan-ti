@@ -6,8 +6,9 @@ namespace DarkSun.Engine;
 
 /// <summary>
 /// Plays the opening cinematic (<c>CINE.GFF</c> scripts 1–8), then opens the
-/// main menu. Any key or mouse button skips it, as in DSUN.EXE. There is no
-/// music yet; the cinematic still keeps the music's timing.
+/// main menu. Any key or mouse button skips it, as in DSUN.EXE. The music
+/// (<c>CINE.GFF</c> <c>GSEQ</c> 26–29) plays through <see cref="Music"/>; the
+/// cinematic keeps the music's timing either way.
 /// Run with <c>-- --check-intro</c> to play it through without a screen and
 /// print when each script starts.
 /// </summary>
@@ -43,6 +44,18 @@ public partial class IntroView : RetroScreen
             return;
         }
         _player = new CinematicPlayer(cine);
+        _player.MusicStarted += n => Music.Instance?.Play("CINE.GFF", n);
+        _player.MusicFade += (seconds, fadeIn) =>
+        {
+            if (fadeIn)
+            {
+                Music.Instance?.FadeIn(seconds);
+            }
+            else
+            {
+                Music.Instance?.FadeOut(seconds);
+            }
+        };
         _player.PlayCinematic(Cinematic);
 
         if (OS.GetCmdlineUserArgs().Contains("--check-intro"))

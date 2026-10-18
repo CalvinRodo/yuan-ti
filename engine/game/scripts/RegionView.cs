@@ -207,6 +207,12 @@ public partial class RegionView : Node2D
             _worldObjects[o.Source!] = o;
         }
         _palette = _region.LoadPalette(Session.Open("GPLDATA.GFF"), Session.Open("RESOURCE.GFF"));
+
+        // The region's music (RDAT +0x2F), changed with the original's 5-second fades.
+        if (!_checking && RegionInfo.Read(Session.Open("RESOURCE.GFF"), _region.Number) is { Music: > 0 } info)
+        {
+            Music.Instance?.ChangeTo("RESOURCE.GFF", info.Music);
+        }
         _mapSize = new Vector2(_region.Width, _region.Height) * Region.TileSize;
 
         byte[] ground = RegionRenderer.RenderRgb(_region, _palette, RegionLayers.Ground);

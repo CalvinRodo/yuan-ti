@@ -87,6 +87,9 @@ public sealed class CinematicPlayer
     /// <summary>Music requests (op 0x64): the <c>GSEQ</c> number, for an audio layer.</summary>
     public event Action<int>? MusicStarted;
 
+    /// <summary>Music fades (ops 0x65 in, 0x66 out): seconds, and whether it fades in.</summary>
+    public event Action<double, bool>? MusicFade;
+
     /// <summary>Instructions this player does not carry out, for diagnostics.</summary>
     public HashSet<int> UnsupportedOps { get; } = [];
 
@@ -293,7 +296,10 @@ public sealed class CinematicPlayer
                 case 0x64:
                     StartMusic(i.Arg(0));
                     break;
-                case 0x65 or 0x66 or 0x67: // music fades: no audio yet
+                case 0x65 or 0x66: // music fade in / out over n ms (9936:0048 / 0073)
+                    MusicFade?.Invoke(i.Arg(0) / 1000.0, i.Op == 0x65);
+                    break;
+                case 0x67:
                     break;
                 default:
                     UnsupportedOps.Add(i.Op);
