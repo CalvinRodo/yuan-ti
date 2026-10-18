@@ -542,6 +542,79 @@ From the handlers (2026-10-18):
   whether to leave (`gstr[6]`, ASK_YES_NO), and on Yes the entry teleports the
   party (`TELEPORT(32766, region, x, y, 0)`).
 
+### Creatures, orders and queries
+
+From the handlers (2026-10-18); the engine's model is `DarkSun.Game.World`.
+
+* **Selectors** (`1A0A:0922`): a negative value is a name, matching every
+  object whose field 0x48 (72) equals it (creatures from `OJFF` n have −n);
+  0 or more is an object index (0–319; 0–3 the party); 9999 is none.
+* **Orders** go through `1A0A:03CA(who, mode, target, extra)`, for object
+  indexes below 48 only. Except for modes 0x0F and 0x11, the target is
+  resolved to its first match, and with no match nothing happens. The order
+  is stored in the creature table (`3972:08A6`: +0 target, +2 extra, +4 mode).
+
+  | Command | Mode | Target / extra |
+  |---|---|---|
+  | FLEE(who) | 0x01 | — |
+  | FETCH(target, who) | 0x0A | target |
+  | FOLLOW(target, who) | 0x0B | target |
+  | GO(target, who) | 0x0D | target |
+  | GOXY(x, y, who) | 0x0F | x, y |
+  | WAIT(who) | 0x11 | — |
+  | HUNT(who) | 0x12 | the active member (`3781:0369`) |
+
+  READORDERS(who) returns the mode; CLEAR_LOS(who) clears the line-of-sight
+  kind (+0x8AC).
+* **Queries:**
+  * GETXY(sel) puts the cell in `gname[1]`, `gname[2]` and 0 in `gname[3]`.
+  * RANGE(a, b): a is an index. It returns the smallest distance
+    (`0898:000C`) to b's matches other than a, makes the nearest "other"
+    (`gname[8]`), and returns 999 if there is none. NEXTTO is RANGE < 2.
+  * GET_LOS(a, b, range) is 1 if any match of b is in clear sight within
+    range, and also sets other.
+  * SET_OTHER(e): a name, or 9999, stores its first match's index in
+    `gname[12]` (`3781:0361`), with acc 1 if found, else 0. An index is
+    stored as given.
+  * GET_STATUS(who) is the combat record's status (+0x1C) for |who| 1–50,
+    else 8. BITSNOOP(a, b) is (a & b) == b, computed in the VM.
+* **FIGHT** starts combat at (`gname[1]`, `gname[2]`) (`7372:030B`) and ends
+  the script. **CLONE**(name, count, x, y, radius, flag) makes copies near
+  (x, y) (`7372:0A44`) and returns how many it made.
+* **REQUEST(code, who, a, b)** dispatches at `87B3:0000`, with a jump table at
+  `87B3:0177`:
+
+  | Code | Effect |
+  |---|---|
+  | 5 | toggle object flag 0x40 and play the `SCMD` sequence at header byte 0x44 (or slot 0 when switching back) |
+  | 10 / 11 | set / clear `GMAP` 0x40 at (a, b) |
+  | 12 / 13 | set / clear `GMAP` 0x80 at (a, b) |
+  | 17 | if who < 0, place `OJFF` −who at cell (a, b) (`896E:0E2E`) |
+  | 18 | set the allegiance (combat record +0x1D) of matching creatures (index ≥ 4, kind 2) |
+  | 19 | `DS:116A` = 1 (reload) |
+  | 1–4, 6–9, 14–16, 20 | not identified: `073D`, `6BB8:0D13`, `028D`, `0AC7`, `0AE1` (spawns a creature, combat-related), `0CB4`, `0F1C`, `0FE9`, `1587:2927`, `6BB8:0FA9`, `13B9` |
+
+  The scripts use these codes this often: 18 ×515, 16 ×382, 17 ×144,
+  2 ×126, 5 ×85, 11 ×67, 9 ×62, 7 ×50.
+* **Engine variables** (`gname` n is raw 0x20 + n; pointer table at `3781:0000`):
+
+  | gname | Address | Meaning |
+  |---|---|---|
+  | 0 | `377E:0019` | combat or fast-mode flag (exits refuse when ≠ 0) |
+  | 1–3 | `377E:001B–1F` | GETXY |
+  | 4 | `377E:0021` | current region |
+  | 5 | `3781:0369` | active member |
+  | 6 | `0367` | actor |
+  | 7 | `0365` | target |
+  | 8 | `0363` | other |
+  | 9 | `035B` | game clock (int32) |
+  | 10 | `0357` | int32, unknown |
+  | 11 | `035F` | unknown |
+  | 12 | `0361` | SET_OTHER |
+
+  `obj_special(n)` is the object whose index is in raw variable n, so 0x25
+  is the active member.
+
 ## 5. Validation
 
 * All 217 `GPL` and 33 `MAS` resources in `GPLDATA.GFF` decode with no unknown
@@ -557,7 +630,11 @@ From the handlers (2026-10-18):
 ## 6. Open questions
 
 * `OP_28` (expr, expr, string; sets the trace flag like SOURCE_TRACE) is unnamed.
-* Names of the engine variables (`gname[0–14]`) and special objects.
+* Engine variables 10 and 11 (`3781:0357`, `035F`); object fields other than
+  19, 72, 75 (allegiance, inferred) and 95.
+* The order handlers themselves (how GO, FOLLOW, HUNT and FLEE move a
+  creature, and when no-orders and line-of-sight scripts run); the engine
+  approximates them.
 * libgff mnemonics for most engine commands are not individually verified.
 * Byte 0 of every script is `19` (END_FUNCTION); real entry points come from
   `GPLI`, whose format is not decoded yet.

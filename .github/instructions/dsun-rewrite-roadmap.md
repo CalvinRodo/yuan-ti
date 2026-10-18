@@ -162,14 +162,30 @@ this milestone brings most of the game's content.
       `GplDialogue`; the Godot `DialogueWindow`). Scripts pause for the
       player and resume (`GplMachine.Suspend` / `Resume`, which replays the
       asking command, so questions inside expressions work).
-- [x] TELEPORT: the party (region exits: 29 found by `--check-exits`) and
-      named objects (hidden when sent elsewhere); NAMETONUM / NUMTONAME.
-- [ ] A creature model, which the remaining commands need: REQUEST (1 585
-      uses), CLONE (674), RANGE (470), GOXY / GO (484), GETXY (377), HUNT
-      (367), CLEAR_LOS (326), GIVE / TAKE (278), SEARCH (173), SET_OTHER,
-      WAIT, GET_LOS, FIGHT, FOLLOW, FLEE; object fields and the special
-      objects (`obj_special(0x25…0x2C)`, `3781:035F–0369`); engine variables
-      (`gname`).
+- [x] TELEPORT: the party (region exits: 31 found by `--check-exits`, which
+      tries every cell of a box) and named objects (hidden when sent
+      elsewhere); NAMETONUM / NUMTONAME.
+- [x] A creature model (`DarkSun.Game.World`: `GameWorld`, `WorldObject`,
+      `WorldGplHost`). Region objects become creatures (those with an `RDFF`
+      combat record, indexes 4–47; walkers if their `SCMD` can walk) or
+      things (48–319); the party is 0–3. It carries out:
+      - the orders HUNT, GO, GOXY, FOLLOW, FLEE, FETCH and WAIT, and READORDERS;
+      - the queries GETXY, RANGE and NEXTTO (the exact `0898:000C` distance),
+        GET_LOS (Bresenham over `GMAP` 0x80), SET_OTHER, GET_STATUS and
+        GETPARTY;
+      - CLONE, TELEPORT, BITSNOOP and CLEAR_LOS, and FIGHT, which ends the
+        script;
+      - REQUEST 5 (toggle state and animation), 10–13 (`GMAP` bits), 17
+        (place) and 18 (allegiance).
+
+      It also keeps object fields (72 id, 75 allegiance, 95 facing, the
+      rest stored), the special objects (`obj_special(n)` = the object whose
+      index is in `gname` n) and the engine variables (actor, target and
+      other set per run).
+- [ ] Still logged only: GIVE / TAKE / SEARCH / AWARD / DROP (need items),
+      FIGHT's combat (M5), REQUEST 1–4, 6–9, 14–16 and 19–20, SHOP,
+      DAMAGE. FLEE and the orders' arrival distances are approximations;
+      the original order handlers (`1A0A`) are not ported line by line.
 - [ ] SOUND (251 uses): queued by the host; needs the audio layer (M7).
 - [ ] Remember each region's changes (moved and removed objects) between
       visits.
@@ -181,8 +197,11 @@ this milestone brings most of the game's content.
       `GplCreatureScripts`); the region view runs `MAS 99`, the region's
       script, move triggers as characters reach cells, and object triggers on
       right-click (F2 shows the log).
-- [ ] Run creature no-orders and line-of-sight scripts as the game does
-      (needs creatures in the world and the line-of-sight test, §3).
+- [x] Run creature no-orders and line-of-sight scripts: `GameWorld.Update`
+      queues them (idle creatures; kind 1 when the active member is in
+      sight within range, kind 2 when not), checked every half second; the
+      view runs a few per frame with the creature as actor
+      (`GplMachine.RunFor`). The original's timing is not traced.
 - [x] **Golden tests**: `make engine-compare` checks that the C# decoder lists
       every script exactly as `gpl_parser.py` does (69 741 lines).
 - [ ] Script debugger in the engine: current script, program counter,

@@ -5,6 +5,7 @@ using DarkSun.Data.Regions;
 using DarkSun.Game.Animation;
 using DarkSun.Game.Movement;
 using DarkSun.Game.Scripting;
+using DarkSun.Game.World;
 using Godot;
 
 namespace DarkSun.Engine;
@@ -17,8 +18,10 @@ namespace DarkSun.Engine;
 /// footprint's cells, so they never overlap. Entering a region runs its
 /// <c>MAS</c> script (after the game-start script, once); characters stepping
 /// into cells fire move triggers; right-clicking an object fires its talk-to,
-/// use, look or pick-up trigger. World commands are not carried out yet: they
-/// are listed in the script log (F2).
+/// use, look or pick-up trigger. The region's objects live in a
+/// <see cref="GameWorld"/>: creatures that can walk carry out their scripted
+/// orders and run their no-orders and line-of-sight scripts; every world
+/// command is listed in the script log (F2).
 /// Click: the selected character walks there; Shift+click: the whole party;
 /// Right-click: interact; Tab: select the next character; N: add one; C:
 /// change its sprite; arrows, WASD or middle-drag scroll; wheel or +/- zoom;
@@ -26,19 +29,22 @@ namespace DarkSun.Engine;
 /// triggers. Run with <c>-- --check-regions</c> to load every region, run its
 /// scripts, animate it and walk the party in it, then quit.
 /// </summary>
-public partial class RegionView : Node2D, IGplWorld
+public partial class RegionView : Node2D
 {
     private const float PanSpeed = 400f;
     private static readonly float[] ZoomLevels = [0.25f, 0.5f, 1f, 2f, 3f, 4f];
 
     /// <summary>The original game's party size.</summary>
-    private const int PartySize = 4;
+    private const int PartySize = GameWorld.PartySize;
+
+    /// <summary>Most creature scripts started in one frame, so a crowd of idle creatures can't stall it.</summary>
+    private const int CreatureScriptsPerFrame = 4;
 
     /// <summary>Region shown when the view opens; kept across visits. −1: not yet chosen, so a new game starts.</summary>
     private static int _regionIndex = -1;
 
     private readonly Dictionary<ImageFrame, Texture2D> _textures = [];
-    private readonly List<(Sprite2D Sprite, RegionObject Object, ScmdAnimator Animator)> _animated = [];
+    private readonly List<AnimatedObject> _animated = [];
     private List<CharacterSprite>? _characters;
     private Region _region = null!;
     private Palette _palette = null!;
@@ -50,9 +56,11 @@ public partial class RegionView : Node2D, IGplWorld
     private Label _hud = null!;
     private readonly List<PartyMember> _party = [];
     private Occupancy _occupancy = new();
+    private GameWorld _world = null!;
+    private readonly Dictionary<WorldObject, Sprite2D> _creatureNodes = [];
+    private readonly Dictionary<RegionObject, WorldObject> _worldObjects = [];
     private SelectionMarker _marker = null!;
     private int _selected;
-    private int _nextId = 1;
     private int _nextSprite;
     private bool _follow = true;
     private readonly List<(RegionObject Object, Sprite2D Sprite)> _objectSprites = [];
@@ -65,7 +73,6 @@ public partial class RegionView : Node2D, IGplWorld
     private readonly Dictionary<int, ImageTexture?> _portraits = [];
     private readonly HashSet<RegionObject> _hidden = [];
     private readonly Dictionary<RegionObject, Vector2> _moved = [];
-    private (int Region, int X, int Y)? _pendingRegion;
     private int _zoomLevel = Array.IndexOf(ZoomLevels, 1f);
     private Vector2 _mapSize;
 
@@ -85,7 +92,6 @@ public partial class RegionView : Node2D, IGplWorld
         _camera = new Camera2D();
         AddChild(_camera);
         AddChild(BuildHud());
-        Session.ScriptHost.World = this;
 
         if (OS.GetCmdlineUserArgs().Contains("--check-regions"))
         {
@@ -181,10 +187,20 @@ public partial class RegionView : Node2D, IGplWorld
         _hidden.Clear();
         _moved.Clear();
         _lastCells.Clear();
-        _occupancy = new Occupancy();
+        _creatureNodes.Clear();
+        _worldObjects.Clear();
         _clock = 0;
 
         _region = Region.Load(Session.Open(file), [Session.Open("SEGOBJEX.GFF"), Session.Open("GPLDATA.GFF")]);
+        var objectData = new GffSet([Session.Open("SEGOBJEX.GFF"), Session.Open("GPLDATA.GFF")]);
+        _world = new GameWorld(_region, objectData, Session.ScriptHost.EngineVariables);
+        _world.Changed += OnWorldChanged;
+        Session.ScriptHost.Map = _world;
+        _occupancy = _world.Occupancy;
+        foreach (WorldObject o in _world.Objects.Where(o => o.Source is not null))
+        {
+            _worldObjects[o.Source!] = o;
+        }
         _palette = _region.LoadPalette(Session.Open("GPLDATA.GFF"), Session.Open("RESOURCE.GFF"));
         _mapSize = new Vector2(_region.Width, _region.Height) * Region.TileSize;
 
@@ -194,17 +210,26 @@ public partial class RegionView : Node2D, IGplWorld
 
         // Each sprite's node sits at the point it is sorted by: an object's ETAB
         // position, a wall's cell bottom. The image hangs off it via Offset.
-        var scripts = new GffSet([Session.Open("SEGOBJEX.GFF"), Session.Open("GPLDATA.GFF")]);
+        // Creatures that can walk are drawn from their walker instead, like the party.
         foreach (RegionObject obj in _region.Objects)
         {
+            if (_worldObjects.TryGetValue(obj, out WorldObject? wo) && wo.Walker is not null)
+            {
+                var node = new Sprite2D { Centered = false };
+                _sorted.AddChild(node);
+                _creatureNodes[wo] = node;
+                DrawCreature(wo);
+                continue;
+            }
             Sprite2D? sprite = AddSprite(obj.Frame, new Vector2(obj.EtabX, obj.EtabY), new Vector2(obj.X, obj.Y), obj.Mirrored);
             if (sprite is not null)
             {
                 _objectSprites.Add((obj, sprite));
             }
-            if (sprite is not null && obj.Scmd > 0 && scripts.TryRead("SCMD", obj.Scmd, out var data))
+            if (sprite is not null && obj.Scmd > 0 && objectData.TryRead("SCMD", obj.Scmd, out var data))
             {
-                _animated.Add((sprite, obj, new ScmdAnimator(Scmd.Parse(data.Span), obj.Frames.Count, mirrored: obj.Mirrored)));
+                var scmd = Scmd.Parse(data.Span);
+                _animated.Add(new AnimatedObject(sprite, obj, scmd, new ScmdAnimator(scmd, obj.Frames.Count, mirrored: obj.Mirrored)));
             }
         }
         foreach (PlacedSprite wall in _region.Walls)
@@ -293,29 +318,30 @@ public partial class RegionView : Node2D, IGplWorld
         {
             AddCharacter(_party.Count > 0 ? _party[^1].Walker.Cell : centre);
         }
+        _world.ActiveMember = _selected;
     }
 
-    /// <summary>Add a character with the next walking sprite, on the free cell nearest to <paramref name="near"/>.</summary>
-    private PartyMember? AddCharacter(Cell near)
+    /// <summary>
+    /// Add a character with the next walking sprite, on the free cell nearest
+    /// to <paramref name="near"/>, as party member <paramref name="slot"/>
+    /// (the next free one if null).
+    /// </summary>
+    private PartyMember? AddCharacter(Cell near, int? slot = null)
     {
         List<CharacterSprite> sprites = Characters();
-        if (sprites.Count == 0)
+        int index = slot ?? _party.Count;
+        if (sprites.Count == 0 || index >= PartySize)
         {
             return null;
         }
         CharacterSprite sprite = sprites[_nextSprite++ % sprites.Count];
-        Footprint footprint = Footprint.EstimateFromWidth(sprite.Frames.Max(f => f.Width));
-        Cell? cell = NearestCell(near, c => Fits(c, footprint));
-        if (cell is null)
+        if (_world.AddPartyMember(index, new CharacterSpec(sprite.Script, sprite.Sizes), near) is not { Walker: { } walker })
         {
             return null;
         }
-        var member = new PartyMember(
-            new Walker(_nextId++, sprite.Script, sprite.Sizes, cell.Value, footprint, _occupancy),
-            sprite,
-            new Sprite2D { Centered = false });
+        var member = new PartyMember(walker, sprite, new Sprite2D { Centered = false });
         _sorted.AddChild(member.Node);
-        _party.Add(member);
+        _party.Insert(Math.Min(index, _party.Count), member);
         member.Walker.Update(Now, _region.IsBlocked);
         DrawMember(member);
         return member;
@@ -329,20 +355,12 @@ public partial class RegionView : Node2D, IGplWorld
             return;
         }
         Cell cell = old.Walker.Cell;
-        old.Walker.Remove();
+        _world.RemovePartyMember(_selected);
         old.Node.QueueFree();
         _party.RemoveAt(_selected);
-        if (AddCharacter(cell) is { } added)
-        {
-            _party.Remove(added);
-            _party.Insert(_selected, added);
-        }
+        AddCharacter(cell, _selected);
         _selected = Math.Min(_selected, Math.Max(0, _party.Count - 1));
     }
-
-    /// <summary>Whether a creature with <paramref name="footprint"/> fits at <paramref name="cell"/> right now.</summary>
-    private bool Fits(Cell cell, Footprint footprint) =>
-        footprint.Cells(cell).All(c => !_region.IsBlocked(c.X, c.Y) && _occupancy.OwnerOf(c) is null);
 
     private void DrawMember(PartyMember member)
     {
@@ -354,6 +372,22 @@ public partial class RegionView : Node2D, IGplWorld
         member.Node.Offset = new Vector2(-walker.Animator.HotX, -walker.Animator.HotY);
     }
 
+    /// <summary>Draw a creature that walks: its region object's frames, placed by its walker.</summary>
+    private void DrawCreature(WorldObject creature)
+    {
+        if (!_creatureNodes.TryGetValue(creature, out Sprite2D? node) || creature.Walker is not { } walker
+            || creature.Source is not { } source)
+        {
+            return;
+        }
+        ImageFrame frame = source.Frames[Math.Clamp(walker.Animator.Frame, 0, source.Frames.Count - 1)];
+        node.Visible = !creature.Hidden && frame.Width > 0 && frame.Height > 0;
+        node.Texture = TextureFor(frame);
+        node.FlipH = walker.Animator.Mirrored;
+        node.Position = new Vector2(walker.Feet.X, walker.Feet.Y);
+        node.Offset = new Vector2(-walker.Animator.HotX, -walker.Animator.HotY);
+    }
+
     private void WalkTo(Cell goal, bool wholeParty)
     {
         foreach (PartyMember member in wholeParty ? _party : Selected is { } m ? [m] : [])
@@ -363,25 +397,6 @@ public partial class RegionView : Node2D, IGplWorld
         _follow = true;
     }
 
-    /// <summary>The cell nearest to <paramref name="start"/> that satisfies <paramref name="ok"/>, searching outwards.</summary>
-    private Cell? NearestCell(Cell start, Func<Cell, bool> ok)
-    {
-        for (int radius = 0; radius < Math.Max(_region.Width, _region.Height); radius++)
-        {
-            for (int dy = -radius; dy <= radius; dy++)
-            {
-                for (int dx = -radius; dx <= radius; dx++)
-                {
-                    var cell = new Cell(start.X + dx, start.Y + dy);
-                    if (Math.Max(Math.Abs(dx), Math.Abs(dy)) == radius && ok(cell))
-                    {
-                        return cell;
-                    }
-                }
-            }
-        }
-        return null;
-    }
 
     // -- per frame --------------------------------------------------------------
 
@@ -389,8 +404,9 @@ public partial class RegionView : Node2D, IGplWorld
     private void Animate()
     {
         long now = Now;
-        foreach (var (sprite, obj, animator) in _animated)
+        foreach (AnimatedObject animated in _animated)
         {
+            (Sprite2D sprite, RegionObject obj, ScmdAnimator animator) = (animated.Sprite, animated.Object, animated.Animator);
             if (!animator.Update(now))
             {
                 continue;
@@ -419,6 +435,14 @@ public partial class RegionView : Node2D, IGplWorld
             }
             _lastCells[member.Walker] = cell;
         }
+
+        // Creatures: orders, then the scripts they asked for.
+        _world.ActiveMember = _selected;
+        foreach (WorldObject creature in _world.Update(now, Session.Scripts.Creatures))
+        {
+            DrawCreature(creature);
+        }
+        RunCreatureScripts();
         if (_overlay.Visible)
         {
             _overlay.QueueRedraw();
@@ -574,7 +598,8 @@ public partial class RegionView : Node2D, IGplWorld
     /// </summary>
     private void Interact(Vector2 at)
     {
-        var hit = _objectSprites
+        var hit = _objectSprites.Where(o => _worldObjects.ContainsKey(o.Object)).Select(o => (Object: _worldObjects[o.Object], o.Sprite))
+            .Concat(_creatureNodes.Select(c => (Object: c.Key, Sprite: c.Value)))
             .Where(o => o.Sprite.Visible && o.Sprite.Texture is { } tex
                 && new Rect2(o.Sprite.Position + o.Sprite.Offset, tex.GetSize()).HasPoint(at))
             .OrderByDescending(o => o.Sprite.Position.Y)
@@ -584,17 +609,21 @@ public partial class RegionView : Node2D, IGplWorld
         {
             return;
         }
+        // Scripts see the object by its index; triggers match its id (−OJFF).
         int actor = _selected;
         foreach (var (list, verb) in new[] { (GplTriggerList.TalkTo, "talk to"), (GplTriggerList.Use, "use"), (GplTriggerList.Look, "look at"), (GplTriggerList.Pickup, "pick up") })
         {
-            if (Session.Scripts.OnObject(list, actor, -hit.Ojff) is { } run)
+            if (Session.Scripts.OnObject(list, actor, hit.Index) is { } run)
             {
-                ReportScript($"{verb} OJFF {hit.Ojff}", run);
+                ReportScript($"{verb} {Describe(hit)}", run);
                 return;
             }
         }
-        AddScriptLine($"OJFF {hit.Ojff}: no talk, use, look or pick-up trigger");
+        AddScriptLine($"{Describe(hit)}: no talk, use, look or pick-up trigger");
     }
+
+    private static string Describe(WorldObject obj) =>
+        obj.Name.Length > 0 ? $"{obj.Name} (OJFF {-obj.Id})" : $"OJFF {-obj.Id}";
 
     /// <summary>Log a script run and the world commands it issued (PRINT_STRING as its text).</summary>
     private void ReportScript(string what, GplRunResult run)
@@ -610,75 +639,108 @@ public partial class RegionView : Node2D, IGplWorld
                 : $"    {c}");
         }
         UpdateHud();
+        if (Session.ScriptHost.PendingFight is { } fight)
+        {
+            Session.ScriptHost.PendingFight = null;
+            AddScriptLine($"    combat at ({fight.X},{fight.Y}) (not modelled yet)");
+        }
         if (_checking)
         {
-            _pendingRegion = null;
+            _world.PendingRegion = null;
         }
-        if (!run.Suspended && _pendingRegion is { } go)
+        if (!run.Suspended && _world.PendingRegion is { } go)
         {
-            _pendingRegion = null;
+            _world.PendingRegion = null;
+            AddScriptLine($"    party leaves for region {go.Region} ({go.X},{go.Y})");
             EnterRegion(go.Region, new Cell(go.X, go.Y));
         }
     }
 
-    // -- world commands (IGplWorld) ---------------------------------------------------
+    // -- the world ---------------------------------------------------------------------
 
     /// <summary>
-    /// TELEPORT the party. In this region each member goes to the free cell
-    /// nearest (x, y) (as <c>7372:06DF</c> does through <c>find_free_cell</c>);
-    /// another region is entered once the script has finished.
+    /// Scripts creatures asked for (no orders, line of sight), a few per
+    /// frame, each with the creature as actor. None start while another
+    /// script waits for the player.
     /// </summary>
-    public void TeleportParty(int region, int x, int y)
+    private void RunCreatureScripts()
     {
-        if (region != _region.Number)
+        for (int n = 0; n < CreatureScriptsPerFrame && _world.PendingScripts.Count > 0 && !Session.Scripts.IsSuspended; n++)
         {
-            _pendingRegion = (region, x, y);
-            AddScriptLine($"    party leaves for region {region} ({x},{y})");
-            return;
-        }
-        foreach (PartyMember member in _party)
-        {
-            Walker w = member.Walker;
-            if (NearestCell(new Cell(x, y), c => w.CanStand(c, _region.IsBlocked)) is { } cell && w.Teleport(cell, _region.IsBlocked))
+            var (entry, actor, why) = _world.PendingScripts.Dequeue();
+            if (Session.Scripts.RunFor(entry, actor) is { } run)
             {
+                ReportScript(why, run);
+            }
+            if (_world.PendingRegion is not null || _world.Region != _region)
+            {
+                return; // the region changed under us
+            }
+        }
+        if (Session.Scripts.IsSuspended)
+        {
+            _world.PendingScripts.Clear();
+        }
+    }
+
+    /// <summary>
+    /// A script changed an object: moved it, took it off the map, put it
+    /// back, or switched its animation (<c>REQUEST(5)</c>).
+    /// </summary>
+    private void OnWorldChanged(WorldObject obj, int? animationStart)
+    {
+        if (obj.Kind == ObjectKind.Party)
+        {
+            if (_party.FirstOrDefault(m => m.Walker == obj.Walker) is { } member)
+            {
+                member.Node.Visible = !obj.Hidden;
                 DrawMember(member);
             }
+            return;
         }
-    }
-
-    /// <summary>
-    /// TELEPORT the objects with <c>OJFF</c> <paramref name="number"/>: to
-    /// another region (255: off the map) they disappear from this one; within
-    /// this region they move to the cell (drawn standing at its bottom centre,
-    /// an approximation).
-    /// </summary>
-    public void TeleportObjects(int number, int region, int x, int y)
-    {
-        foreach (var (obj, sprite) in _objectSprites.Where(o => o.Object.Ojff == number))
+        if (_creatureNodes.ContainsKey(obj))
         {
-            if (region != _region.Number)
+            DrawCreature(obj);
+            return;
+        }
+        if (obj.Walker is not null && obj.Source is not null)
+        {
+            // A clone of a walking creature: give it a node of its own.
+            _creatureNodes[obj] = new Sprite2D { Centered = false };
+            _sorted.AddChild(_creatureNodes[obj]);
+            DrawCreature(obj);
+            return;
+        }
+        if (obj.Source is not { } source)
+        {
+            return;
+        }
+        if (obj.Hidden)
+        {
+            _hidden.Add(source);
+        }
+        else
+        {
+            _hidden.Remove(source);
+            if (obj.FixedCell != new Cell(source.EtabX / Region.TileSize, Math.Max(0, source.EtabY - 1) / Region.TileSize))
             {
-                _hidden.Add(obj);
-                sprite.Visible = false;
-            }
-            else
-            {
-                _hidden.Remove(obj);
-                _moved[obj] = new Vector2(x * Region.TileSize + Region.TileSize / 2, (y + 1) * Region.TileSize - 1);
-                sprite.Position = _moved[obj];
-                sprite.Visible = true;
+                // Drawn standing at the cell's bottom centre (an approximation).
+                _moved[source] = new Vector2(obj.FixedCell.X * Region.TileSize + Region.TileSize / 2, (obj.FixedCell.Y + 1) * Region.TileSize - 1);
             }
         }
+        foreach (var (o, sprite) in _objectSprites.Where(o => o.Object == source))
+        {
+            sprite.Visible = !obj.Hidden;
+            if (_moved.TryGetValue(source, out Vector2 at))
+            {
+                sprite.Position = at;
+            }
+        }
+        if (animationStart is int start && _animated.FirstOrDefault(a => a.Object == source) is { } animated)
+        {
+            animated.Animator = new ScmdAnimator(animated.Script, source.Frames.Count, start, source.Mirrored);
+        }
     }
-
-    /// <summary>
-    /// Object fields the region view knows: field 95 of a special object is
-    /// the facing (0–7 clockwise from north) of the selected character, which
-    /// stands in for the party's active member (the region-exit script, GPL
-    /// 80, checks it). Special objects are not otherwise told apart yet.
-    /// </summary>
-    public int? ReadField(GplObjectRef field) =>
-        field.IsSpecial && field.Path is [95] && Selected is { } member ? (int)member.Walker.Facing : null;
 
     /// <summary>Change to region <paramref name="number"/> with the party at <paramref name="start"/>.</summary>
     private void EnterRegion(int number, Cell start)
@@ -721,21 +783,27 @@ public partial class RegionView : Node2D, IGplWorld
             ShowRegion(index);
             AnswerForThePlayer();
             int number = _region.Number;
-            var spots = Session.Scripts.Triggers.Records(GplTriggerList.MoveTile).Select(t => (t.A, t.B, "tile"))
-                .Concat(Session.Scripts.Triggers.Records(GplTriggerList.MoveBox).Select(t => (t.A, t.B, "box"))).ToList();
+            var spots = Session.Scripts.Triggers.Records(GplTriggerList.MoveTile).Select(t => (t.A, t.B, W: 1, H: 1, "tile"))
+                .Concat(Session.Scripts.Triggers.Records(GplTriggerList.MoveBox).Select(t => (t.A, t.B, W: (int)t.B8, H: (int)t.B9, "box"))).ToList();
             var found = new List<string>();
-            foreach (var (x, y, kind) in spots)
+            foreach (var (x0, y0, width, height, kind) in spots)
             {
                 if (_region.Number != number)
                 {
                     ShowRegion(index);
                     AnswerForThePlayer();
                 }
+                // The first cell of the trigger the active member can stand on (creatures hold cells too).
                 Walker w = _party[0].Walker;
-                if (!w.Teleport(new Cell(x, y), _region.IsBlocked))
+                var cells = from dy in Enumerable.Range(0, Math.Max(1, height))
+                            from dx in Enumerable.Range(0, Math.Max(1, width))
+                            select new Cell(x0 + dx, y0 + dy);
+                if (cells.FirstOrDefault(c => w.CanStand(c, _region.IsBlocked), new Cell(-1, -1)) is not { X: >= 0 } at
+                    || !w.Teleport(at, _region.IsBlocked))
                 {
                     continue;
                 }
+                var (x, y) = (at.X, at.Y);
                 for (int tick = 0; tick < 4 && _region.Number == number; tick++)
                 {
                     _clock += 1.0 / ScmdAnimator.TicksPerSecond;
@@ -779,8 +847,10 @@ public partial class RegionView : Node2D, IGplWorld
     private void CheckAllRegions()
     {
         int failures = 0;
-        foreach (string file in Session.Install!.RegionFiles)
+        IReadOnlyList<string> files = Session.Install!.RegionFiles;
+        for (_regionIndex = 0; _regionIndex < files.Count; _regionIndex++)
         {
+            string file = files[_regionIndex];
             LoadRegion(file);
             int linesBefore = _scriptLines.Count;
             RunRegionScripts();
@@ -806,12 +876,28 @@ public partial class RegionView : Node2D, IGplWorld
                 + $"towards ({goal.X},{goal.Y}): {members}; {(_party.Any(m => m.Walker.IsWalking) ? "still walking" : "stopped")}; "
                 + $"{overlaps} overlaps\n    scripts {scriptLine.TrimStart('>', ' ')}; "
                 + $"{Session.Scripts.Triggers.Count(GplTriggerList.MoveBox)} box triggers; "
-                + $"{_scriptLines.Skip(linesBefore).Count(l => l.Contains("reached"))} move triggers fired on the walk");
+                + $"{_scriptLines.Skip(linesBefore).Count(l => l.Contains("reached"))} move triggers fired on the walk\n    "
+                + $"{_world.Objects.Count(o => o.Kind == ObjectKind.Creature)} creatures ({_creatureNodes.Count} walking, "
+                + $"{_world.Objects.Count(o => o.Order.Mode != OrderMode.None)} with orders); "
+                + $"{_scriptLines.Skip(linesBefore).Count(l => l.Contains("has no orders") || l.Contains(" sight") || l.Contains(" sees "))} creature scripts run");
         }
         GD.Print($"{Characters().Count} walking character sprites; {failures} overlaps in total; "
             + $"{_answered} dialogue prompts answered, {_scriptLines.Count(l => l.Contains("stopped:"))} scripts stopped with an error");
+        foreach (string line in _scriptLines.Where(l => l.Contains("stopped:")))
+        {
+            GD.Print(line);
+        }
         GetTree().Quit(failures == 0 ? 0 : 1);
     }
+}
+
+/// <summary>A region object with an <c>SCMD</c> animation; scripts can restart it (<c>REQUEST(5)</c>).</summary>
+public sealed class AnimatedObject(Sprite2D sprite, RegionObject obj, Scmd script, ScmdAnimator animator)
+{
+    public Sprite2D Sprite { get; } = sprite;
+    public RegionObject Object { get; } = obj;
+    public Scmd Script { get; } = script;
+    public ScmdAnimator Animator { get; set; } = animator;
 }
 
 /// <summary>A character on the map: its movement, its sprite set, and its node.</summary>

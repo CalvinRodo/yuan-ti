@@ -56,7 +56,7 @@ public class WalkerTests
     /// Every stand slot points at record 0 (one frame, stop); every walk slot
     /// at a 4-record walk east of 4 pixels per 7 ticks, like SCMD 2.
     /// </summary>
-    private static Scmd Script()
+    internal static Scmd Script()
     {
         var data = new byte[Scmd.HeaderSize + 5 * 8];
         for (int slot = 0; slot < Scmd.SlotCount; slot++)

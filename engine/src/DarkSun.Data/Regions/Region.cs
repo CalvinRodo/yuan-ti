@@ -69,6 +69,10 @@ public sealed class Region
     /// <summary>Walls, row-major (drawn after the objects).</summary>
     public IReadOnlyList<PlacedSprite> Walls { get; }
 
+    /// <summary>A region with no tiles or walls, from its <c>GMAP</c> bytes and objects (for tests and tools).</summary>
+    public static Region Create(int number, int width, int height, byte[] flags, IEnumerable<RegionObject>? objects = null) =>
+        new(number, width, height, new byte[width * height], flags, [], [.. objects ?? []], []);
+
     /// <summary>
     /// Load a region. <paramref name="auxiliary"/> files are searched after the
     /// region file for <c>OJFF</c>, <c>BMP </c> and <c>WALL</c> resources:

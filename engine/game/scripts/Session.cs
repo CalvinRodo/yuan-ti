@@ -2,6 +2,7 @@ using DarkSun.Data;
 using DarkSun.Data.Gff;
 using DarkSun.Game.Rules;
 using DarkSun.Game.Scripting;
+using DarkSun.Game.World;
 
 namespace DarkSun.Engine;
 
@@ -17,8 +18,8 @@ public static class Session
 
     private static GplMachine? _scripts;
 
-    /// <summary>Script host: carries out the dialogue commands and records the rest.</summary>
-    public static DialogueGplHost ScriptHost { get; private set; } = new();
+    /// <summary>Script host: carries out dialogue and the world commands the creature model supports, and records the rest.</summary>
+    public static WorldGplHost ScriptHost { get; private set; } = new();
 
     /// <summary>The GPL interpreter for this session; the game-start script has run when <see cref="GameStarted"/>.</summary>
     public static GplMachine Scripts
@@ -42,7 +43,7 @@ public static class Session
         Install = install;
         Files.Clear();
         _scripts = null;
-        ScriptHost = new DialogueGplHost();
+        ScriptHost = new WorldGplHost();
         GameStarted = false;
     }
 

@@ -158,7 +158,7 @@ public sealed class GplMachine
         {
             return null;
         }
-        (Actor, Target, Other) = (who, who, who);
+        SetContext(who, who, who);
         return Run(entry);
     }
 
@@ -169,7 +169,7 @@ public sealed class GplMachine
         {
             return null;
         }
-        (Actor, Target, Other) = (actor, target, target);
+        SetContext(actor, target, target);
         return Run(entry);
     }
 
@@ -180,8 +180,35 @@ public sealed class GplMachine
         {
             return null;
         }
-        (Actor, Target, Other) = (actor, first, second);
+        SetContext(actor, first, second);
         return Run(entry);
+    }
+
+    /// <summary>
+    /// A creature's own script (no orders, line of sight): run with
+    /// <paramref name="creature"/> as actor, target and other. Refused while
+    /// another script is paused.
+    /// </summary>
+    public GplRunResult? RunFor(GplEntry entry, int creature)
+    {
+        if (IsSuspended)
+        {
+            return null;
+        }
+        SetContext(creature, creature, creature);
+        return Run(entry);
+    }
+
+    /// <summary>
+    /// Who acts and on what, also as the engine variables scripts read them
+    /// (<c>gname[6]</c> actor, <c>[7]</c> target, <c>[8]</c> other).
+    /// </summary>
+    private void SetContext(int actor, int target, int other)
+    {
+        (Actor, Target, Other) = (actor, target, other);
+        _host.WriteEngineVariable(this, 0x26, actor);
+        _host.WriteEngineVariable(this, 0x27, target);
+        _host.WriteEngineVariable(this, 0x28, other);
     }
 
     // -- running -----------------------------------------------------------------
@@ -534,6 +561,7 @@ public sealed class GplMachine
             // Triggers (dsun-exe-reference.md §4).
             case 0x1B: Creatures.SetSight(V(2), 1, new GplEntry(V(1), (ushort)V(0)), V(3)); break;
             case 0x1C: Creatures.SetSight(V(2), 2, new GplEntry(V(1), (ushort)V(0)), V(3)); break;
+            case 0x1D: Creatures.ClearSight(V(0)); Host(i, a); break;
             case 0x6F: Creatures.SetNoOrders(V(2), new GplEntry(V(1), (ushort)V(0))); break;
             case 0x65: AddObjectTrigger(GplTriggerList.Attack, a); break;
             case 0x66: AddObjectTrigger(GplTriggerList.Look, a); break;
@@ -545,6 +573,9 @@ public sealed class GplMachine
             case 0x6A: Triggers.AddBox(GplTriggerList.MoveBox, V(0), V(1), V(2), V(3), V(4), V(5), V(6)); break;
             case 0x6B: Triggers.AddBox(GplTriggerList.DoorBox, V(0), V(1), V(2), V(3), V(4), V(5), V(6)); break;
             case 0x70: Triggers.AddUseWith(V(0), V(1), V(2), V(3), InGameStartScript); break;
+
+            case 0x20: Accumulator = (V(0) & V(1)) == V(1) ? 1 : 0; break; // BITSNOOP
+            case 0x35: Host(i, a); _done = true; break; // FIGHT: combat starts, the script ends (gpl_exit)
 
             // Debug and source-trace commands: no effect on the game.
             case 0x23 or 0x28 or 0x2C or 0x2E or 0x4B: break;

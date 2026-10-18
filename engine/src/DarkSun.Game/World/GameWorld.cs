@@ -1,0 +1,665 @@
+using DarkSun.Data.Animation;
+using DarkSun.Data.Gff;
+using DarkSun.Data.Regions;
+using DarkSun.Game.Movement;
+using DarkSun.Game.Scripting;
+
+namespace DarkSun.Game.World;
+
+public enum ObjectKind { Party, Creature, Thing }
+
+/// <summary>
+/// A creature's order (<c>1A0A:03CA</c>, table <c>3972:08AA</c>): what it is
+/// doing, set by HUNT, GO, GOXY, FOLLOW, FLEE, FETCH and WAIT.
+/// </summary>
+public enum OrderMode
+{
+    None = 0x00,
+    Flee = 0x01,
+    Fetch = 0x0A,
+    Follow = 0x0B,
+    Go = 0x0D,
+    GoXY = 0x0F,
+    Wait = 0x11,
+    Hunt = 0x12,
+}
+
+/// <param name="Target">GO / FOLLOW / HUNT / FETCH: the object index; GOXY: x.</param>
+/// <param name="Extra">GOXY: y.</param>
+public readonly record struct Order(OrderMode Mode, int Target, int Extra);
+
+/// <summary>An object in the region: a party member, a creature or a thing.</summary>
+public sealed class WorldObject
+{
+    private readonly Dictionary<int, int> _fields = [];
+
+    public WorldObject(int index, ObjectKind kind, int id)
+    {
+        Index = index;
+        Kind = kind;
+        Id = id;
+    }
+
+    /// <summary>Index in the object table (0–319); 0–3 are the party, 4–47 can take orders.</summary>
+    public int Index { get; }
+
+    public ObjectKind Kind { get; }
+
+    /// <summary>Field 72 (0x48): −<c>OJFF</c> number for region objects, which is what <c>name(-n)</c> matches.</summary>
+    public int Id { get; set; }
+
+    /// <summary>Field 19.</summary>
+    public string Name { get; set; } = "";
+
+    /// <summary>The region object this came from, if any.</summary>
+    public RegionObject? Source { get; init; }
+
+    public CombatRecord? Record { get; init; }
+
+    public Walker? Walker { get; set; }
+
+    /// <summary>Cell for objects without a walker.</summary>
+    public Cell FixedCell { get; set; }
+
+    public Cell Cell => Walker?.Cell ?? FixedCell;
+
+    /// <summary>Taken off the map (TELEPORT to another region).</summary>
+    public bool Hidden { get; set; }
+
+    public Order Order { get; set; }
+
+    /// <summary>Object flag 0x40, toggled by <c>REQUEST(5)</c>: e.g. a door open.</summary>
+    public bool SecondState { get; set; }
+
+    /// <summary>Combat record allegiance (<c>+0x1D</c>), set by <c>REQUEST(18)</c>; also field 75 (inferred).</summary>
+    public int Allegiance { get; set; }
+
+    /// <summary>Combat record status (<c>+0x1C</c>), read by GET_STATUS.</summary>
+    public int Status { get; set; }
+
+    /// <summary>Facing 0–7 clockwise from north (field 95).</summary>
+    public int Facing => Walker is { } w ? (int)w.Facing : _fields.GetValueOrDefault(95);
+
+    public bool CanTakeOrders => Index < GameWorld.MaxCreatures && Walker is not null && Kind != ObjectKind.Party;
+
+    /// <summary>Script-visible fields; 19, 72, 75 and 95 are modelled, the rest stored as written.</summary>
+    public int ReadField(int field) => field switch
+    {
+        72 => Id,
+        75 => Allegiance,
+        95 => Facing,
+        _ => _fields.GetValueOrDefault(field),
+    };
+
+    public void WriteField(int field, int value)
+    {
+        switch (field)
+        {
+            case 72: Id = value; break;
+            case 75: Allegiance = value; break;
+            default: _fields[field] = value; break;
+        }
+    }
+}
+
+/// <summary>What the view needs to draw a walking character: its script and frame sizes.</summary>
+public sealed record CharacterSpec(Scmd Script, IReadOnlyList<(int Width, int Height)> Frames)
+{
+    public Footprint Footprint => Footprint.EstimateFromWidth(Frames.Count == 0 ? 0 : Frames.Max(f => f.Width));
+}
+
+/// <summary>
+/// The objects of the current region and what scripts do to them: the
+/// engine's model of DSUN.EXE's object table (<c>DS:6694</c>, 320 entries),
+/// creature table (<c>3972:08AA</c>) and the script engine variables.
+/// <see cref="Update"/> carries out the creatures' orders.
+/// </summary>
+public sealed class GameWorld
+{
+    public const int MaxObjects = 0x140;
+    public const int MaxCreatures = 0x30;
+    public const int PartySize = 4;
+    public const int None = 9999;
+
+    /// <summary>Ticks between a creature's re-plans while it follows a moving target (about 0.5 s).</summary>
+    private const int ReplanTicks = 48;
+
+    /// <summary>Ticks between checks for idle creatures and line-of-sight scripts (about 0.5 s).</summary>
+    private const int ScriptCheckTicks = 48;
+
+    private readonly WorldObject?[] _objects = new WorldObject?[MaxObjects];
+    private readonly int[] _engine;
+    private readonly Dictionary<int, Scmd?> _scripts = [];
+    private readonly IResourceSource _objectData;
+    private readonly Dictionary<int, long> _nextPlan = [];
+    private long _nextScriptCheck;
+
+    /// <summary>A world for <paramref name="region"/>: its <c>ETAB</c> objects, creatures from their <c>RDFF</c> records.</summary>
+    /// <param name="objectData"><c>SEGOBJEX.GFF</c> (and <c>GPLDATA.GFF</c>): <c>RDFF</c> and <c>SCMD</c> resources.</param>
+    /// <param name="engine">The engine variables (<c>gname[0–14]</c>), kept across regions; a new set if null.</param>
+    public GameWorld(Region region, IResourceSource objectData, int[]? engine = null)
+    {
+        Region = region;
+        _objectData = objectData;
+        _engine = engine ?? new int[15];
+        _engine[4] = region.Number;
+        int nextCreature = PartySize;
+        int nextThing = MaxCreatures;
+
+        foreach (RegionObject source in region.Objects)
+        {
+            CombatRecord? record = objectData.TryRead("RDFF", source.Ojff, out var rdff) ? CombatRecord.Parse(rdff.Span) : null;
+            bool creature = record is not null;
+            int index = creature && nextCreature < MaxCreatures ? nextCreature++ : nextThing < MaxObjects ? nextThing++ : -1;
+            if (index < 0)
+            {
+                continue;
+            }
+            var obj = new WorldObject(index, creature ? ObjectKind.Creature : ObjectKind.Thing, -source.Ojff)
+            {
+                Source = source,
+                Record = record,
+                Name = record?.Name ?? "",
+                Allegiance = record?.Allegiance ?? 0,
+                Status = record?.Status ?? 0,
+                FixedCell = new Cell(source.EtabX / Region.TileSize, Math.Max(0, source.EtabY - 1) / Region.TileSize),
+            };
+            _objects[index] = obj;
+
+            // Creatures whose animation can walk get a walker, so orders can move them.
+            if (creature && source.Scmd > 0)
+            {
+                if (ScriptOf(source.Scmd) is { CanWalk: true } scmd)
+                {
+                    var spec = new CharacterSpec(scmd, [.. source.Frames.Select(f => (f.Width, f.Height))]);
+                    if (NearestCell(obj.FixedCell, c => Fits(c, spec.Footprint)) is { } cell)
+                    {
+                        obj.Walker = new Walker(index, spec.Script, spec.Frames, cell, spec.Footprint, Occupancy);
+                    }
+                }
+            }
+        }
+    }
+
+    public Region Region { get; }
+
+    /// <summary>The engine variables (<c>gname[0–14]</c>) this world reads and writes.</summary>
+    public int[] EngineVariables => _engine;
+
+    public Occupancy Occupancy { get; } = new();
+
+    public IEnumerable<WorldObject> Objects => _objects.OfType<WorldObject>();
+
+    public IEnumerable<WorldObject> Party => Enumerable.Range(0, PartySize).Select(i => _objects[i]).OfType<WorldObject>();
+
+    public WorldObject? this[int index] => index is >= 0 and < MaxObjects ? _objects[index] : null;
+
+    /// <summary>The party's active member (<c>gname[5]</c>, <c>3781:0369</c>).</summary>
+    public int ActiveMember
+    {
+        get => _engine[5];
+        set => _engine[5] = value;
+    }
+
+    /// <summary>Scripts the world wants run: idle creatures' no-orders scripts and line-of-sight scripts.</summary>
+    public Queue<(GplEntry Entry, int Actor, string Why)> PendingScripts { get; } = new();
+
+    /// <summary>Region change a script asked for (TELEPORT of the party to another region).</summary>
+    public (int Region, int X, int Y)? PendingRegion { get; set; }
+
+    /// <summary>Objects whose appearance changed (moved, hidden, animation restarted), for the view.</summary>
+    public event Action<WorldObject, int?>? Changed;
+
+    // -- party -------------------------------------------------------------------------
+
+    /// <summary>Put a party member (0–3) at the free cell nearest <paramref name="near"/>.</summary>
+    public WorldObject? AddPartyMember(int slot, CharacterSpec spec, Cell near)
+    {
+        if (slot is < 0 or >= PartySize || NearestCell(near, c => Fits(c, spec.Footprint)) is not { } cell)
+        {
+            return null;
+        }
+        _objects[slot]?.Walker?.Remove();
+        var obj = new WorldObject(slot, ObjectKind.Party, slot)
+        {
+            Name = $"Character {slot + 1}",
+            Walker = new Walker(slot, spec.Script, spec.Frames, cell, spec.Footprint, Occupancy),
+        };
+        _objects[slot] = obj;
+        return obj;
+    }
+
+    public void RemovePartyMember(int slot)
+    {
+        _objects[slot]?.Walker?.Remove();
+        if (slot is >= 0 and < PartySize)
+        {
+            _objects[slot] = null;
+        }
+    }
+
+    // -- selection (1A0A:0922) ----------------------------------------------------------
+
+    /// <summary>
+    /// The objects a script value refers to: a negative value is a name (every
+    /// object whose id is that value), 0 or more an object index, 9999 none.
+    /// </summary>
+    public IEnumerable<WorldObject> Select(int value)
+    {
+        if (value == None)
+        {
+            yield break;
+        }
+        if (value >= 0)
+        {
+            if (this[value] is { } obj)
+            {
+                yield return obj;
+            }
+            yield break;
+        }
+        foreach (WorldObject obj in Objects)
+        {
+            if (obj.Id == value && !obj.Hidden)
+            {
+                yield return obj;
+            }
+        }
+    }
+
+    public WorldObject? First(int value) => Select(value).FirstOrDefault();
+
+    // -- engine variables (gname, 3781:0000 pointer table) -----------------------------
+
+    /// <summary>Engine variable by raw index 0x20–0x2C.</summary>
+    public int EngineVariable(int raw) => raw is >= 0x20 and < 0x2F ? _engine[raw - 0x20] : 0;
+
+    public void SetEngineVariable(int raw, int value)
+    {
+        if (raw is >= 0x20 and < 0x2F)
+        {
+            _engine[raw - 0x20] = value;
+        }
+    }
+
+    /// <summary>The object a special reference names: <c>obj_special(n)</c> is the object whose index engine variable n holds.</summary>
+    public WorldObject? Special(int n) => this[EngineVariable(n)];
+
+    // -- orders and queries (1A0A) -------------------------------------------------------
+
+    /// <summary>
+    /// Give every creature matching <paramref name="who"/> an order
+    /// (<c>1A0A:03CA</c>): GO / FOLLOW / HUNT / FETCH need their target to
+    /// exist and keep its first match's index.
+    /// </summary>
+    public void SetOrder(int who, OrderMode mode, int target, int extra)
+    {
+        int resolved = target;
+        if (mode is not (OrderMode.GoXY or OrderMode.Wait))
+        {
+            if (First(target) is not { } t)
+            {
+                return;
+            }
+            resolved = t.Index;
+        }
+        foreach (WorldObject obj in Select(who).Where(o => o.Index < MaxCreatures))
+        {
+            obj.Order = new Order(mode, resolved, extra);
+            _nextPlan[obj.Index] = 0;
+        }
+    }
+
+    public int ReadOrders(int who) => this[who] is { Index: < MaxCreatures } obj ? (int)obj.Order.Mode : 0;
+
+    /// <summary>
+    /// RANGE (<c>1A0A:01A0</c>): the distance from object <paramref name="from"/>
+    /// to the nearest other object matching <paramref name="to"/>; that object
+    /// becomes "other" (<c>gname[8]</c>). 999 if none.
+    /// </summary>
+    public int Range(int from, int to)
+    {
+        if (this[from] is not { } a)
+        {
+            return GplGeometry.Far;
+        }
+        int best = GplGeometry.Far;
+        foreach (WorldObject b in Select(to).Where(b => b != a && !b.Hidden))
+        {
+            int d = GplGeometry.Distance(a.Cell.X, a.Cell.Y, b.Cell.X, b.Cell.Y);
+            if (d < best)
+            {
+                best = d;
+                SetEngineVariable(0x28, b.Index);
+            }
+        }
+        return best;
+    }
+
+    /// <summary>GET_LOS (<c>1A0A:00B3</c>): is any object matching <paramref name="to"/> in sight of <paramref name="from"/> within <paramref name="range"/>?</summary>
+    public bool InSight(int from, int to, int range)
+    {
+        if (this[from] is not { } a)
+        {
+            return false;
+        }
+        bool seen = false;
+        foreach (WorldObject b in Select(to).Where(b => b != a && !b.Hidden))
+        {
+            if (GplGeometry.LineOfSight(Region, a.Cell.X, a.Cell.Y, b.Cell.X, b.Cell.Y)
+                && GplGeometry.Distance(a.Cell.X, a.Cell.Y, b.Cell.X, b.Cell.Y) <= (range & 0xFF))
+            {
+                seen = true;
+                SetEngineVariable(0x28, b.Index);
+            }
+        }
+        return seen;
+    }
+
+    /// <summary>GETXY (<c>1A0A:0256</c>): the cell of the (last) matching object into <c>gname[1]</c>, <c>gname[2]</c>; <c>gname[3]</c> = 0.</summary>
+    public void GetXY(int who)
+    {
+        foreach (WorldObject obj in Select(who))
+        {
+            SetEngineVariable(0x21, obj.Cell.X);
+            SetEngineVariable(0x22, obj.Cell.Y);
+            SetEngineVariable(0x23, 0);
+        }
+    }
+
+    /// <summary>GET_STATUS: the named creature's status, 8 if there is none (<c>1A0A:02B6</c>).</summary>
+    public int Status(int who) => First(who) is { Record: not null } c ? c.Status : 8;
+
+    /// <summary><c>REQUEST(18)</c> (<c>87B3:12DC</c>): set the allegiance of matching creatures outside the party.</summary>
+    public void SetAllegiance(int who, int value)
+    {
+        foreach (WorldObject obj in Select(who).Where(o => o.Kind == ObjectKind.Creature))
+        {
+            obj.Allegiance = value & 0xFF;
+        }
+    }
+
+    // -- placing objects ---------------------------------------------------------------------
+
+    /// <summary>
+    /// TELEPORT objects (<c>7372:06DF</c>): to another region (255: off the
+    /// map) they leave this one; here they go to the free cell nearest (x, y).
+    /// The party (who 32766) to another region becomes <see cref="PendingRegion"/>.
+    /// </summary>
+    public void Teleport(int who, int region, int x, int y)
+    {
+        IEnumerable<WorldObject> targets = who == DialogueGplHost.WholeParty ? Party : Select(who);
+        if (who == DialogueGplHost.WholeParty && region != Region.Number)
+        {
+            PendingRegion = (region, x, y);
+            return;
+        }
+        foreach (WorldObject obj in targets.ToList())
+        {
+            if (region != Region.Number)
+            {
+                obj.Hidden = true;
+                obj.Walker?.Remove();
+            }
+            else
+            {
+                obj.Hidden = false;
+                Place(obj, new Cell(x, y));
+            }
+            Changed?.Invoke(obj, null);
+        }
+    }
+
+    /// <summary>
+    /// CLONE (<c>043D:3457</c>, <c>7372:0A44</c>): <paramref name="count"/>
+    /// copies of the object named <paramref name="name"/> near (x, y). Returns
+    /// how many were made.
+    /// </summary>
+    public int Clone(int name, int count, int x, int y)
+    {
+        if (First(name) is not { } original)
+        {
+            return 0;
+        }
+        int made = 0;
+        for (int i = 0; i < count; i++)
+        {
+            int index = Enumerable.Range(PartySize, MaxObjects - PartySize).FirstOrDefault(n => _objects[n] is null, -1);
+            if (index < 0)
+            {
+                break;
+            }
+            var copy = new WorldObject(index, original.Kind, original.Id)
+            {
+                Source = original.Source,
+                Record = original.Record,
+                Name = original.Name,
+                Allegiance = original.Allegiance,
+                Status = original.Status,
+                FixedCell = new Cell(x, y),
+            };
+            if (original.Walker is { } w && index < MaxCreatures)
+            {
+                var spec = new CharacterSpec(w.Script, w.Frames);
+                if (NearestCell(new Cell(x, y), c => Fits(c, spec.Footprint)) is not { } cell)
+                {
+                    continue;
+                }
+                copy.Walker = new Walker(index, spec.Script, spec.Frames, cell, spec.Footprint, Occupancy);
+            }
+            _objects[index] = copy;
+            made++;
+            Changed?.Invoke(copy, null);
+        }
+        return made;
+    }
+
+    /// <summary><c>REQUEST(17)</c>: show the object named <paramref name="name"/> at cell (x, y).</summary>
+    public void Show(int name, int x, int y)
+    {
+        foreach (WorldObject obj in Select(name).Concat(Objects.Where(o => o.Id == name && o.Hidden)).Distinct().ToList())
+        {
+            obj.Hidden = false;
+            Place(obj, new Cell(x, y));
+            Changed?.Invoke(obj, null);
+        }
+    }
+
+    /// <summary>
+    /// <c>REQUEST(5)</c> (<c>87B3:019F</c>): toggle the objects' second state
+    /// (e.g. open / closed), playing the animation that starts at <c>SCMD</c>
+    /// header byte 0x44, or the normal one when switching back.
+    /// </summary>
+    public void ToggleState(int who)
+    {
+        foreach (WorldObject obj in Select(who))
+        {
+            if (obj.Source is not { Scmd: > 0 } source || ScriptOf(source.Scmd) is not { } scmd)
+            {
+                continue;
+            }
+            obj.SecondState = !obj.SecondState;
+            int start = obj.SecondState ? scmd.Extra[4] | (scmd.Extra[5] << 8) : scmd.Slots[0];
+            Changed?.Invoke(obj, start);
+        }
+    }
+
+    /// <summary>
+    /// <c>REQUEST(10–13)</c>: set or clear <c>GMAP</c> bits at cell (x, y)
+    /// (<c>gmap_set_bits</c> / <c>gmap_clear_bits</c>): 0x40 blocks movement,
+    /// 0x80 sight (doors, portcullises).
+    /// </summary>
+    public void SetCellFlags(int x, int y, CellFlags flags, bool on)
+    {
+        if (x < 0 || y < 0 || x >= Region.Width || y >= Region.Height || y * Region.Width + x >= Region.Flags.Length)
+        {
+            return;
+        }
+        ref byte cell = ref Region.Flags[y * Region.Width + x];
+        cell = on ? (byte)(cell | (byte)flags) : (byte)(cell & ~(byte)flags);
+    }
+
+    /// <summary>The object a script's <c>obj(id)</c> or <c>obj_special(n)</c> names, before its field path.</summary>
+    public WorldObject? Resolve(int id) => id >= 0x8000 ? Special(id & 0x7FFF) : First(-id);
+
+    private Scmd? ScriptOf(int number)
+    {
+        if (!_scripts.TryGetValue(number, out Scmd? scmd))
+        {
+            scmd = _objectData.TryRead("SCMD", number, out var data) ? Scmd.Parse(data.Span) : null;
+            _scripts[number] = scmd;
+        }
+        return scmd;
+    }
+
+    private void Place(WorldObject obj, Cell near)
+    {
+        if (obj.Walker is { } w)
+        {
+            if (NearestCell(near, c => w.CanStand(c, Region.IsBlocked)) is { } cell)
+            {
+                if (!w.Teleport(cell, Region.IsBlocked))
+                {
+                    w.Teleport(cell, (_, _) => false);
+                }
+            }
+        }
+        else
+        {
+            obj.FixedCell = near;
+        }
+    }
+
+    // -- the passage of time ----------------------------------------------------------------
+
+    /// <summary>
+    /// Carry out orders, step the creatures (not the party) to tick
+    /// <paramref name="now"/>, and queue the scripts creatures should
+    /// run: no-orders scripts for idle creatures, and line-of-sight scripts
+    /// (kind 1 in sight of the active member within range, kind 2 not).
+    /// Returns the objects whose picture changed.
+    /// </summary>
+    public List<WorldObject> Update(long now, GplCreatureScripts creatureScripts)
+    {
+        var changed = new List<WorldObject>();
+        // Party members are stepped by the caller, which also fires their move triggers.
+        foreach (WorldObject obj in Objects.Where(o => o.Walker is not null && !o.Hidden && o.Kind != ObjectKind.Party).ToList())
+        {
+            if (obj.CanTakeOrders)
+            {
+                FollowOrder(obj, now);
+            }
+            if (obj.Walker!.Update(now, Region.IsBlocked))
+            {
+                changed.Add(obj);
+            }
+        }
+        if (now >= _nextScriptCheck)
+        {
+            _nextScriptCheck = now + ScriptCheckTicks;
+            QueueCreatureScripts(creatureScripts);
+        }
+        return changed;
+    }
+
+    private void FollowOrder(WorldObject obj, long now)
+    {
+        Walker w = obj.Walker!;
+        Order order = obj.Order;
+        if (order.Mode is OrderMode.None or OrderMode.Wait || now < _nextPlan.GetValueOrDefault(obj.Index))
+        {
+            return;
+        }
+        _nextPlan[obj.Index] = now + ReplanTicks;
+        WorldObject? target = order.Mode is OrderMode.GoXY ? null : this[order.Target];
+        switch (order.Mode)
+        {
+            case OrderMode.GoXY:
+                if (w.Cell == new Cell(order.Target, order.Extra))
+                {
+                    obj.Order = default;
+                }
+                else if (!w.IsWalking)
+                {
+                    w.WalkTo(new Cell(order.Target, order.Extra), Region.IsBlocked);
+                }
+                break;
+            case OrderMode.Go or OrderMode.Fetch or OrderMode.Follow or OrderMode.Hunt:
+                if (target is null || target.Hidden)
+                {
+                    obj.Order = default;
+                    break;
+                }
+                int distance = GplGeometry.Distance(w.Cell.X, w.Cell.Y, target.Cell.X, target.Cell.Y);
+                int near = order.Mode == OrderMode.Follow ? 2 : 1;
+                if (distance <= near)
+                {
+                    w.Stop();
+                    if (order.Mode is OrderMode.Go or OrderMode.Fetch)
+                    {
+                        obj.Order = default;
+                    }
+                }
+                else
+                {
+                    w.WalkTo(target.Cell, Region.IsBlocked);
+                }
+                break;
+            case OrderMode.Flee:
+                if (this[ActiveMember] is { } from && !w.IsWalking)
+                {
+                    int dx = Math.Sign(w.Cell.X - from.Cell.X), dy = Math.Sign(w.Cell.Y - from.Cell.Y);
+                    w.WalkTo(new Cell(w.Cell.X + 6 * (dx == 0 ? 1 : dx), w.Cell.Y + 6 * dy), Region.IsBlocked);
+                }
+                break;
+        }
+    }
+
+    private void QueueCreatureScripts(GplCreatureScripts scripts)
+    {
+        WorldObject? active = this[ActiveMember];
+        foreach (WorldObject obj in Objects.Where(o => o.Kind == ObjectKind.Creature && !o.Hidden && o.Index >= PartySize))
+        {
+            if (obj.Order.Mode == OrderMode.None && obj.Walker is { IsWalking: false }
+                && scripts.NoOrders.TryGetValue(obj.Id, out GplEntry idle) && idle.File != 0)
+            {
+                PendingScripts.Enqueue((idle, obj.Index, $"{obj.Name} has no orders"));
+            }
+            if (active is not null && scripts.Sight.TryGetValue(obj.Id, out var sight) && sight.Entry.File != 0)
+            {
+                bool seen = GplGeometry.LineOfSight(Region, obj.Cell.X, obj.Cell.Y, active.Cell.X, active.Cell.Y)
+                    && GplGeometry.Distance(obj.Cell.X, obj.Cell.Y, active.Cell.X, active.Cell.Y) <= (sight.Range & 0x7F);
+                if (seen == (sight.Kind == 1))
+                {
+                    PendingScripts.Enqueue((sight.Entry, obj.Index, $"{obj.Name} {(seen ? "sees" : "lost sight of")} {active.Name}"));
+                }
+            }
+        }
+    }
+
+    // -- cells --------------------------------------------------------------------------------
+
+    /// <summary>Whether a footprint fits at a cell right now.</summary>
+    public bool Fits(Cell cell, Footprint footprint) =>
+        footprint.Cells(cell).All(c => !Region.IsBlocked(c.X, c.Y) && Occupancy.OwnerOf(c) is null);
+
+    /// <summary>The cell nearest <paramref name="start"/> that satisfies <paramref name="ok"/>, searching outwards.</summary>
+    public Cell? NearestCell(Cell start, Func<Cell, bool> ok)
+    {
+        for (int radius = 0; radius < Math.Max(Region.Width, Region.Height); radius++)
+        {
+            for (int dy = -radius; dy <= radius; dy++)
+            {
+                for (int dx = -radius; dx <= radius; dx++)
+                {
+                    var cell = new Cell(start.X + dx, start.Y + dy);
+                    if (Math.Max(Math.Abs(dx), Math.Abs(dy)) == radius && ok(cell))
+                    {
+                        return cell;
+                    }
+                }
+            }
+        }
+        return null;
+    }
+}

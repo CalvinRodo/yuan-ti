@@ -68,8 +68,11 @@ cell fire its move trigger; right-click an object to fire its talk-to, use,
 look or pick-up trigger. Dialogue (text, portraits, Continue, Yes/No,
 menus) opens in a window and pauses the script until answered; TELEPORT moves
 the party (region exits: walk out through a map edge and answer Yes) and
-creatures. Other world commands are only logged so far: F2 shows the script
-log. Click: the selected character (green ring) walks there;
+creatures. Creatures (objects with an `RDFF` combat record) walk where their
+scripts send them (HUNT, GO, GOXY, FOLLOW, FLEE, FETCH, WAIT), and run their
+no-orders and line-of-sight scripts; RANGE, GETXY, GET_LOS and the other
+queries read the world (`DarkSun.Game.World`). Items, combat and some
+REQUEST codes are still only logged: F2 shows the script log. Click: the selected character (green ring) walks there;
 Shift+click: the whole party; Tab: select
 the next character; N: add a character; C: change the selected character's
 sprite. Characters cover a footprint of cells (estimated from the sprite's

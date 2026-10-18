@@ -63,6 +63,10 @@ public sealed class Walker
 
     public int Id { get; }
 
+    public Scmd Script => _script;
+
+    public IReadOnlyList<(int Width, int Height)> Frames => _frames;
+
     public Footprint Footprint { get; }
 
     /// <summary>The cell of the creature's feet, or the cell it is walking from.</summary>

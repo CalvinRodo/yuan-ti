@@ -76,5 +76,7 @@ public class LoggingGplHost : IGplHost
     public virtual int ChooseMenu(GplMachine machine, string title, IReadOnlyList<GplMenuOption> options) =>
         MenuChoice(title, options);
 
+    public virtual int TriggerId(GplMachine machine, int obj) => obj;
+
     private static string Key(GplObjectRef field) => $"{field.Id}:{string.Join('.', field.Path)}";
 }
