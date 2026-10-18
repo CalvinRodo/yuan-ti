@@ -6,8 +6,9 @@ namespace DarkSun.Engine;
 /// <summary>
 /// Start screen: finds the player's game files and opens the region viewer.
 /// For headless checks: <c>-- --check-install</c> prints what was found and
-/// quits (exit code 1 if nothing); <c>-- --check-regions</c> loads every region
-/// in the region viewer and quits.
+/// quits (exit code 1 if nothing); <c>-- --check-regions</c>,
+/// <c>-- --check-exits</c> and <c>-- --check-start</c> run the region viewer's
+/// checks and quit.
 /// </summary>
 public partial class Main : Control
 {
@@ -24,14 +25,15 @@ public partial class Main : Control
             ?? GameInstall.Locate([LoadConfiguredDirectory(), DevelopmentDirectory()]);
         string[] args = OS.GetCmdlineUserArgs();
 
-        if (args.Contains("--check-install") || (install is null && args.Contains("--check-regions")))
+        bool regionCheck = args.Contains("--check-regions") || args.Contains("--check-exits") || args.Contains("--check-start");
+        if (args.Contains("--check-install") || (install is null && regionCheck))
         {
             GD.Print(install is null ? "No game install found." : Describe(install));
             GetTree().Quit(install is null ? 1 : 0);
             return;
         }
         ShowStatus(install, null);
-        if (args.Contains("--check-regions"))
+        if (regionCheck)
         {
             OpenRegionView();
         }

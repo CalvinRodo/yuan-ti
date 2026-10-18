@@ -512,6 +512,36 @@ Script use of the trigger commands (all 250 scripts): no-orders 1 224,
 in-LOS 768, talk-to 536, attack 664, move-box 408, use 324, not-in-LOS 216,
 use-with 164, look 150, move-tile 94, pickup 16, door 0.
 
+### Text, dialogue and teleports
+
+From the handlers (2026-10-18):
+
+* **Text windows** are one routine, `84C9:0253(window, …)`: window 0 the prompt
+  buttons, 1 the picture, 2 the text, 3 "wait for a button" (then
+  `84C9:0CD9` returns the button pressed).
+  * `PRINT_STRING(style, text)` (`7372:15D9`) prints in window 2; only the
+    style's low byte is passed. The scripts use 115 (10 849 times, speech) and
+    98 (2 868 times, narration); what the byte selects is not traced.
+  * `PRINT_NUMBER(style, n)` prints n in decimal; `PRINT_NEWLINE` prints `"\n"`.
+  * `SHOW_PIC(n)` shows `PORT` n (1–120, 32 × 32) in window 1; `CLEAR_PIC`
+    clears window 1.
+  * `CONTINUE` shows "Press continue" and a Continue button; `ASK_YES_NO`
+    "Answer Yes or No", Yes and No, and sets acc to 1 for Yes.
+* `NAMETONUM` and `NUMTONAME` only negate: acc = −expr.
+* **TELEPORT** `(who, region, x, y, flag)` (`043D:1EAE`), cells:
+  * who 32766 (0x7FFE) is the party (`7372:0857`): in the current region each
+    member is placed at a free cell near (x, y) (`7372:06DF`, which also
+    fires move triggers); another region is entered (`7155:1487`, which runs
+    `region_enter_scripts`). The party's orders are cleared; acc = 1.
+  * who < 0: every object named −who; who ≥ 0: that object index; each via
+    `7372:06DF`. Region 255 takes creatures off the map.
+* **Region exits** are move-box triggers on the map edges that run `GPL 80`:
+  each entry sets the edge (1 north, 2 east, 3 south, 4 west), and the routine
+  at `053C` returns unless the active member faces out through it
+  (`obj_special(0x25)` field 95, facing 0–7 clockwise from north), asks
+  whether to leave (`gstr[6]`, ASK_YES_NO), and on Yes the entry teleports the
+  party (`TELEPORT(32766, region, x, y, 0)`).
+
 ## 5. Validation
 
 * All 217 `GPL` and 33 `MAS` resources in `GPLDATA.GFF` decode with no unknown

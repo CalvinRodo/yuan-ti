@@ -157,10 +157,22 @@ this milestone brings most of the game's content.
       `LoggingGplHost` records them, so scripts run end to end
       (`make engine-scripts`: every region script and every trigger it
       registers, 0 interpreter errors).
-- [ ] Carry out the world commands, most used first: PRINT_STRING and the
-      text window (CLEAR_PIC, SHOW_PIC, PRINT_NEWLINE), REQUEST, HUNT,
-      CLEAR_LOS, RANGE, TELEPORT, WAIT, GETXY, FIGHT, CLONE, GOXY, SOUND,
-      MENU / ASK_YES_NO; the engine variables (`gname`) and object fields.
+- [x] Dialogue: PRINT_STRING / PRINT_NUMBER / PRINT_NEWLINE, SHOW_PIC /
+      CLEAR_PIC, CONTINUE, ASK_YES_NO, MENU (`DialogueGplHost`,
+      `GplDialogue`; the Godot `DialogueWindow`). Scripts pause for the
+      player and resume (`GplMachine.Suspend` / `Resume`, which replays the
+      asking command, so questions inside expressions work).
+- [x] TELEPORT: the party (region exits: 29 found by `--check-exits`) and
+      named objects (hidden when sent elsewhere); NAMETONUM / NUMTONAME.
+- [ ] A creature model, which the remaining commands need: REQUEST (1 585
+      uses), CLONE (674), RANGE (470), GOXY / GO (484), GETXY (377), HUNT
+      (367), CLEAR_LOS (326), GIVE / TAKE (278), SEARCH (173), SET_OTHER,
+      WAIT, GET_LOS, FIGHT, FOLLOW, FLEE; object fields and the special
+      objects (`obj_special(0x25…0x2C)`, `3781:035F–0369`); engine variables
+      (`gname`).
+- [ ] SOUND (251 uses): queued by the host; needs the audio layer (M7).
+- [ ] Remember each region's changes (moved and removed objects) between
+      visits.
 - [x] **Find how scripts are triggered** (`dsun-exe-reference.md` §4):
       `MAS 99` at a new game, `MAS` *n* on entering region *n*, and the
       triggers those scripts register (move tile/box, look, talk, use, use

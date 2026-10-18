@@ -26,7 +26,7 @@ namespace DarkSun.Engine;
 /// triggers. Run with <c>-- --check-regions</c> to load every region, run its
 /// scripts, animate it and walk the party in it, then quit.
 /// </summary>
-public partial class RegionView : Node2D
+public partial class RegionView : Node2D, IGplWorld
 {
     private const float PanSpeed = 400f;
     private static readonly float[] ZoomLevels = [0.25f, 0.5f, 1f, 2f, 3f, 4f];
@@ -34,8 +34,8 @@ public partial class RegionView : Node2D
     /// <summary>The original game's party size.</summary>
     private const int PartySize = 4;
 
-    /// <summary>Region shown when the view opens; kept across visits.</summary>
-    private static int _regionIndex;
+    /// <summary>Region shown when the view opens; kept across visits. −1: not yet chosen, so a new game starts.</summary>
+    private static int _regionIndex = -1;
 
     private readonly Dictionary<ImageFrame, Texture2D> _textures = [];
     private readonly List<(Sprite2D Sprite, RegionObject Object, ScmdAnimator Animator)> _animated = [];
@@ -61,6 +61,11 @@ public partial class RegionView : Node2D
     private int _scriptLogSeen;
     private Label _scriptLog = null!;
     private PanelContainer _scriptPanel = null!;
+    private DialogueWindow _dialogueWindow = null!;
+    private readonly Dictionary<int, ImageTexture?> _portraits = [];
+    private readonly HashSet<RegionObject> _hidden = [];
+    private readonly Dictionary<RegionObject, Vector2> _moved = [];
+    private (int Region, int X, int Y)? _pendingRegion;
     private int _zoomLevel = Array.IndexOf(ZoomLevels, 1f);
     private Vector2 _mapSize;
 
@@ -80,10 +85,32 @@ public partial class RegionView : Node2D
         _camera = new Camera2D();
         AddChild(_camera);
         AddChild(BuildHud());
+        Session.ScriptHost.World = this;
 
         if (OS.GetCmdlineUserArgs().Contains("--check-regions"))
         {
+            _checking = true;
             CheckAllRegions();
+            return;
+        }
+        if (OS.GetCmdlineUserArgs().Contains("--check-exits"))
+        {
+            CheckExits();
+            return;
+        }
+        if (_regionIndex < 0)
+        {
+            // A new game begins where DSUN.EXE's does: region 42, the party at pixel (488, 152).
+            _regionIndex = 0;
+            EnterRegion(GplMachine.StartRegion,
+                new Cell(GplMachine.StartX / Region.TileSize, GplMachine.StartY / Region.TileSize));
+            if (OS.GetCmdlineUserArgs().Contains("--check-start"))
+            {
+                GD.Print($"new game: {Session.Install!.RegionFiles[_regionIndex]} (region {_region.Number}); party at "
+                    + string.Join(", ", _party.Select(m => $"({m.Walker.Cell.X},{m.Walker.Cell.Y})")));
+                GD.Print(string.Join('\n', _scriptLines));
+                GetTree().Quit();
+            }
             return;
         }
         ShowRegion(_regionIndex);
@@ -103,16 +130,22 @@ public partial class RegionView : Node2D
         _scriptLog = new Label { LabelSettings = new LabelSettings { FontSize = 9 }, AutowrapMode = TextServer.AutowrapMode.Off };
         _scriptPanel.AddChild(_scriptLog);
         layer.AddChild(_scriptPanel);
+
+        _dialogueWindow = new DialogueWindow
+        {
+            Answer = answer => ReportScript("answer", Session.Scripts.Resume(answer)),
+        };
+        layer.AddChild(_dialogueWindow);
         return layer;
     }
 
-    private void ShowRegion(int index)
+    private void ShowRegion(int index, Cell? start = null)
     {
         IReadOnlyList<string> files = Session.Install!.RegionFiles;
         _regionIndex = (index % files.Count + files.Count) % files.Count;
         LoadRegion(files[_regionIndex]);
+        PlaceParty(start);
         RunRegionScripts();
-        PlaceParty();
         UpdateHud();
         _follow = true;
         FollowCharacter();
@@ -145,6 +178,8 @@ public partial class RegionView : Node2D
         _animated.Clear();
         _party.Clear();
         _objectSprites.Clear();
+        _hidden.Clear();
+        _moved.Clear();
         _lastCells.Clear();
         _occupancy = new Occupancy();
         _clock = 0;
@@ -248,12 +283,12 @@ public partial class RegionView : Node2D
 
     private PartyMember? Selected => _party.Count > 0 ? _party[_selected] : null;
 
-    /// <summary>Put a party of <see cref="PartySize"/> near the middle of the map.</summary>
-    private void PlaceParty()
+    /// <summary>Put a party of <see cref="PartySize"/> near <paramref name="start"/>, or the middle of the map.</summary>
+    private void PlaceParty(Cell? start = null)
     {
         _selected = 0;
         _nextSprite = 0;
-        Cell centre = new(_region.Width / 2, _region.Height / 2);
+        Cell centre = start ?? new(_region.Width / 2, _region.Height / 2);
         for (int i = 0; i < PartySize; i++)
         {
             AddCharacter(_party.Count > 0 ? _party[^1].Walker.Cell : centre);
@@ -362,9 +397,10 @@ public partial class RegionView : Node2D
             }
             ImageFrame frame = obj.Frames[animator.Frame];
             sprite.Texture = TextureFor(frame);
-            sprite.Visible = frame.Width > 0 && frame.Height > 0;
+            sprite.Visible = frame.Width > 0 && frame.Height > 0 && !_hidden.Contains(obj);
             sprite.FlipH = animator.Mirrored;
-            sprite.Position = new Vector2(obj.EtabX + animator.OffsetX, obj.EtabY + animator.OffsetY);
+            Vector2 at = _moved.TryGetValue(obj, out Vector2 m) ? m : new Vector2(obj.EtabX, obj.EtabY);
+            sprite.Position = at + new Vector2(animator.OffsetX, animator.OffsetY);
             _ = animator.TakeSounds().Count(); // sound effects are not played yet
         }
         for (int i = 0; i < _party.Count; i++)
@@ -459,6 +495,10 @@ public partial class RegionView : Node2D
         {
             Zoom(-1);
         }
+        else if (_dialogueWindow.Visible && e is InputEventMouseButton { ButtonIndex: MouseButton.Left or MouseButton.Right })
+        {
+            // The dialogue is modal: the map takes no clicks until it closes.
+        }
         else if (e is InputEventMouseButton { ButtonIndex: MouseButton.Left, Pressed: true } click)
         {
             Vector2 at = GetGlobalMousePosition();
@@ -498,10 +538,26 @@ public partial class RegionView : Node2D
 
     // -- scripts ---------------------------------------------------------------------
 
+    /// <summary>A <c>PORT</c> portrait in the region's palette (they use colours every palette shares).</summary>
+    private ImageTexture? Portrait(int number)
+    {
+        if (!_portraits.TryGetValue(number, out ImageTexture? texture))
+        {
+            texture = Session.Open("GPLDATA.GFF").TryRead("PORT", number, out var data)
+                && ImageDecoder.ReadFrames(data.Span) is [var frame, ..]
+                ? Textures.ToTexture(frame, _palette)
+                : null;
+            _portraits[number] = texture;
+        }
+        return texture;
+    }
+
     /// <summary>The game-start script once per session, then the region's <c>MAS</c> script.</summary>
     private void RunRegionScripts()
     {
         GplMachine scripts = Session.Scripts;
+        _portraits.Clear();
+        _dialogueWindow.Attach(Session.ScriptHost.Dialogue, Portrait);
         if (!Session.GameStarted)
         {
             Session.GameStarted = true;
@@ -543,8 +599,8 @@ public partial class RegionView : Node2D
     /// <summary>Log a script run and the world commands it issued (PRINT_STRING as its text).</summary>
     private void ReportScript(string what, GplRunResult run)
     {
-        AddScriptLine($"> {what}: {run.Entry.Kind} {run.Entry.File} @{run.Entry.Address:x4}, "
-            + $"{run.Instructions} instructions{(run.Error is null ? "" : $", stopped: {run.Error}")}");
+        string status = run.Suspended ? ", waiting for the player" : run.Error is null ? "" : $", stopped: {run.Error}";
+        AddScriptLine($"> {what}: {run.Entry.Kind} {run.Entry.File} @{run.Entry.Address:x4}, {run.Instructions} instructions{status}");
         var log = Session.ScriptHost.Log;
         for (; _scriptLogSeen < log.Count; _scriptLogSeen++)
         {
@@ -554,6 +610,86 @@ public partial class RegionView : Node2D
                 : $"    {c}");
         }
         UpdateHud();
+        if (_checking)
+        {
+            _pendingRegion = null;
+        }
+        if (!run.Suspended && _pendingRegion is { } go)
+        {
+            _pendingRegion = null;
+            EnterRegion(go.Region, new Cell(go.X, go.Y));
+        }
+    }
+
+    // -- world commands (IGplWorld) ---------------------------------------------------
+
+    /// <summary>
+    /// TELEPORT the party. In this region each member goes to the free cell
+    /// nearest (x, y) (as <c>7372:06DF</c> does through <c>find_free_cell</c>);
+    /// another region is entered once the script has finished.
+    /// </summary>
+    public void TeleportParty(int region, int x, int y)
+    {
+        if (region != _region.Number)
+        {
+            _pendingRegion = (region, x, y);
+            AddScriptLine($"    party leaves for region {region} ({x},{y})");
+            return;
+        }
+        foreach (PartyMember member in _party)
+        {
+            Walker w = member.Walker;
+            if (NearestCell(new Cell(x, y), c => w.CanStand(c, _region.IsBlocked)) is { } cell && w.Teleport(cell, _region.IsBlocked))
+            {
+                DrawMember(member);
+            }
+        }
+    }
+
+    /// <summary>
+    /// TELEPORT the objects with <c>OJFF</c> <paramref name="number"/>: to
+    /// another region (255: off the map) they disappear from this one; within
+    /// this region they move to the cell (drawn standing at its bottom centre,
+    /// an approximation).
+    /// </summary>
+    public void TeleportObjects(int number, int region, int x, int y)
+    {
+        foreach (var (obj, sprite) in _objectSprites.Where(o => o.Object.Ojff == number))
+        {
+            if (region != _region.Number)
+            {
+                _hidden.Add(obj);
+                sprite.Visible = false;
+            }
+            else
+            {
+                _hidden.Remove(obj);
+                _moved[obj] = new Vector2(x * Region.TileSize + Region.TileSize / 2, (y + 1) * Region.TileSize - 1);
+                sprite.Position = _moved[obj];
+                sprite.Visible = true;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Object fields the region view knows: field 95 of a special object is
+    /// the facing (0–7 clockwise from north) of the selected character, which
+    /// stands in for the party's active member (the region-exit script, GPL
+    /// 80, checks it). Special objects are not otherwise told apart yet.
+    /// </summary>
+    public int? ReadField(GplObjectRef field) =>
+        field.IsSpecial && field.Path is [95] && Selected is { } member ? (int)member.Walker.Facing : null;
+
+    /// <summary>Change to region <paramref name="number"/> with the party at <paramref name="start"/>.</summary>
+    private void EnterRegion(int number, Cell start)
+    {
+        int index = Session.Install!.RegionFiles.ToList().FindIndex(f => f.Equals($"RGN{number:X2}.GFF", StringComparison.OrdinalIgnoreCase));
+        if (index < 0)
+        {
+            AddScriptLine($"    no region file for region {number}");
+            return;
+        }
+        ShowRegion(index, start);
     }
 
     private void AddScriptLine(string line)
@@ -568,6 +704,73 @@ public partial class RegionView : Node2D
 
     // -- headless check ----------------------------------------------------------
 
+    private int _answered;
+    private bool _checking;
+
+    /// <summary>
+    /// For every region: put the active member on each move trigger (a box's
+    /// top-left cell) and report the triggers whose scripts take the party to
+    /// another region.
+    /// </summary>
+    private void CheckExits()
+    {
+        IReadOnlyList<string> files = Session.Install!.RegionFiles;
+        int exits = 0;
+        for (int index = 0; index < files.Count; index++)
+        {
+            ShowRegion(index);
+            AnswerForThePlayer();
+            int number = _region.Number;
+            var spots = Session.Scripts.Triggers.Records(GplTriggerList.MoveTile).Select(t => (t.A, t.B, "tile"))
+                .Concat(Session.Scripts.Triggers.Records(GplTriggerList.MoveBox).Select(t => (t.A, t.B, "box"))).ToList();
+            var found = new List<string>();
+            foreach (var (x, y, kind) in spots)
+            {
+                if (_region.Number != number)
+                {
+                    ShowRegion(index);
+                    AnswerForThePlayer();
+                }
+                Walker w = _party[0].Walker;
+                if (!w.Teleport(new Cell(x, y), _region.IsBlocked))
+                {
+                    continue;
+                }
+                for (int tick = 0; tick < 4 && _region.Number == number; tick++)
+                {
+                    _clock += 1.0 / ScmdAnimator.TicksPerSecond;
+                    Animate();
+                    AnswerForThePlayer(yes: true);
+                }
+                if (_region.Number != number)
+                {
+                    found.Add($"{kind} ({x},{y}) -> region {_region.Number} at ({_party[0].Walker.Cell.X},{_party[0].Walker.Cell.Y})");
+                }
+            }
+            exits += found.Count;
+            GD.Print($"{files[index]}: {spots.Count} move triggers, {found.Count} exits{(found.Count > 0 ? ": " + string.Join("; ", found) : "")}");
+        }
+        GD.Print($"{exits} region exits found");
+        GetTree().Quit();
+    }
+
+    /// <summary>With no player, answer every prompt: Continue, No (Yes if <paramref name="yes"/>), or each menu's first option.</summary>
+    private void AnswerForThePlayer(bool yes = false)
+    {
+        for (int i = 0; i < 50 && Session.Scripts.IsSuspended; i++)
+        {
+            int answer = Session.ScriptHost.Dialogue.Prompt switch
+            {
+                GplMenuPrompt menu => menu.Options.ToList().FindIndex(o => o.Enabled),
+                GplYesNoPrompt => yes ? 1 : 0,
+                _ => 0,
+            };
+            _answered++;
+            ReportScript("auto answer", Session.Scripts.Resume(answer));
+        }
+        Session.ScriptHost.Dialogue.Clear();
+    }
+
     /// <summary>
     /// For every region: load it, place the party, send everyone to a cell 20
     /// columns away for 15 simulated seconds, and check after every tick that
@@ -581,6 +784,7 @@ public partial class RegionView : Node2D
             LoadRegion(file);
             int linesBefore = _scriptLines.Count;
             RunRegionScripts();
+            AnswerForThePlayer();
             string scriptLine = _scriptLines.Count > linesBefore ? _scriptLines[linesBefore] : "";
             PlaceParty();
             Cell start = _party[0].Walker.Cell;
@@ -591,6 +795,7 @@ public partial class RegionView : Node2D
             {
                 _clock = (double)tick / ScmdAnimator.TicksPerSecond;
                 Animate();
+                AnswerForThePlayer();
                 var cells = _party.SelectMany(m => m.Walker.Footprint.Cells(m.Walker.Cell)).ToList();
                 overlaps += cells.Count - cells.Distinct().Count();
             }
@@ -603,7 +808,8 @@ public partial class RegionView : Node2D
                 + $"{Session.Scripts.Triggers.Count(GplTriggerList.MoveBox)} box triggers; "
                 + $"{_scriptLines.Skip(linesBefore).Count(l => l.Contains("reached"))} move triggers fired on the walk");
         }
-        GD.Print($"{Characters().Count} walking character sprites; {failures} overlaps in total");
+        GD.Print($"{Characters().Count} walking character sprites; {failures} overlaps in total; "
+            + $"{_answered} dialogue prompts answered, {_scriptLines.Count(l => l.Contains("stopped:"))} scripts stopped with an error");
         GetTree().Quit(failures == 0 ? 0 : 1);
     }
 }

@@ -2,9 +2,10 @@ using DarkSun.Game.Rules;
 
 namespace DarkSun.Game.Scripting;
 
-/// <summary>How a run ended.</summary>
+/// <summary>How a run ended, or paused.</summary>
 /// <param name="Error">Why DSUN.EXE would have aborted the script (its <c>7372:17A7</c> path), or null.</param>
-public sealed record GplRunResult(GplEntry Entry, int Instructions, string? Error)
+/// <param name="Suspended">The host paused the script for the player (see <see cref="GplMachine.Suspend"/>); <see cref="GplMachine.Resume"/> continues it.</param>
+public sealed record GplRunResult(GplEntry Entry, int Instructions, string? Error, bool Suspended = false)
 {
     public bool Ok => Error is null;
 }
@@ -28,6 +29,12 @@ public sealed class GplMachine
     public const int MaxIfDepth = 31;
     public const int MaxCompareDepth = 7;
     public const int GameStartFile = 99;
+
+    /// <summary>Where a new game begins (<c>main</c>, <c>1512:0001</c>): region 42 (<c>RGN2A.GFF</c>).</summary>
+    public const int StartRegion = 42;
+
+    /// <summary>The party's start position in <see cref="StartRegion"/>, in pixels (<c>DS:117E</c>, <c>DS:1180</c>).</summary>
+    public const int StartX = 0x1E8, StartY = 0x98;
 
     private readonly IGplScripts _scripts;
     private readonly IGplHost _host;
@@ -53,6 +60,10 @@ public sealed class GplMachine
     private string? _error;
     private bool _afterString;
     private string _lastString = "";
+    private bool _suspendRequested;
+    private GplEntry _runEntry;
+    private int _runCount;
+    private int? _answer;
 
     public GplMachine(IGplScripts scripts, IGplHost host, byte[] fieldTypes, BorlandRandom random)
     {
@@ -91,6 +102,27 @@ public sealed class GplMachine
     /// <summary>Called with each instruction before it runs, if set.</summary>
     public Action<GplEntry, GplInstruction>? Trace { get; set; }
 
+    /// <summary>A script is paused waiting for the player; new runs and triggers are refused until it finishes.</summary>
+    public bool IsSuspended { get; private set; }
+
+    /// <summary>
+    /// Pause the running script for input the host can't give at once
+    /// (CONTINUE, ASK_YES_NO, MENU). The command that asked is undone and run
+    /// again by <see cref="Resume"/>, where the host takes the player's answer
+    /// with <see cref="TryTakeAnswer"/> instead of pausing again; this works
+    /// for questions asked inside expressions, e.g. <c>lnum[0] = ((ASK_YES_NO))</c>.
+    /// </summary>
+    public void Suspend() => _suspendRequested = true;
+
+    /// <summary>The answer passed to <see cref="Resume"/>, once, for the command that asked.</summary>
+    public bool TryTakeAnswer(out int answer)
+    {
+        answer = _answer ?? 0;
+        bool had = _answer.HasValue;
+        _answer = null;
+        return had;
+    }
+
     // -- entry points (dsun-exe-reference.md §4) ---------------------------------
 
     /// <summary>A new game: clear the globals and triggers, then run <c>MAS 99</c>.</summary>
@@ -122,7 +154,7 @@ public sealed class GplMachine
     /// </summary>
     public GplRunResult? OnMove(int who, int x, int y, bool active)
     {
-        if (Triggers.MatchMove(x, y, active ? 0 : 1) is not { } entry)
+        if (IsSuspended || Triggers.MatchMove(x, y, active ? 0 : 1) is not { } entry)
         {
             return null;
         }
@@ -133,7 +165,7 @@ public sealed class GplMachine
     /// <summary>Pick up, talk to, attack, look at or use <paramref name="target"/>.</summary>
     public GplRunResult? OnObject(GplTriggerList list, int actor, int target)
     {
-        if (Triggers.MatchObject(list, _host.TriggerId(this, target)) is not { } entry)
+        if (IsSuspended || Triggers.MatchObject(list, _host.TriggerId(this, target)) is not { } entry)
         {
             return null;
         }
@@ -144,7 +176,7 @@ public sealed class GplMachine
     /// <summary>Use <paramref name="first"/> with <paramref name="second"/>.</summary>
     public GplRunResult? OnUseWith(int actor, int first, int second)
     {
-        if (Triggers.MatchUseWith(_host.TriggerId(this, first), _host.TriggerId(this, second)) is not { } entry)
+        if (IsSuspended || Triggers.MatchUseWith(_host.TriggerId(this, first), _host.TriggerId(this, second)) is not { } entry)
         {
             return null;
         }
@@ -164,6 +196,10 @@ public sealed class GplMachine
         {
             return new GplRunResult(entry, 0, null);
         }
+        if (IsSuspended)
+        {
+            return new GplRunResult(entry, 0, "another script is waiting for the player");
+        }
         _fileStack.Clear();
         _frame = 0;
         _ifDepth = 0;
@@ -171,9 +207,32 @@ public sealed class GplMachine
         _done = false;
         _error = null;
         Memory.ClearLocals();
+        _runEntry = entry;
+        _runCount = 0;
         CallFile(entry);
+        return Continue();
+    }
 
-        int count = 0;
+    /// <summary>
+    /// Continue a suspended script: the command that paused runs again and
+    /// gets <paramref name="answer"/> (ASK_YES_NO: 1 yes, 0 no; MENU: the
+    /// option's index or −1; CONTINUE: anything).
+    /// </summary>
+    public GplRunResult Resume(int answer = 0)
+    {
+        if (!IsSuspended)
+        {
+            throw new InvalidOperationException("no script is suspended");
+        }
+        IsSuspended = false;
+        _answer = answer;
+        return Continue();
+    }
+
+    private GplRunResult Continue()
+    {
+        int count = _runCount;
+        GplEntry entry = _runEntry;
         while (!_done && _frame >= 1)
         {
             if (++count > InstructionLimit)
@@ -198,10 +257,28 @@ public sealed class GplMachine
                 Abort(e.Message);
                 break;
             }
+            (int frame, int ifDepth, int compareDepth, int files) = (_frame, _ifDepth, _compareDepth, _fileStack.Count);
             _pc[_frame] = pc + instruction.Length;
             Trace?.Invoke(Current with { Address = pc }, instruction);
             Execute(instruction);
+            if (_suspendRequested && !_done)
+            {
+                // Undo the command so that Resume runs it again with the answer.
+                _suspendRequested = false;
+                (_frame, _ifDepth, _compareDepth) = (frame, ifDepth, compareDepth);
+                if (_fileStack.Count != files)
+                {
+                    _fileStack.RemoveRange(files, _fileStack.Count - files);
+                    Load(_fileStack[^1].File, _fileStack[^1].Kind, clearLocals: false);
+                }
+                _pc[_frame] = pc;
+                IsSuspended = true;
+                _runCount = count - 1;
+                return new GplRunResult(entry, count, null, Suspended: true);
+            }
+            _answer = null;
         }
+        _suspendRequested = false;
         return new GplRunResult(entry, count, _error);
     }
 
@@ -261,7 +338,7 @@ public sealed class GplMachine
     }
 
     /// <summary>Make a file current (<c>043D:03F8</c>); a different file clears the locals.</summary>
-    private bool Load(int file, GplFileKind kind)
+    private bool Load(int file, GplFileKind kind, bool clearLocals = true)
     {
         if (_loaded == (file, kind))
         {
@@ -277,7 +354,10 @@ public sealed class GplMachine
             loaded = (code, new GplDecoder(code, _fieldTypes), []);
             _files[(file, kind)] = loaded;
         }
-        Memory.ClearLocals();
+        if (clearLocals)
+        {
+            Memory.ClearLocals();
+        }
         (_code, _decoder, _cache) = loaded;
         _loaded = (file, kind);
         return true;
@@ -369,6 +449,7 @@ public sealed class GplMachine
             case 0x07: Modify(a[0], 4, v => v + 1); break;
             case 0x0A: CopyString(a[0], a[1], i); break;
             case 0x0E: Accumulator = Accumulator == 0 ? 1 : 0; break;
+            case 0x1E or 0x1F: Accumulator = unchecked(-V(0)); break; // NAMETONUM, NUMTONAME: acc = −value
             case 0x11: Modify(a[0], 4, v => unchecked(v * V(1))); break;
             case GplOpcodes.Jump: Jump(V(0)); break;
             case GplOpcodes.CallLocal: PushFrame((ushort)V(0)); break;
@@ -502,7 +583,7 @@ public sealed class GplMachine
             options.Add(new GplMenuOption(text.Text ?? text.Value.ToString(), (ushort)address, enabled));
         }
         int choice = _host.ChooseMenu(this, title, options);
-        if (choice >= 0 && choice < options.Count)
+        if (!_suspendRequested && choice >= 0 && choice < options.Count)
         {
             // The chosen option's address is entered as a subroutine.
             PushFrame(options[choice].Address);

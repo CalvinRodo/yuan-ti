@@ -341,3 +341,94 @@ public class GplTriggerTests
         Assert.Null(m.Triggers.MatchObject(GplTriggerList.TalkTo, -8));
     }
 }
+
+public class GplDialogueTests
+{
+    private static (GplMachine, DialogueGplHost) Make(byte[] code)
+    {
+        var scripts = new Scripts();
+        scripts.Files[(1, GplFileKind.Gpl)] = code;
+        var host = new DialogueGplHost();
+        return (new GplMachine(scripts, host, [], new BorlandRandom(1)), host);
+    }
+
+    /// <summary>A packed string (kind 5) of plain ASCII text.</summary>
+    private static byte[] Packed(string text)
+    {
+        // 7-bit codes, big-endian bit order, ended by code 3: the inverse of GplDecoder.Packed.
+        var bits = new List<bool>();
+        foreach (byte c in text.Select(ch => (byte)ch).Append((byte)3))
+        {
+            for (int b = 6; b >= 0; b--)
+            {
+                bits.Add(((c >> b) & 1) != 0);
+            }
+        }
+        while (bits.Count % 8 != 0)
+        {
+            bits.Add(false);
+        }
+        var bytes = new List<byte> { 0x92, 0x05 };
+        for (int i = 0; i < bits.Count; i += 8)
+        {
+            bytes.Add((byte)Enumerable.Range(0, 8).Sum(k => bits[i + k] ? 1 << (7 - k) : 0));
+        }
+        return [.. bytes];
+    }
+
+    [Fact]
+    public void YesNoAskedInsideAnExpressionResumesWithTheAnswer()
+    {
+        var a = new Asm().Op(0x4F).Num(115).Bytes(Packed("Hello")).Op(0x00) // PRINT_STRING(115, "Hello")
+            .Op(0x16).Bytes(0x8C, 0x38).Bytes((byte)GplVarType.LocalNum, 0)   // lnum[0] = ((ASK_YES_NO))
+            .Op(0x31);
+        var (m, host) = Make(a.ToArray());
+
+        GplRunResult first = m.Run(new GplEntry(1, 0));
+        Assert.True(first.Suspended);
+        Assert.IsType<GplYesNoPrompt>(host.Dialogue.Prompt);
+        Assert.Equal("Hello", Assert.Single(host.Dialogue.Text).Text);
+        Assert.Null(m.OnMove(0, 0, 0, true)); // no other script while waiting
+
+        GplRunResult done = m.Resume(1);
+        Assert.True(done.Ok && !done.Suspended);
+        Assert.Equal(1, m.Memory.Read(new GplVariable(GplVarType.LocalNum, 0)));
+        Assert.Single(host.Dialogue.Text); // the PRINT_STRING before the question did not run again
+        Assert.Null(host.Dialogue.Prompt);
+    }
+
+    [Fact]
+    public void MenuEntersTheChosenOption()
+    {
+        // MENU(title=0) ENTRY(text=1, func=@A, cond=1) ENTRY(text=2, func=@B, cond=1) MENU_END; EXIT
+        // A: lnum[0] = 1; RET   B: lnum[0] = 2; RET
+        var a = new Asm().Op(0x48).Num(0);
+        a.Num(1);
+        int optionA = a.Placeholder();
+        a.Num(1).Num(2);
+        int optionB = a.Placeholder();
+        a.Num(1).Op(0x4A).Op(0x31);
+        a.Patch(optionA, a.Here);
+        a.Set(GplVarType.LocalNum, 0, 1).Op(0x15);
+        a.Patch(optionB, a.Here);
+        a.Set(GplVarType.LocalNum, 0, 2).Op(0x15);
+        var (m, host) = Make(a.ToArray());
+
+        Assert.True(m.Run(new GplEntry(1, 0)).Suspended);
+        Assert.Equal(2, Assert.IsType<GplMenuPrompt>(host.Dialogue.Prompt).Options.Count);
+
+        Assert.True(m.Resume(1).Ok);
+        Assert.Equal(2, m.Memory.Read(new GplVariable(GplVarType.LocalNum, 0)));
+    }
+
+    [Fact]
+    public void PicturesAndTextGoToTheDialogue()
+    {
+        var a = new Asm().Op(0x54).Num(28).Op(0x50).Num(98).Num(42).Op(0x51).Op(0x2A).Op(0x54).Num(5).Op(0x31);
+        var (m, host) = Make(a.ToArray());
+
+        m.Run(new GplEntry(1, 0));
+        Assert.Equal(5, host.Dialogue.Portrait);
+        Assert.Empty(host.Dialogue.Text); // CLEAR_PIC cleared "42\n"
+    }
+}

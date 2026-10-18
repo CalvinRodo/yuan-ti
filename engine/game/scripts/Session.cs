@@ -17,8 +17,8 @@ public static class Session
 
     private static GplMachine? _scripts;
 
-    /// <summary>Script host: records world commands until the world handles them.</summary>
-    public static LoggingGplHost ScriptHost { get; private set; } = new();
+    /// <summary>Script host: carries out the dialogue commands and records the rest.</summary>
+    public static DialogueGplHost ScriptHost { get; private set; } = new();
 
     /// <summary>The GPL interpreter for this session; the game-start script has run when <see cref="GameStarted"/>.</summary>
     public static GplMachine Scripts
@@ -42,7 +42,7 @@ public static class Session
         Install = install;
         Files.Clear();
         _scripts = null;
-        ScriptHost = new LoggingGplHost();
+        ScriptHost = new DialogueGplHost();
         GameStarted = false;
     }
 

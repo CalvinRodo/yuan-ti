@@ -115,6 +115,26 @@ public sealed class Walker
         _path.Clear();
     }
 
+    /// <summary>
+    /// Put the creature at <paramref name="cell"/> at once (TELEPORT), if its
+    /// footprint fits there: it stops, and stands facing the way it was.
+    /// </summary>
+    public bool Teleport(Cell cell, Func<int, int, bool> blocked)
+    {
+        if (!CanStand(cell, blocked))
+        {
+            return false;
+        }
+        Stop();
+        _target = null;
+        _occupancy.ReleaseAll(Id);
+        _occupancy.TryClaim(Id, Footprint.Cells(cell));
+        Cell = cell;
+        _standing = false;
+        Animator = Stand();
+        return true;
+    }
+
     /// <summary>Take the creature off the map: release its cells.</summary>
     public void Remove()
     {

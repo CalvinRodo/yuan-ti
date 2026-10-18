@@ -3,6 +3,9 @@
 // Runs MAS 99 (new game), then for every region: MAS <region>, then every
 // trigger the region registered (tile and box triggers at their cells,
 // object and use-with triggers, creature no-orders and line-of-sight scripts).
+// Prompts (Continue, Yes/No, menus) pause the script as in the game; this
+// answers them as a player would: Continue, alternately Yes and No, and each
+// menu's enabled options in turn.
 // Prints one line per region and a summary; -v also prints the world commands.
 
 using DarkSun.Data.Gff;
@@ -17,10 +20,10 @@ if (args.Length < 1)
 bool verbose = args.Contains("-v");
 GffFile gpl = GffFile.Open(Path.Combine(args[0], "GPLDATA.GFF"));
 byte[] fieldTypes = gpl.TryRead("GPLX", 1, out var gplx) ? GplDecoder.FieldTypes(gplx.Span) : [];
-var host = new LoggingGplHost();
+var host = new DialogueGplHost();
 var machine = new GplMachine(new GffScripts(gpl), host, fieldTypes, new BorlandRandom(1));
 
-int runs = 0, instructions = 0;
+int runs = 0, instructions = 0, prompts = 0, menus = 0;
 var errors = new List<string>();
 void Count(GplRunResult? r)
 {
@@ -28,6 +31,18 @@ void Count(GplRunResult? r)
     {
         return;
     }
+    while (r.Suspended)
+    {
+        prompts++;
+        int answer = host.Dialogue.Prompt switch
+        {
+            GplMenuPrompt m => Enabled(m)[menus++ % Enabled(m).Count],
+            GplYesNoPrompt => prompts % 2,
+            _ => 0,
+        };
+        r = machine.Resume(answer);
+    }
+    host.Dialogue.Clear();
     runs++;
     instructions += r.Instructions;
     if (r.Error is not null)
@@ -87,7 +102,7 @@ foreach (int region in regions)
 // variable has some value); anything else is an interpreter error.
 var loops = errors.Where(e => e.EndsWith("instructions")).ToList();
 var failures = errors.Except(loops).ToList();
-Console.WriteLine($"{runs} runs, {instructions} instructions, {host.Log.Count} world commands, "
+Console.WriteLine($"{runs} runs, {instructions} instructions, {prompts} prompts answered, {host.Log.Count} world commands, "
     + $"{failures.Count} errors, {loops.Count} loops waiting on world state");
 var commands = host.Log.GroupBy(l => l.Command.Mnemonic).OrderByDescending(g => g.Count());
 Console.WriteLine("world commands: " + string.Join(", ", commands.Select(g => $"{g.Key} {g.Count()}")));
@@ -103,3 +118,6 @@ return failures.Count == 0 ? 0 : 1;
 
 string Triggers() => string.Join(" ", Enum.GetValues<GplTriggerList>()
     .Select(l => (l, n: machine.Triggers.Count(l))).Where(x => x.n > 0).Select(x => $"{x.l} {x.n}"));
+
+static List<int> Enabled(GplMenuPrompt m) =>
+    [.. m.Options.Select((o, i) => (o, i)).Where(x => x.o.Enabled).Select(x => x.i).DefaultIfEmpty(-1)];

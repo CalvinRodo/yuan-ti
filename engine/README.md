@@ -58,12 +58,18 @@ $GODOT --headless --path engine/game -- --check-install
 $GODOT --headless --path engine/game -- --check-regions
 ```
 
-In the region viewer, a party of four stands near the middle of the map
-(placeholder sprites: any object whose `SCMD` can walk). Entering a region
+The region viewer starts a new game where DSUN.EXE does: region 42
+(`RGN2A.GFF`), the party at pixel (488, 152), after the game-start script
+(`MAS 99`). PgUp/PgDn browse the other regions, with the party in the middle
+of the map. The party is four placeholder sprites (any object whose `SCMD`
+can walk). Entering a region
 runs its script (and, once, the game-start script); characters reaching a
 cell fire its move trigger; right-click an object to fire its talk-to, use,
-look or pick-up trigger. World commands are only logged so far: F2 shows the
-script log. Click: the selected character (green ring) walks there;
+look or pick-up trigger. Dialogue (text, portraits, Continue, Yes/No,
+menus) opens in a window and pauses the script until answered; TELEPORT moves
+the party (region exits: walk out through a map edge and answer Yes) and
+creatures. Other world commands are only logged so far: F2 shows the script
+log. Click: the selected character (green ring) walks there;
 Shift+click: the whole party; Tab: select
 the next character; N: add a character; C: change the selected character's
 sprite. Characters cover a footprint of cells (estimated from the sprite's
@@ -74,7 +80,9 @@ again after the next click); mouse wheel or +/- zoom; PgUp/PgDn change region;
 F1 shows blocked cells (red), cells that block line of sight (blue outline),
 occupied cells (yellow) and move triggers (magenta); Esc goes back. Objects with an `SCMD` script
 animate. `--check-regions` also walks the party 20 cells in every region and
-fails if two characters ever overlap.
+fails if two characters ever overlap; `--check-exits` steps on every move
+trigger and lists the region exits; `--check-start` starts a new game and
+prints where the party stands and what the scripts did.
 
 ## Notes
 
