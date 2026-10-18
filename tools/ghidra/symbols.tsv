@@ -292,6 +292,54 @@
 4356:4274	data	ExitStart	#pragma exit table .. 427A
 4356:A420	data	_atexittbl	32 far pointers
 4356:A4A0	data	_ctrlbrk_handler
+# --- Region map flags (GMAP), see dsun-exe-reference.md "Region maps" ---
+2191:01CB	func	void region_load_maps(int region, int clearOccupied)	loads PAL, RMAP (DS:2F4A) and GMAP (DS:0556) for a region; clears GMAP bit 0x20 in a 98x98 area
+142F:0052	func	void gmap_set_bits(unsigned x, unsigned y, char bits)
+142F:0083	func	void gmap_clear_bits(unsigned x, unsigned y, char bits)
+142F:00B6	func	int gmap_test_bits(int x, int y, char bits)
+142F:00DC	func	int gmap_is_blocked(unsigned x, unsigned y)	GMAP & 0x40; outside the 128x98 map counts as blocked
+142F:0114	func	int gmap_blocks_sight(unsigned x, unsigned y)	GMAP & 0x80
+142F:014B	func	int gmap_is_occupied(unsigned x, unsigned y)	GMAP & 0x20 (runtime: a creature stands here)
+142F:0182	func	void gmap_set_blocked(unsigned x, unsigned y)
+142F:01B1	func	void gmap_set_blocks_sight(unsigned x, unsigned y)
+142F:01E0	func	void gmap_set_occupied(unsigned x, unsigned y)
+142F:020F	func	void gmap_clear_blocked(unsigned x, unsigned y)
+142F:023E	func	void gmap_clear_blocks_sight(unsigned x, unsigned y)
+142F:026D	func	void gmap_unmark_party(void)	clears 0x60 at the 4 party cells (DS:0546)
+142F:02B9	func	void gmap_mark_party(void)	sets 0x60 at the cells of living party members
+142F:0323	func	void party_set_cell(unsigned member, int x, int y)
+142F:0348	func	void party_clear_cell(unsigned member)	cell = (0x81, 99): off the map
+142F:0426	func	void gmap_debug_overlay(void)	draws a box on every visible blocked cell; fill colour 0x20 if occupied, else 0x34
+150F:0002	func	gmap_line_cell_blocks_sight	line-of-sight step test: GMAP & 0x80 at the cell in 37B7:0017/0019; returns -1 if it blocks
+0898:00A4	func	line_of_sight	walks a line cell by cell (0898:0142); returns -1 at the first cell with GMAP 0x80, 0 if clear
+1A0A:11DB	func	int footprint_blocked(int x, int y)	any blocked cell in x +/- DS:1650, y - 0..DS:1652
+7372:0909	func	find_free_cell	sets the footprint DS:1650 = size & 7, DS:1652 = size / 8, then searches outward for a free cell
+1DBD:0002	func	draw_objects_and_walls	draws ETAB objects and GMAP walls of the visible area, row by row
+# --- Objects and SCMD animation, see dsun-exe-reference.md "Object animation" ---
+1DF3:1073	func	object_from_ojff	fills an object (DS:6694 + 0x20*n) from an OJFF record and its ETAB entry
+1DF3:1157	func	object_create	creates the object for an ETAB entry on first draw; reads OJFF, starts its SCMD
+1DF3:1999	func	void object_load_scmd(int object)	loads the SCMD for a pending object (+0x15 < 0 holds -number)
+1DF3:1A00	func	int scmd_load(int number, int slot)	SCMD cache (DS:6450, 64 x 9 bytes); header -> DS:57CC + 0x48*slot
+1DF3:1BEF	func	object_apply_scmd_record	applies one 8-byte SCMD record: frame, delay, hot spot, move, sound, flags
+1DF3:22B2	func	object_start_scmd	loads an SCMD into an object and starts it at a record index
+1DF3:23A9	func	object_animate_step	steps an object's SCMD when its delay has elapsed on the 96 Hz tick DS:11D6
+1DF3:29E8	func	void timer_tick(void)	96 Hz timer callback: DS:11D6++
+191F:0A6F	func	void play_sound_effect(char id)	skipped when sound is off or id is -1 (probably)
+# Data
+4356:0556	data	gmap	far ptr: region map flags, 128 x 98 bytes
+4356:0546	data	party_cells	4 x (int x, int y): cells marked occupied by the party
+4356:1184	data	walk_slot_by_direction	8 bytes: SCMD header slot for walking, by direction 0=N .. 7=NW
+4356:118C	data	stand_slot_by_direction	8 bytes: SCMD header slot for standing, by direction
+4356:11D6	data	tick_count	long, 96 Hz
+4356:1650	data	footprint_half_width
+4356:1652	data	footprint_height
+4356:2F4A	data	rmap	far ptr: region tile map, 128 x 98 bytes
+4356:2F52	data	direction_dx	9 signed bytes, by direction 0=N .. 7=NW
+4356:2F5B	data	direction_dy	9 signed bytes
+4356:57CC	data	scmd_headers	far ptr: 0x48-byte SCMD headers, one per cache slot
+4356:6450	data	scmd_cache	64 x 9 bytes: refcount, number, far ptr to records, record count
+4356:6690	data	etab	far ptr: the region's ETAB entries (8 bytes each)
+4356:6694	data	objects	0x140 x 0x20 bytes, see dsun-exe-reference.md
 # Data (kind "data" becomes a label)
 4356:00AC	data	gpl_trace_hook	far fn ptr called before each GPL command when non-null
 4356:00C0	data	gpl_cmd_table	129 near pointers into segment 043D, indexed by opcode

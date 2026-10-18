@@ -57,7 +57,9 @@ $GODOT --headless --path engine/game -- --check-regions
 ```
 
 In the region viewer: arrows, WASD or drag to scroll; mouse wheel or +/- to
-zoom; PgUp/PgDn for the previous or next region; Esc to go back.
+zoom; PgUp/PgDn for the previous or next region; F1 to show blocked cells (red)
+and cells that block line of sight (blue outline); Esc to go back. Objects
+with an `SCMD` script animate.
 
 ## Notes
 

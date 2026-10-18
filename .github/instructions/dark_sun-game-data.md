@@ -102,9 +102,9 @@ wall edges and placed objects (resolved via OJFF/WALL in SEGOBJEX.GFF and GPLDAT
 ### Resource Types (all region files share this identical structure)
 | Tag | Count | Description |
 |-----|------:|-------------|
-| ETAB | 1 | Object entry table — array of 8-byte records: `int16 x, int16 y, int8 yOffset, uint8 flags (bit7=mirrored), int16 ojffNumber`. Each record places one game-world object sprite at a pixel position. OJFF numbers reference SEGOBJEX.GFF. |
+| ETAB | 1 | Object entry table — array of 8-byte records: `int16 x, int16 y, int8 elevation, uint8 flags (bit7=mirrored), int16 −ojffNumber`. Each record places one game-world object sprite at a pixel position. OJFF numbers reference SEGOBJEX.GFF. Flags and run-time use: `dsun-exe-reference.md` §3. |
 | GFFI | 1 | GFF index block |
-| GMAP | 1 | Region map flags — 128 × 98 byte array (one byte per tile). Lower 5 bits = wall index (0 = no wall); upper 3 bits = passability / terrain flags. Wall index encodes `wallNumber = regionNumber × 100 + wallIndex − 1` into GPLDATA.GFF's WALL resources. |
+| GMAP | 1 | Region map flags — 128 × 98 byte array (one byte per tile). Lower 5 bits = wall index (0 = no wall); bit 5 (0x20) occupied by a creature (run time only); bit 6 (0x40) blocks movement; bit 7 (0x80) blocks line of sight (see `dsun-exe-reference.md` §3). Wall index encodes `wallNumber = regionNumber × 100 + wallIndex − 1` into GPLDATA.GFF's WALL resources. |
 | RMAP | 1 | Region tile map — 128 × 98 byte array (one byte per tile). Each byte is the TILE resource number for the ground-layer graphic. |
 | TILE | 152–254 | Tile graphics — 16 × 16 pixel indexed bitmaps for the ground layer. Typically ~190–254 unique tiles per region. Require a PAL to render. |
 
@@ -124,6 +124,6 @@ Region rendering requires SEGOBJEX.GFF + GPLDATA.GFF alongside the region GFF.
 |-----|------:|-------------|
 | BMP | 2 419 | Bitmap sprite frames — the actual pixel data for all in-world objects. Referenced by OJFF entries via their `bmpNumber` field. |
 | GFFI | 4 | GFF index blocks |
-| OJFF | 2 775 | Object sprite definition — 16-byte record: `int16 ??, int16 xOffset, int16 yOffset, …, uint16 bmpNumber` at offset 0x0C. Gives the pixel offset and BMP reference for one sprite. ETAB entries in region files reference these by number. |
+| OJFF | 2 775 | Object sprite definition — 16-byte record: `+0 flags, int16 anchor x at 2, int16 anchor y at 4, int8 y adjustment at 0x0A, uint16 bmpNumber at 0x0C, int16 scmdNumber at 0x0E` (0 = not animated). ETAB entries in region files reference these by number. |
 | RDFF | 1 046 | Resource definition — paired with OJFF entries at the same resource numbers. Size varies (61, 159, 312, or 455 bytes). Likely stores collision boxes, pathfinding hints, or extra metadata for each object. |
-| SCMD | 256 | Animation scripts — bytecode controlling multi-frame sprite animation and state transitions for objects and characters. |
+| SCMD | 256 | Animation scripts — 0x48-byte header (32 start indexes: facing N/E/S/W × 8 actions) and 8-byte records: frame, delay (96 Hz ticks), flags (jump, stop, mirror, …), dx, dy, hot spot x, y, sound. Format in `dsun-exe-reference.md` §3. |

@@ -301,7 +301,111 @@ Semantics notes (from the handlers):
 
 ---
 
-## 3. Validation
+## 3. Region maps and object animation
+
+Derived statically from the code named in `tools/ghidra/symbols.tsv`
+(2026-10-18); not yet observed at run time. DGROUP addresses are `DS:xxxx`.
+
+### Region map flags (`GMAP`)
+
+`region_load_maps` (`2191:01CB`) loads the region's `PAL `, `RMAP` (far pointer
+`DS:2F4A`) and `GMAP` (far pointer `DS:0556`), each 128 × 98 bytes, row-major
+(`y * 128 + x`). Segment `142F` holds the accessors. Coordinates outside
+128 × 98 count as blocked and as not blocking sight.
+
+| Bits | Meaning | Evidence |
+|------|---------|----------|
+| 0–4 (`0x1F`) | Wall index: 0 none, else `WALL` region × 100 + index − 1, drawn bottom-centred on the cell | `draw_objects_and_walls` (`1DBD:0002`) |
+| 5 (`0x20`) | Occupied by a creature (run-time only; cleared on load, set with `0x40` at party cells) | `gmap_mark_party` / `gmap_unmark_party` set and clear `0x60`; stored in 1 cell of all 33 files |
+| 6 (`0x40`) | Blocks movement | `gmap_is_blocked` (`142F:00DC`), used by `footprint_blocked` and the movement code in `1587`/`1A0A`; the game's own debug overlay (`142F:0426`) boxes these cells |
+| 7 (`0x80`) | Blocks line of sight | `line_of_sight` (`0898:00A4`) stops at the first `0x80` cell; spell-area targeting (`8B7D:00AB`) accepts blocked cells that lack `0x80` |
+
+Most `0x80` cells also have `0x40` (walls); outdoor regions have few
+(cliffs block movement but not sight), indoor and city regions many.
+
+**Footprint.** `footprint_blocked` (`1A0A:11DB`) tests every cell from
+x − w to x + w and from y − h to y, with w = `DS:1650` and h = `DS:1652`.
+`find_free_cell` (`7372:0909`) sets them from a size byte: w = size & 7,
+h = size / 8. Both are 0 by default (a single cell).
+
+**Directions** (tables `DS:2F52` dx and `DS:2F5B` dy): 0 N (0, −1), 1 NE,
+2 E (1, 0), 3 SE, 4 S (0, 1), 5 SW, 6 W (−1, 0), 7 NW.
+
+### Objects
+
+Each `ETAB` entry (8 bytes: int16 x, int16 y, int8 elevation, flags, int16
+`OJFF` number) becomes an object the first time it is drawn: `object_create`
+(`1DF3:1157`) reads the `OJFF` and stores the object index in place of the
+negated `OJFF` number. The object table is `DS:6694`, 0x140 entries of 0x20
+bytes:
+
+| Offset | Size | Contents |
+|--------|------|----------|
+| `+00` | 1 | flags: 0x01 animating, 0x02 ?, 0x04 set by SCMD flag 0x20, 0x20 moved, 0x80 disabled |
+| `+01` | 2 | `ETAB` index |
+| `+03`, `+05` | 2, 2 | screen position: `ETAB` x − `OJFF` +2, `ETAB` y − `OJFF` +4 − `OJFF` +0x0A (signed byte) |
+| `+07`, `+08` | 1, 1 | hot spot (from the `OJFF` anchor, then from `SCMD` records) |
+| `+09`, `+0B` | 2, 2 | world position (`ETAB` x, y; moved by `SCMD` dx, dy) |
+| `+0D` | 1 | `ETAB` elevation byte |
+| `+0E` | 1 | `OJFF` +0x0B |
+| `+11` | 1 | current `BMP ` frame |
+| `+12`, `+13` | 1, 1 | frame width, height |
+| `+14` | 1 | delay of the current record |
+| `+15` | 2 | `SCMD` cache slot, or −number while not loaded, or −1 |
+| `+17` | 1 | current `SCMD` record index |
+| `+18` | 2 | `BMP ` number (`OJFF` +0x0C) |
+| `+1C` | 4 | tick of the last step |
+
+`OJFF` (16 bytes): +0 object flags, +2 / +4 int16 anchor x / y, +0x0A int8 y
+adjustment, +0x0B ?, +0x0C uint16 `BMP ` number, +0x0E int16 `SCMD` number
+(0: not animated; 703 of the 2 775 have one, and every number exists).
+
+The `ETAB` flags byte: bit 7 mirrored, bit 6 refresh once (the next step
+skips the records and clears it), bit 5 draw at world position − hot spot
+instead of the screen position above, bit 4 hidden. None of bits 4–6 is set
+in the files.
+
+### Object animation (`SCMD`)
+
+An `SCMD` resource (`SEGOBJEX.GFF`) is a 0x48-byte header and a list of 8-byte
+records (count = (size − 0x48) / 8). `scmd_load` (`1DF3:1A00`) caches up to
+64, with the headers at `DS:57CC`.
+
+**Header.** 32 uint16 record indexes, slot = facing × 8 + action, for the four
+facings N, E, S, W; then 8 bytes (+0x40 word and +0x44 byte are read by
+`896E:0C92` and `87B3:0AE1`; meaning unknown). Actions seen in the code: 0
+stand, 1 walk, 7 walk diagonally. The direction tables `DS:118C` (stand: 0, 8,
+8, 8, 16, 24, 24, 24) and `DS:1184` (walk: 1, 7, 9, 15, 17, 23, 25, 31) map the
+eight directions onto slots: a diagonal uses action 7 of the facing
+counter-clockwise from it (NE → N, SE → E, SW → S, NW → W). Creatures start
+at their stand slot; other objects at record 0 (*unverified*: from the 0xFF
+initial index being read as 0).
+
+**Records** (`object_apply_scmd_record`, `1DF3:1BEF`):
+
+| Byte | Meaning |
+|------|---------|
+| 0 | `BMP ` frame (0xFF: keep the frame); for a jump record, the target index |
+| 1 | delay before the next step, in 96 Hz ticks; values above 99 are × 10. Forced to 0 for a moving record while `377E:0019` is set |
+| 2 | flags: 0x01 jump to byte 0 (taken when the step lands on this record, which is not shown), 0x02 stop after this record, 0x04 mirror (clear: not mirrored), 0x10 mark moved, 0x20 calls `1DF3:2BCF` (unknown), 0x40 creatures: take the hot spot from bytes 5–6 instead of (width / 2, height) |
+| 3, 4 | int8 dx, dy added to the world position; leaving −64…0x800 × −64…0x620 stops the animation |
+| 5, 6 | hot spot x, y |
+| 7 | sound effect (`play_sound_effect`), 0: none |
+
+**Stepping** (`object_animate_step`, `1DF3:23A9`): when the last step plus the
+delay is at most the tick count `DS:11D6` and the object is animating: if
+the index is past the last record, animation stops and the index resets to 0;
+the record at the index is applied; unless it has flag 0x02 the index moves
+on, and if the new record has flag 0x01 the index becomes its byte 0. The tick
+count is advanced by `timer_tick` (`1DF3:29E8`), registered at 96 Hz with the
+sound library's timer (`33A5:077F`, `33A5:0992`).
+
+**Drawing order.** `draw_objects_and_walls` (`1DBD:0002`) walks the visible
+rows top to bottom, drawing each row's walls and the objects whose `ETAB` y
+falls in it, so objects and walls are depth-sorted by row. `region_renderer.py`
+draws all objects and then all walls.
+
+## 4. Validation
 
 * All 217 `GPL` and 33 `MAS` resources in `GPLDATA.GFF` decode with no unknown
   bytes, ending exactly at the resource end (`python src/gpl_parser.py
@@ -313,7 +417,7 @@ Semantics notes (from the handlers):
 * Dark Sun 2 (`dark_sun_2/data/GPLDATA.GFF`): 258/350 decode; it is a later VM
   revision with extra opcodes.
 
-## 4. Open questions
+## 5. Open questions
 
 * `OP_28` (expr, expr, string; sets the trace flag like SOURCE_TRACE) is unnamed.
 * Names of the engine variables (`gname[0–14]`) and special objects.

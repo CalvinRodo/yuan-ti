@@ -8,6 +8,18 @@ namespace DarkSun.Data.Regions;
 public sealed record PlacedSprite(int X, int Y, ImageFrame Frame, bool Mirrored = false);
 
 /// <summary>
+/// An <c>ETAB</c> object: drawn with its frames' top-left corner at
+/// (<paramref name="X"/>, <paramref name="Y"/>), which is how DSUN.EXE places
+/// objects until something moves them.
+/// </summary>
+/// <param name="Frames">All frames of the object's <c>BMP </c>; static objects show frame 0.</param>
+/// <param name="Scmd">The <c>SCMD</c> animation number (<c>OJFF</c> +0x0E), or 0.</param>
+public sealed record RegionObject(int EtabIndex, int Ojff, int X, int Y, bool Mirrored, IReadOnlyList<ImageFrame> Frames, int Scmd)
+{
+    public ImageFrame Frame => Frames[0];
+}
+
+/// <summary>
 /// One explorable region (<c>RGNxx.GFF</c>), resolved to what is drawn and
 /// where. Port of <c>src/region_renderer.py</c> (from John Glassmyer's
 /// RegionTool.java). Layers, back to front: ground tiles (<c>RMAP</c> →
@@ -21,7 +33,7 @@ public sealed class Region
     public const int WallIndexMask = 0x1F;
 
     private Region(int number, int width, int height, byte[] tileMap, byte[] flags,
-        Dictionary<int, ImageFrame> tiles, List<PlacedSprite> objects, List<PlacedSprite> walls)
+        Dictionary<int, ImageFrame> tiles, List<RegionObject> objects, List<PlacedSprite> walls)
     {
         Number = number;
         Width = width;
@@ -43,17 +55,14 @@ public sealed class Region
     /// <summary><c>RMAP</c>: tile number per cell, row-major.</summary>
     public byte[] TileMap { get; }
 
-    /// <summary>
-    /// <c>GMAP</c>: per cell, bits 0–4 are the wall index (0: none) and bits 5–7
-    /// are terrain flags (*unverified*: passability). Empty if absent.
-    /// </summary>
+    /// <summary><c>GMAP</c>: one <see cref="CellFlags"/> byte per cell, row-major.</summary>
     public byte[] Flags { get; }
 
     /// <summary>Ground tile images by tile number.</summary>
     public IReadOnlyDictionary<int, ImageFrame> Tiles { get; }
 
     /// <summary><c>ETAB</c> objects, in table order (drawn in this order).</summary>
-    public IReadOnlyList<PlacedSprite> Objects { get; }
+    public IReadOnlyList<RegionObject> Objects { get; }
 
     /// <summary>Walls, row-major (drawn after the objects).</summary>
     public IReadOnlyList<PlacedSprite> Walls { get; }
@@ -85,6 +94,18 @@ public sealed class Region
         return new Region(number, width, height, tileMap, flags,
             LoadTiles(files), LoadObjects(all, number), LoadWalls(all, number, flags, width, height));
     }
+
+    public CellFlags FlagsAt(int x, int y) =>
+        x >= 0 && y >= 0 && x < Width && y < Height && y * Width + x < Flags.Length
+            ? (CellFlags)Flags[y * Width + x]
+            : CellFlags.None;
+
+    /// <summary>Whether a cell blocks movement; cells off the map do, as in DSUN.EXE.</summary>
+    public bool IsBlocked(int x, int y) =>
+        x < 0 || y < 0 || x >= Width || y >= Height || FlagsAt(x, y).HasFlag(CellFlags.Blocked);
+
+    /// <summary>Whether a cell blocks line of sight; cells off the map don't.</summary>
+    public bool BlocksSight(int x, int y) => FlagsAt(x, y).HasFlag(CellFlags.BlocksSight);
 
     /// <summary>
     /// The region's palette: the <c>GPLDATA.GFF</c> <c>PAL </c> with the
@@ -132,26 +153,26 @@ public sealed class Region
     }
 
     /// <summary>
-    /// <c>ETAB</c>: 8-byte records of int16 x, int16 y, int8 y offset, flags
-    /// (bit 7: mirrored), int16 <c>OJFF</c> number (sign ignored). The
-    /// <c>OJFF</c> gives the sprite's anchor (int16 at 2 and 4) and its
-    /// <c>BMP </c> number (uint16 at 0x0C).
+    /// <c>ETAB</c>: 8-byte records of int16 x, int16 y, int8 elevation, flags
+    /// (bit 7: mirrored), int16 −<c>OJFF</c> number. The <c>OJFF</c> gives the
+    /// anchor (int16 at 2 and 4, plus int8 at 0x0A for y), the <c>BMP </c>
+    /// number (uint16 at 0x0C) and the <c>SCMD</c> number (int16 at 0x0E);
+    /// the position is computed as in <c>object_from_ojff</c> (<c>1DF3:1073</c>).
     /// </summary>
-    private static List<PlacedSprite> LoadObjects(GffSet all, int number)
+    private static List<RegionObject> LoadObjects(GffSet all, int number)
     {
-        var objects = new List<PlacedSprite>();
+        var objects = new List<RegionObject>();
         if (!all.TryRead("ETAB", number, out var etabMemory))
         {
             return objects;
         }
         ReadOnlySpan<byte> etab = etabMemory.Span;
-        var sprites = new Dictionary<int, (int X, int Y, ImageFrame Frame)?>();
+        var sprites = new Dictionary<int, ObjectSprite?>();
 
         for (int at = 0; at + 8 <= etab.Length; at += 8)
         {
             int x = BinaryPrimitives.ReadInt16LittleEndian(etab[at..]);
             int y = BinaryPrimitives.ReadInt16LittleEndian(etab[(at + 2)..]);
-            int yOffset = (sbyte)etab[at + 4];
             bool mirrored = (etab[at + 5] & 0x80) != 0;
             int ojff = Math.Abs((int)BinaryPrimitives.ReadInt16LittleEndian(etab[(at + 6)..]));
 
@@ -162,13 +183,15 @@ public sealed class Region
             }
             if (sprite is { } s)
             {
-                objects.Add(new PlacedSprite(x - s.X, y - s.Y - yOffset, s.Frame, mirrored));
+                objects.Add(new RegionObject(at / 8, ojff, x - s.AnchorX, y - s.AnchorY, mirrored, s.Frames, s.Scmd));
             }
         }
         return objects;
     }
 
-    private static (int X, int Y, ImageFrame Frame)? LoadObjectSprite(GffSet all, int ojff)
+    private sealed record ObjectSprite(int AnchorX, int AnchorY, IReadOnlyList<ImageFrame> Frames, int Scmd);
+
+    private static ObjectSprite? LoadObjectSprite(GffSet all, int ojff)
     {
         if (!all.TryRead("OJFF", ojff, out var record) || record.Length < 0x10)
         {
@@ -183,7 +206,11 @@ public sealed class Region
         var frames = ImageDecoder.ReadFrames(image.Span);
         return frames.Count == 0
             ? null
-            : (BinaryPrimitives.ReadInt16LittleEndian(r[2..]), BinaryPrimitives.ReadInt16LittleEndian(r[4..]), frames[0]);
+            : new ObjectSprite(
+                BinaryPrimitives.ReadInt16LittleEndian(r[2..]),
+                BinaryPrimitives.ReadInt16LittleEndian(r[4..]) + (sbyte)r[0x0A],
+                frames,
+                BinaryPrimitives.ReadInt16LittleEndian(r[0x0E..]));
     }
 
     /// <summary>

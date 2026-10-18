@@ -169,13 +169,14 @@ def render_region(
 
     etab_data = _get_resource(all_gffs, 'ETAB', region_number)
     if etab_data:
-        # Cache: ojff_number -> (x_offset, y_offset, ImageFrame) or None
+        # Cache: ojff_number -> (x_offset, y_offset, ImageFrame) or None.
+        # The y offset includes OJFF byte 0x0A, as DSUN.EXE positions objects
+        # (object_from_ojff, 1DF3:1073); ETAB byte 4 is not used for this.
         ojff_cache: Dict[int, Optional[Tuple[int, int, ImageFrame]]] = {}
 
         for off in range(0, len(etab_data) - 7, 8):
             ex       = struct.unpack_from('<h', etab_data, off)[0]
             ey       = struct.unpack_from('<h', etab_data, off + 2)[0]
-            ey_off   = struct.unpack_from('<b', etab_data, off + 4)[0]   # signed byte
             byte5    = etab_data[off + 5]
             mirrored = bool(byte5 & 0x80)
             ojff_num = struct.unpack_from('<h', etab_data, off + 6)[0]
@@ -186,7 +187,8 @@ def render_region(
                 ojff_raw = _get_resource(all_gffs, 'OJFF', ojff_num)
                 if ojff_raw and len(ojff_raw) >= 0x10:
                     ox  = struct.unpack_from('<h', ojff_raw, 2)[0]
-                    oy  = struct.unpack_from('<h', ojff_raw, 4)[0]
+                    oy  = (struct.unpack_from('<h', ojff_raw, 4)[0]
+                           + struct.unpack_from('<b', ojff_raw, 0xA)[0])
                     bmp = struct.unpack_from('<H', ojff_raw, 0xC)[0]
                     bd  = _get_resource(all_gffs, 'BMP ', bmp)
                     if bd:
@@ -201,7 +203,7 @@ def render_region(
             if ojff is None:
                 continue
             ox, oy, frame = ojff
-            paste(frame, ex - ox, ey - oy - ey_off, mirrored=mirrored)
+            paste(frame, ex - ox, ey - oy, mirrored=mirrored)
 
     # ==========================================================================
     # Layer 3: WALL sprites (from GMAP wall-index bytes)

@@ -16,6 +16,7 @@ public static class Controls
     public const string ZoomOut = "map_zoom_out";
     public const string NextRegion = "debug_next_region";
     public const string PreviousRegion = "debug_previous_region";
+    public const string ToggleMapFlags = "debug_toggle_map_flags";
     public const string Back = "ui_cancel";
 
     public static void Register()
@@ -28,6 +29,7 @@ public static class Controls
         Add(ZoomOut, Key.Minus, Key.KpSubtract);
         Add(NextRegion, Key.Pagedown);
         Add(PreviousRegion, Key.Pageup);
+        Add(ToggleMapFlags, Key.F1);
     }
 
     private static void Add(string action, params Key[] keys)

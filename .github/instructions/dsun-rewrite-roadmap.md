@@ -106,6 +106,7 @@ Done when every region file renders identically in both tool chains.
 
 Goal: a party sprite walking around a region at the original scale.
 
+- [x] Debug overlay of the `GMAP` flags (F1 in the region view).
 - [x] Region scene (`scenes/region_view.tscn`): the ground baked into one
       2048 × 1568 texture from `RMAP` and `TILE`; objects and walls as sprites
       in the original draw order. Scroll, zoom, and PgUp/PgDn through all 33
@@ -113,10 +114,18 @@ Goal: a party sprite walking around a region at the original scale.
 - [ ] Y-sort objects and walls with characters, once characters move.
 - [ ] Camera following the party, with integer scaling to any window size
       (the original is 320 × 200, *unverified*).
-- [ ] Movement and collision from the `GMAP` passability bits (*unverified*:
-      upper 3 bits); click-to-move with A* pathfinding.
-- [ ] Character sprites and animation: decode `SCMD` animation scripts
-      (reverse engineering, §10).
+- [ ] Movement and collision from the `GMAP` bits (confirmed 2026-10-18:
+      0x40 blocks movement, 0x80 blocks sight, 0x20 occupied at run time;
+      `Region.IsBlocked`, `Region.BlocksSight`) and the creature footprint;
+      click-to-move with A* pathfinding.
+- [x] Decode `SCMD` animation scripts (`DarkSun.Data.Animation.Scmd`,
+      `DarkSun.Game.Animation.ScmdAnimator`, 96 Hz ticks); objects in the
+      region view animate.
+- [ ] Character sprites: walking and standing by direction from the `SCMD`
+      header slots; the creature hot spot (width / 2, height).
+- [ ] Draw objects and walls depth-sorted by row, as DSUN.EXE does
+      (`draw_objects_and_walls`, `1DBD:0002`).
+- [ ] Play `SCMD` sound effects (record byte 7).
 - [ ] Region transitions: map edges and doors to other `RGNxx` files.
 - [ ] Debug overlay: grid, passability, object numbers, hovered tile.
 
@@ -218,8 +227,10 @@ name the functions in `tools/ghidra/symbols.tsv`.
 
 | Needed for | What to find | Where to start |
 |------------|--------------|----------------|
-| M2 | `SCMD` animation script format | callers of the `SCMD` resource loader; the sprite-drawing code |
-| M2 | `GMAP` flag bits, region exits | the movement code; door GPL scripts |
+| ~~M2~~ | ~~`SCMD` animation script format~~ | Done 2026-10-18: `dsun-exe-reference.md` §3 |
+| ~~M2~~ | ~~`GMAP` flag bits~~ | Done 2026-10-18: `dsun-exe-reference.md` §3 |
+| M2 | Region exits | door GPL scripts; the region change in `main`'s loop |
+| M2 | `SCMD` record flags 0x10 and 0x20, header bytes 0x40–0x47, the action numbers 2–6 | `1DF3:2BCF`; `896E:0C92`, `87B3:0AE1`; the combat code's header lookups |
 | M3 | Script triggers (region entry, object use, tiles, timers) | callers of `gpl_run` (`043D:0001`); `main`'s loop (`dsun-decompilation.md` §4) |
 | M3 | What each world-affecting GPL command does | the 114 named `gpl_op_*` handlers and their callees |
 | M4 | `FONT` and UI resource formats | text-drawing and window code; `WIND`/`BUTN` loaders |
@@ -272,5 +283,5 @@ than leaving them all for the end:
    (M1).~~ Done 2026-10-18.
 3. ~~Render one region in Godot and scroll around it (start of M2).~~ Done
    2026-10-18: every region, from the start screen's "View regions".
-4. In parallel: decode `SCMD`, and find the script triggers (§10, the first
-   two backlog items to block progress).
+4. In parallel: ~~decode `SCMD`~~ (done 2026-10-18), and find the script
+   triggers (§10).

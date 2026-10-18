@@ -42,7 +42,9 @@ public static class RegionRenderer
                 Draw(rgb, width, height, new PlacedSprite(cell % region.Width * Region.TileSize, cell / region.Width * Region.TileSize, tile), palette);
             }
         }
-        var sprites = (layers.HasFlag(RegionLayers.Objects) ? region.Objects : [])
+        var sprites = (layers.HasFlag(RegionLayers.Objects)
+                ? region.Objects.Select(o => new PlacedSprite(o.X, o.Y, o.Frame, o.Mirrored))
+                : [])
             .Concat(layers.HasFlag(RegionLayers.Walls) ? region.Walls : []);
         foreach (PlacedSprite sprite in sprites)
         {
