@@ -13,7 +13,7 @@ stored in this repository. The plan is in
 | `src/DarkSun.Game` | Game state, rules, GPL virtual machine, saves. No Godot dependency. |
 | `game/` | Godot project: scenes, rendering, UI, input, audio. |
 | `tests/` | xUnit tests for the two libraries. |
-| `tools/DarkSun.Dump` | Hashes every resource, image frame and palette in the game files, for `make engine-compare`. |
+| `tools/DarkSun.Dump` | Hashes every resource, image frame, palette and region render in the game files, for `make engine-compare`. |
 | `DarkSun.sln` | All of the above; the Godot project points to it (`dotnet/project/solution_directory`). |
 | `Directory.Build.props` | Settings shared by every project (target framework, nullable, language version). |
 
@@ -48,12 +48,16 @@ make engine-compare # check the C# file-format code against the Python tools
 `src/image.py`) and `tools/DarkSun.Dump` over the game files, and fails unless
 the two outputs are identical. Run it after changing either side.
 
-Headless check that the engine starts and finds the game files (exit code 1
-if it doesn't):
+Headless checks: that the engine starts and finds the game files (exit code
+1 if it doesn't), and that every region loads in the region viewer:
 
 ```
 $GODOT --headless --path engine/game -- --check-install
+$GODOT --headless --path engine/game -- --check-regions
 ```
+
+In the region viewer: arrows, WASD or drag to scroll; mouse wheel or +/- to
+zoom; PgUp/PgDn for the previous or next region; Esc to go back.
 
 ## Notes
 

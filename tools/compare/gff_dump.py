@@ -14,6 +14,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'src'))
 
 from gff import GffFile  # noqa: E402
 from image import ImageReading, Palette  # noqa: E402
+from region_renderer import render_region  # noqa: E402
 
 IMAGE_TAGS = ['BMP ', 'CBMP', 'TILE', 'ICON', 'PORT', 'WALL', 'FONT']
 PALETTE_TAGS = ['PAL ', 'CPAL']
@@ -25,6 +26,13 @@ def sha1(data: bytes) -> str:
 
 def main(game_dir: str, out_path: str):
     names = sorted(n for n in os.listdir(game_dir) if n.endswith('.GFF'))
+    def load(name):
+        with open(os.path.join(game_dir, name), 'rb') as f:
+            return GffFile.create(f.read())
+
+    aux = [load('SEGOBJEX.GFF'), load('GPLDATA.GFF')]
+    resource = load('RESOURCE.GFF')
+    first_pal = next(r.number for r in resource.describe_resources() if r.tag == 'PAL ')
     with open(out_path, 'w', newline='\n') as out:
         for name in names:
             with open(os.path.join(game_dir, name), 'rb') as f:
@@ -61,6 +69,19 @@ def main(game_dir: str, out_path: str):
                     out.write(f'{prefix}\t{len(p)}\t{sha1(rgb)}\n')
                 except Exception:
                     out.write(f'{prefix}\terror\n')
+            if name.startswith('RGN'):
+                # Region palette: the GPLDATA.GFF PAL numbered like the GMAP,
+                # else the first PAL in RESOURCE.GFF (as precompute.py does).
+                try:
+                    number = next(r.number for r in resources if r.tag == 'GMAP')
+                    if aux[1].has_resource('PAL ', number):
+                        palette = Palette.from_pal_data(aux[1].get_resource_data('PAL ', number))
+                    else:
+                        palette = Palette.from_pal_data(resource.get_resource_data('PAL ', first_pal))
+                    img = render_region(gff, aux, palette)
+                    out.write(f'M\t{name}\t{img.width}x{img.height}\t{sha1(img.tobytes())}\n')
+                except Exception:
+                    out.write(f'M\t{name}\terror\n')
 
 
 if __name__ == '__main__':

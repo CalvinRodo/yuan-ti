@@ -5,10 +5,12 @@
 //   R  file  tag  number  offset  size  sha1(data)
 //   I  file  tag  number  frame   WxH   sha1(pixels + mask)    (or "-  error")
 //   P  file  tag  number  colors  sha1(rgb)                     (or "error")
+//   M  file  WxH  sha1(rgb)   whole-region render, for RGNxx.GFF  (or "error")
 
 using System.Security.Cryptography;
 using DarkSun.Data.Gff;
 using DarkSun.Data.Images;
+using DarkSun.Data.Regions;
 
 string[] imageTags = ["BMP ", "CBMP", "TILE", "ICON", "PORT", "WALL", "FONT"];
 string[] paletteTags = ["PAL ", "CPAL"];
@@ -20,6 +22,9 @@ if (args.Length != 2)
 }
 
 using var output = new StreamWriter(args[1]) { NewLine = "\n" };
+GffFile segObjEx = GffFile.Open(Path.Combine(args[0], "SEGOBJEX.GFF"));
+GffFile gplData = GffFile.Open(Path.Combine(args[0], "GPLDATA.GFF"));
+GffFile resourceGff = GffFile.Open(Path.Combine(args[0], "RESOURCE.GFF"));
 var files = Directory.EnumerateFiles(args[0], "*.GFF").Select(Path.GetFileName).Order(StringComparer.Ordinal);
 foreach (string name in files!)
 {
@@ -59,6 +64,19 @@ foreach (string name in files!)
         catch (Exception e) when (e is IndexOutOfRangeException or ArgumentException)
         {
             output.WriteLine($"{prefix}\terror");
+        }
+    }
+    if (name!.StartsWith("RGN", StringComparison.Ordinal))
+    {
+        try
+        {
+            Region region = Region.Load(gff, [segObjEx, gplData]);
+            byte[] rgb = RegionRenderer.RenderRgb(region, region.LoadPalette(gplData, resourceGff));
+            output.WriteLine($"M\t{name}\t{region.Width * Region.TileSize}x{region.Height * Region.TileSize}\t{Sha1(rgb)}");
+        }
+        catch (Exception e) when (e is InvalidDataException or KeyNotFoundException or InvalidOperationException)
+        {
+            output.WriteLine($"M\t{name}\terror");
         }
     }
 }

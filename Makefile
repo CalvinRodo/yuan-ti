@@ -123,9 +123,9 @@ engine-run: engine-build ## Run the engine                            [GODOT=]
 engine-edit: ## Open the engine in the Godot editor
 	$(GODOT) --editor --path engine/game
 
-engine-compare: ## Check the C# GFF/image port against the Python tools on the game files
+engine-compare: ## Check the C# GFF, image and region code against the Python tools
 	mkdir -p $(OUT_DIR)/compare
 	$(PYTHON) tools/compare/gff_dump.py $(GAME_DIR) $(OUT_DIR)/compare/python.tsv
 	$(DOTNET) run --project engine/tools/DarkSun.Dump -- $(GAME_DIR) $(OUT_DIR)/compare/csharp.tsv
 	cmp $(OUT_DIR)/compare/python.tsv $(OUT_DIR)/compare/csharp.tsv
-	@echo "identical: $$(wc -l < $(OUT_DIR)/compare/csharp.tsv) resources, frames and palettes"
+	@echo "identical: $$(wc -l < $(OUT_DIR)/compare/csharp.tsv) resources, frames, palettes and region renders"

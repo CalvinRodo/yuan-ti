@@ -83,16 +83,20 @@ Goal: every resource the first playable region needs, loaded in C#.
       or a mod folder in order).
 - [x] Port the image decoder and palettes; produce RGBA for Godot
       (`DarkSun.Data.Images`; `Textures` in the Godot project).
-- [ ] Port `RMAP`, `GMAP`, `ETAB`, `OJFF` and `WALL` lookups from
-      `region_renderer.py`.
+- [x] Port `RMAP`, `GMAP`, `ETAB`, `OJFF` and `WALL` lookups from
+      `region_renderer.py` (`DarkSun.Data.Regions.Region`; `RegionRenderer`
+      draws a whole region in software).
+- [ ] Find the palette the game uses for region 255 (`RGNFF.GFF`): there is no
+      `GPLDATA.GFF` `PAL ` 255, so the engine falls back to the first `PAL ` in
+      `RESOURCE.GFF`, as `precompute.py` does.
 - [ ] Port the text parsers and the `NAME` table.
 - [x] **Check against the Python tools**: `make engine-compare` hashes every
       resource, image frame and palette in the game files with both
       (`tools/compare/gff_dump.py`, `engine/tools/DarkSun.Dump`) and requires
-      identical output; on 2026-10-18, 15 400 resources, 13 895 frames and 57
-      palettes matched.
-- [ ] Render every region to PNG from C# and diff it against
-      `region_renderer.py`'s output.
+      identical output; on 2026-10-18, 15 400 resources, 13 895 frames, 57
+      palettes and the renders of all 33 regions matched.
+- [x] Render every region from C# and diff it against `region_renderer.py`'s
+      output (part of `make engine-compare`).
 
 Done when every region file renders identically in both tool chains.
 
@@ -102,9 +106,11 @@ Done when every region file renders identically in both tool chains.
 
 Goal: a party sprite walking around a region at the original scale.
 
-- [ ] Region scene: the ground tiles as a Godot `TileMapLayer` (16 × 16 tiles,
-      128 × 98 cells) built from `RMAP` and `TILE`; objects and walls as
-      y-sorted sprites from `ETAB` and `GMAP`.
+- [x] Region scene (`scenes/region_view.tscn`): the ground baked into one
+      2048 × 1568 texture from `RMAP` and `TILE`; objects and walls as sprites
+      in the original draw order. Scroll, zoom, and PgUp/PgDn through all 33
+      regions.
+- [ ] Y-sort objects and walls with characters, once characters move.
 - [ ] Camera following the party, with integer scaling to any window size
       (the original is 320 × 200, *unverified*).
 - [ ] Movement and collision from the `GMAP` passability bits (*unverified*:
@@ -264,6 +270,7 @@ than leaving them all for the end:
    Done 2026-10-18.
 2. ~~Port `gff.py` and the image decoder, compared against the Python tools
    (M1).~~ Done 2026-10-18.
-3. Render one region in Godot and scroll around it (start of M2).
+3. ~~Render one region in Godot and scroll around it (start of M2).~~ Done
+   2026-10-18: every region, from the start screen's "View regions".
 4. In parallel: decode `SCMD`, and find the script triggers (§10, the first
    two backlog items to block progress).

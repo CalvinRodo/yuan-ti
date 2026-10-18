@@ -1,40 +1,40 @@
 using DarkSun.Data;
-using DarkSun.Data.Gff;
-using DarkSun.Data.Images;
 using Godot;
 
 namespace DarkSun.Engine;
 
 /// <summary>
-/// Start screen: finds the player's game files and shows what was found.
-/// Run with <c>-- --check-install</c> to print the result and quit (exit code
-/// 1 if no install was found), e.g. from a headless test.
+/// Start screen: finds the player's game files and opens the region viewer.
+/// For headless checks: <c>-- --check-install</c> prints what was found and
+/// quits (exit code 1 if nothing); <c>-- --check-regions</c> loads every region
+/// in the region viewer and quits.
 /// </summary>
 public partial class Main : Control
 {
     private const string SettingsPath = "user://settings.cfg";
 
     private Label _status = null!;
-    private HBoxContainer _preview = null!;
+    private Button _viewRegions = null!;
     private FileDialog _picker = null!;
 
     public override void _Ready()
     {
         BuildUi();
-        GameInstall? install = GameInstall.Locate([LoadConfiguredDirectory(), DevelopmentDirectory()]);
+        GameInstall? install = Session.Install
+            ?? GameInstall.Locate([LoadConfiguredDirectory(), DevelopmentDirectory()]);
+        string[] args = OS.GetCmdlineUserArgs();
 
-        if (OS.GetCmdlineUserArgs().Contains("--check-install"))
+        if (args.Contains("--check-install") || (install is null && args.Contains("--check-regions")))
         {
             GD.Print(install is null ? "No game install found." : Describe(install));
-            if (install is not null)
-            {
-                ShowTilePreview(install);
-                GD.Print($"Decoded {_preview.GetChildCount()} tiles from {install.RegionFiles[0]}");
-            }
             GetTree().Quit(install is null ? 1 : 0);
             return;
         }
         ShowStatus(install, null);
+        if (args.Contains("--check-regions"))
+        {
+            OpenRegionView();
+        }
     }
 
     private void BuildUi()
@@ -48,9 +48,10 @@ public partial class Main : Control
         box.AddChild(new Label { Text = "Dark Sun: Shattered Lands", HorizontalAlignment = HorizontalAlignment.Center });
         _status = new Label { HorizontalAlignment = HorizontalAlignment.Center };
         box.AddChild(_status);
-        _preview = new HBoxContainer { Alignment = BoxContainer.AlignmentMode.Center };
-        box.AddChild(_preview);
 
+        _viewRegions = new Button { Text = "View regions" };
+        _viewRegions.Pressed += OpenRegionView;
+        box.AddChild(_viewRegions);
         var choose = new Button { Text = "Choose game folder…" };
         choose.Pressed += () => _picker.PopupCentered(new Vector2I(600, 360));
         box.AddChild(choose);
@@ -79,46 +80,15 @@ public partial class Main : Control
     {
         _status.Text = install is not null ? Describe(install)
             : error ?? "Game files not found. Choose the folder where Dark Sun is installed.";
-        foreach (Node child in _preview.GetChildren())
+        if (install is not null && install != Session.Install)
         {
-            child.QueueFree();
+            Session.Use(install);
         }
-        if (install is not null)
-        {
-            ShowTilePreview(install);
-        }
+        _viewRegions.Disabled = install is null;
     }
 
-    /// <summary>
-    /// The first ground tiles of the first region, as a check that the game
-    /// files decode. A region's palette is the GPLDATA.GFF <c>PAL </c> with
-    /// the number of the region's <c>GMAP</c>.
-    /// </summary>
-    private void ShowTilePreview(GameInstall install)
-    {
-        try
-        {
-            GffFile region = GffFile.Open(install.FindFile(install.RegionFiles[0])!);
-            GffFile gplData = GffFile.Open(install.FindFile("GPLDATA.GFF")!);
-            var resources = region.DescribeResources();
-            int regionNumber = resources.First(r => r.Tag == "GMAP").Number;
-            Palette palette = Palette.FromBytes(gplData.Read("PAL", regionNumber).Span);
-
-            foreach (var tile in resources.Where(r => r.Tag == "TILE").Take(16))
-            {
-                ImageFrame frame = ImageDecoder.ReadFrames(region.Read(tile.Tag, tile.Number).Span)[0];
-                _preview.AddChild(new TextureRect
-                {
-                    Texture = Textures.ToTexture(frame, palette),
-                    StretchMode = TextureRect.StretchModeEnum.Keep,
-                });
-            }
-        }
-        catch (Exception e) when (e is InvalidDataException or KeyNotFoundException or InvalidOperationException or IOException)
-        {
-            _status.Text += $"\nCould not decode {install.RegionFiles.FirstOrDefault()}: {e.Message}";
-        }
-    }
+    private void OpenRegionView() =>
+        GetTree().CallDeferred(SceneTree.MethodName.ChangeSceneToFile, "res://scenes/region_view.tscn");
 
     private static string Describe(GameInstall install) =>
         $"Game files: {install.Directory}\n{install.RegionFiles.Count} regions";
