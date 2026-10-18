@@ -12,7 +12,7 @@ from flask import Blueprint, jsonify, abort, request
 from gff import NoSuchResourceError
 from config import DEFAULT_GAME, tag_to_url_seg, url_seg_to_tag
 from gff_cache import load_gff
-from gpl_parser import disassemble_gpl
+from gpl_parser import disassemble_gpl, field_types_from
 
 bp = Blueprint('scripts', __name__)
 
@@ -62,9 +62,8 @@ def api_script_disasm(tag_url: str, number: int):
     except Exception as exc:
         return jsonify({'error': str(exc)}), 500
 
-    is_mas = tag.strip() == 'MAS'
     try:
-        instructions = disassemble_gpl(bytes(data), is_mas=is_mas)
+        instructions = disassemble_gpl(bytes(data), field_types_from(gff))
     except Exception as exc:
         return jsonify({'error': str(exc)}), 500
 

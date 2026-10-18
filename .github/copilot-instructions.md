@@ -36,10 +36,10 @@ Multi-game support is driven by the `GAMES` dict in `src/config.py`; adding a ne
 
 ## Key Concepts
 
-- **GFF file**: a container of typed, numbered resources. Each resource has a 4-byte ASCII **tag** (e.g. `BMP `, `GPL `, `RMAP`) and an integer **number**. All known tags are documented in `GFF_CHUNK_TYPES` in `src/gff.py`.
+- **GFF file**: a container of typed, numbered resources. Each resource has a 4-byte ASCII **tag** (e.g. `BMP `, `GPL `, `RMAP`) and an integer **number**. All known tags are documented in `src/data/gff_chunk_types.toml` (loaded as `GFF_CHUNK_TYPES` in `src/gff.py`).
 - **GffFile API**: `gff.get_resource_data(tag, number) → bytes`, `gff.describe_resources() → list[ResourceDescriptor]`, `gff.replace_resource(tag, number, data)`.
 - **Palette**: images are paletted (256-colour VGA). A `PAL ` resource (or an external `.PAL` file) must be loaded separately and passed to `ImageReading` / `ImageFrame.to_pil()`.
-- **GPL scripting**: game logic lives in `GPLDATA.GFF`. `GPL ` resources are local scripts; `MAS ` resources are global. Use `gpl_parser.disassemble_gpl(data)`.
+- **GPL scripting**: game logic lives in `GPLDATA.GFF`. `GPL ` resources are local scripts; `MAS ` resources are global. Use `gpl_parser.disassemble_gpl(data, gpl_parser.field_types_from(gff))`; the grammar is documented in `.github/instructions/dsun-exe-reference.md`.
 - **RDFF objects** (in `SEGOBJEX.GFF` / DS2's `OBJEX.GFF`): 10-byte header parsed by `_RDFF_HDR_FMT`; `type == 1` → item (`_ITEM1R_FMT`, 20 bytes), `type == 2` → combat/monster (`_COMBAT_FMT`, 58 bytes). Helpers in `ds1_parsers.py`.
 
 ## Game-by-Game Differences

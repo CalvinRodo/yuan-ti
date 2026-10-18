@@ -114,7 +114,7 @@ exists: bool = gff.has_resource('PAL ', 0)
 in order. Useful when a resource might be in the current GFF *or*
 `RESOURCE.GFF`.
 
-**`GFF_CHUNK_TYPES`** — `Dict[str, str]` mapping tag → human description.
+**`GFF_CHUNK_TYPES`** — `dict[str, str]` mapping tag → human description, loaded from `src/data/gff_chunk_types.toml`.
 All known tags are listed there. Tags not in this dict show as `'Unknown'`.
 
 ### `server.py` — `load_gff(name)`
@@ -322,9 +322,9 @@ GET /api/gff/<name>/texts
 |--------|--------------------------------|-------|
 | `PAL ` | Palette (see §4b)              | |
 | `GMAP` | Region map flags               | byte per cell like RMAP |
-| `GPL ` | Compiled GPL script            | binary, engine-specific |
-| `GPLX` | GPL index                      | |
-| `MAS ` | Compiled MAS files             | |
+| `GPL ` | Compiled GPL script            | decoded by `gpl_parser.py` (see dsun-exe-reference.md) |
+| `GPLX` | GPL tables                     | `[0x3DE:0x441]` = stat field types used by GPL opcode 33 |
+| `MAS ` | Compiled MAS files             | same bytecode as GPL; decoded by `gpl_parser.py --tag=MAS` |
 | `FONT` | Font resource                  | |
 | `ETAB` | Object entry table             | |
 | `POBJ` | PolyMesh object database       | 3DX format |

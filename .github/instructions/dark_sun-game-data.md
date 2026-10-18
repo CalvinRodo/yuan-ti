@@ -44,11 +44,11 @@ This file is loaded alongside region GFFs when rendering a region (supplies WALL
 | Tag | Count | Description |
 |-----|------:|-------------|
 | GFFI | 9 | GFF index blocks — internal secondary-table index entries |
-| GPL | 217 | Compiled GPL files — the game's bytecode scripting language (items, containers, NPCs, world events) |
+| GPL | 217 | Compiled GPL files — the game's bytecode scripting language (items, containers, NPCs, world events, dialogue). Fully decoded: see `dsun-exe-reference.md` / `src/gpl_parser.py` |
 | GPLI | 1 | GPL index — lookup table mapping GPL resource numbers to their scripts |
-| GPLX | 1 | GPL cross-reference index — cross-references GPL entries |
+| GPLX | 1 | GPL tables, 1269 bytes, loaded by overlay 7372: `0x000–0x3DD` → DS:4D7A, `0x3DE–0x440` → DS:537A (stat field types), 10 bytes → DS:53F7, `0xAA` bytes after |
 | IT1R | 1 | Item type 1 record — item constants / configuration table |
-| MAS | 33 | Compiled MAS files — object / AI state-machine scripts |
+| MAS | 33 | Compiled MAS files — same bytecode as GPL (all 33 decode with `gpl_parser.py --tag=MAS`) |
 | NAME | 1 | Name table — 256 null-terminated entries, each with: display name `\x00` path-fragment `\x00` 2–3 type/flags bytes ending in `\xff`. Used to look up canonical names for items and entities. Many entries carry a leading `=` byte (0x3D) that may act as a category flag. |
 | PAL | 45 | VGA 256-color palettes shared across gameplay scenes |
 | PORT | 112 | Portrait bitmaps — character and NPC portrait images used in dialogue and character sheets |

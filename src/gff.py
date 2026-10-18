@@ -37,7 +37,7 @@ from dataclasses import dataclass
 # ---------------------------------------------------------------------------
 # Known chunk type descriptions – loaded from src/data/gff_chunk_types.toml
 # ---------------------------------------------------------------------------
-def _load_chunk_types() -> Dict[str, str]:
+def _load_chunk_types() -> dict[str, str]:
     _data_file = os.path.join(os.path.dirname(__file__), 'data', 'gff_chunk_types.toml')
     with open(_data_file, 'rb') as _f:
         return tomllib.load(_f)['chunk_types']

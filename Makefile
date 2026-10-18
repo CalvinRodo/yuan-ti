@@ -10,7 +10,8 @@ OUT_DIR  := out
 
 .PHONY: help serve install install-ffmpeg extract list-resource list-gff extract-gff \
         precompute precompute-gff precompute-maps precompute-gamedata \
-        precompute-images precompute-audio
+        precompute-images precompute-audio \
+        gpl unpack-exe
 
 help: ## Show this help message
 	@echo ""
@@ -76,3 +77,15 @@ extract-gff: ## Extract one GFF file to ./out/    [GFF=<name>]
 	$(PYTHON) $(SRC)/gff_tool.py \
 	    --gff=$(GAME_DIR)/$(GFF) \
 	    --extract-to-dir=$(OUT_DIR)/$(basename $(GFF))
+
+# ---------------------------------------------------------------------------
+
+N ?= 1
+
+gpl: ## Disassemble one GPL script            [N=<number>]
+	$(PYTHON) $(SRC)/gpl_parser.py --gff=$(GAME_DIR)/GPLDATA.GFF --number=$(N)
+
+unpack-exe: ## Flatten DSUN.EXE overlays for Ghidra -> out/DSUN_FLAT.EXE
+	mkdir -p $(OUT_DIR)
+	$(PYTHON) $(SRC)/ovl_unpack.py --exe=$(GAME_DIR)/DSUN.EXE \
+	    --out=$(OUT_DIR)/DSUN_FLAT.EXE --map=$(OUT_DIR)/DSUN_FLAT.map
