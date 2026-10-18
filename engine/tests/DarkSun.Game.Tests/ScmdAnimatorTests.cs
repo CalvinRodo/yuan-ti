@@ -41,7 +41,7 @@ public class ScmdAnimatorTests
     public void WaitsForTheDelayAndFollowsJumps()
     {
         Scmd s = Build([], Rec(1, 10), Rec(2, 5, ScmdFlags.Mirror), Rec(0, 0, ScmdFlags.Jump));
-        var a = new ScmdAnimator(s, frameCount: 3);
+        var a = new ScmdAnimator(s, frameCount: 3) { MinimumDelay = 0 };
 
         Assert.True(a.Update(0));
         Assert.Equal((1, 1, false), (a.Frame, a.Index, a.Mirrored));
@@ -60,7 +60,7 @@ public class ScmdAnimatorTests
     public void StopHoldsTheFrame()
     {
         Scmd s = Build([], Rec(2, 0, ScmdFlags.Stop), Rec(1, 0));
-        var a = new ScmdAnimator(s, frameCount: 3);
+        var a = new ScmdAnimator(s, frameCount: 3) { MinimumDelay = 0 };
 
         Assert.True(a.Update(0));
         Assert.False(a.Animating);
@@ -72,12 +72,24 @@ public class ScmdAnimatorTests
     public void RunningPastTheEndStops()
     {
         Scmd s = Build([], Rec(1, 0));
-        var a = new ScmdAnimator(s, frameCount: 2);
+        var a = new ScmdAnimator(s, frameCount: 2) { MinimumDelay = 0 };
 
         Assert.True(a.Update(0));
         Assert.True(a.Update(0)); // index past the end: record 0 is applied once more
         Assert.False(a.Animating);
         Assert.False(a.Update(1));
+    }
+
+    [Fact]
+    public void ZeroDelaysLastTheMinimum()
+    {
+        Scmd s = Build([], Rec(1, 0), Rec(2, 0));
+        var a = new ScmdAnimator(s, frameCount: 3);
+
+        a.Update(0);
+        Assert.False(a.Update(ScmdAnimator.DefaultMinimumDelay - 1));
+        Assert.True(a.Update(ScmdAnimator.DefaultMinimumDelay));
+        Assert.Equal(2, a.Frame);
     }
 
     [Fact]
@@ -91,7 +103,7 @@ public class ScmdAnimatorTests
     public void KeepFrameAndOutOfRangeFrames()
     {
         Scmd s = Build([], Rec(2, 0), Rec(ScmdRecord.KeepFrame, 0), Rec(9, 0));
-        var a = new ScmdAnimator(s, frameCount: 3);
+        var a = new ScmdAnimator(s, frameCount: 3) { MinimumDelay = 0 };
 
         a.Update(0);
         a.Update(0);
@@ -104,7 +116,7 @@ public class ScmdAnimatorTests
     public void AccumulatesMovementAndSounds()
     {
         Scmd s = Build([], Rec(0, 0, dx: 3, dy: -2, sound: 7), Rec(0, 0, dx: 3, dy: -2));
-        var a = new ScmdAnimator(s, frameCount: 1);
+        var a = new ScmdAnimator(s, frameCount: 1) { MinimumDelay = 0 };
 
         a.Update(0);
         a.Update(0);

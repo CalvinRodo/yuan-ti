@@ -16,6 +16,15 @@ public sealed class ScmdAnimator
 {
     public const int TicksPerSecond = 96;
 
+    /// <summary>
+    /// Shortest time a record stays on screen, in ticks (6: 16 per second).
+    /// DSUN.EXE advances a record with delay 0 on every pass of its main
+    /// loop, so its speed there depended on the PC; a third of the walking
+    /// creatures (e.g. <c>SCMD</c> 194) have 0-delay walks. This floor is the
+    /// engine's choice, close to the 7 ticks of the standard walk.
+    /// </summary>
+    public const int DefaultMinimumDelay = 6;
+
     private readonly Scmd _script;
     private readonly int _frameCount;
     private readonly IReadOnlyList<(int Width, int Height)>? _creatureFrames;
@@ -48,6 +57,9 @@ public sealed class ScmdAnimator
         Mirrored = mirrored;
         Animating = true;
     }
+
+    /// <summary>Shortest time a record stays on screen, in ticks; 0 for DSUN.EXE's frame-by-frame stepping.</summary>
+    public int MinimumDelay { get; init; } = DefaultMinimumDelay;
 
     public bool Animating { get; private set; }
 
@@ -128,7 +140,7 @@ public sealed class ScmdAnimator
             OffsetX += record.Dx;
             OffsetY += record.Dy;
         }
-        _delay = record.DelayTicks;
+        _delay = Math.Max(record.DelayTicks, MinimumDelay);
         _lastStep = now;
         if (record.Sound != 0)
         {

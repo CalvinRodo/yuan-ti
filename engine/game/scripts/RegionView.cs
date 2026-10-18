@@ -9,23 +9,28 @@ using Godot;
 namespace DarkSun.Engine;
 
 /// <summary>
-/// Shows a whole region with a character to walk around. The ground is one
-/// texture; objects, walls and the character are sprites depth-sorted by their
+/// Shows a whole region with a party to walk around. The ground is one
+/// texture; objects, walls and characters are sprites depth-sorted by their
 /// bottom edge, as DSUN.EXE draws them row by row. Objects with an
-/// <c>SCMD</c> script animate on a 96 Hz tick.
-/// Click to walk; Tab changes the character; arrows, WASD or right-drag
-/// scroll; wheel or +/- zoom; PgUp/PgDn change region; F1 shows the
-/// <c>GMAP</c> flags. Run with <c>-- --check-regions</c> to load every region,
-/// animate it and walk a character in it, then quit.
+/// <c>SCMD</c> script animate on a 96 Hz tick. Characters hold their
+/// footprint's cells, so they never overlap.
+/// Click: the selected character walks there; Shift+click: the whole party;
+/// Tab: select the next character; N: add one; C: change its sprite; arrows,
+/// WASD or right-drag scroll; wheel or +/- zoom; PgUp/PgDn change region; F1
+/// shows the <c>GMAP</c> flags and occupied cells. Run with
+/// <c>-- --check-regions</c> to load every region, animate it and walk the
+/// party in it, then quit.
 /// </summary>
 public partial class RegionView : Node2D
 {
     private const float PanSpeed = 400f;
     private static readonly float[] ZoomLevels = [0.25f, 0.5f, 1f, 2f, 3f, 4f];
 
-    /// <summary>Region and character shown when the view opens; kept across visits.</summary>
+    /// <summary>The original game's party size.</summary>
+    private const int PartySize = 4;
+
+    /// <summary>Region shown when the view opens; kept across visits.</summary>
     private static int _regionIndex;
-    private static int _characterIndex;
 
     private readonly Dictionary<ImageFrame, Texture2D> _textures = [];
     private readonly List<(Sprite2D Sprite, RegionObject Object, ScmdAnimator Animator)> _animated = [];
@@ -38,9 +43,12 @@ public partial class RegionView : Node2D
     private MapFlagsOverlay _overlay = null!;
     private Camera2D _camera = null!;
     private Label _hud = null!;
-    private Walker? _walker;
-    private CharacterSprite? _character;
-    private Sprite2D? _characterSprite;
+    private readonly List<PartyMember> _party = [];
+    private Occupancy _occupancy = new();
+    private SelectionMarker _marker = null!;
+    private int _selected;
+    private int _nextId = 1;
+    private int _nextSprite;
     private bool _follow = true;
     private int _zoomLevel = Array.IndexOf(ZoomLevels, 1f);
     private Vector2 _mapSize;
@@ -52,6 +60,8 @@ public partial class RegionView : Node2D
         Controls.Register();
         _ground = new Node2D();
         AddChild(_ground);
+        _marker = new SelectionMarker();
+        AddChild(_marker);
         _sorted = new Node2D { YSortEnabled = true };
         AddChild(_sorted);
         _overlay = new MapFlagsOverlay { Visible = false };
@@ -83,7 +93,7 @@ public partial class RegionView : Node2D
         IReadOnlyList<string> files = Session.Install!.RegionFiles;
         _regionIndex = (index % files.Count + files.Count) % files.Count;
         LoadRegion(files[_regionIndex]);
-        PlaceCharacter(NearestFreeCell(new Cell(_region.Width / 2, _region.Height / 2)));
+        PlaceParty();
         UpdateHud();
         _follow = true;
         FollowCharacter();
@@ -91,11 +101,13 @@ public partial class RegionView : Node2D
 
     private void UpdateHud()
     {
-        string character = _character is null ? "none" : $"OJFF {_character.Ojff}";
+        string selected = Selected is { } m
+            ? $"character {_selected + 1}/{_party.Count}: OJFF {m.Sprite.Ojff}, footprint {2 * m.Walker.Footprint.HalfWidth + 1}×{m.Walker.Footprint.Height + 1}"
+            : "no characters";
         _hud.Text = $"{Session.Install!.RegionFiles[_regionIndex]} · region {_region.Number} · "
-            + $"{_region.Objects.Count} objects ({_animated.Count} animated) · character {character}\n"
-            + "Click: walk · Tab: character · Arrows/WASD or right-drag: scroll · Wheel or +/-: zoom · "
-            + "PgUp/PgDn: region · F1: blocked cells · Esc: back";
+            + $"{_region.Objects.Count} objects ({_animated.Count} animated) · {selected}\n"
+            + "Click: walk · Shift+click: party · Tab: select · N: add · C: sprite · "
+            + "Arrows/WASD or right-drag: scroll · Wheel or +/-: zoom · PgUp/PgDn: region · F1: map flags · Esc: back";
     }
 
     /// <summary>Replace the map's nodes with <paramref name="file"/>'s region.</summary>
@@ -107,8 +119,8 @@ public partial class RegionView : Node2D
         }
         _textures.Clear();
         _animated.Clear();
-        _characterSprite = null;
-        _walker = null;
+        _party.Clear();
+        _occupancy = new Occupancy();
         _clock = 0;
 
         _region = Region.Load(Session.Open(file), [Session.Open("SEGOBJEX.GFF"), Session.Open("GPLDATA.GFF")]);
@@ -135,7 +147,7 @@ public partial class RegionView : Node2D
             var bottom = new Vector2(wall.X + wall.Frame.Width / 2, wall.Y + wall.Frame.Height);
             AddSprite(wall.Frame, bottom, new Vector2(wall.X, wall.Y), wall.Mirrored);
         }
-        _overlay.Show(_region);
+        _overlay.Show(_region, _occupancy);
         Animate();
     }
 
@@ -204,58 +216,90 @@ public partial class RegionView : Node2D
         return _characters;
     }
 
-    private void PlaceCharacter(Cell cell)
+    private PartyMember? Selected => _party.Count > 0 ? _party[_selected] : null;
+
+    /// <summary>Put a party of <see cref="PartySize"/> near the middle of the map.</summary>
+    private void PlaceParty()
     {
-        List<CharacterSprite> characters = Characters();
-        if (characters.Count == 0)
+        _selected = 0;
+        _nextSprite = 0;
+        Cell centre = new(_region.Width / 2, _region.Height / 2);
+        for (int i = 0; i < PartySize; i++)
         {
-            return;
+            AddCharacter(_party.Count > 0 ? _party[^1].Walker.Cell : centre);
         }
-        _characterIndex = (_characterIndex % characters.Count + characters.Count) % characters.Count;
-        _character = characters[_characterIndex];
-        Direction facing = _walker?.Facing ?? Direction.South;
-        _walker = new Walker(_character.Script, _character.Sizes, cell, facing);
-        _characterSprite ??= new Sprite2D { Centered = false };
-        if (_characterSprite.GetParent() is null)
-        {
-            _sorted.AddChild(_characterSprite);
-        }
-        _walker.Update(Now, _region.IsBlocked);
-        DrawCharacter();
     }
 
-    private void DrawCharacter()
+    /// <summary>Add a character with the next walking sprite, on the free cell nearest to <paramref name="near"/>.</summary>
+    private PartyMember? AddCharacter(Cell near)
     {
-        if (_walker is null || _character is null || _characterSprite is null)
+        List<CharacterSprite> sprites = Characters();
+        if (sprites.Count == 0)
         {
-            return;
+            return null;
         }
-        ImageFrame frame = _character.Frames[_walker.Animator.Frame];
-        _characterSprite.Texture = TextureFor(frame);
-        _characterSprite.FlipH = _walker.Animator.Mirrored;
-        _characterSprite.Position = new Vector2(_walker.Feet.X, _walker.Feet.Y);
-        _characterSprite.Offset = new Vector2(-_walker.Animator.HotX, -_walker.Animator.HotY);
+        CharacterSprite sprite = sprites[_nextSprite++ % sprites.Count];
+        Footprint footprint = Footprint.EstimateFromWidth(sprite.Frames.Max(f => f.Width));
+        Cell? cell = NearestCell(near, c => Fits(c, footprint));
+        if (cell is null)
+        {
+            return null;
+        }
+        var member = new PartyMember(
+            new Walker(_nextId++, sprite.Script, sprite.Sizes, cell.Value, footprint, _occupancy),
+            sprite,
+            new Sprite2D { Centered = false });
+        _sorted.AddChild(member.Node);
+        _party.Add(member);
+        member.Walker.Update(Now, _region.IsBlocked);
+        DrawMember(member);
+        return member;
     }
 
-    private void WalkTo(Cell goal)
+    /// <summary>Give the selected character the next walking sprite, keeping its place if it fits.</summary>
+    private void ChangeSprite()
     {
-        if (_walker is null)
+        if (Selected is not { } old)
         {
             return;
         }
-        // Plan from the cell the current step ends in.
-        Cell from = _walker.Cell;
-        if (_walker.IsWalking)
+        Cell cell = old.Walker.Cell;
+        old.Walker.Remove();
+        old.Node.QueueFree();
+        _party.RemoveAt(_selected);
+        if (AddCharacter(cell) is { } added)
         {
-            (int fx, int fy) = _walker.Feet;
-            from = new Cell(fx / Region.TileSize, (fy - 1) / Region.TileSize);
+            _party.Remove(added);
+            _party.Insert(_selected, added);
         }
-        _walker.Follow(Pathfinder.FindPath(_region.IsBlocked, from, goal));
+        _selected = Math.Min(_selected, Math.Max(0, _party.Count - 1));
+    }
+
+    /// <summary>Whether a creature with <paramref name="footprint"/> fits at <paramref name="cell"/> right now.</summary>
+    private bool Fits(Cell cell, Footprint footprint) =>
+        footprint.Cells(cell).All(c => !_region.IsBlocked(c.X, c.Y) && _occupancy.OwnerOf(c) is null);
+
+    private void DrawMember(PartyMember member)
+    {
+        Walker walker = member.Walker;
+        ImageFrame frame = member.Sprite.Frames[walker.Animator.Frame];
+        member.Node.Texture = TextureFor(frame);
+        member.Node.FlipH = walker.Animator.Mirrored;
+        member.Node.Position = new Vector2(walker.Feet.X, walker.Feet.Y);
+        member.Node.Offset = new Vector2(-walker.Animator.HotX, -walker.Animator.HotY);
+    }
+
+    private void WalkTo(Cell goal, bool wholeParty)
+    {
+        foreach (PartyMember member in wholeParty ? _party : Selected is { } m ? [m] : [])
+        {
+            member.Walker.WalkTo(goal, _region.IsBlocked);
+        }
         _follow = true;
     }
 
-    /// <summary>The free cell nearest to <paramref name="start"/>, searching outwards.</summary>
-    private Cell NearestFreeCell(Cell start)
+    /// <summary>The cell nearest to <paramref name="start"/> that satisfies <paramref name="ok"/>, searching outwards.</summary>
+    private Cell? NearestCell(Cell start, Func<Cell, bool> ok)
     {
         for (int radius = 0; radius < Math.Max(_region.Width, _region.Height); radius++)
         {
@@ -263,14 +307,15 @@ public partial class RegionView : Node2D
             {
                 for (int dx = -radius; dx <= radius; dx++)
                 {
-                    if (Math.Max(Math.Abs(dx), Math.Abs(dy)) == radius && !_region.IsBlocked(start.X + dx, start.Y + dy))
+                    var cell = new Cell(start.X + dx, start.Y + dy);
+                    if (Math.Max(Math.Abs(dx), Math.Abs(dy)) == radius && ok(cell))
                     {
-                        return new Cell(start.X + dx, start.Y + dy);
+                        return cell;
                     }
                 }
             }
         }
-        return start;
+        return null;
     }
 
     // -- per frame --------------------------------------------------------------
@@ -292,17 +337,25 @@ public partial class RegionView : Node2D
             sprite.Position = new Vector2(obj.EtabX + animator.OffsetX, obj.EtabY + animator.OffsetY);
             _ = animator.TakeSounds().Count(); // sound effects are not played yet
         }
-        if (_walker is not null && _walker.Update(now, _region.IsBlocked))
+        foreach (PartyMember member in _party)
         {
-            DrawCharacter();
+            if (member.Walker.Update(now, _region.IsBlocked))
+            {
+                DrawMember(member);
+            }
         }
+        if (_overlay.Visible)
+        {
+            _overlay.QueueRedraw();
+        }
+        _marker.Follow(Selected?.Walker);
     }
 
     private void FollowCharacter()
     {
-        if (_follow && _walker is not null)
+        if (_follow && Selected is { } member)
         {
-            _camera.Position = new Vector2(_walker.Feet.X, _walker.Feet.Y);
+            _camera.Position = new Vector2(member.Walker.Feet.X, member.Walker.Feet.Y);
         }
         ClampCamera();
     }
@@ -339,10 +392,24 @@ public partial class RegionView : Node2D
         {
             ShowRegion(_regionIndex - 1);
         }
-        else if (e.IsActionPressed(Controls.NextCharacter) && _walker is not null)
+        else if (e.IsActionPressed(Controls.NextCharacter) && _party.Count > 0)
         {
-            _characterIndex++;
-            PlaceCharacter(_walker.Cell);
+            _selected = (_selected + 1) % _party.Count;
+            _follow = true;
+            UpdateHud();
+        }
+        else if (e.IsActionPressed(Controls.AddCharacter))
+        {
+            Cell near = Selected?.Walker.Cell ?? new Cell(_region.Width / 2, _region.Height / 2);
+            if (AddCharacter(near) is not null)
+            {
+                _selected = _party.Count - 1;
+            }
+            UpdateHud();
+        }
+        else if (e.IsActionPressed(Controls.ChangeSprite))
+        {
+            ChangeSprite();
             UpdateHud();
         }
         else if (e.IsActionPressed(Controls.ZoomIn) || e is InputEventMouseButton { ButtonIndex: MouseButton.WheelUp, Pressed: true })
@@ -353,10 +420,10 @@ public partial class RegionView : Node2D
         {
             Zoom(-1);
         }
-        else if (e is InputEventMouseButton { ButtonIndex: MouseButton.Left, Pressed: true })
+        else if (e is InputEventMouseButton { ButtonIndex: MouseButton.Left, Pressed: true } click)
         {
             Vector2 at = GetGlobalMousePosition();
-            WalkTo(new Cell((int)Math.Floor(at.X / Region.TileSize), (int)Math.Floor(at.Y / Region.TileSize)));
+            WalkTo(new Cell((int)Math.Floor(at.X / Region.TileSize), (int)Math.Floor(at.Y / Region.TileSize)), click.ShiftPressed);
         }
         else if (e is InputEventMouseMotion motion && (motion.ButtonMask & (MouseButtonMask.Right | MouseButtonMask.Middle)) != 0)
         {
@@ -385,29 +452,68 @@ public partial class RegionView : Node2D
     // -- headless check ----------------------------------------------------------
 
     /// <summary>
-    /// For every region: load it, then walk the character towards a cell 20
-    /// columns away for 10 simulated seconds, and report how far it got.
+    /// For every region: load it, place the party, send everyone to a cell 20
+    /// columns away for 15 simulated seconds, and check after every tick that
+    /// no two characters' footprints overlap.
     /// </summary>
     private void CheckAllRegions()
     {
+        int failures = 0;
         foreach (string file in Session.Install!.RegionFiles)
         {
             LoadRegion(file);
-            Cell start = NearestFreeCell(new Cell(_region.Width / 2, _region.Height / 2));
-            PlaceCharacter(start);
-            WalkTo(new Cell(start.X + 20, start.Y));
-            int pathLength = _walker!.IsWalking ? Pathfinder.FindPath(_region.IsBlocked, start, new Cell(start.X + 20, start.Y)).Count : 0;
-            for (int tick = 0; tick < 10 * ScmdAnimator.TicksPerSecond; tick++)
+            PlaceParty();
+            Cell start = _party[0].Walker.Cell;
+            Cell goal = new(start.X + 20, start.Y);
+            WalkTo(goal, wholeParty: true);
+            int overlaps = 0;
+            for (int tick = 0; tick < 15 * ScmdAnimator.TicksPerSecond; tick++)
             {
                 _clock = (double)tick / ScmdAnimator.TicksPerSecond;
                 Animate();
+                var cells = _party.SelectMany(m => m.Walker.Footprint.Cells(m.Walker.Cell)).ToList();
+                overlaps += cells.Count - cells.Distinct().Count();
             }
-            GD.Print($"{file}: region {_region.Number}, {_region.Objects.Count} objects ({_animated.Count} animated), "
-                + $"{_region.Walls.Count} walls; character OJFF {_character?.Ojff} walked {start} -> {_walker.Cell} "
-                + $"({pathLength}-cell path, {(_walker.IsWalking ? "still walking" : "arrived")})");
+            failures += overlaps;
+            string members = string.Join(", ", _party.Select(m =>
+                $"{m.Walker.Footprint.HalfWidth * 2 + 1}x{m.Walker.Footprint.Height + 1} at ({m.Walker.Cell.X},{m.Walker.Cell.Y})"));
+            GD.Print($"{file}: region {_region.Number}, {_animated.Count} animated objects; party from ({start.X},{start.Y}) "
+                + $"towards ({goal.X},{goal.Y}): {members}; {(_party.Any(m => m.Walker.IsWalking) ? "still walking" : "stopped")}; "
+                + $"{overlaps} overlaps");
         }
-        GD.Print($"{Characters().Count} walking character sprites");
-        GetTree().Quit();
+        GD.Print($"{Characters().Count} walking character sprites; {failures} overlaps in total");
+        GetTree().Quit(failures == 0 ? 0 : 1);
+    }
+}
+
+/// <summary>A character on the map: its movement, its sprite set, and its node.</summary>
+public sealed record PartyMember(Walker Walker, CharacterSprite Sprite, Sprite2D Node);
+
+/// <summary>A ring under the selected character's feet, drawn below the sprites.</summary>
+public partial class SelectionMarker : Node2D
+{
+    private Walker? _walker;
+
+    public void Follow(Walker? walker)
+    {
+        _walker = walker;
+        Visible = walker is not null;
+        if (walker is not null)
+        {
+            Position = new Vector2(walker.Feet.X, walker.Feet.Y - 2);
+            QueueRedraw();
+        }
+    }
+
+    public override void _Draw()
+    {
+        if (_walker is null)
+        {
+            return;
+        }
+        float radius = 6 + _walker.Footprint.HalfWidth * 16;
+        DrawSetTransform(Vector2.Zero, 0, new Vector2(1, 0.5f));
+        DrawArc(Vector2.Zero, radius, 0, Mathf.Tau, 32, new Color(0.4f, 1f, 0.4f, 0.9f), 1.5f);
     }
 }
 

@@ -96,12 +96,16 @@ public sealed class Scmd
     public int StandStart(Direction direction) => Slots[StandSlots[(int)direction]];
 
     /// <summary>
-    /// Whether every direction has a walk sequence that moves: its first
-    /// record exists and has a dx or dy. Creature scripts move one cell per
-    /// walk cycle (e.g. <c>SCMD</c> 2: four records of 4 pixels, 7 ticks each).
+    /// Whether every direction has its own walk sequence that moves: a walk
+    /// slot different from the stand slot, whose first record has a dx or dy.
+    /// Creature scripts move one cell per walk cycle (e.g. <c>SCMD</c> 2: four
+    /// records of 4 pixels, 7 ticks each). Scripts with an all-zero header,
+    /// such as the wandering-critter paths, don't qualify.
     /// </summary>
     public bool CanWalk => Enum.GetValues<Direction>().All(d =>
-        WalkStart(d) < Records.Count && (Records[WalkStart(d)].Dx != 0 || Records[WalkStart(d)].Dy != 0));
+        WalkStart(d) != StandStart(d)
+        && WalkStart(d) < Records.Count
+        && (Records[WalkStart(d)].Dx != 0 || Records[WalkStart(d)].Dy != 0));
 
     public int WalkStart(Direction direction) => Slots[WalkSlots[(int)direction]];
 }

@@ -119,8 +119,13 @@ Goal: a party sprite walking around a region at the original scale.
       `Region.BlocksSight`); click-to-move with A* pathfinding
       (`DarkSun.Game.Movement`: `Pathfinder`, 8-way without cutting corners,
       and `Walker`, one walk cycle per cell).
-- [ ] Creature footprints larger than one cell (`footprint_blocked`), and
-      marking occupied cells (0x20) so creatures don't overlap.
+- [x] Creature footprints (`Footprint`: half-width and height cells, as
+      `footprint_blocked` tests them) and occupied cells (`Occupancy`, the
+      engine's form of `GMAP` 0x20): characters never overlap, wait for each
+      other, and detour when that is short.
+- [ ] Creature sizes from the game data: byte 0x3D of the 0x47-byte creature
+      records (table `DS:1661`), whose source file is not yet traced; until
+      then sizes are estimated from sprite width.
 - [ ] Compare with DSUN.EXE's own pathfinding (not yet located) and walking
       speed in play (walk records move 4 px per 7 ticks: about 3.4 cells/s).
 - [x] Decode `SCMD` animation scripts (`DarkSun.Data.Animation.Scmd`,

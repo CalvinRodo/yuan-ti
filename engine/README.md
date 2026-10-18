@@ -56,14 +56,19 @@ $GODOT --headless --path engine/game -- --check-install
 $GODOT --headless --path engine/game -- --check-regions
 ```
 
-In the region viewer: click to walk the character there (it finds a path
-around blocked cells); Tab for the next character sprite (any object whose
-`SCMD` can walk); arrows, WASD or right-drag to scroll (the camera follows
-the character again after the next click); mouse wheel or +/- to zoom;
-PgUp/PgDn for the previous or next region; F1 to show blocked cells (red) and
-cells that block line of sight (blue outline); Esc to go back. Objects with an
-`SCMD` script animate. `--check-regions` also walks a character 20 cells in
-every region.
+In the region viewer, a party of four stands near the middle of the map
+(placeholder sprites: any object whose `SCMD` can walk). Click: the selected
+character (green ring) walks there; Shift+click: the whole party; Tab: select
+the next character; N: add a character; C: change the selected character's
+sprite. Characters cover a footprint of cells (estimated from the sprite's
+width until the game's size data is traced) and never overlap: one blocked by
+another waits, goes round if that's short, or gives up after about 4 s.
+Arrows, WASD or right-drag scroll (the camera follows the selected character
+again after the next click); mouse wheel or +/- zoom; PgUp/PgDn change region;
+F1 shows blocked cells (red), cells that block line of sight (blue outline)
+and occupied cells (yellow); Esc goes back. Objects with an `SCMD` script
+animate. `--check-regions` also walks the party 20 cells in every region and
+fails if two characters ever overlap.
 
 ## Notes
 

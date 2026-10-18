@@ -326,7 +326,10 @@ Most `0x80` cells also have `0x40` (walls); outdoor regions have few
 **Footprint.** `footprint_blocked` (`1A0A:11DB`) tests every cell from
 x − w to x + w and from y − h to y, with w = `DS:1650` and h = `DS:1652`.
 `find_free_cell` (`7372:0909`) sets them from a size byte: w = size & 7,
-h = size / 8. Both are 0 by default (a single cell).
+h = size / 8. Both are 0 by default (a single cell). Its caller at
+`7372:0388` reads the size from byte 0x3D of a 0x47-byte record in the table
+at far pointer `DS:1661` (*unverified*: per-creature data; the file it is
+loaded from is not traced).
 
 **Directions** (tables `DS:2F52` dx and `DS:2F5B` dy): 0 N (0, −1), 1 NE,
 2 E (1, 0), 3 SE, 4 S (0, 1), 5 SW, 6 W (−1, 0), 7 NW.
@@ -398,7 +401,12 @@ the index is past the last record, animation stops and the index resets to 0;
 the record at the index is applied; unless it has flag 0x02 the index moves
 on, and if the new record has flag 0x01 the index becomes its byte 0. The tick
 count is advanced by `timer_tick` (`1DF3:29E8`), registered at 96 Hz with the
-sound library's timer (`33A5:077F`, `33A5:0992`).
+sound library's timer (`33A5:077F`, `33A5:0992`). `main`'s loop runs without
+a frame limit, so a record with delay 0 advances on every pass and its speed
+depended on the PC; 38 of the walking object sprites (e.g. `SCMD` 194) walk
+with delay 0. Every 8 ticks `timer_tick` also sets `DS:1194`, which makes the
+loop run `22F8:047C`, a palette step (it calls the palette code `22F8:0514`),
+not a frame limiter.
 
 **Drawing order.** `draw_objects_and_walls` (`1DBD:0002`) walks the visible
 rows top to bottom, drawing each row's walls and the objects whose `ETAB` y
