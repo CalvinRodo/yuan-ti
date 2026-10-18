@@ -340,6 +340,50 @@
 4356:6450	data	scmd_cache	64 x 9 bytes: refcount, number, far ptr to records, record count
 4356:6690	data	etab	far ptr: the region's ETAB entries (8 bytes each)
 4356:6694	data	objects	0x140 x 0x20 bytes, see dsun-exe-reference.md
+# --- Script triggers, see dsun-exe-reference.md "What runs the scripts" ---
+5DAA:0000	func	gpl_init	allocates the trigger table and GPL globals, runs MAS 99
+039D:0000	func	void region_enter_scripts(int region)	frees the region's triggers, then runs MAS <region> from 0
+039D:0846	func	trigger_free_head	frees the first record of a trigger list
+039D:00FB	func	trigger_free_local	frees records of a list whose byte +6 (global) is 0
+039D:0166	func	trigger_free_local_usewith	as trigger_free_local, global byte at +8
+039D:01D1	func	int trigger_on_move(int who, int x, int y, int notActive)	move tile triggers, then move box triggers, at cell (x, y)
+039D:021F	func	int trigger_on_talk(int actor, int target)
+039D:0245	func	trigger_on_door	door tile, then door box triggers; never called in DSUN.EXE
+039D:02A7	func	int trigger_on_pickup(int actor, int target)
+039D:02CD	func	int trigger_on_attack(int actor, int target)
+039D:02F3	func	int trigger_on_look(int actor, int target)
+039D:0319	func	int trigger_on_use(int actor, int target)
+039D:033F	func	int trigger_on_use_with(int actor, int first, int second)
+039D:03BC	func	trigger_match_use_with
+039D:0477	func	trigger_check_tiles
+039D:04E9	func	trigger_match_tile	cell equal to (+4, +6) and who <= byte +0A
+039D:05BE	func	trigger_check_boxes
+039D:0630	func	trigger_match_box	cell inside (+4, +6, +8 wide, +9 high) and who <= byte +0A
+039D:0750	func	trigger_check_object	sets the script context (37B7:0003-0007), then trigger_match_object
+039D:07B9	func	trigger_match_object	target id (object field 0x48) equal to +4
+043D:30CA	func	trigger_build_tile	5 expressions -> {address, file, x, y, byte}
+043D:311B	func	trigger_build_box	7 expressions -> {address, file, x, y, width, height, who}
+043D:317A	func	trigger_build_object	3 expressions -> 3781:00FD {address, file, object, global}
+043D:31E5	func	trigger_build_use_with	4 expressions -> 3781:00F4 {object, object, address, file, global}
+043D:3555	func	trigger_insert_object	sorted by +4; same key replaces
+043D:3605	func	trigger_insert_tile	sorted by (+4, +6); same key replaces
+043D:36F0	func	trigger_insert_box
+043D:34A1	func	trigger_insert_use_with
+043D:37DB	func	trigger_alloc	takes a record from the free list
+1A0A:0525	func	creature_set_los	CREATE_INLOS/NOTINLOS_TRIGGER: kind 1 or 2, script and range in the 3972:08AA table
+1A0A:053E	func	creature_set_noorders	CREATE_NOORDERS_TRIGGER: script in the 3972:08AA table
+1A0A:0651	func	object_trigger_id	object field 0x48 (the id triggers match)
+1A0A:0743	func	creature_default_idle	idle behaviour of a creature without a no-orders script
+1A0A:0A77	func	void run_noorders_scripts(void)	runs the no-orders script of every idle creature in the list
+1A0A:1897	func	void creature_noorders(int creature)	runs its no-orders script if it has no order (creatures 4 and up)
+1A0A:1914	func	void creature_check_los(int creature)	runs its in-LOS (kind 1) or not-in-LOS (kind 2) script
+# Data
+4356:117C	data	current_region	region number; 42 (RGN2A) at a new game
+4356:117E	data	start_position	x, y in pixels at a new game (488, 152)
+4356:42CC	data	trigger_table	far ptr: 200 x 13-byte trigger records
+377E:0005	data	trigger_lists	10 list heads: move tile 05, door tile 07, move box 09, door box 0B, pickup 0D, talk 0F, attack 11, look 13, use 15, use with 17
+3972:08AA	data	creature_scripts	0x13 bytes per object: order, LOS kind, scripts, range, next
+3972:0C36	data	object_kinds	3 bytes per object: kind (2 creature), index into its record table
 # Data (kind "data" becomes a label)
 4356:00AC	data	gpl_trace_hook	far fn ptr called before each GPL command when non-null
 4356:00C0	data	gpl_cmd_table	129 near pointers into segment 043D, indexed by opcode

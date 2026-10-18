@@ -20,6 +20,7 @@ public static class Controls
     public const string NextCharacter = "party_select_next";
     public const string AddCharacter = "debug_add_character";
     public const string ChangeSprite = "debug_change_sprite";
+    public const string ToggleScriptLog = "debug_toggle_script_log";
     public const string Back = "ui_cancel";
 
     public static void Register()
@@ -36,6 +37,7 @@ public static class Controls
         Add(NextCharacter, Key.Tab);
         Add(AddCharacter, Key.N);
         Add(ChangeSprite, Key.C);
+        Add(ToggleScriptLog, Key.F2);
     }
 
     private static void Add(string action, params Key[] keys)

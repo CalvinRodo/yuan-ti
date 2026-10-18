@@ -13,7 +13,8 @@ stored in this repository. The plan is in
 | `src/DarkSun.Game` | Game state, rules, GPL virtual machine, saves. No Godot dependency. |
 | `game/` | Godot project: scenes, rendering, UI, input, audio. |
 | `tests/` | xUnit tests for the two libraries. |
-| `tools/DarkSun.Dump` | Hashes every resource, image frame, palette and region render in the game files, for `make engine-compare`. |
+| `tools/DarkSun.Dump` | Hashes every resource, image frame, palette and region render in the game files, and lists every script, for `make engine-compare`. |
+| `tools/DarkSun.ScriptRun` | Runs the new-game script, every region script and every trigger they register, for `make engine-scripts`. |
 | `DarkSun.sln` | All of the above; the Godot project points to it (`dotnet/project/solution_directory`). |
 | `Directory.Build.props` | Settings shared by every project (target framework, nullable, language version). |
 
@@ -41,7 +42,8 @@ make engine-build   # build everything
 make engine-test    # unit tests
 make engine-run     # run the game
 make engine-edit    # open the Godot editor
-make engine-compare # check the C# file-format code against the Python tools
+make engine-compare # check the C# file-format and script decoding against the Python tools
+make engine-scripts # run every game script in the C# interpreter (V=-v lists the world commands)
 ```
 
 `engine-compare` runs the repository's `tools/compare/gff_dump.py` (using `src/gff.py` and
@@ -57,16 +59,20 @@ $GODOT --headless --path engine/game -- --check-regions
 ```
 
 In the region viewer, a party of four stands near the middle of the map
-(placeholder sprites: any object whose `SCMD` can walk). Click: the selected
-character (green ring) walks there; Shift+click: the whole party; Tab: select
+(placeholder sprites: any object whose `SCMD` can walk). Entering a region
+runs its script (and, once, the game-start script); characters reaching a
+cell fire its move trigger; right-click an object to fire its talk-to, use,
+look or pick-up trigger. World commands are only logged so far: F2 shows the
+script log. Click: the selected character (green ring) walks there;
+Shift+click: the whole party; Tab: select
 the next character; N: add a character; C: change the selected character's
 sprite. Characters cover a footprint of cells (estimated from the sprite's
 width until the game's size data is traced) and never overlap: one blocked by
 another waits, goes round if that's short, or gives up after about 4 s.
-Arrows, WASD or right-drag scroll (the camera follows the selected character
+Arrows, WASD or middle-drag scroll (the camera follows the selected character
 again after the next click); mouse wheel or +/- zoom; PgUp/PgDn change region;
-F1 shows blocked cells (red), cells that block line of sight (blue outline)
-and occupied cells (yellow); Esc goes back. Objects with an `SCMD` script
+F1 shows blocked cells (red), cells that block line of sight (blue outline),
+occupied cells (yellow) and move triggers (magenta); Esc goes back. Objects with an `SCMD` script
 animate. `--check-regions` also walks the party 20 cells in every region and
 fails if two characters ever overlap.
 

@@ -413,7 +413,106 @@ rows top to bottom, drawing each row's walls and the objects whose `ETAB` y
 falls in it, so objects and walls are depth-sorted by row. `region_renderer.py`
 draws all objects and then all walls.
 
-## 4. Validation
+## 4. What runs the scripts
+
+Derived statically (2026-10-18); names in `tools/ghidra/symbols.tsv`. All
+script runs go through `gpl_run(file, address, kind)` (`043D:0001`): kind 1
+runs `GPL ` resource *file*, kind 2 runs `MAS ` resource *file*, starting at
+byte *address* (`gpl_call_file`, `043D:02F3`; loaders `043D:04BA` cache,
+`043D:0555` load).
+
+### Entry points
+
+| When | Runs | Code |
+|------|------|------|
+| New game (each pass of `main`'s outer loop), and GPL start-up (`gpl_init`, `5DAA:0000`) | `MAS 99` from 0 | `main` `1512:03E0`; `5DAA:0000` |
+| Entering region *n* | `MAS` *n* from 0, after removing the old region's triggers | `region_enter_scripts` (`039D:0000`), called with the current region `DS:117C` |
+| A trigger matches an event | its `GPL` file and address | the check functions below |
+| A creature has nothing to do | its no-orders script | `creature_noorders` (`1A0A:1897`), `run_noorders_scripts` (`1A0A:0A77`) |
+| A creature sees, or loses sight of, the active party member | its line-of-sight script | `creature_check_los` (`1A0A:1914`) |
+
+`MAS` numbers are the region numbers (2–45; `RGNFF.GFF`, region 255, has
+none), plus 99 for the game start. A new game resets the region to 42
+(`RGN2A.GFF`), the start position to (488, 152) (`DS:117E`/`1180`), the global
+variables and the trigger lists, then runs `MAS 99`.
+
+File 0 means "no script": `gpl_main_loop` runs nothing for it, and the
+creature code treats a script file of 0 as unset. `MAS` files start with code
+(run from 0); `GPL` files start with END_FUNCTION and are entered at the
+addresses triggers give.
+
+The region scripts register the region's triggers with the `CREATE_…_TRIGGER`
+commands; most other scripts are `GPL` files that those triggers run.
+
+### Trigger lists
+
+Triggers are 13-byte records in a 200-entry table (far pointer `DS:42CC`,
+allocated by `gpl_init`), chained into ten sorted lists whose heads are words
+at `377E:0005`–`0017`. Common fields: `+0` address, `+2` `GPL` file, `+0B`
+next index (−1 ends).
+
+| List | Command (opcode) | Arguments | Record | Checked by | Called from |
+|------|------------------|-----------|--------|------------|-------------|
+| `+05` | `CREATE_MOVE_TILE_TRIGGER` (68) | x, y, address, file, b | `+4` x, `+6` y, `+8` b | `trigger_on_move` (`039D:01D1`), tiles first | region entry, for each party member's cell (`1587:1F83`); `1DF3:055A`, `1A0A:0B0F`, `7372:06DF` (*unverified*: the per-step movement code) |
+| `+07` | `CREATE_DOOR_TILE_TRIGGER` (69) | as above | as above | `trigger_on_door` (`039D:0245`) | **nothing**: no reference in DSUN.EXE, and no script uses door triggers |
+| `+09` | `CREATE_MOVE_BOX_TRIGGER` (6A) | x, y, width, height, address, file, who | `+4` x, `+6` y, `+8` width, `+9` height, `+0A` who | `trigger_on_move`, after tiles | as move tile |
+| `+0B` | `CREATE_DOOR_BOX_TRIGGER` (6B) | as above | as above | `trigger_on_door` | nothing |
+| `+0D` | `CREATE_PICKUP_TRIGGER` (6C) | address, file, object | `+4` object, `+6` global | `trigger_on_pickup` (`039D:02A7`) | `6527:0C0D`, `7BEB:0A60` |
+| `+0F` | `CREATE_TALKTO_TRIGGER` (6E) | address, file, object | as pickup | `trigger_on_talk` (`039D:021F`) | `68BD:0040` |
+| `+11` | `CREATE_ATTACK_TRIGGER` (65) | address, file, object | as pickup | `trigger_on_attack` (`039D:02CD`) | `612E:1359`, `7D80:003B` |
+| `+13` | `CREATE_LOOK_TRIGGER` (66) | address, file, object | as pickup | `trigger_on_look` (`039D:02F3`) | `68BD:0040` |
+| `+15` | `CREATE_USE_TRIGGER` (6D) | address, file, object | as pickup | `trigger_on_use` (`039D:0319`) | `6BB8:0B56`, `91F7:03D0` |
+| `+17` | `CREATE_USEWITH_TRIGGER` (70) | object, object, address, file | `+4`, `+6` the objects, `+8` global | `trigger_on_use_with` (`039D:033F`) | `6527:0CC0`, `74F1:2532`, `7BEB:006B` |
+
+Matching (first match in list order runs, and the check returns 1):
+
+* **Tile**: the mover's cell (world position >> 4) equals (`+4`, `+6`), and
+  the event's *who* value is at most byte `+0A`. Tile records never write
+  `+0A` (their fifth argument goes to `+8`), and the table starts filled with
+  0xFF, so in practice they fire for every mover (*unverified* whether that
+  was intended).
+* **Box**: `+4` ≤ x ≤ `+4` + width − 1, `+6` ≤ y ≤ `+6` + height − 1, and
+  *who* ≤ `+0A`. For party moves *who* is 0 for the active member
+  (`37B7:0009`) and 1 for the others: a box with 0 fires only for the active
+  member.
+* **Object** (pickup, talk, attack, look, use): `+4` equals the target's id,
+  field 0x48 of the object (read through `0826:0009`). Scripts name objects
+  as `name(-n)` with *n* the `OJFF` number: 356 of the 449 objects named by
+  the region scripts' object triggers are `OJFF` numbers in that region's
+  `ETAB` (the rest are presumably made at run time, e.g. by CLONE).
+* **Use with**: the two ids match in either order.
+
+Before running, the checks set the script's context: `37B7:0007` (=
+`3781:0367`) the actor, `37B7:0005` and `37B7:0003` the target or the two
+objects; `1A0A:0256` focuses the actor.
+
+**Lifetime.** `region_enter_scripts` empties the tile, door and box lists, and
+removes object and use-with triggers whose "global" byte is 0. That byte is
+set when the trigger was created by `MAS 99` (`377C:0012` = 99 and `377C:0014`
+= 2), so the game-start script's object triggers survive region changes.
+Registering a trigger with the same key as an existing one replaces it.
+
+### Per-creature scripts
+
+A table at `3972:08AA`, 0x13 bytes per object (indexes 0–3 are the party;
+the others are creatures), filled by:
+
+* `CREATE_NOORDERS_TRIGGER` (6F) (address, file, object) via
+  `creature_set_noorders` (`1A0A:053E`): `+04` address, `+08` file. Run when a
+  non-party creature has no current order (`+00` = 0). A creature with neither
+  script falls back to `creature_default_idle` (`1A0A:0743`).
+* `CREATE_INLOS_TRIGGER` (1B) and `CREATE_NOTINLOS_TRIGGER` (1C) (address,
+  file, object, range) via `creature_set_los` (`1A0A:0525`, kind 1 or 2):
+  `+02` kind, `+06` address, `+0A` file, `+0C` range. Kind 1 runs when the
+  creature has a clear line of sight (`line_of_sight`, §3) to the active
+  party member and the distance (`0898:000C`) is at most the range; kind 2
+  when the sight line is blocked or the distance is greater.
+
+Script use of the trigger commands (all 250 scripts): no-orders 1 224,
+in-LOS 768, talk-to 536, attack 664, move-box 408, use 324, not-in-LOS 216,
+use-with 164, look 150, move-tile 94, pickup 16, door 0.
+
+## 5. Validation
 
 * All 217 `GPL` and 33 `MAS` resources in `GPLDATA.GFF` decode with no unknown
   bytes, ending exactly at the resource end (`python src/gpl_parser.py
@@ -425,7 +524,7 @@ draws all objects and then all walls.
 * Dark Sun 2 (`dark_sun_2/data/GPLDATA.GFF`): 258/350 decode; it is a later VM
   revision with extra opcodes.
 
-## 5. Open questions
+## 6. Open questions
 
 * `OP_28` (expr, expr, string; sets the trace flag like SOURCE_TRACE) is unnamed.
 * Names of the engine variables (`gname[0–14]`) and special objects.

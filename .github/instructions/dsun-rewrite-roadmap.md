@@ -148,19 +148,31 @@ Goal: a party sprite walking around a region at the original scale.
 Goal: the world reacts. Most quest, dialogue and event logic lives in GPL, so
 this milestone brings most of the game's content.
 
-- [ ] Port the GPL virtual machine to `DarkSun.Game`: fetch/dispatch, the
-      expression evaluator (left to right, no precedence), operand decoding,
-      variables (`lnum`/`gnum` int16, `lbignum`/`gbignum`/`acc` int32,
-      strings, flags), call frames and cross-file calls, with the original
-      limits.
-- [ ] Every opcode that affects the world goes through `IScriptHost`. Start
-      with logging stubs, so scripts run end to end before the engine supports
-      everything.
-- [ ] **Find how scripts are triggered** (reverse engineering, §10): which
-      script runs on region entry, on talking to or using an object, on
-      stepping on a tile, on timers.
-- [ ] **Golden tests**: disassemble every script with `gpl_parser.py`, and check
-      the C# VM decodes the same instructions.
+- [x] Port the GPL virtual machine to `DarkSun.Game.Scripting`
+      (`GplDecoder`, `GplMachine`, `GplMemory`): operand decoding, the
+      expression evaluator (left to right, no precedence), variables as the
+      original byte areas, call frames and cross-file calls, IF / COMPARE /
+      WHILE with their limits and quirks, RAND.
+- [x] Every opcode that affects the world goes through `IGplHost`;
+      `LoggingGplHost` records them, so scripts run end to end
+      (`make engine-scripts`: every region script and every trigger it
+      registers, 0 interpreter errors).
+- [ ] Carry out the world commands, most used first: PRINT_STRING and the
+      text window (CLEAR_PIC, SHOW_PIC, PRINT_NEWLINE), REQUEST, HUNT,
+      CLEAR_LOS, RANGE, TELEPORT, WAIT, GETXY, FIGHT, CLONE, GOXY, SOUND,
+      MENU / ASK_YES_NO; the engine variables (`gname`) and object fields.
+- [x] **Find how scripts are triggered** (`dsun-exe-reference.md` §4):
+      `MAS 99` at a new game, `MAS` *n* on entering region *n*, and the
+      triggers those scripts register (move tile/box, look, talk, use, use
+      with, pick up, attack; per-creature no-orders and line of sight).
+- [x] Port the trigger lists and checks (`GplTriggers`, byte for byte, and
+      `GplCreatureScripts`); the region view runs `MAS 99`, the region's
+      script, move triggers as characters reach cells, and object triggers on
+      right-click (F2 shows the log).
+- [ ] Run creature no-orders and line-of-sight scripts as the game does
+      (needs creatures in the world and the line-of-sight test, §3).
+- [x] **Golden tests**: `make engine-compare` checks that the C# decoder lists
+      every script exactly as `gpl_parser.py` does (69 741 lines).
 - [ ] Script debugger in the engine: current script, program counter,
       variables, breakpoints. Cheap to build here, and very useful for
       modders.
@@ -241,9 +253,10 @@ name the functions in `tools/ghidra/symbols.tsv`.
 |------------|--------------|----------------|
 | ~~M2~~ | ~~`SCMD` animation script format~~ | Done 2026-10-18: `dsun-exe-reference.md` §3 |
 | ~~M2~~ | ~~`GMAP` flag bits~~ | Done 2026-10-18: `dsun-exe-reference.md` §3 |
-| M2 | Region exits | door GPL scripts; the region change in `main`'s loop |
+| M2 | Region exits | probably move-box and move-tile triggers whose scripts change region; find the GPL command that sets `DS:117C` and the region change (`1587:1F83`) |
 | M2 | `SCMD` record flags 0x10 and 0x20, header bytes 0x40–0x47, the action numbers 2–6 | `1DF3:2BCF`; `896E:0C92`, `87B3:0AE1`; the combat code's header lookups |
-| M3 | Script triggers (region entry, object use, tiles, timers) | callers of `gpl_run` (`043D:0001`); `main`'s loop (`dsun-decompilation.md` §4) |
+| ~~M3~~ | ~~Script triggers~~ | Done 2026-10-18: `dsun-exe-reference.md` §4 |
+| M3 | Which player actions call each trigger check (look, talk, use, pickup, attack menus); the per-step movement check | the callers listed in `dsun-exe-reference.md` §4 |
 | M3 | What each world-affecting GPL command does | the 114 named `gpl_op_*` handlers and their callees |
 | M4 | `FONT` and UI resource formats | text-drawing and window code; `WIND`/`BUTN` loaders |
 | M5 | Character rules and level tables | character sheet and creation code; `GPLX` tables (`DS:4D7A`, `DS:537A`) |
@@ -295,5 +308,5 @@ than leaving them all for the end:
    (M1).~~ Done 2026-10-18.
 3. ~~Render one region in Godot and scroll around it (start of M2).~~ Done
    2026-10-18: every region, from the start screen's "View regions".
-4. In parallel: ~~decode `SCMD`~~ (done 2026-10-18), and find the script
-   triggers (§10).
+4. ~~In parallel: decode `SCMD`, and find the script triggers.~~ Done
+   2026-10-18.

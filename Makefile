@@ -15,7 +15,7 @@ DOTNET   ?= $(or $(shell command -v dotnet 2>/dev/null),$(HOME)/.dotnet/dotnet)
 .PHONY: help serve install install-ffmpeg extract list-resource list-gff extract-gff \
         precompute precompute-gff precompute-maps precompute-gamedata \
         precompute-images precompute-audio \
-        gpl unpack-exe decomp engine-build engine-test engine-run engine-edit engine-compare
+        gpl unpack-exe decomp engine-build engine-test engine-run engine-edit engine-compare engine-scripts
 
 help: ## Show this help message
 	@echo ""
@@ -106,7 +106,7 @@ decomp: unpack-exe ## Decompile DSUN.EXE with headless Ghidra -> out/decomp/  [G
 # Godot / C# engine (engine/)
 
 # Godot builds and loads C# with the same SDK, found through DOTNET_ROOT and PATH.
-ENGINE_TARGETS := engine-build engine-test engine-run engine-edit engine-compare
+ENGINE_TARGETS := engine-build engine-test engine-run engine-edit engine-compare engine-scripts
 $(ENGINE_TARGETS): export DOTNET_ROOT := $(patsubst %/,%,$(dir $(realpath $(DOTNET))))
 $(ENGINE_TARGETS): export PATH := $(DOTNET_ROOT):$(PATH)
 $(ENGINE_TARGETS): export DOTNET_CLI_TELEMETRY_OPTOUT := 1
@@ -123,9 +123,14 @@ engine-run: engine-build ## Run the engine                            [GODOT=]
 engine-edit: ## Open the engine in the Godot editor
 	$(GODOT) --editor --path engine/game
 
-engine-compare: ## Check the C# GFF, image and region code against the Python tools
+engine-compare: ## Check the C# GFF, image, region and GPL decoding against the Python tools
 	mkdir -p $(OUT_DIR)/compare
 	$(PYTHON) tools/compare/gff_dump.py $(GAME_DIR) $(OUT_DIR)/compare/python.tsv
-	$(DOTNET) run --project engine/tools/DarkSun.Dump -- $(GAME_DIR) $(OUT_DIR)/compare/csharp.tsv
+	$(PYTHON) tools/compare/gpl_listing.py $(GAME_DIR)/GPLDATA.GFF $(OUT_DIR)/compare/gpl_python.txt
+	$(DOTNET) run --project engine/tools/DarkSun.Dump -- $(GAME_DIR) $(OUT_DIR)/compare/csharp.tsv $(OUT_DIR)/compare/gpl_csharp.txt
 	cmp $(OUT_DIR)/compare/python.tsv $(OUT_DIR)/compare/csharp.tsv
-	@echo "identical: $$(wc -l < $(OUT_DIR)/compare/csharp.tsv) resources, frames, palettes and region renders"
+	cmp $(OUT_DIR)/compare/gpl_python.txt $(OUT_DIR)/compare/gpl_csharp.txt
+	@echo "identical: $$(wc -l < $(OUT_DIR)/compare/csharp.tsv) resources, frames, palettes and region renders; $$(wc -l < $(OUT_DIR)/compare/gpl_csharp.txt) script listing lines"
+
+engine-scripts: ## Run every game script in the C# interpreter with a logging host  [V=-v]
+	$(DOTNET) run --project engine/tools/DarkSun.ScriptRun -- $(GAME_DIR) $(V)

@@ -4,6 +4,7 @@ using DarkSun.Data.Images;
 using DarkSun.Data.Regions;
 using DarkSun.Game.Animation;
 using DarkSun.Game.Movement;
+using DarkSun.Game.Scripting;
 using Godot;
 
 namespace DarkSun.Engine;
@@ -13,13 +14,17 @@ namespace DarkSun.Engine;
 /// texture; objects, walls and characters are sprites depth-sorted by their
 /// bottom edge, as DSUN.EXE draws them row by row. Objects with an
 /// <c>SCMD</c> script animate on a 96 Hz tick. Characters hold their
-/// footprint's cells, so they never overlap.
+/// footprint's cells, so they never overlap. Entering a region runs its
+/// <c>MAS</c> script (after the game-start script, once); characters stepping
+/// into cells fire move triggers; right-clicking an object fires its talk-to,
+/// use, look or pick-up trigger. World commands are not carried out yet: they
+/// are listed in the script log (F2).
 /// Click: the selected character walks there; Shift+click: the whole party;
-/// Tab: select the next character; N: add one; C: change its sprite; arrows,
-/// WASD or right-drag scroll; wheel or +/- zoom; PgUp/PgDn change region; F1
-/// shows the <c>GMAP</c> flags and occupied cells. Run with
-/// <c>-- --check-regions</c> to load every region, animate it and walk the
-/// party in it, then quit.
+/// Right-click: interact; Tab: select the next character; N: add one; C:
+/// change its sprite; arrows, WASD or middle-drag scroll; wheel or +/- zoom;
+/// PgUp/PgDn change region; F1 shows the <c>GMAP</c> flags, occupied cells and
+/// triggers. Run with <c>-- --check-regions</c> to load every region, run its
+/// scripts, animate it and walk the party in it, then quit.
 /// </summary>
 public partial class RegionView : Node2D
 {
@@ -50,6 +55,12 @@ public partial class RegionView : Node2D
     private int _nextId = 1;
     private int _nextSprite;
     private bool _follow = true;
+    private readonly List<(RegionObject Object, Sprite2D Sprite)> _objectSprites = [];
+    private readonly Dictionary<Walker, Cell> _lastCells = [];
+    private readonly List<string> _scriptLines = [];
+    private int _scriptLogSeen;
+    private Label _scriptLog = null!;
+    private PanelContainer _scriptPanel = null!;
     private int _zoomLevel = Array.IndexOf(ZoomLevels, 1f);
     private Vector2 _mapSize;
 
@@ -85,6 +96,13 @@ public partial class RegionView : Node2D
         _hud = new Label { LabelSettings = new LabelSettings { FontSize = 10 } };
         panel.AddChild(_hud);
         layer.AddChild(panel);
+
+        _scriptPanel = new PanelContainer { Visible = false };
+        _scriptPanel.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.BottomWide);
+        _scriptPanel.GrowVertical = Control.GrowDirection.Begin;
+        _scriptLog = new Label { LabelSettings = new LabelSettings { FontSize = 9 }, AutowrapMode = TextServer.AutowrapMode.Off };
+        _scriptPanel.AddChild(_scriptLog);
+        layer.AddChild(_scriptPanel);
         return layer;
     }
 
@@ -93,6 +111,7 @@ public partial class RegionView : Node2D
         IReadOnlyList<string> files = Session.Install!.RegionFiles;
         _regionIndex = (index % files.Count + files.Count) % files.Count;
         LoadRegion(files[_regionIndex]);
+        RunRegionScripts();
         PlaceParty();
         UpdateHud();
         _follow = true;
@@ -104,10 +123,15 @@ public partial class RegionView : Node2D
         string selected = Selected is { } m
             ? $"character {_selected + 1}/{_party.Count}: OJFF {m.Sprite.Ojff}, footprint {2 * m.Walker.Footprint.HalfWidth + 1}×{m.Walker.Footprint.Height + 1}"
             : "no characters";
+        GplTriggers t = Session.Scripts.Triggers;
+        int objectTriggers = new[] { GplTriggerList.TalkTo, GplTriggerList.Use, GplTriggerList.Look, GplTriggerList.Pickup, GplTriggerList.Attack, GplTriggerList.UseWith }
+            .Sum(t.Count);
         _hud.Text = $"{Session.Install!.RegionFiles[_regionIndex]} · region {_region.Number} · "
             + $"{_region.Objects.Count} objects ({_animated.Count} animated) · {selected}\n"
-            + "Click: walk · Shift+click: party · Tab: select · N: add · C: sprite · "
-            + "Arrows/WASD or right-drag: scroll · Wheel or +/-: zoom · PgUp/PgDn: region · F1: map flags · Esc: back";
+            + $"Triggers: {t.Count(GplTriggerList.MoveTile)} tile, {t.Count(GplTriggerList.MoveBox)} box, {objectTriggers} object, "
+            + $"{Session.Scripts.Creatures.NoOrders.Count + Session.Scripts.Creatures.Sight.Count} creature\n"
+            + "Click: walk · Shift+click: party · Right-click: interact · Tab: select · N: add · C: sprite · "
+            + "Arrows/WASD or middle-drag: scroll · Wheel or +/-: zoom · PgUp/PgDn: region · F1: map · F2: script log · Esc: back";
     }
 
     /// <summary>Replace the map's nodes with <paramref name="file"/>'s region.</summary>
@@ -120,6 +144,8 @@ public partial class RegionView : Node2D
         _textures.Clear();
         _animated.Clear();
         _party.Clear();
+        _objectSprites.Clear();
+        _lastCells.Clear();
         _occupancy = new Occupancy();
         _clock = 0;
 
@@ -137,6 +163,10 @@ public partial class RegionView : Node2D
         foreach (RegionObject obj in _region.Objects)
         {
             Sprite2D? sprite = AddSprite(obj.Frame, new Vector2(obj.EtabX, obj.EtabY), new Vector2(obj.X, obj.Y), obj.Mirrored);
+            if (sprite is not null)
+            {
+                _objectSprites.Add((obj, sprite));
+            }
             if (sprite is not null && obj.Scmd > 0 && scripts.TryRead("SCMD", obj.Scmd, out var data))
             {
                 _animated.Add((sprite, obj, new ScmdAnimator(Scmd.Parse(data.Span), obj.Frames.Count, mirrored: obj.Mirrored)));
@@ -147,7 +177,7 @@ public partial class RegionView : Node2D
             var bottom = new Vector2(wall.X + wall.Frame.Width / 2, wall.Y + wall.Frame.Height);
             AddSprite(wall.Frame, bottom, new Vector2(wall.X, wall.Y), wall.Mirrored);
         }
-        _overlay.Show(_region, _occupancy);
+        _overlay.Show(_region, _occupancy, Session.Scripts.Triggers);
         Animate();
     }
 
@@ -337,12 +367,21 @@ public partial class RegionView : Node2D
             sprite.Position = new Vector2(obj.EtabX + animator.OffsetX, obj.EtabY + animator.OffsetY);
             _ = animator.TakeSounds().Count(); // sound effects are not played yet
         }
-        foreach (PartyMember member in _party)
+        for (int i = 0; i < _party.Count; i++)
         {
+            PartyMember member = _party[i];
             if (member.Walker.Update(now, _region.IsBlocked))
             {
                 DrawMember(member);
             }
+            // Move triggers fire when a character reaches a new cell (trigger_on_move).
+            Cell cell = member.Walker.Cell;
+            if (_lastCells.TryGetValue(member.Walker, out Cell last) && last != cell
+                && Session.Scripts.OnMove(i, cell.X, cell.Y, i == _selected) is { } run)
+            {
+                ReportScript($"character {i + 1} reached ({cell.X},{cell.Y})", run);
+            }
+            _lastCells[member.Walker] = cell;
         }
         if (_overlay.Visible)
         {
@@ -425,7 +464,15 @@ public partial class RegionView : Node2D
             Vector2 at = GetGlobalMousePosition();
             WalkTo(new Cell((int)Math.Floor(at.X / Region.TileSize), (int)Math.Floor(at.Y / Region.TileSize)), click.ShiftPressed);
         }
-        else if (e is InputEventMouseMotion motion && (motion.ButtonMask & (MouseButtonMask.Right | MouseButtonMask.Middle)) != 0)
+        else if (e is InputEventMouseButton { ButtonIndex: MouseButton.Right, Pressed: true })
+        {
+            Interact(GetGlobalMousePosition());
+        }
+        else if (e.IsActionPressed(Controls.ToggleScriptLog))
+        {
+            _scriptPanel.Visible = !_scriptPanel.Visible;
+        }
+        else if (e is InputEventMouseMotion motion && (motion.ButtonMask & MouseButtonMask.Middle) != 0)
         {
             _follow = false;
             _camera.Position -= motion.Relative / _camera.Zoom.X;
@@ -449,6 +496,76 @@ public partial class RegionView : Node2D
             half.Y * 2 >= _mapSize.Y ? _mapSize.Y / 2 : Math.Clamp(_camera.Position.Y, half.Y, _mapSize.Y - half.Y));
     }
 
+    // -- scripts ---------------------------------------------------------------------
+
+    /// <summary>The game-start script once per session, then the region's <c>MAS</c> script.</summary>
+    private void RunRegionScripts()
+    {
+        GplMachine scripts = Session.Scripts;
+        if (!Session.GameStarted)
+        {
+            Session.GameStarted = true;
+            ReportScript("new game", scripts.NewGame());
+        }
+        ReportScript($"entered region {_region.Number}", scripts.EnterRegion(_region.Number));
+        _overlay.Show(_region, _occupancy, scripts.Triggers);
+    }
+
+    /// <summary>
+    /// Right-click: the front-most object under the pointer gets its talk-to,
+    /// use, look or pick-up trigger, the first one it has. Scripts name
+    /// objects by negated <c>OJFF</c> number.
+    /// </summary>
+    private void Interact(Vector2 at)
+    {
+        var hit = _objectSprites
+            .Where(o => o.Sprite.Visible && o.Sprite.Texture is { } tex
+                && new Rect2(o.Sprite.Position + o.Sprite.Offset, tex.GetSize()).HasPoint(at))
+            .OrderByDescending(o => o.Sprite.Position.Y)
+            .Select(o => o.Object)
+            .FirstOrDefault();
+        if (hit is null)
+        {
+            return;
+        }
+        int actor = _selected;
+        foreach (var (list, verb) in new[] { (GplTriggerList.TalkTo, "talk to"), (GplTriggerList.Use, "use"), (GplTriggerList.Look, "look at"), (GplTriggerList.Pickup, "pick up") })
+        {
+            if (Session.Scripts.OnObject(list, actor, -hit.Ojff) is { } run)
+            {
+                ReportScript($"{verb} OJFF {hit.Ojff}", run);
+                return;
+            }
+        }
+        AddScriptLine($"OJFF {hit.Ojff}: no talk, use, look or pick-up trigger");
+    }
+
+    /// <summary>Log a script run and the world commands it issued (PRINT_STRING as its text).</summary>
+    private void ReportScript(string what, GplRunResult run)
+    {
+        AddScriptLine($"> {what}: {run.Entry.Kind} {run.Entry.File} @{run.Entry.Address:x4}, "
+            + $"{run.Instructions} instructions{(run.Error is null ? "" : $", stopped: {run.Error}")}");
+        var log = Session.ScriptHost.Log;
+        for (; _scriptLogSeen < log.Count; _scriptLogSeen++)
+        {
+            GplCommand c = log[_scriptLogSeen].Command;
+            AddScriptLine(c.Mnemonic == "PRINT_STRING" && c.Texts.Count > 1 && c.Texts[1] is { } text
+                ? $"    \"{text.Trim()}\""
+                : $"    {c}");
+        }
+        UpdateHud();
+    }
+
+    private void AddScriptLine(string line)
+    {
+        _scriptLines.Add(line);
+        if (_scriptLines.Count > 300)
+        {
+            _scriptLines.RemoveRange(0, _scriptLines.Count - 300);
+        }
+        _scriptLog.Text = string.Join('\n', _scriptLines.TakeLast(16));
+    }
+
     // -- headless check ----------------------------------------------------------
 
     /// <summary>
@@ -462,6 +579,9 @@ public partial class RegionView : Node2D
         foreach (string file in Session.Install!.RegionFiles)
         {
             LoadRegion(file);
+            int linesBefore = _scriptLines.Count;
+            RunRegionScripts();
+            string scriptLine = _scriptLines.Count > linesBefore ? _scriptLines[linesBefore] : "";
             PlaceParty();
             Cell start = _party[0].Walker.Cell;
             Cell goal = new(start.X + 20, start.Y);
@@ -479,7 +599,9 @@ public partial class RegionView : Node2D
                 $"{m.Walker.Footprint.HalfWidth * 2 + 1}x{m.Walker.Footprint.Height + 1} at ({m.Walker.Cell.X},{m.Walker.Cell.Y})"));
             GD.Print($"{file}: region {_region.Number}, {_animated.Count} animated objects; party from ({start.X},{start.Y}) "
                 + $"towards ({goal.X},{goal.Y}): {members}; {(_party.Any(m => m.Walker.IsWalking) ? "still walking" : "stopped")}; "
-                + $"{overlaps} overlaps");
+                + $"{overlaps} overlaps\n    scripts {scriptLine.TrimStart('>', ' ')}; "
+                + $"{Session.Scripts.Triggers.Count(GplTriggerList.MoveBox)} box triggers; "
+                + $"{_scriptLines.Skip(linesBefore).Count(l => l.Contains("reached"))} move triggers fired on the walk");
         }
         GD.Print($"{Characters().Count} walking character sprites; {failures} overlaps in total");
         GetTree().Quit(failures == 0 ? 0 : 1);

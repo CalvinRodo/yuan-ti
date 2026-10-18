@@ -1,4 +1,4 @@
-// Usage: DarkSun.Dump <game-dir> <out.tsv>
+// Usage: DarkSun.Dump <game-dir> <out.tsv> [<gpl-listing.txt>]
 //
 // One line per GFF resource, per decoded image frame and per palette, with
 // SHA-1 hashes instead of content; the format matches tools/compare/gff_dump.py:
@@ -11,14 +11,34 @@ using System.Security.Cryptography;
 using DarkSun.Data.Gff;
 using DarkSun.Data.Images;
 using DarkSun.Data.Regions;
+using DarkSun.Game.Scripting;
 
 string[] imageTags = ["BMP ", "CBMP", "TILE", "ICON", "PORT", "WALL", "FONT"];
 string[] paletteTags = ["PAL ", "CPAL"];
 
-if (args.Length != 2)
+if (args.Length is < 2 or > 3)
 {
-    Console.Error.WriteLine("usage: DarkSun.Dump <game-dir> <out.tsv>");
+    Console.Error.WriteLine("usage: DarkSun.Dump <game-dir> <out.tsv> [<gpl-listing.txt>]");
     return 2;
+}
+
+// The listing of every GPL and MAS script, as tools/compare/gpl_listing.py writes it.
+if (args.Length == 3)
+{
+    GffFile scripts = GffFile.Open(Path.Combine(args[0], "GPLDATA.GFF"));
+    byte[] fieldTypes = scripts.TryRead("GPLX", 1, out var gplx) ? GplDecoder.FieldTypes(gplx.Span) : [];
+    using var listing = new StreamWriter(args[2]) { NewLine = "\n" };
+    foreach (string tag in new[] { "GPL ", "MAS " })
+    {
+        foreach (int n in scripts.DescribeResources().Where(r => r.Tag == tag).Select(r => r.Number).Order())
+        {
+            listing.WriteLine($"; {tag.Trim()} {n}");
+            foreach (string line in GplDecoder.Listing(scripts.Read(tag, n).ToArray(), fieldTypes))
+            {
+                listing.WriteLine(line);
+            }
+        }
+    }
 }
 
 using var output = new StreamWriter(args[1]) { NewLine = "\n" };

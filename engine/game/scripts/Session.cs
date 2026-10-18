@@ -1,5 +1,7 @@
 using DarkSun.Data;
 using DarkSun.Data.Gff;
+using DarkSun.Game.Rules;
+using DarkSun.Game.Scripting;
 
 namespace DarkSun.Engine;
 
@@ -13,10 +15,35 @@ public static class Session
 
     public static GameInstall? Install { get; private set; }
 
+    private static GplMachine? _scripts;
+
+    /// <summary>Script host: records world commands until the world handles them.</summary>
+    public static LoggingGplHost ScriptHost { get; private set; } = new();
+
+    /// <summary>The GPL interpreter for this session; the game-start script has run when <see cref="GameStarted"/>.</summary>
+    public static GplMachine Scripts
+    {
+        get
+        {
+            if (_scripts is null)
+            {
+                GffFile gpl = Open("GPLDATA.GFF");
+                byte[] fieldTypes = gpl.TryRead("GPLX", 1, out var gplx) ? GplDecoder.FieldTypes(gplx.Span) : [];
+                _scripts = new GplMachine(new GffScripts(gpl), ScriptHost, fieldTypes, BorlandRandom.FromTime(DateTimeOffset.Now));
+            }
+            return _scripts;
+        }
+    }
+
+    public static bool GameStarted { get; set; }
+
     public static void Use(GameInstall install)
     {
         Install = install;
         Files.Clear();
+        _scripts = null;
+        ScriptHost = new LoggingGplHost();
+        GameStarted = false;
     }
 
     /// <summary>A GFF file from the install, opened on first use.</summary>

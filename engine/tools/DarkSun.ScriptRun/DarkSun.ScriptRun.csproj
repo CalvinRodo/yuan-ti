@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Runs the game's scripts with a logging host: the new-game script, every
+       region's script, and every trigger they register. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\DarkSun.Game\DarkSun.Game.csproj" />
+  </ItemGroup>
+</Project>

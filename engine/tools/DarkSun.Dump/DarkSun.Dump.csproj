@@ -6,5 +6,6 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\DarkSun.Data\DarkSun.Data.csproj" />
+    <ProjectReference Include="..\..\src\DarkSun.Game\DarkSun.Game.csproj" />
   </ItemGroup>
 </Project>
