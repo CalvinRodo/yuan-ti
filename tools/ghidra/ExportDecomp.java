@@ -3,7 +3,10 @@
 //
 // Run as a headless post-script (see `make decomp`):
 //   analyzeHeadless <proj> <name> -import out/DSUN_FLAT.EXE \
-//     -postScript ExportDecomp.java out/symbols.tsv out/decomp
+//     -postScript ExportDecomp.java out/symbols.tsv out/decomp [SEG,...]
+//
+// The optional third argument limits decompilation to the listed EXE segments
+// (hex), for quick checks of symbol changes.
 //
 // Output (all paths under the output directory):
 //   seg_XXXX.c   decompiled functions of EXE segment XXXX, in address order
@@ -21,13 +24,15 @@
 import java.io.*;
 import java.nio.file.*;
 import java.util.*;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import ghidra.app.cmd.function.CreateFunctionCmd;
 import ghidra.app.decompiler.*;
 import ghidra.app.script.GhidraScript;
 import ghidra.program.model.address.*;
-import ghidra.program.model.data.VoidDataType;
+import ghidra.program.model.data.*;
+import ghidra.program.model.lang.Register;
 import ghidra.program.model.listing.*;
 import ghidra.program.model.mem.*;
 import ghidra.program.model.symbol.*;
@@ -46,15 +51,27 @@ public class ExportDecomp extends GhidraScript {
 	private static final byte[] STACK_CHECK = { 0x39, 0x26, (byte) 0x9C, 0x00, 0x72 };
 	private static final byte[] PUSH_BP_MOV_BP_SP = { 0x55, (byte) 0x8B, (byte) 0xEC };
 
+	// Name column of a func symbol may be a prototype:
+	//   ret [near] [pascal] name(type name, ..., ...)
+	private static final Pattern PROTOTYPE = Pattern.compile("(.*?)\\b(\\w+)\\s*\\((.*)\\)\\s*");
+
 	private final Map<Address, String> origin = new HashMap<>();
+	private final Map<String, DataType> types = new HashMap<>();
+	private Set<Integer> exportSegs;
 	private final List<String> seedLog = new ArrayList<>();
 	private boolean logSeeding = true;
 
 	@Override
 	protected void run() throws Exception {
 		String[] args = getScriptArgs();
-		if (args.length != 2) {
-			throw new IllegalArgumentException("usage: ExportDecomp.java <symbols.tsv> <out-dir>");
+		if (args.length < 2 || args.length > 3) {
+			throw new IllegalArgumentException("usage: ExportDecomp.java <symbols.tsv> <out-dir> [SEG,...]");
+		}
+		if (args.length == 3) {
+			exportSegs = new HashSet<>();
+			for (String seg : args[2].split(",")) {
+				exportSegs.add(Integer.parseInt(seg, 16));
+			}
 		}
 		Path outDir = Paths.get(args[1]);
 		Files.createDirectories(outDir);
@@ -73,6 +90,7 @@ public class ExportDecomp extends GhidraScript {
 		seedFromPatterns();
 		analyzeChanges(currentProgram);
 		renameDefaults();
+		defineTypes();
 		applySymbols(symbols);
 
 		Files.write(outDir.resolve("seeds.log"), seedLog);
@@ -101,9 +119,14 @@ public class ExportDecomp extends GhidraScript {
 			if (line.isBlank() || line.startsWith("#")) {
 				continue;
 			}
-			String[] cols = line.split("\t", 4);
-			if (cols.length < 3) {
+			String[] cols = Arrays.copyOf(line.split("\t", 4), 5);
+			if (cols[2] == null) {
 				throw new IOException("bad symbol line: " + line);
+			}
+			Matcher m = PROTOTYPE.matcher(cols[2]);
+			if (m.matches()) {
+				cols[4] = cols[2];
+				cols[2] = m.group(2);
 			}
 			rows.add(cols);
 		}
@@ -161,7 +184,7 @@ public class ExportDecomp extends GhidraScript {
 		SymbolTable table = currentProgram.getSymbolTable();
 		for (String[] s : symbols) {
 			Address a = exeAddress(s[0]);
-			String comment = s.length > 3 ? s[3] : null;
+			String comment = s[3];
 			Function f = getFunctionAt(a);
 			if (isFunc(s) && f != null) {
 				f.setName(s[2], SourceType.USER_DEFINED);
@@ -171,6 +194,9 @@ public class ExportDecomp extends GhidraScript {
 					f.replaceParameters(Function.FunctionUpdateType.DYNAMIC_STORAGE_ALL_PARAMS, true,
 						SourceType.USER_DEFINED);
 					f.setReturnType(VoidDataType.dataType, SourceType.USER_DEFINED);
+				}
+				if (s[4] != null) {
+					applyPrototype(f, s[4]);
 				}
 				if (comment != null) {
 					f.setComment(comment);
@@ -186,6 +212,172 @@ public class ExportDecomp extends GhidraScript {
 				}
 			}
 		}
+	}
+
+	// -- prototypes ---------------------------------------------------------
+
+	/**
+	 * Types used by the prototypes: C base types, Borland's FILE and dos.h /
+	 * alloc.h structs, and far code pointers. Data pointers are near
+	 * (2 bytes, medium model) unless written `far *` (4 bytes, seg:off).
+	 */
+	private void defineTypes() {
+		DataTypeManager dtm = currentProgram.getDataTypeManager();
+		CategoryPath cat = new CategoryPath("/borland");
+		types.put("void", VoidDataType.dataType);
+		types.put("char", CharDataType.dataType);
+		types.put("signed char", SignedCharDataType.dataType);
+		types.put("unsigned char", UnsignedCharDataType.dataType);
+		types.put("int", IntegerDataType.dataType);
+		types.put("short", ShortDataType.dataType);
+		types.put("unsigned", UnsignedIntegerDataType.dataType);
+		types.put("unsigned int", UnsignedIntegerDataType.dataType);
+		types.put("long", LongDataType.dataType);
+		types.put("unsigned long", UnsignedLongDataType.dataType);
+		typedef(cat, "size_t", UnsignedIntegerDataType.dataType);
+		typedef(cat, "time_t", LongDataType.dataType);
+		typedef(cat, "va_list", new PointerDataType(VoidDataType.dataType, 2, dtm));
+
+		DataType uchar = UnsignedCharDataType.dataType;
+		DataType uint = UnsignedIntegerDataType.dataType;
+		DataType sint = IntegerDataType.dataType;
+		struct(cat, "FILE", "level", ShortDataType.dataType, "flags", uint, "fd", CharDataType.dataType,
+			"hold", uchar, "bsize", ShortDataType.dataType, "buffer", new PointerDataType(uchar, 2, dtm),
+			"curp", new PointerDataType(uchar, 2, dtm), "istemp", uint, "token", ShortDataType.dataType);
+		struct(cat, "struct date", "da_year", sint, "da_day", CharDataType.dataType, "da_mon",
+			CharDataType.dataType);
+		struct(cat, "struct time", "ti_min", uchar, "ti_hour", uchar, "ti_hund", uchar, "ti_sec", uchar);
+		struct(cat, "struct heapinfo", "ptr", new PointerDataType(VoidDataType.dataType, 2, dtm), "size",
+			uint, "in_use", sint);
+		struct(cat, "struct farheapinfo", "ptr", new PointerDataType(VoidDataType.dataType, 4, dtm), "size",
+			UnsignedLongDataType.dataType, "in_use", sint);
+
+		// Far code pointers are 4-byte seg:off values, not pointer types: a
+		// constant far pointer to a function (push cs; push offset) makes the
+		// decompiler fail with "Offset must be between 0x0 and 0x10ffef".
+		for (String name : List.of("sighandler_t", "atexit_t", "cbrk_t", "isr_t")) {
+			typedef(cat, name, DWordDataType.dataType);
+		}
+	}
+
+	private void typedef(CategoryPath cat, String name, DataType dt) {
+		types.put(name, new TypedefDataType(cat, name, dt, currentProgram.getDataTypeManager()));
+	}
+
+	private void struct(CategoryPath cat, String name, Object... fields) {
+		DataTypeManager dtm = currentProgram.getDataTypeManager();
+		StructureDataType st = new StructureDataType(cat, name.replace("struct ", ""), 0, dtm);
+		for (int i = 0; i < fields.length; i += 2) {
+			st.add((DataType) fields[i + 1], (String) fields[i], null);
+		}
+		types.put(name, st);
+	}
+
+	/** Parse a C type such as `const char far *`; `far *` is a 4-byte pointer. */
+	private DataType parseType(String text) {
+		DataTypeManager dtm = currentProgram.getDataTypeManager();
+		String[] tokens = text.replace("*", " * ").trim().split("\\s+");
+		List<String> base = new ArrayList<>();
+		int i = 0;
+		for (; i < tokens.length && !tokens[i].equals("*") && !tokens[i].equals("far"); i++) {
+			if (!tokens[i].equals("const")) {
+				base.add(tokens[i]);
+			}
+		}
+		DataType dt = types.get(String.join(" ", base));
+		if (dt == null) {
+			throw new IllegalArgumentException("unknown type: " + text);
+		}
+		boolean far = false;
+		for (; i < tokens.length; i++) {
+			if (tokens[i].equals("far")) {
+				far = true;
+			}
+			else if (tokens[i].equals("*")) {
+				dt = new PointerDataType(dt, far ? 4 : 2, dtm);
+				far = false;
+			}
+			else if (!tokens[i].equals("const")) {
+				throw new IllegalArgumentException("bad type: " + text);
+			}
+		}
+		return dtm.resolve(dt, DataTypeConflictHandler.REPLACE_HANDLER);
+	}
+
+	/**
+	 * Apply a prototype with explicit storage. Arguments are on the stack in
+	 * 2-byte slots from offset 4 (far call) or 2 (`near`); cdecl puts the first
+	 * argument lowest, `pascal` the last, and pascal callees pop their
+	 * arguments. Results are in AL, AX or DX:AX. Explicit storage is needed
+	 * because the cspec's __cdecl16far has no DX:AX return.
+	 */
+	private void applyPrototype(Function f, String prototype) throws Exception {
+		Matcher m = PROTOTYPE.matcher(prototype);
+		m.matches();
+		List<String> retWords = new ArrayList<>(Arrays.asList(m.group(1).trim().split("\\s+")));
+		boolean near = retWords.remove("near");
+		boolean pascal = retWords.remove("pascal");
+		DataType ret = parseType(String.join(" ", retWords));
+
+		List<String[]> args = new ArrayList<>();
+		boolean varArgs = false;
+		String list = m.group(3).trim();
+		if (!list.equals("void")) {
+			for (String arg : list.split(",")) {
+				arg = arg.trim();
+				if (arg.equals("...")) {
+					varArgs = true;
+					continue;
+				}
+				Matcher a = Pattern.compile("(.*?)(\\w+)").matcher(arg);
+				if (!a.matches() || a.group(1).isBlank()) {
+					throw new IllegalArgumentException("argument needs a type and name: " + prototype);
+				}
+				args.add(new String[] { a.group(1), a.group(2) });
+			}
+		}
+		if (pascal) {
+			Collections.reverse(args);
+		}
+		List<Parameter> params = new ArrayList<>();
+		int offset = near ? 2 : 4;
+		int first = offset;
+		for (String[] arg : args) {
+			DataType dt = parseType(arg[0]);
+			params.add(new ParameterImpl(arg[1], dt,
+				new VariableStorage(currentProgram, offset, dt.getLength()), currentProgram));
+			offset += (dt.getLength() + 1) & ~1;
+		}
+		if (pascal) {
+			Collections.reverse(params);
+		}
+
+		VariableStorage retStorage;
+		int size = ret instanceof VoidDataType ? 0 : ret.getLength();
+		if (size == 0) {
+			retStorage = VariableStorage.VOID_STORAGE;
+		}
+		else if (size <= 2) {
+			retStorage = new VariableStorage(currentProgram, register(size == 1 ? "AL" : "AX"));
+		}
+		else if (size == 4) {
+			retStorage = new VariableStorage(currentProgram, register("DX"), register("AX"));
+		}
+		else {
+			throw new IllegalArgumentException("unsupported return type: " + prototype);
+		}
+
+		String convention = (pascal ? "__stdcall16" : "__cdecl16") + (near ? "near" : "far");
+		f.updateFunction(convention, new ReturnParameterImpl(ret, retStorage, currentProgram), params,
+			Function.FunctionUpdateType.CUSTOM_STORAGE, true, SourceType.USER_DEFINED);
+		f.setVarArgs(varArgs);
+		if (pascal) {
+			f.setStackPurgeSize(offset - first);
+		}
+	}
+
+	private Register register(String name) {
+		return currentProgram.getRegister(name);
 	}
 
 	/**
@@ -322,6 +514,9 @@ public class ExportDecomp extends GhidraScript {
 				Function f = it.next();
 				Address entry = f.getEntryPoint();
 				int seg = ((SegmentedAddress) entry).getSegment() - LOAD_SEG;
+				if (exportSegs != null && !exportSegs.contains(seg)) {
+					continue;
+				}
 				String file = String.format("seg_%04X.c", seg);
 				PrintWriter out = files.get(seg);
 				if (out == null) {

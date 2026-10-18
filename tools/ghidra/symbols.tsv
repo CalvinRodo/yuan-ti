@@ -1,8 +1,11 @@
 # Curated DSUN.EXE symbols, applied by ExportDecomp.java.
-# seg:off (EXE segments, load segment 0)	kind: func[+noreturn][+noargs] | data | label	name	comment
+# seg:off (EXE segments, load segment 0)	kind: func[+noreturn][+noargs] | data | label	name or C prototype	comment
+# Prototypes: `ret [near] [pascal] name(type name, ...)`. Calls are far and cdecl
+# unless marked; data pointers are near (2 bytes) unless written `far *`.
+# Types are defined in ExportDecomp.defineTypes.
 # GPL handlers (DS:00C0 table) are added by gen_symbols.py; don't list them here.
 # Sources: .github/instructions/dsun-exe-reference.md
-1512:0001	func	main	game main(argc, argv, envp), called by the Borland startup code; holds the top-level game loop
+1512:0001	func	int main(int argc, char **argv, char **envp)	game main(argc, argv, envp), called by the Borland startup code; holds the top-level game loop
 043D:0001	func	gpl_run	far entry: reset interpreter state, run a GPL file from an address
 043D:00A1	func	gpl_main_loop	op = fetch(); dispatch(op) until 3781:0326 is set
 043D:00F9	func	gpl_exit	3781:0326 = 1
@@ -43,14 +46,14 @@
 0000:02A5	func	ErrorDisplay	c0: write CX bytes at DS:DX to stderr
 0000:02AD	func+noreturn	abort	prints "Abnormal program termination", _exit(3)
 0000:02DF	func+noreturn	c0_overlay_error	prints "Runtime overlay error" (CS:02C8), _exit(4)
-0000:02FD	func	abs
-0000:030B	func	atexit	32 slots at DS:A420, count DS:3E4A
+0000:02FD	func	int abs(int x)
+0000:030B	func	int atexit(atexit_t func)	32 slots at DS:A420, count DS:3E4A
 0000:0338	func	ctrlbrk_isr	int 23h handler installed by ctrlbrk: calls the user handler, _exit(0) if it returns 0
-0000:0361	func	ctrlbrk
+0000:0361	func	void ctrlbrk(cbrk_t handler)
 0000:0387	func	exit_dummy	default _exitbuf/_exitfopen/_exitopen
-0000:0388	func	__exit	exit.c _exit_(status, quick, dontexit): atexit, _cleanup, _exitbuf..., _restorezero, _checknull, _terminate
-0000:03DF	func+noreturn	exit
-0000:03EE	func+noreturn	_exit
+0000:0388	func	void near pascal __exit(int quick, int dontexit, int status)	exit.c _exit_(status, quick, dontexit): atexit, _cleanup, _exitbuf..., _restorezero, _checknull, _terminate
+0000:03DF	func+noreturn	void exit(int status)
+0000:03EE	func+noreturn	void _exit(int status)
 # Compiler helpers (N_ = near entry, F_ = far entry)
 0000:041A	func	F_LXMUL	Borland F_LXMUL@: DX:AX = DX:AX * CX:BX
 0000:0431	func	F_PCMP	Borland F_PCMP@: compare huge pointers DX:AX, CX:BX
@@ -80,24 +83,24 @@
 0000:07D9	func	N_LXMUL	Borland N_LXMUL@
 0000:07F0	func	N_PCMP	Borland N_PCMP@
 # Errors, time, I/O, misc
-0000:046E	func	getdate
-0000:0481	func	gettime
-0000:0494	func	getvect
-0000:04A3	func	setvect
-0000:06BA	func	__IOerror	map DOS error to errno (DS:0094) via _dosErrorToSV (DS:40C8); returns -1
-0000:06F3	func	__DOSerror
-0000:0705	func	isatty
-0000:0716	func	__longtoa	(value, string, radix, maybeSigned, hexStyle)
-0000:0793	func	__utoa
-0000:07B0	func	lseek
-0000:0811	func	srand	seed = DS:4122 (long)
-0000:0822	func	rand	seed = seed * 0x015A4E35 + 1; return (seed >> 16) & 0x7FFF
-0000:0848	func	_read
-0000:0875	func	setdate
-0000:0888	func	settime
-0000:0940	func	stime
-0000:0978	func	time
-0000:09C5	func	tolower	uses _ctype (DS:3E4C)
+0000:046E	func	void getdate(struct date *datep)
+0000:0481	func	void gettime(struct time *timep)
+0000:0494	func	isr_t getvect(int intno)
+0000:04A3	func	void setvect(int intno, isr_t isr)
+0000:06BA	func	int near pascal __IOerror(int doserror)	map DOS error to errno (DS:0094) via _dosErrorToSV (DS:40C8); returns -1
+0000:06F3	func	int near pascal __DOSerror(int doserror)
+0000:0705	func	int isatty(int handle)
+0000:0716	func	char * near pascal __longtoa(long value, char *string, int radix, char maybeSigned, char hexStyle)	(value, string, radix, maybeSigned, hexStyle)
+0000:0793	func	char * near pascal __utoa(unsigned value, char *string)
+0000:07B0	func	long lseek(int handle, long offset, int fromwhere)
+0000:0811	func	void srand(unsigned seed)	seed = DS:4122 (long)
+0000:0822	func	int rand(void)	seed = seed * 0x015A4E35 + 1; return (seed >> 16) & 0x7FFF
+0000:0848	func	int _read(int handle, void *buf, unsigned len)
+0000:0875	func	void setdate(struct date *datep)
+0000:0888	func	void settime(struct time *timep)
+0000:0940	func	int stime(time_t *tp)
+0000:0978	func	time_t time(time_t *timer)
+0000:09C5	func	int tolower(int ch)	uses _ctype (DS:3E4C)
 0000:09F1	func	vprinter_hex4	write DX as 4 hex digits at ES:DI
 0000:09F8	func	vprinter_hex2
 0000:0A01	func	vprinter_hexdigit
@@ -106,136 +109,136 @@
 0000:0A30	func	vprinter_putc
 0000:0A39	func	vprinter_flush
 0000:0A69	func	__vprinter_body
-0000:0EBC	func	__brk	near heap break (DS:009C)
-0000:0EDE	func	__sbrk
-0000:0F0F	func	brk
-0000:0F1B	func	sbrk
+0000:0EBC	func	int near __brk(void *addr)	near heap break (DS:009C)
+0000:0EDE	func	void * near __sbrk(unsigned long incr)
+0000:0F0F	func	int brk(void *addr)
+0000:0F1B	func	void *sbrk(int incr)
 0000:0F2B	func+noreturn	printf_float_not_linked	prints "print : floating point formats not linked", abort
 0000:0F30	label	scanf_float_not_linked	same for "scanf"
 0000:0F4A	func	io_delay
 0000:0F4B	func	readtimer	PIT channel 0 count, inverted
 0000:089B	func	_setupio	#pragma startup priority 2: init _openfd and _streams, buffer stdin/stdout unless they are terminals
 0000:0F65	func	delay_calibrate	#pragma startup priority 16: sets the delay multiplier DS:41C2
-0000:0F86	func	delay	busy-wait N ms on the PIT, scaled by DS:41C2
+0000:0F86	func	void delay(unsigned milliseconds)	busy-wait N ms on the PIT, scaled by DS:41C2
 0000:1D34	func	__realcvt	jmp [DS:4248], the float-format vector (default: printf_float_not_linked)
 0000:1D3A	func	_setargv	#pragma startup priority 16: parse PSP command tail into _argc/_argv
 0000:1DCD	func	setargv_nextchar	_setargv helper: next character, handling quotes and \"
-0000:1E51	func	setblock	int 21h/4Ah
+0000:1E51	func	int setblock(unsigned segx, unsigned newsize)	int 21h/4Ah
 0000:1E6D	func	_setenvp	#pragma startup priority 16: copy the environment, build _environ
 # Far heap (farheap.asm): CS:0FE7 first, 0FE9 last, 0FEB rover, 0FED saved DS
 0000:0FF3	func	farheap_free_last_block
 0000:1056	func	farheap_free_inner_block
 0000:10C7	func	farheap_pull_free_block
 0000:10F0	func	farheap_insert_free_block
-0000:1127	func	farfree
+0000:1127	func	void farfree(void far *block)
 0000:1150	func	farheap_create
 0000:11B4	func	farheap_extend
 0000:120E	func	farheap_split_block
-0000:1231	func	farmalloc
+0000:1231	func	void far *farmalloc(unsigned long nbytes)
 0000:12AE	func	farrealloc_move
 0000:132A	func	farrealloc_shrink
-0000:138E	func	farrealloc
+0000:138E	func	void far *farrealloc(void far *oldblock, unsigned long nbytes)
 0000:1408	func	farheap_setblock
 0000:147E	func	farheap_brk
 0000:14BD	func	farheap_sbrk
-0000:1548	func	farcalloc_fill
-0000:155C	func	farcalloc
-0000:15E5	func	farcoreleft
-0000:1635	func	farheapcheck	-1 corrupt, 1 empty, 2 OK
-0000:1730	func	farheapchecknode
-0000:179C	func	farheapfillfree
-0000:17F6	func	farheapcheckfree
-0000:1857	func	farheapwalk
+0000:1548	func	void near pascal farcalloc_fill(void far *p, unsigned n, char value)
+0000:155C	func	void far *farcalloc(unsigned long nunits, unsigned long unitsz)
+0000:15E5	func	unsigned long farcoreleft(void)
+0000:1635	func	int farheapcheck(void)	-1 corrupt, 1 empty, 2 OK
+0000:1730	func	int farheapchecknode(void far *node)
+0000:179C	func	int farheapfillfree(unsigned fillvalue)
+0000:17F6	func	int farheapcheckfree(unsigned fillvalue)
+0000:1857	func	int farheapwalk(struct farheapinfo *hi)
 # Near heap (DS:41C8 first, 41CA last, 41CC rover); used by _setenvp and setvbuf
-0000:18BE	func	near_free
+0000:18BE	func	void near_free(void *block)
 0000:18DB	func	near_free_last_block
 0000:1915	func	near_free_inner_block
 0000:194E	func	near_pull_free_block
 0000:196A	func	near_insert_free_block
-0000:198D	func	near_malloc
+0000:198D	func	void *near_malloc(size_t size)
 0000:19ED	func	near_heap_create
 0000:1A2D	func	near_heap_extend
 0000:1A56	func	near_split_block
 0000:1A6F	func	near_realloc_move
 0000:1AA4	func	near_realloc_shrink
-0000:1AE8	func	near_realloc
-0000:1BD4	func	heapchecknode
-0000:1C4F	func	heapfillfree
-0000:1C99	func	heapcheckfree
-0000:1CEA	func	heapwalk
+0000:1AE8	func	void *near_realloc(void *block, size_t size)
+0000:1BD4	func	int heapchecknode(void *node)
+0000:1C4F	func	int heapfillfree(unsigned fillvalue)
+0000:1C99	func	int heapcheckfree(unsigned fillvalue)
+0000:1CEA	func	int heapwalk(struct heapinfo *hi)
 # signal.c
 0000:1ECA	func	sig_int5_isr	SIGSEGV (bound)
 0000:1F4B	func	sig_int6_isr	SIGILL
 0000:1FBC	func	sig_int0_isr	SIGFPE (divide)
 0000:202D	func	sig_int4_isr	SIGFPE (overflow)
 0000:209E	func	sig_int23_isr	SIGINT
-0000:2119	func	_sigindex	index of a signal in DS:41F9
-0000:213A	func	signal
-0000:2265	func	raise
+0000:2119	func	int _sigindex(int sig)	index of a signal in DS:41F9
+0000:213A	func	sighandler_t signal(int sig, sighandler_t func)
+0000:2265	func	int raise(int sig)
 # string / conversion / stdio (near data)
-0000:231D	func	atol
-0000:238D	func	atoi
-0000:239A	func	eof
-0000:2411	func	fflush
-0000:2492	func	flushall
-0000:24CC	func	ftell_displacement	buffered bytes, counting \n in text mode
-0000:2529	func	fseek
-0000:2591	func	ftell
+0000:231D	func	long atol(const char *s)
+0000:238D	func	int atoi(const char *s)
+0000:239A	func	int eof(int handle)
+0000:2411	func	int fflush(FILE *stream)
+0000:2492	func	int flushall(void)
+0000:24CC	func	int near pascal ftell_displacement(FILE *stream)	buffered bytes, counting \n in text mode
+0000:2529	func	int fseek(FILE *stream, long offset, int whence)
+0000:2591	func	long ftell(FILE *stream)
 0000:2658	func	flush_term_streams	flush line-buffered terminal streams before a read
-0000:2681	func	_ffill
-0000:26DA	func	_fgetc
-0000:26EF	func	fgetc
-0000:27A8	func	getenv
-0000:2807	func	gets
-0000:2862	func	itoa
-0000:288A	func	ultoa
-0000:28A4	func	ltoa
-0000:28C9	func	memcpy
-0000:28E8	func	setmem
-0000:290E	func	memset
-0000:2929	func	movmem
-0000:2972	func	memmove
-0000:298C	func	printf
-0000:29A3	func	_fputc
-0000:29BC	func	fputc
-0000:2AF2	func	fputchar
-0000:2B04	func	__fputn	printf putter for streams
-0000:2CAC	func	puts
-0000:2CF7	func	read	text-mode read (CR/LF, ^Z)
-0000:2DC5	func	setvbuf
-0000:2E9D	func	sprintf_putn	putter: memcpy into the destination string
-0000:2EC5	func	sprintf
-0000:2EE2	func	vsprintf
-0000:2EFE	func	strcmp
-0000:2F2D	func	strcpy
-0000:2F4F	func	strlen
-0000:2F69	func	strncpy
-0000:2F95	func	strrchr
-0000:2FC4	func	strupr
-0000:2FE4	func	dostounix
-0000:30FD	func	unixtodos
-0000:32CD	func	tzset	#pragma startup priority 30; reads TZ (DS:423C)
-0000:344E	func	__isDST
-0000:352D	func	vprintf
-0000:3543	func	write	text-mode write (LF -> CR LF)
-0000:3651	func	_write
+0000:2681	func	int near pascal _ffill(FILE *stream)
+0000:26DA	func	int _fgetc(FILE *stream)
+0000:26EF	func	int fgetc(FILE *stream)
+0000:27A8	func	char *getenv(const char *name)
+0000:2807	func	char *gets(char *s)
+0000:2862	func	char *itoa(int value, char *string, int radix)
+0000:288A	func	char *ultoa(unsigned long value, char *string, int radix)
+0000:28A4	func	char *ltoa(long value, char *string, int radix)
+0000:28C9	func	void *memcpy(void *dest, const void *src, size_t n)
+0000:28E8	func	void setmem(void *dest, unsigned length, char value)
+0000:290E	func	void *memset(void *s, int c, size_t n)
+0000:2929	func	void movmem(const void *src, void *dest, unsigned length)
+0000:2972	func	void *memmove(void *dest, const void *src, size_t n)
+0000:298C	func	int printf(const char *format, ...)
+0000:29A3	func	int _fputc(char c, FILE *stream)
+0000:29BC	func	int fputc(int c, FILE *stream)
+0000:2AF2	func	int fputchar(int c)
+0000:2B04	func	unsigned near pascal __fputn(const char *ptr, unsigned n, FILE *stream)	printf putter for streams
+0000:2CAC	func	int puts(const char *s)
+0000:2CF7	func	int read(int handle, void *buf, unsigned len)	text-mode read (CR/LF, ^Z)
+0000:2DC5	func	int setvbuf(FILE *stream, char *buf, int type, size_t size)
+0000:2E9D	func	unsigned near pascal sprintf_putn(const char *ptr, unsigned n, char **dest)	putter: memcpy into the destination string
+0000:2EC5	func	int sprintf(char *buffer, const char *format, ...)
+0000:2EE2	func	int vsprintf(char *buffer, const char *format, va_list arglist)
+0000:2EFE	func	int strcmp(const char *s1, const char *s2)
+0000:2F2D	func	char *strcpy(char *dest, const char *src)
+0000:2F4F	func	size_t strlen(const char *s)
+0000:2F69	func	char *strncpy(char *dest, const char *src, size_t maxlen)
+0000:2F95	func	char *strrchr(const char *s, int c)
+0000:2FC4	func	char *strupr(char *s)
+0000:2FE4	func	long dostounix(struct date *d, struct time *t)
+0000:30FD	func	void unixtodos(long time, struct date *d, struct time *t)
+0000:32CD	func	void tzset(void)	#pragma startup priority 30; reads TZ (DS:423C)
+0000:344E	func	int near pascal __isDST(unsigned hour, unsigned yday, unsigned month, unsigned year)
+0000:352D	func	int vprintf(const char *format, va_list arglist)
+0000:3543	func	int write(int handle, const void *buf, unsigned len)	text-mode write (LF -> CR LF)
+0000:3651	func	int _write(int handle, const void *buf, unsigned len)
 # far string / memory (_f*)
-0000:36AE	func	_fmemchr
-0000:36D1	func	_fmemcpy
-0000:36F5	func	_fsetmem
-0000:3719	func	_fmemset
-0000:3738	func	_fstrcat
-0000:3777	func	_fstrchr
-0000:37B4	func	_fstrcmp
-0000:37E4	func	_fstrcpy
-0000:380D	func	_fstricmp
-0000:384E	func	_fstrlen	NULL -> 0
-0000:386D	func	_fstrlwr
-0000:3891	func	_fstrncmp
-0000:38C9	func	_fstrncpy
-0000:38FA	func	_fstrnicmp
-0000:393E	func	_fstrstr
-0000:39AC	func	_fstrupr
+0000:36AE	func	void far *_fmemchr(const void far *s, int c, size_t n)
+0000:36D1	func	void far *_fmemcpy(void far *dest, const void far *src, size_t n)
+0000:36F5	func	void _fsetmem(void far *dest, unsigned length, char value)
+0000:3719	func	void far *_fmemset(void far *s, int c, size_t n)
+0000:3738	func	char far *_fstrcat(char far *dest, const char far *src)
+0000:3777	func	char far *_fstrchr(const char far *s, int c)
+0000:37B4	func	int _fstrcmp(const char far *s1, const char far *s2)
+0000:37E4	func	char far *_fstrcpy(char far *dest, const char far *src)
+0000:380D	func	int _fstricmp(const char far *s1, const char far *s2)
+0000:384E	func	size_t _fstrlen(const char far *s)	NULL -> 0
+0000:386D	func	char far *_fstrlwr(char far *s)
+0000:3891	func	int _fstrncmp(const char far *s1, const char far *s2, size_t maxlen)
+0000:38C9	func	char far *_fstrncpy(char far *dest, const char far *src, size_t maxlen)
+0000:38FA	func	int _fstrnicmp(const char far *s1, const char far *s2, size_t maxlen)
+0000:393E	func	char far *_fstrstr(const char far *s1, const char far *s2)
+0000:39AC	func	char far *_fstrupr(char far *s)
 0000:230B	func+noreturn+noargs	borland_stack_overflow	prints "Stack overflow!" (CS:22F9), then jumps to _exit
 # VROOMM overlay manager (Borland OVERLAY.LIB), segment 3653
 3653:0013	func	ovr_install	set up the overlay manager in the buffer ovr_init allocated (calls ovr_swap_vector_and_exe, reads the EXE)
@@ -243,8 +246,8 @@
 3653:0D2A	func	ovr_init	#pragma startup priority 1: farmalloc the overlay buffer (_ovrbuffer paragraphs), ovr_install, abort on failure
 3653:0143	func	ovr_swap_vector_and_exe	swap the overlay interrupt vector ([0111h], normally 3Fh) and close/reopen the EXE
 3653:07FE	func	ovr_walk_stack	walk the BP chain; an odd saved BP (inc bp) marks a far frame whose return address may point into an overlay
-3653:08EE	func	_OvrInitEms	called from game init 6A94:0138
-3653:0AB8	func	_OvrInitExt	called from game init 6A94:0138
+3653:08EE	func	int _OvrInitEms(unsigned emsHandle, unsigned emsFirst, unsigned emsPages)	called from game init 6A94:0138
+3653:0AB8	func	int _OvrInitExt(unsigned long start, unsigned long length)	called from game init 6A94:0138
 3653:0D8E	func	ovr_ems_detect	opens EMMXXXX0
 3653:0ED0	func	ovr_xms_detect	int 2Fh/4300h
 # DGROUP (4356) runtime data

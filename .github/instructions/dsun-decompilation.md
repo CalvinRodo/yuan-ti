@@ -34,16 +34,30 @@ Steps (about 25 minutes on 4 cores):
      leading `inc bp`), `enter N,0` after a return, and Borland stack-check
      sites;
    * renames default `FUN_` names to `fn_<seg>_<off>` in EXE coordinates and
-     applies names, comments, `+noargs` (no parameters, `void` return) and
-     `data`/`label` symbols;
+     applies names, C prototypes, comments, `+noargs` (no parameters, `void`
+     return) and `data`/`label` symbols;
    * decompiles every function, retrying timeouts with a 900 s limit, and
      strips the Borland stack check from the C.
 
 To name something, add it to `tools/ghidra/symbols.tsv` and rerun. Columns:
-`seg:off`, kind (`func[+noreturn][+noargs]`, `data` or `label`), name,
-optional comment. This is the
+`seg:off`, kind (`func[+noreturn][+noargs]`, `data` or `label`), name or C
+prototype, optional comment. This is the
 durable record of naming work: REA/Ghidra GUI annotations are lost when their
 session closes.
+
+A prototype is written `ret [near] [pascal] name(type name, ..., ...)`. By
+default the function is called far and is cdecl (arguments from `[sp+4]`, first
+argument lowest, caller pops). `near` puts the arguments from `[sp+2]`;
+`pascal` reverses their order and makes the callee pop them (`ret N`). Data
+pointers are near (2 bytes); write `far *` for a 4-byte `seg:off` pointer.
+Results are returned in `AL`, `AX` or `DX:AX`. The script sets this storage
+explicitly, because the cspec's `__cdecl16far` cannot return in `DX:AX`. The
+available types are C base types, `size_t`, `time_t`, `va_list`, `FILE`,
+`struct date`/`time`/`heapinfo`/`farheapinfo` and the far code pointers
+`sighandler_t`, `atexit_t`, `cbrk_t` and `isr_t` (see
+`ExportDecomp.defineTypes`). To check a change without the full 25-minute
+run, pass a third script argument with a comma-separated list of EXE segments
+to decompile (e.g. `0000,1512`).
 
 ## 2. Output (`out/decomp/`)
 
@@ -65,14 +79,14 @@ labels and segment constants in the code keep Ghidra segments (EXE seg +
 `3781:031B`. Linear address = `0x10000 + seg*16 + off`; REA and the Ghidra GUI
 take linear addresses.
 
-## 3. Coverage (Ghidra 12.1.4, 2026-10-17)
+## 3. Coverage (Ghidra 12.1.4, 2026-10-18)
 
 | | Count |
 |---|---|
-| Functions | 2 828 (2 563 from auto-analysis; 265 recovered by the script) |
-| Decompiled | 2 400 |
+| Functions | 2 829 (2 564 from auto-analysis; 265 recovered by the script) |
+| Decompiled | 2 402 |
 | Overlay thunks | 420 |
-| Failed | 8 (all auto-analysis functions: `0980:5CDE`, `2267:0461`, `33A5:0F31`, `33A5:0F40`, `68BD:0627`, `6ECD:07BF`, `74F1:0971`, `896E:0245`) |
+| Failed | 7 (all auto-analysis functions: `0980:5CDE`, `33A5:0F31`, `33A5:0F40`, `68BD:0627`, `6ECD:07BF`, `74F1:0971`, `896E:0245`) |
 | Named | 350 (Borland runtime and overlay manager, GPL interpreter and handlers, `main`) |
 
 Recovered by the script, beyond Ghidra's auto-analysis: 146 symbols (all 114
@@ -98,6 +112,15 @@ GPL handlers among them), 106 prologues, 13 stack-check sites.
 * `unaff_` registers (271 functions) are register-passed arguments or
   clobbers that Borland's register calling conventions hide; check the
   assembly when one matters.
+* **Far pointers print like near ones.** A `void far *` parameter shows as
+  `void *`, and a far argument is often built with `CONCAT22(seg, off)`.
+  `symbols.tsv` has the real widths. Far code pointers (`sighandler_t` and
+  the rest) are typed as 4-byte values, not function pointers, because a
+  constant far function pointer makes the decompiler fail. Such constants are
+  in Ghidra segments: `signal(8,0x525100f2)` passes `4251:00F2`.
+* **Compiler helpers have no prototypes.** `F_LXMUL`, `F_SPUSH`, `LDIV` and
+  the rest take their arguments in registers, so calls to them still show
+  no arguments (e.g. `N_LXMUL()` in `rand`).
 * DOS/BIOS calls appear as `swi(0x21)` etc. with registers lost; read the
   assembly for the AH function number. Port I/O shows as `in(…)`/`out(…)`.
 
@@ -175,8 +198,16 @@ Segment `0000` (14.8 KB) is Borland C++ 3.0's medium-model runtime: `c0`
 startup, compiler helpers, the C library modules linked into `_TEXT`, and the
 far string functions. Segment `3653` is the VROOMM overlay manager. Every
 function in `0000` is named in `tools/ghidra/symbols.tsv`, along with the RTL's
-DGROUP variables (`errno`, `_streams`, `_ctype`, …). No Borland signature
-library was available, so each was identified from its code (DOS calls, RTL
+DGROUP variables (`errno`, `_streams`, `_ctype`, …). 112 runtime
+functions (the C library and its internal stack-argument helpers), `main`,
+`_OvrInitEms` and `_OvrInitExt` have
+Borland C++ 3.0 prototypes, so calls to them show their arguments. The
+argument order and calling convention of the internal `pascal` helpers
+(`__exit`, `__longtoa`, `__isDST`, the `printf` putters) were checked against
+their call sites.
+
+No Borland signature library was available, so each function was
+identified from its code (DOS calls, RTL
 data it touches, Borland's known algorithms such as `rand`'s LCG) and its call
 pattern, and checked against the `#pragma startup`/`exit` tables at
 `DS:4250–4279`.
