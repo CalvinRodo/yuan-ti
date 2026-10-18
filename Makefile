@@ -5,13 +5,14 @@ PYTHON   := uv run python3
 SRC      := src
 GAME_DIR := dark_sun
 OUT_DIR  := out
+GHIDRA_HOME ?= $(HOME)/.local/opt/ghidra_12.1.4_PUBLIC
 
 .DEFAULT_GOAL := help
 
 .PHONY: help serve install install-ffmpeg extract list-resource list-gff extract-gff \
         precompute precompute-gff precompute-maps precompute-gamedata \
         precompute-images precompute-audio \
-        gpl unpack-exe
+        gpl unpack-exe decomp
 
 help: ## Show this help message
 	@echo ""
@@ -89,3 +90,11 @@ unpack-exe: ## Flatten DSUN.EXE overlays for Ghidra -> out/DSUN_FLAT.EXE
 	mkdir -p $(OUT_DIR)
 	$(PYTHON) $(SRC)/ovl_unpack.py --exe=$(GAME_DIR)/DSUN.EXE \
 	    --out=$(OUT_DIR)/DSUN_FLAT.EXE --map=$(OUT_DIR)/DSUN_FLAT.map
+
+decomp: unpack-exe ## Decompile DSUN.EXE with headless Ghidra -> out/decomp/  [GHIDRA_HOME=]
+	$(PYTHON) tools/ghidra/gen_symbols.py --exe=$(GAME_DIR)/DSUN.EXE --out=$(OUT_DIR)/symbols.tsv
+	rm -rf $(OUT_DIR)/decomp $(OUT_DIR)/ghidra_proj && mkdir -p $(OUT_DIR)/ghidra_proj
+	$(GHIDRA_HOME)/support/analyzeHeadless $(OUT_DIR)/ghidra_proj dsun \
+	    -import $(OUT_DIR)/DSUN_FLAT.EXE -scriptPath tools/ghidra \
+	    -postScript ExportDecomp.java $(OUT_DIR)/symbols.tsv $(OUT_DIR)/decomp \
+	    -deleteProject

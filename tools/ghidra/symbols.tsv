@@ -1,0 +1,312 @@
+# Curated DSUN.EXE symbols, applied by ExportDecomp.java.
+# seg:off (EXE segments, load segment 0)	kind: func[+noreturn][+noargs] | data | label	name	comment
+# GPL handlers (DS:00C0 table) are added by gen_symbols.py; don't list them here.
+# Sources: .github/instructions/dsun-exe-reference.md
+1512:0001	func	main	game main(argc, argv, envp), called by the Borland startup code; holds the top-level game loop
+043D:0001	func	gpl_run	far entry: reset interpreter state, run a GPL file from an address
+043D:00A1	func	gpl_main_loop	op = fetch(); dispatch(op) until 3781:0326 is set
+043D:00F9	func	gpl_exit	3781:0326 = 1
+043D:01C8	func	gpl_dispatch	op < 0x81: optional trace hook DS:00AC, then DS:00C0[op]()
+043D:0205	func	gpl_push_frame	push call frame (max 50, depth 3781:0192)
+043D:0290	func	gpl_pop_frame	pop call frame
+043D:02F3	func	gpl_call_file	call into another GPL file (max 16, depth 3781:0327)
+043D:0384	func	gpl_return_file	return from a cross-file call
+043D:08F8	func	gpl_search_operand	SEARCH criteria operand (opcode 33)
+043D:264C	func	gpl_invalid_opcode	377C:0009 = -1, exit
+043D:2668	func	gpl_advance_pc	advance PC
+043D:26D6	func	gpl_read_variable	variable operand read
+043D:2BB7	func	gpl_read_string	string operand (kind byte 1/2/5)
+043D:2C26	func	gpl_unpack_string	7-bit packed text, char 3 ends, max 299
+043D:2DBD	func	gpl_peek_at	peek byte at PC+n
+043D:2E07	func	gpl_read_word	read big-endian word
+043D:2E28	func	gpl_read_byte	read byte
+043D:2E49	func	gpl_peek_byte	peek byte at PC
+043D:2FCC	func	gpl_read_objref	object reference: word id, count n, n field bytes
+043D:3297	func	gpl_read_target	assignment target (variable or objref)
+043D:338B	func	gpl_read_menu	MENU operand (opcode 48)
+043D:396B	func	gpl_map_raw_char	kind-2 string byte mapping
+043D:398F	func	gpl_eval_expr	expression evaluator, result in acc 3781:031B
+043D:3DAA	func	gpl_read_exprs	read N expressions -> 3781:00B4[i], lvalues 3781:00D4[i]
+# --- Borland C++ 3.0 runtime, medium model (C0M.OBJ + CM.LIB), segment 0000 ---
+# Identified by code shape, DOS calls, RTL data and call patterns; see
+# .github/instructions/dsun-decompilation.md. Helper names drop Borland's
+# trailing '@' (F_LXMUL@ -> F_LXMUL) so they are valid C identifiers.
+# c0.asm startup / exit
+0000:0163	func	_cleanup	c0: run #pragma exit table (InitStart 4250..ExitStart 4274..ExitEnd 427A)
+0000:0176	func	_checknull	c0: checksum DS:0000-002E, print "Null pointer assignment" if changed
+0000:019E	func	_terminate	c0: int 21h/4Ch with the exit status
+0000:01A7	label	ZeroDivision	c0: int 0 handler, prints "Divide error" and exits 3
+0000:01B0	func	SaveVectors	c0: save int 0/4/5/6 to DS:0074-0082, hook int 0
+0000:01F3	func	_restorezero	c0: restore int 0/4/5/6
+0000:0220	func	c0_Initialize	c0: run init table entries lowest priority first
+0000:0264	func	c0_Cleanup	c0: run exit table entries highest priority first
+0000:02A5	func	ErrorDisplay	c0: write CX bytes at DS:DX to stderr
+0000:02AD	func+noreturn	abort	prints "Abnormal program termination", _exit(3)
+0000:02DF	func+noreturn	c0_overlay_error	prints "Runtime overlay error" (CS:02C8), _exit(4)
+0000:02FD	func	abs
+0000:030B	func	atexit	32 slots at DS:A420, count DS:3E4A
+0000:0338	func	ctrlbrk_isr	int 23h handler installed by ctrlbrk: calls the user handler, _exit(0) if it returns 0
+0000:0361	func	ctrlbrk
+0000:0387	func	exit_dummy	default _exitbuf/_exitfopen/_exitopen
+0000:0388	func	__exit	exit.c _exit_(status, quick, dontexit): atexit, _cleanup, _exitbuf..., _restorezero, _checknull, _terminate
+0000:03DF	func+noreturn	exit
+0000:03EE	func+noreturn	_exit
+# Compiler helpers (N_ = near entry, F_ = far entry)
+0000:041A	func	F_LXMUL	Borland F_LXMUL@: DX:AX = DX:AX * CX:BX
+0000:0431	func	F_PCMP	Borland F_PCMP@: compare huge pointers DX:AX, CX:BX
+0000:0452	func	F_SCOPY	Borland F_SCOPY@: struct copy, CX bytes
+0000:04B4	func	N_LDIV	Borland N_LDIV@ (F_LDIV@ at 04B7): signed 32-bit divide
+0000:04B7	label	F_LDIV	Borland F_LDIV@
+0000:04BB	label	N_LUDIV	Borland N_LUDIV@ (F_LUDIV@ at 04BE)
+0000:04BE	label	F_LUDIV	Borland F_LUDIV@
+0000:04C3	func	N_LMOD	Borland N_LMOD@ (F_LMOD@ at 04C6)
+0000:04C6	label	F_LMOD	Borland F_LMOD@
+0000:04CB	label	N_LUMOD	Borland N_LUMOD@ (F_LUMOD@ at 04CE)
+0000:04CE	label	F_LUMOD	Borland F_LUMOD@
+0000:04D1	func	LDIV_common	shared body of LDIV/LUDIV/LMOD/LUMOD; CX bit 0 = unsigned, bit 1 = modulus
+0000:0562	func	N_LXLSH	Borland N_LXLSH@ (F_LXLSH@ at 0565): DX:AX <<= CL
+0000:0565	label	F_LXLSH	Borland F_LXLSH@
+0000:0583	func	N_PADA	Borland N_PADA@: huge pointer += long, in place
+0000:0586	func	F_PADA	Borland F_PADA@
+0000:05A1	func	pada_common	shared tail of F_PADA@/F_PSBA@
+0000:05E5	func	psba_common	shared tail of F_PSBA@/F_PADA@
+0000:05CA	func	F_PSBA	Borland F_PSBA@: huge pointer -= long, in place
+0000:060B	func	N_PADD	Borland N_PADD@: huge pointer + long
+0000:060E	func	F_PADD	Borland F_PADD@
+0000:063A	label	N_PSUB	Borland N_PSUB@: huge pointer - long
+0000:063D	label	F_PSUB	Borland F_PSUB@
+0000:066B	func	F_PSBP	Borland F_PSBP@: huge pointer difference (long)
+0000:0699	func	F_SPUSH	Borland F_SPUSH@: copy a struct onto the stack (pass by value)
+0000:07D9	func	N_LXMUL	Borland N_LXMUL@
+0000:07F0	func	N_PCMP	Borland N_PCMP@
+# Errors, time, I/O, misc
+0000:046E	func	getdate
+0000:0481	func	gettime
+0000:0494	func	getvect
+0000:04A3	func	setvect
+0000:06BA	func	__IOerror	map DOS error to errno (DS:0094) via _dosErrorToSV (DS:40C8); returns -1
+0000:06F3	func	__DOSerror
+0000:0705	func	isatty
+0000:0716	func	__longtoa	(value, string, radix, maybeSigned, hexStyle)
+0000:0793	func	__utoa
+0000:07B0	func	lseek
+0000:0811	func	srand	seed = DS:4122 (long)
+0000:0822	func	rand	seed = seed * 0x015A4E35 + 1; return (seed >> 16) & 0x7FFF
+0000:0848	func	_read
+0000:0875	func	setdate
+0000:0888	func	settime
+0000:0940	func	stime
+0000:0978	func	time
+0000:09C5	func	tolower	uses _ctype (DS:3E4C)
+0000:09F1	func	vprinter_hex4	write DX as 4 hex digits at ES:DI
+0000:09F8	func	vprinter_hex2
+0000:0A01	func	vprinter_hexdigit
+0000:0A09	func	__vprinter	printf engine (putter, outP, format, args)
+0000:0A23	func	vprinter_strlen
+0000:0A30	func	vprinter_putc
+0000:0A39	func	vprinter_flush
+0000:0A69	func	__vprinter_body
+0000:0EBC	func	__brk	near heap break (DS:009C)
+0000:0EDE	func	__sbrk
+0000:0F0F	func	brk
+0000:0F1B	func	sbrk
+0000:0F2B	func+noreturn	printf_float_not_linked	prints "print : floating point formats not linked", abort
+0000:0F30	label	scanf_float_not_linked	same for "scanf"
+0000:0F4A	func	io_delay
+0000:0F4B	func	readtimer	PIT channel 0 count, inverted
+0000:089B	func	_setupio	#pragma startup priority 2: init _openfd and _streams, buffer stdin/stdout unless they are terminals
+0000:0F65	func	delay_calibrate	#pragma startup priority 16: sets the delay multiplier DS:41C2
+0000:0F86	func	delay	busy-wait N ms on the PIT, scaled by DS:41C2
+0000:1D34	func	__realcvt	jmp [DS:4248], the float-format vector (default: printf_float_not_linked)
+0000:1D3A	func	_setargv	#pragma startup priority 16: parse PSP command tail into _argc/_argv
+0000:1DCD	func	setargv_nextchar	_setargv helper: next character, handling quotes and \"
+0000:1E51	func	setblock	int 21h/4Ah
+0000:1E6D	func	_setenvp	#pragma startup priority 16: copy the environment, build _environ
+# Far heap (farheap.asm): CS:0FE7 first, 0FE9 last, 0FEB rover, 0FED saved DS
+0000:0FF3	func	farheap_free_last_block
+0000:1056	func	farheap_free_inner_block
+0000:10C7	func	farheap_pull_free_block
+0000:10F0	func	farheap_insert_free_block
+0000:1127	func	farfree
+0000:1150	func	farheap_create
+0000:11B4	func	farheap_extend
+0000:120E	func	farheap_split_block
+0000:1231	func	farmalloc
+0000:12AE	func	farrealloc_move
+0000:132A	func	farrealloc_shrink
+0000:138E	func	farrealloc
+0000:1408	func	farheap_setblock
+0000:147E	func	farheap_brk
+0000:14BD	func	farheap_sbrk
+0000:1548	func	farcalloc_fill
+0000:155C	func	farcalloc
+0000:15E5	func	farcoreleft
+0000:1635	func	farheapcheck	-1 corrupt, 1 empty, 2 OK
+0000:1730	func	farheapchecknode
+0000:179C	func	farheapfillfree
+0000:17F6	func	farheapcheckfree
+0000:1857	func	farheapwalk
+# Near heap (DS:41C8 first, 41CA last, 41CC rover); used by _setenvp and setvbuf
+0000:18BE	func	near_free
+0000:18DB	func	near_free_last_block
+0000:1915	func	near_free_inner_block
+0000:194E	func	near_pull_free_block
+0000:196A	func	near_insert_free_block
+0000:198D	func	near_malloc
+0000:19ED	func	near_heap_create
+0000:1A2D	func	near_heap_extend
+0000:1A56	func	near_split_block
+0000:1A6F	func	near_realloc_move
+0000:1AA4	func	near_realloc_shrink
+0000:1AE8	func	near_realloc
+0000:1BD4	func	heapchecknode
+0000:1C4F	func	heapfillfree
+0000:1C99	func	heapcheckfree
+0000:1CEA	func	heapwalk
+# signal.c
+0000:1ECA	func	sig_int5_isr	SIGSEGV (bound)
+0000:1F4B	func	sig_int6_isr	SIGILL
+0000:1FBC	func	sig_int0_isr	SIGFPE (divide)
+0000:202D	func	sig_int4_isr	SIGFPE (overflow)
+0000:209E	func	sig_int23_isr	SIGINT
+0000:2119	func	_sigindex	index of a signal in DS:41F9
+0000:213A	func	signal
+0000:2265	func	raise
+# string / conversion / stdio (near data)
+0000:231D	func	atol
+0000:238D	func	atoi
+0000:239A	func	eof
+0000:2411	func	fflush
+0000:2492	func	flushall
+0000:24CC	func	ftell_displacement	buffered bytes, counting \n in text mode
+0000:2529	func	fseek
+0000:2591	func	ftell
+0000:2658	func	flush_term_streams	flush line-buffered terminal streams before a read
+0000:2681	func	_ffill
+0000:26DA	func	_fgetc
+0000:26EF	func	fgetc
+0000:27A8	func	getenv
+0000:2807	func	gets
+0000:2862	func	itoa
+0000:288A	func	ultoa
+0000:28A4	func	ltoa
+0000:28C9	func	memcpy
+0000:28E8	func	setmem
+0000:290E	func	memset
+0000:2929	func	movmem
+0000:2972	func	memmove
+0000:298C	func	printf
+0000:29A3	func	_fputc
+0000:29BC	func	fputc
+0000:2AF2	func	fputchar
+0000:2B04	func	__fputn	printf putter for streams
+0000:2CAC	func	puts
+0000:2CF7	func	read	text-mode read (CR/LF, ^Z)
+0000:2DC5	func	setvbuf
+0000:2E9D	func	sprintf_putn	putter: memcpy into the destination string
+0000:2EC5	func	sprintf
+0000:2EE2	func	vsprintf
+0000:2EFE	func	strcmp
+0000:2F2D	func	strcpy
+0000:2F4F	func	strlen
+0000:2F69	func	strncpy
+0000:2F95	func	strrchr
+0000:2FC4	func	strupr
+0000:2FE4	func	dostounix
+0000:30FD	func	unixtodos
+0000:32CD	func	tzset	#pragma startup priority 30; reads TZ (DS:423C)
+0000:344E	func	__isDST
+0000:352D	func	vprintf
+0000:3543	func	write	text-mode write (LF -> CR LF)
+0000:3651	func	_write
+# far string / memory (_f*)
+0000:36AE	func	_fmemchr
+0000:36D1	func	_fmemcpy
+0000:36F5	func	_fsetmem
+0000:3719	func	_fmemset
+0000:3738	func	_fstrcat
+0000:3777	func	_fstrchr
+0000:37B4	func	_fstrcmp
+0000:37E4	func	_fstrcpy
+0000:380D	func	_fstricmp
+0000:384E	func	_fstrlen	NULL -> 0
+0000:386D	func	_fstrlwr
+0000:3891	func	_fstrncmp
+0000:38C9	func	_fstrncpy
+0000:38FA	func	_fstrnicmp
+0000:393E	func	_fstrstr
+0000:39AC	func	_fstrupr
+0000:230B	func+noreturn+noargs	borland_stack_overflow	prints "Stack overflow!" (CS:22F9), then jumps to _exit
+# VROOMM overlay manager (Borland OVERLAY.LIB), segment 3653
+3653:0013	func	ovr_install	set up the overlay manager in the buffer ovr_init allocated (calls ovr_swap_vector_and_exe, reads the EXE)
+3653:0196	func	ovr_exit	#pragma exit (priority 1)
+3653:0D2A	func	ovr_init	#pragma startup priority 1: farmalloc the overlay buffer (_ovrbuffer paragraphs), ovr_install, abort on failure
+3653:0143	func	ovr_swap_vector_and_exe	swap the overlay interrupt vector ([0111h], normally 3Fh) and close/reopen the EXE
+3653:07FE	func	ovr_walk_stack	walk the BP chain; an odd saved BP (inc bp) marks a far frame whose return address may point into an overlay
+3653:08EE	func	_OvrInitEms	called from game init 6A94:0138
+3653:0AB8	func	_OvrInitExt	called from game init 6A94:0138
+3653:0D8E	func	ovr_ems_detect	opens EMMXXXX0
+3653:0ED0	func	ovr_xms_detect	int 2Fh/4300h
+# DGROUP (4356) runtime data
+4356:0074	data	_Int0Vector	saved int 0 (4: 0078, 5: 007C, 6: 0080)
+4356:0084	data	_argc
+4356:0086	data	_argv
+4356:0088	data	_environ
+4356:008A	data	_envLng
+4356:008C	data	_envseg
+4356:008E	data	_envSize
+4356:0090	data	_psp
+4356:0092	data	_osversion	_osmajor 0092, _osminor 0093
+4356:0094	data	errno
+4356:0096	data	_StartTime	BIOS tick count at startup (int 1Ah)
+4356:009C	data	__brklvl	near heap break; the stack check fails when SP <= this
+4356:009E	data	__farheapbase	far ptr
+4356:00A2	data	__farbrklvl	far ptr
+4356:00A6	data	__farheaptop	far ptr; segment from PSP:0002
+4356:3E48	data	_ovrbuffer	overlay buffer size in paragraphs (Borland tuning variable)
+4356:3E4A	data	_atexitcnt
+4356:3E4C	data	_ctype	257 bytes; 1 space, 4 upper ...
+4356:3F4E	data	_exitbuf
+4356:3F52	data	_exitfopen
+4356:3F56	data	_exitopen
+4356:3F5A	data	_streams	FILE[20], 16 bytes each (stdin 3F5A, stdout 3F6A)
+4356:409A	data	_nfile
+4356:409C	data	_openfd
+4356:40C4	data	_heaplen
+4356:40C6	data	_doserrno
+4356:40C8	data	_dosErrorToSV
+4356:4122	data	rand_seed	long
+4356:4126	data	_stklen
+4356:41C2	data	delay_multiplier	set by delay_calibrate
+4356:41C8	data	near_heap_first
+4356:41CA	data	near_heap_last
+4356:41CC	data	near_heap_rover
+4356:41DC	data	_environ_copy
+4356:41E1	data	_sigtbl	far handlers, one per _sigindex
+4356:41F9	data	_signals	signal numbers
+4356:4248	data	__RealCvtVector
+4356:4250	data	InitStart	#pragma startup table (6-byte entries) .. 4274
+4356:4274	data	ExitStart	#pragma exit table .. 427A
+4356:A420	data	_atexittbl	32 far pointers
+4356:A4A0	data	_ctrlbrk_handler
+# Data (kind "data" becomes a label)
+4356:00AC	data	gpl_trace_hook	far fn ptr called before each GPL command when non-null
+4356:00C0	data	gpl_cmd_table	129 near pointers into segment 043D, indexed by opcode
+377C:0009	data	gpl_error	set to -1 by an invalid opcode
+3781:00B4	data	gpl_expr_values	results of gpl_read_exprs
+3781:00D4	data	gpl_expr_lvalues	far pointers to the variables read by gpl_read_exprs
+3781:0192	data	gpl_frame_depth	call-frame depth (max 50)
+3781:0193	data	gpl_code_base	base for PC values
+3781:0255	data	gpl_code	far pointer to the loaded GPL code
+3781:0295	data	gpl_pc	PC per frame depth
+3781:031B	data	gpl_acc	accumulator (int32)
+3781:0326	data	gpl_done	main loop exits when set
+3781:0327	data	gpl_file_depth	cross-file call depth (max 16)
+3781:032F	data	gpl_lstr	far ptr: local strings (42-byte records)
+3781:0333	data	gpl_lbignum	far ptr: local int32
+3781:0337	data	gpl_lnum	far ptr: local int16
+3781:033B	data	gpl_lflag	far ptr: local bit flags
+3781:033F	data	gpl_gstr	far ptr: global strings
+3781:0343	data	gpl_gbignum	far ptr: global int32
+3781:0347	data	gpl_gnum	far ptr: global int16
+3781:034B	data	gpl_gflag	far ptr: global bit flags

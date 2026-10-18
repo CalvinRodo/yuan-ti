@@ -15,7 +15,7 @@ linear `0x17D60`.
 
 | Item | Value |
 |------|-------|
-| Compiler | Borland C++ 1991, large model, 386 instructions (`66` prefixes) |
+| Compiler | Borland C++ 3.0 (1991), **medium** model (far code, near data; RTL is `C0M.OBJ` + `CM.LIB`), 386 instructions (`66` prefixes). Most game data lives in far segments reached through explicit `far` pointers |
 | MZ load image | file `0x5400`–`0x52EA0` (header 1344 paragraphs, 4853 relocs) |
 | Entry | `0000:0000`, sets `DS = 4356h` (DGROUP) |
 | Overlays | Borland VROOMM: `FBOV` block appended at file `0x52EA0` |
@@ -23,9 +23,19 @@ linear `0x17D60`.
 | Far data | `3779`–`4356` (`3781` = GPL state, `377C`, `377E`, …) |
 | Overlay stubs | `41A6`–`4351` (58 stubs: 52 with code, 6 empty) |
 
-Functions use Borland's overlay-aware frame: `inc bp; push bp; mov bp,sp …
-pop bp; dec bp; ret`, so a function starts one byte **before** `push bp`.
-Every function opens with a stack check `cmp [9Ch],sp / jb / call far 0000:230B`.
+Most functions open with `push bp; mov bp,sp`. Some (72 found, among them
+`gpl_eval_expr`) use Borland's overlay-aware far
+frame `inc bp; push bp; mov bp,sp … pop bp; dec bp; retf`, so they start one byte
+**before** `push bp`. The odd saved BP marks a far frame for the overlay
+manager's stack walk (`3653:07FE`), which patches return addresses into
+overlays it unloads.
+Functions built with stack checking (468 of them, including 100 of the 115 GPL
+handlers) open with `cmp [9Ch],sp / jb / call far 0000:230B`. `DS:009C` is the
+RTL's `__brklvl`; `0000:230B` prints "Stack overflow!" and exits.
+
+Segment `0000` is Borland's `c0` startup plus every runtime module whose code
+segment is `_TEXT`; `3653` is the VROOMM overlay manager. Both are named in
+`tools/ghidra/symbols.tsv` (see `dsun-decompilation.md` §7).
 
 ### FBOV overlay block
 
@@ -35,8 +45,8 @@ overlay code:           starts at FBOV + 0x10
 ```
 
 Segment table (file `0x46770`, 220 entries × 8 bytes): `seg, maxoff, flags, minoff`
-(flags 0 = data, 1 = code, 3 = overlay stub, 4 = other). Segment 0 merges many
-modules, so the table is coarser than the real CS values.
+(flags 0 = data, 1 = code, 3 = overlay stub, 4 = other). Segment 0 merges the
+startup code and the runtime library, so the table is coarser than the real CS values.
 
 Overlay stub segment (in the resident image):
 
@@ -65,8 +75,9 @@ its stub, e.g. `call far 4251:00B1` → stub `4251` → overlay segment `7372`.
 
 ## 2. GPL interpreter (code segment `043D`, 0x3E99 bytes)
 
-Ghidra only auto-creates 18 functions here: handlers are reached through the
-near-pointer table below, so read them by address.
+Ghidra's auto-analysis only creates 18 functions here, because handlers are reached
+through the near-pointer table below. `make decomp` creates and names the rest
+(see `dsun-decompilation.md`).
 
 | Address | Role |
 |---------|------|
