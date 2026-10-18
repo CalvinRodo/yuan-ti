@@ -7,14 +7,15 @@ GAME_DIR := dark_sun
 OUT_DIR  := out
 GHIDRA_HOME ?= $(HOME)/.local/opt/ghidra_12.1.4_PUBLIC
 GODOT    ?= $(HOME)/.local/opt/Godot_v4.7.2-stable_mono_linux_x86_64/Godot_v4.7.2-stable_mono_linux.x86_64
-DOTNET   ?= dotnet
+# dotnet from PATH, else the user-local install from dotnet-install.sh.
+DOTNET   ?= $(or $(shell command -v dotnet 2>/dev/null),$(HOME)/.dotnet/dotnet)
 
 .DEFAULT_GOAL := help
 
 .PHONY: help serve install install-ffmpeg extract list-resource list-gff extract-gff \
         precompute precompute-gff precompute-maps precompute-gamedata \
         precompute-images precompute-audio \
-        gpl unpack-exe decomp engine-build engine-test engine-run engine-edit
+        gpl unpack-exe decomp engine-build engine-test engine-run engine-edit engine-compare
 
 help: ## Show this help message
 	@echo ""
@@ -104,6 +105,12 @@ decomp: unpack-exe ## Decompile DSUN.EXE with headless Ghidra -> out/decomp/  [G
 # ---------------------------------------------------------------------------
 # Godot / C# engine (engine/)
 
+# Godot builds and loads C# with the same SDK, found through DOTNET_ROOT and PATH.
+ENGINE_TARGETS := engine-build engine-test engine-run engine-edit engine-compare
+$(ENGINE_TARGETS): export DOTNET_ROOT := $(patsubst %/,%,$(dir $(realpath $(DOTNET))))
+$(ENGINE_TARGETS): export PATH := $(DOTNET_ROOT):$(PATH)
+$(ENGINE_TARGETS): export DOTNET_CLI_TELEMETRY_OPTOUT := 1
+
 engine-build: ## Build the engine libraries, tests and Godot project  [DOTNET=]
 	$(DOTNET) build engine/DarkSun.sln
 
@@ -115,3 +122,10 @@ engine-run: engine-build ## Run the engine                            [GODOT=]
 
 engine-edit: ## Open the engine in the Godot editor
 	$(GODOT) --editor --path engine/game
+
+engine-compare: ## Check the C# GFF/image port against the Python tools on the game files
+	mkdir -p $(OUT_DIR)/compare
+	$(PYTHON) tools/compare/gff_dump.py $(GAME_DIR) $(OUT_DIR)/compare/python.tsv
+	$(DOTNET) run --project engine/tools/DarkSun.Dump -- $(GAME_DIR) $(OUT_DIR)/compare/csharp.tsv
+	cmp $(OUT_DIR)/compare/python.tsv $(OUT_DIR)/compare/csharp.tsv
+	@echo "identical: $$(wc -l < $(OUT_DIR)/compare/csharp.tsv) resources, frames and palettes"

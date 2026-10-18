@@ -78,13 +78,20 @@ compare against by eye.
 
 Goal: every resource the first playable region needs, loaded in C#.
 
-- [ ] Port `gff.py`: header, index block, resource lookup by tag and number.
-- [ ] Port the image decoder and palettes; produce RGBA for Godot.
+- [x] Port `gff.py`: header, index block, resource lookup by tag and number
+      (`DarkSun.Data.Gff`: `GffFile`, and `GffSet` for searching several files
+      or a mod folder in order).
+- [x] Port the image decoder and palettes; produce RGBA for Godot
+      (`DarkSun.Data.Images`; `Textures` in the Godot project).
 - [ ] Port `RMAP`, `GMAP`, `ETAB`, `OJFF` and `WALL` lookups from
       `region_renderer.py`.
 - [ ] Port the text parsers and the `NAME` table.
-- [ ] **Check against the Python tools**: export the same resources from both
-      and compare. Render every region to PNG from C# and diff it against
+- [x] **Check against the Python tools**: `make engine-compare` hashes every
+      resource, image frame and palette in the game files with both
+      (`tools/compare/gff_dump.py`, `engine/tools/DarkSun.Dump`) and requires
+      identical output; on 2026-10-18, 15 400 resources, 13 895 frames and 57
+      palettes matched.
+- [ ] Render every region to PNG from C# and diff it against
       `region_renderer.py`'s output.
 
 Done when every region file renders identically in both tool chains.
@@ -255,8 +262,8 @@ than leaving them all for the end:
 
 1. ~~Create `engine/` with the Godot project, the libraries and tests (§1).~~
    Done 2026-10-18.
-2. Port `gff.py` and the image decoder, with the PNG comparison against the
-   Python tools (M1).
+2. ~~Port `gff.py` and the image decoder, compared against the Python tools
+   (M1).~~ Done 2026-10-18.
 3. Render one region in Godot and scroll around it (start of M2).
 4. In parallel: decode `SCMD`, and find the script triggers (§10, the first
    two backlog items to block progress).

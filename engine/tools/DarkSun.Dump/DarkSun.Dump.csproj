@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Dumps resources, image frames and palettes as hashes, for comparison
+       with tools/compare/gff_dump.py (make engine-compare). -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\DarkSun.Data\DarkSun.Data.csproj" />
+  </ItemGroup>
+</Project>
