@@ -1,0 +1,13 @@
+<Project Sdk="Godot.NET.Sdk/4.7.2">
+  <!-- Godot presentation layer: scenes, rendering, UI, input, audio. -->
+  <PropertyGroup>
+    <!-- Repeated from Directory.Build.props: Godot adds net8.0 to a project that doesn't name one. -->
+    <TargetFramework>net10.0</TargetFramework>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+    <RootNamespace>DarkSun.Engine</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\src\DarkSun.Data\DarkSun.Data.csproj" />
+    <ProjectReference Include="..\src\DarkSun.Game\DarkSun.Game.csproj" />
+  </ItemGroup>
+</Project>

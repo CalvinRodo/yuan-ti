@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Game state, rules, GPL virtual machine, saves. No Godot dependency. -->
+  <ItemGroup>
+    <ProjectReference Include="..\DarkSun.Data\DarkSun.Data.csproj" />
+  </ItemGroup>
+</Project>

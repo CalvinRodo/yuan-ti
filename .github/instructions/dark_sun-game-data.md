@@ -92,7 +92,7 @@ current GFF, and spell ICON images are numbered from 21 000 upward.
 
 ---
 
-## RGN02.GFF … RGN2D.GFF, RGNFF.GFF  *(35 region files)*
+## RGN02.GFF … RGN2D.GFF, RGNFF.GFF  *(33 region files)*
 One file per explorable region of the game world. Region filenames use two-digit
 hexadecimal identifiers (`02` … `2D` plus the special `FF`).
 Each file is self-contained: the RMAP provides a 128 × 98 tile index that the

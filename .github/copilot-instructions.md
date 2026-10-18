@@ -42,6 +42,7 @@ Multi-game support is driven by the `GAMES` dict in `src/config.py`; adding a ne
 - **GPL scripting**: game logic lives in `GPLDATA.GFF`. `GPL ` resources are local scripts; `MAS ` resources are global. Use `gpl_parser.disassemble_gpl(data, gpl_parser.field_types_from(gff))`; the grammar is documented in `.github/instructions/dsun-exe-reference.md`.
 - **Game executable**: `make decomp` writes Ghidra pseudocode for every DSUN.EXE function to `out/decomp/` (not committed); name functions in `tools/ghidra/symbols.tsv`. See `.github/instructions/dsun-decompilation.md`.
 - **Rewrite plan**: the Godot 4 / C# engine plan (data layer, GPL VM, reverse-engineering backlog, QOL features) is in `.github/instructions/dsun-rewrite-roadmap.md`.
+- **Engine**: `engine/` is the Godot 4.7 / C# (.NET 10) engine; `make engine-build`, `make engine-test`, `make engine-run`. Code without Godot dependencies goes in `engine/src/DarkSun.Data` (formats) or `engine/src/DarkSun.Game` (rules, GPL VM). See `engine/README.md`.
 - **RDFF objects** (in `SEGOBJEX.GFF` / DS2's `OBJEX.GFF`): 10-byte header parsed by `_RDFF_HDR_FMT`; `type == 1` → item (`_ITEM1R_FMT`, 20 bytes), `type == 2` → combat/monster (`_COMBAT_FMT`, 58 bytes). Helpers in `ds1_parsers.py`.
 
 ## Game-by-Game Differences

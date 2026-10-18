@@ -30,9 +30,10 @@ What already exists, and what the engine can reuse:
 | Text (`TEXT`, `MERR`, `NAME`, `SPIN`) | Parsed | `src/text_parsers.py` |
 | Items, monsters, spells (`IT1R`, `RDFF`, `SPIN`) | Partly parsed | `src/ds1_parsers.py` |
 | Music (`CSEQ`/`GSEQ`/`LSEQ`/`PSEQ`, `MSEQ`; XMIDI) | Converts to MIDI | `src/xmi_tool.py` |
+| Sound samples (`BVOC`) | Extracted as Creative `.VOC` | `src/precompute.py` (audio step) |
 | GPL scripts (217 `GPL `, 33 `MAS `) | Bytecode fully documented, disassembler | `src/gpl_parser.py`, `dsun-exe-reference.md` |
 | Executable | Overlays unpacked; 2 402 functions decompiled; runtime, GPL interpreter and all handlers named | `make decomp` |
-| Not yet decoded | `SCMD` animation scripts, `FONT`, UI resources (`BUTN`, `DBOX`, `WIND`, `MENU`, …), `BVOC` sounds (*unverified*: Creative `.VOC`), cinematics (`ACF `, `BMA `), most of `RDFF` | |
+| Not yet decoded | `SCMD` animation scripts, `FONT`, UI resources (`BUTN`, `DBOX`, `WIND`, `MENU`, …), cinematics (`ACF `, `BMA `), most of `RDFF` | |
 
 The GOG install ships DOSBox, so the original game is always available to
 compare against by eye.
@@ -41,9 +42,11 @@ compare against by eye.
 
 ## 1. Architecture
 
-- [ ] **Repository layout**: a Godot 4 (.NET) project in `engine/`, beside the
-      Python tools, which stay as they are.
-- [ ] **Three layers**, so that most code can be tested and reused without
+- [x] **Repository layout**: `engine/` beside the Python tools, which stay as
+      they are: the Godot project in `engine/game/`, the libraries in
+      `engine/src/`, tests in `engine/tests/`, all in `engine/DarkSun.sln`
+      (.NET 10, Godot 4.7.2). See `engine/README.md`.
+- [x] **Three layers**, so that most code can be tested and reused without
       Godot:
   - `DarkSun.Data` (plain C# library): GFF reader and format decoders. Has no
     Godot dependency, and returns plain arrays and records.
@@ -53,17 +56,19 @@ compare against by eye.
     do).
   - `engine/` (Godot): scenes, rendering, UI, input, audio. It turns `Data`
     output into Godot textures and audio, and drives `Game`.
-- [ ] **Game files**: the player points the engine at their install on first
-      run (with GOG and Steam paths found automatically). No original assets
-      in the repository or in builds.
+- [x] **Game files**: the player points the engine at their install on first
+      run (`GameInstall`; also `DARKSUN_DIR` and the repository's `dark_sun/`).
+      No original assets in the repository or in builds.
+- [ ] Find GOG and Steam installs automatically.
 - [ ] **Asset cache**: decode to Godot `Image`/`ImageTexture` at load time
       instead of converting files on disk, so that the original files stay the
       single source of truth and mods can replace individual resources.
 - [ ] **Mod overrides**: a folder of loose files (PNG, JSON, recompiled GPL)
       that takes priority over GFF resources by tag and number. Design the
       lookup now, even if the mod tools come later.
-- [ ] **Tests**: xUnit tests for `Data` and `Game`, run by `dotnet test`
-      without the editor.
+- [x] **Tests**: xUnit tests for `Data` and `Game`, run by `make engine-test`
+      without the editor. Borland's RNG (`BorlandRandom`) is the first rule
+      ported.
 - [ ] **Check web export** support for Godot C# at the version you choose, if
       a browser build matters; otherwise target desktop only.
 
@@ -172,7 +177,8 @@ executable, not in the data.
 - [ ] Music: XMIDI → MIDI (port `xmi_tool.py`), played through a C# SoundFont
       synthesizer (e.g. MeltySynth) with a bundled freely licensed General MIDI
       SoundFont; an OPL (AdLib) emulation option later for the original sound.
-- [ ] Sound effects: decode `BVOC` (and any other sample resources) to Godot
+- [ ] Sound effects: decode `BVOC` (Creative `.VOC`, as `precompute.py`
+      already extracts) and any other sample resources to Godot
       `AudioStreamWAV`.
 - [ ] Which music plays where: find the region, combat and event music
       selection (GPL commands or engine code).
@@ -206,7 +212,7 @@ name the functions in `tools/ghidra/symbols.tsv`.
 | M4 | `FONT` and UI resource formats | text-drawing and window code; `WIND`/`BUTN` loaders |
 | M5 | Character rules and level tables | character sheet and creation code; `GPLX` tables (`DS:4D7A`, `DS:537A`) |
 | M6 | Combat rules and AI | functions that call `rand` (18 in 9 segments; 6 in `612E`, 3 in `6466`; *unverified* that these are combat) |
-| M7 | `BVOC` format, music selection | callers of the sound driver; segment `0980` has the most port I/O (*unverified*: sound or video driver) |
+| M7 | Music and sound selection | callers of the sound driver; segment `0980` has the most port I/O (*unverified*: sound or video driver) |
 | M9 | Original save format | `303C` file-library callers that write files |
 
 Pipeline improvements, worth doing only when a backlog item needs them:
@@ -247,8 +253,8 @@ than leaving them all for the end:
 
 ## First steps
 
-1. Create `engine/` with the Godot project and the `DarkSun.Data` and
-   `DarkSun.Game` libraries plus a test project (§1).
+1. ~~Create `engine/` with the Godot project, the libraries and tests (§1).~~
+   Done 2026-10-18.
 2. Port `gff.py` and the image decoder, with the PNG comparison against the
    Python tools (M1).
 3. Render one region in Godot and scroll around it (start of M2).

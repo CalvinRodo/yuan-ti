@@ -6,13 +6,15 @@ SRC      := src
 GAME_DIR := dark_sun
 OUT_DIR  := out
 GHIDRA_HOME ?= $(HOME)/.local/opt/ghidra_12.1.4_PUBLIC
+GODOT    ?= $(HOME)/.local/opt/Godot_v4.7.2-stable_mono_linux_x86_64/Godot_v4.7.2-stable_mono_linux.x86_64
+DOTNET   ?= dotnet
 
 .DEFAULT_GOAL := help
 
 .PHONY: help serve install install-ffmpeg extract list-resource list-gff extract-gff \
         precompute precompute-gff precompute-maps precompute-gamedata \
         precompute-images precompute-audio \
-        gpl unpack-exe decomp
+        gpl unpack-exe decomp engine-build engine-test engine-run engine-edit
 
 help: ## Show this help message
 	@echo ""
@@ -98,3 +100,18 @@ decomp: unpack-exe ## Decompile DSUN.EXE with headless Ghidra -> out/decomp/  [G
 	    -import $(OUT_DIR)/DSUN_FLAT.EXE -scriptPath tools/ghidra \
 	    -postScript ExportDecomp.java $(OUT_DIR)/symbols.tsv $(OUT_DIR)/decomp \
 	    -deleteProject
+
+# ---------------------------------------------------------------------------
+# Godot / C# engine (engine/)
+
+engine-build: ## Build the engine libraries, tests and Godot project  [DOTNET=]
+	$(DOTNET) build engine/DarkSun.sln
+
+engine-test: ## Run the engine unit tests
+	$(DOTNET) test engine/DarkSun.sln
+
+engine-run: engine-build ## Run the engine                            [GODOT=]
+	$(GODOT) --path engine/game
+
+engine-edit: ## Open the engine in the Godot editor
+	$(GODOT) --editor --path engine/game
