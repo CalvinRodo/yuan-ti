@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Plays a cinematic without a screen and writes snapshots of it. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\DarkSun.Game\DarkSun.Game.csproj" />
+  </ItemGroup>
+</Project>

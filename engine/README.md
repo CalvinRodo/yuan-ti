@@ -15,6 +15,7 @@ stored in this repository. The plan is in
 | `tests/` | xUnit tests for the two libraries. |
 | `tools/DarkSun.Dump` | Hashes every resource, image frame, palette and region render in the game files, and lists every script, for `make engine-compare`. |
 | `tools/DarkSun.ScriptRun` | Runs the new-game script, every region script and every trigger they register, for `make engine-scripts`. |
+| `tools/DarkSun.CineDump` | Plays a cinematic without a screen and saves snapshots (PPM), for `make engine-cine`. |
 | `DarkSun.sln` | All of the above; the Godot project points to it (`dotnet/project/solution_directory`). |
 | `Directory.Build.props` | Settings shared by every project (target framework, nullable, language version). |
 
@@ -44,6 +45,7 @@ make engine-run     # run the game
 make engine-edit    # open the Godot editor
 make engine-compare # check the C# file-format and script decoding against the Python tools
 make engine-scripts # run every game script in the C# interpreter (V=-v lists the world commands)
+make engine-cine    # play a cinematic headless, snapshots in out/cine (CINE=0 intro, 1 arrival, 100 ending)
 ```
 
 `engine-compare` runs the repository's `tools/compare/gff_dump.py` (using `src/gff.py` and
@@ -51,12 +53,24 @@ make engine-scripts # run every game script in the C# interpreter (V=-v lists th
 the two outputs are identical. Run it after changing either side.
 
 Headless checks: that the engine starts and finds the game files (exit code
-1 if it doesn't), and that every region loads in the region viewer:
+1 if it doesn't), that every region loads in the region viewer, that the
+intro plays through, and that the main menu builds:
 
 ```
 $GODOT --headless --path engine/game -- --check-install
 $GODOT --headless --path engine/game -- --check-regions
+$GODOT --headless --path engine/game -- --check-intro
+$GODOT --headless --path engine/game -- --check-menu
 ```
+
+Starting the game plays the intro (`CINE.GFF` scripts 1–8: the SSI and AD&D
+logos, the title, the sword falling to Athas, the story scroll). Any key or
+click skips it; `-- --no-intro` leaves it out. There is no music yet, but
+the cinematics keep the music's timing. Then comes the original main menu:
+Start Game (or S) plays the arrival cinematic and starts a new game, and
+Exit (E) quits. Create Characters (C) and Load Saved Game (L) aren't ported
+yet. Arrow keys and Enter work too. Esc in the region viewer returns to the
+menu. The start screen only appears when the game files can't be found.
 
 The region viewer starts a new game where DSUN.EXE does: region 42
 (`RGN2A.GFF`), the party at pixel (488, 152), after the game-start script

@@ -638,3 +638,77 @@ From the handlers (2026-10-18); the engine's model is `DarkSun.Game.World`.
 * libgff mnemonics for most engine commands are not individually verified.
 * Byte 0 of every script is `19` (END_FUNCTION); real entry points come from
   `GPLI`, whose format is not decoded yet.
+
+## 7. Cinematics and the main menu
+
+From the handlers (2026-10-18). Played by `DarkSun.Game.Cinematics.CinematicPlayer`.
+
+### Which cinematic plays when
+
+`play_cinematic(n)` (`60B9:042E`) is a switch on n:
+
+| n | Scripts | Called from |
+|---|---|---|
+| 0 | `ACF` 1–8, stopping when one returns 0 (skipped) | start-up (`6A94:0138`), when sound and the intro are enabled (`DS:1162`, `DS:1160`) |
+| 1 | `ACF` 9, 10 | entering region 42 with a new party (`1587:1F83`) |
+| 100 | `ACF` 11, 12, 13 | the ending |
+| 200, 300 | a `CMAT` / `CPAL` picture | |
+
+`REQUEST(6, n)` (`87B3:0AC7`) plays cinematic n from a script.
+
+### `ACF` scripts (`985F:0000`)
+
+A script is a list of 16-bit words. An instruction's first word is
+`op << 8 | length in bytes`; its arguments follow. Op 0 ends the script.
+Before running it, the interpreter collects every op 1 entry,
+`(index, frames, bytes)`. These describe the `BMA` with the same number: it
+is that many images in the `BMP` format, back to back, streamed 64 KB at a
+time (`0852`).
+
+There are two VGA pages (`0980:5814(-1)` flips them): page 0 is shown and
+page 1 is hidden. The script's clock (`3931:02C5`) is reset when each script
+starts and counts XMIDI callback events with value 0x7F (`3164:0033`), so
+waits follow the music (about 8–10 ticks a second). Colour cycling and the
+effects run on a 70 Hz timer (`985F:0C60`, set up through `33A5:0992`). Any
+key ends the cinematic (`0CE5`).
+
+| Op | Arguments | Effect | Handler |
+|---|---|---|---|
+| 01 | index, frames, bytes | `BMA` chunk table (no effect when run) | |
+| 03 / 04 | | timer flag on / off | `0C1E` / `0C49` |
+| 05 | | wait for the next tick, draw the next `BMA` frame on the shown page at (0, 0) | `099A` |
+| 06 | n | wait n ticks, each counted from the last | `0A91` |
+| 07 | | clock, frame and chunk counters to 0 | `0AE2` |
+| 08 | a, n | (`0980:4723(1, a)`), flip, wait n ticks | `0B35` |
+| 14 | `index << 8 \| R`, `G << 8 \| B` | set a colour in the staging palette | `9B64:0000` |
+| 15 | | apply the staging palette | `9B64:00A0` |
+| 16 | n | set `PAL` n | `985F:0BD0` |
+| 19 | slot, first, last, speed | colour cycling: every `speed` timer steps colours first…last rotate up by one, the last one moving to the front | `9B64:017B`, `22F8:0387/047C` |
+| 1A | slot | stop cycling | `9B64:0235` |
+| 28 / 29 | slot (0–4), n / slot | load `BMP` n / free it | `9388:0000` / `0105` |
+| 2A | slot, x, y | draw the slot's image on the hidden page | `9388:01D8` |
+| 2B | | flip | `9388:02E4` |
+| 3C | n | dissolve: copy the hidden page to the shown page in the order of a 17-bit LFSR (mask 0x12000; x the low 9 bits, y the rest; (0, 0) is never reached), flip, wait until n ticks since the start | `9794:0000` |
+| 3F | first, last, R, G, B, n | fade colours first…last toward (R, G, B) ÷ 4, one unit per channel a pass, then wait until n ticks | `9794:046C` |
+| 40 | p, n | fade all colours toward `PAL` p likewise | `9794:07DD` |
+| 5B | bands, n | wipe: the hidden page opens out from lines 200 ÷ bands apart, one row a step, flip, wait until n ticks | `93D2:112C` |
+| 64 | n | play music n (`GSEQ` etc. 26–29) | `9936:0000` |
+| 65 / 66 | ms | music fade in / out | `9936:0048` / `0073` |
+| 7F | 12 values | not decoded (only in `ACF` 11) | `9944:1AD7` |
+
+Ops 2, 9–0x13, 0x17, 0x18, 0x2C, 0x3D, 0x3E, 0x50–0x5A, 0x5C–0x5E, 0x67 and
+0x79–0x7E exist but the shipped scripts don't use them.
+
+### Windows, buttons and accelerators (`RESOURCE.GFF`)
+
+* `WIND`: a 0x105-byte header and 30-byte items. `+0x08` is the number,
+  `+0xBE`/`+0xC0` the size and `+0xF3` the item count. Item i is at
+  `0x105 + 30·i`: `+4` tag, `+8` number, `+0x0C`/`+0x0E` position.
+* `BUTN` (110 bytes): `+0x28`/`+0x2A` size, `+0x5A` the `ICON` drawn. Icon
+  frames: 0 normal, 1 highlighted, 2 disabled (1 × 1 if none), 3 pressed.
+* `ACCL`: `+0x0C` count, then 5-byte entries (flags, key, command).
+* **Main menu** (`8015:0208`): clear the screen, `PAL` 1001, `BMP` 20028 at
+  (47, 25) and 20029 at (4, 45), then window 3000. Its buttons are 2048–2051
+  (Start Game, Create Characters, Load Saved Game, Exit to DOS) and its
+  accelerators are `ACCL` 8100 (S s C c L l E e → 8100–8107). The handlers
+  are in a table at `8015:01D8`.

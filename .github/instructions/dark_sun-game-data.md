@@ -13,9 +13,9 @@ Cutscene / cinematic resources. Drives the intro, ending, and in-game FMV sequen
 ### Resource Types
 | Tag | Count | Description |
 |-----|------:|-------------|
-| ACF | 13 | Cinematic binary — encoded cinematic animation or script data |
+| ACF | 13 | Cinematic scripts (16-bit word bytecode; `dsun-exe-reference.md` §7). 1–8 intro, 9–10 arrival, 11–13 ending |
 | ADV | 13 | AIL audio driver — Miles Sound System `.ADV` driver files |
-| BMA | 11 | Cinematic binary animation frames |
+| BMA | 11 | Cinematic animation: BMP-format images back to back, split by the matching ACF's op-1 table; frames draw over the previous one |
 | BMP | 19 | Bitmap images — cinematic backgrounds and frame graphics |
 | CSEQ | 1 | Cinematic sequence — playback control block |
 | GSEQ | 4 | Global sequence — shared timing/sync sequence used across cutscenes |

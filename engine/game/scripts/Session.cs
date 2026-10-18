@@ -38,6 +38,14 @@ public static class Session
 
     public static bool GameStarted { get; set; }
 
+    /// <summary>Forget the current game: fresh scripts, globals and triggers.</summary>
+    public static void NewGame()
+    {
+        _scripts = null;
+        ScriptHost = new WorldGplHost();
+        GameStarted = false;
+    }
+
     public static void Use(GameInstall install)
     {
         Install = install;

@@ -33,7 +33,9 @@ What already exists, and what the engine can reuse:
 | Sound samples (`BVOC`) | Extracted as Creative `.VOC` | `src/precompute.py` (audio step) |
 | GPL scripts (217 `GPL `, 33 `MAS `) | Bytecode fully documented, disassembler | `src/gpl_parser.py`, `dsun-exe-reference.md` |
 | Executable | Overlays unpacked; 2 402 functions decompiled; runtime, GPL interpreter and all handlers named | `make decomp` |
-| Not yet decoded | `SCMD` animation scripts, `FONT`, UI resources (`BUTN`, `DBOX`, `WIND`, `MENU`, …), cinematics (`ACF `, `BMA `), most of `RDFF` | |
+| Cinematics (`ACF `, `BMA `, `CINE.GFF` `BMP`/`PAL`) | Decoded and played | `DarkSun.Data.Cinematics`, `DarkSun.Game.Cinematics`, `dsun-exe-reference.md` §7 |
+| UI windows (`WIND`, `BUTN`, `ACCL`) | Layout decoded (the main menu uses them) | `DarkSun.Data.Ui` |
+| Not yet decoded | `FONT`, `APFM`, `EBOX`, `DBOX`, `MENU`, most of `RDFF` | |
 
 The GOG install ships DOSBox, so the original game is always available to
 compare against by eye.
@@ -217,8 +219,12 @@ this milestone brings most of the game's content.
       using the original art (decoded `WIND`, `BUTN`, `DBOX`, `FONT`), so that
       layout is resolution-independent and easy to change. The original
       layouts are a reference, not a constraint.
-- [ ] Main menu, options, and a journal or quest log (new; fed by GPL
-      variables and dialogue history).
+- [x] Main menu, from the original's window 3000 (`MainMenu`): Start Game
+      (plays cinematic 1, then a new game in region 42) and Exit work; S, C,
+      L and E and the arrow keys work. Create Characters and Load Saved Game
+      say they aren't ported yet.
+- [ ] Options, and a journal or quest log (new; fed by GPL variables and
+      dialogue history).
 
 ---
 
@@ -267,8 +273,13 @@ executable, not in the data.
 - [ ] Save and load in the engine's own format (JSON plus compressed state):
       GPL variables, party, region states. Save at any time, with autosaves.
 - [ ] Optional: import original save games (format needs reverse engineering).
-- [ ] Cinematics from `CINE.GFF` (`ACF `, `BMA `, sequences); can be skipped
-      until late.
+- [x] Cinematics from `CINE.GFF` (`CinematicPlayer`): the intro (ACF 1–8)
+      before the main menu, the arrival (9–10) on a new game; the ending
+      (11–13) plays too, but nothing triggers it yet. Any key skips. Timed by
+      the music's XMIDI callbacks, as in DSUN.EXE.
+- [ ] Cinematic op 0x7F (`9944:1AD7`, 12 arguments; only in the ending's
+      first script): not decoded, so that picture is shown still.
+- [ ] Cinematic music (GSEQ 26–29; ops 0x64–0x66), with the audio layer (M7).
 - [ ] Full playthrough with a checklist of every region, quest and ending;
       compare doubtful behaviour against the original in DOSBox.
 
@@ -289,7 +300,7 @@ name the functions in `tools/ghidra/symbols.tsv`.
 | ~~M3~~ | ~~Script triggers~~ | Done 2026-10-18: `dsun-exe-reference.md` §4 |
 | M3 | Which player actions call each trigger check (look, talk, use, pickup, attack menus); the per-step movement check | the callers listed in `dsun-exe-reference.md` §4 |
 | M3 | What each world-affecting GPL command does | the 114 named `gpl_op_*` handlers and their callees |
-| M4 | `FONT` and UI resource formats | text-drawing and window code; `WIND`/`BUTN` loaders |
+| M4 | `FONT`, `APFM`, `EBOX` formats; what each `WIND` is | text-drawing and window code (`2531`, `25EC`); `WIND`/`BUTN`/`ACCL` done (§7) |
 | M5 | Character rules and level tables | character sheet and creation code; `GPLX` tables (`DS:4D7A`, `DS:537A`) |
 | M6 | Combat rules and AI | functions that call `rand` (18 in 9 segments; 6 in `612E`, 3 in `6466`; *unverified* that these are combat) |
 | M7 | Music and sound selection | callers of the sound driver; segment `0980` has the most port I/O (*unverified*: sound or video driver) |

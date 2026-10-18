@@ -25,12 +25,14 @@ namespace DarkSun.Engine;
 /// Click: the selected character walks there; Shift+click: the whole party;
 /// Right-click: interact; Tab: select the next character; N: add one; C:
 /// change its sprite; arrows, WASD or middle-drag scroll; wheel or +/- zoom;
-/// PgUp/PgDn change region; F1 shows the <c>GMAP</c> flags, occupied cells and
+/// PgUp/PgDn change region; Esc returns to the main menu; F1 shows the <c>GMAP</c> flags, occupied cells and
 /// triggers. Run with <c>-- --check-regions</c> to load every region, run its
 /// scripts, animate it and walk the party in it, then quit.
 /// </summary>
 public partial class RegionView : Node2D
 {
+    public const string ScenePath = "res://scenes/region_view.tscn";
+
     private const float PanSpeed = 400f;
     private static readonly float[] ZoomLevels = [0.25f, 0.5f, 1f, 2f, 3f, 4f];
 
@@ -77,6 +79,9 @@ public partial class RegionView : Node2D
     private Vector2 _mapSize;
 
     private long Now => (long)(_clock * ScmdAnimator.TicksPerSecond);
+
+    /// <summary>Make the next opening of the view start a new game (region 42).</summary>
+    public static void StartNewGame() => _regionIndex = -1;
 
     public override void _Ready()
     {
@@ -477,7 +482,7 @@ public partial class RegionView : Node2D
     {
         if (e.IsActionPressed(Controls.Back))
         {
-            GetTree().ChangeSceneToFile("res://scenes/main.tscn");
+            GetTree().ChangeSceneToFile(MainMenu.ScenePath);
         }
         else if (e.IsActionPressed(Controls.ToggleMapFlags))
         {

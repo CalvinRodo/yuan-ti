@@ -4,7 +4,9 @@ using Godot;
 namespace DarkSun.Engine;
 
 /// <summary>
-/// Start screen: finds the player's game files and opens the region viewer.
+/// Start screen: finds the player's game files, then plays the intro and
+/// opens the main menu (<c>-- --no-intro</c>: straight to the menu). Only
+/// shown when the files can't be found, to choose their folder.
 /// For headless checks: <c>-- --check-install</c> prints what was found and
 /// quits (exit code 1 if nothing); <c>-- --check-regions</c>,
 /// <c>-- --check-exits</c> and <c>-- --check-start</c> run the region viewer's
@@ -26,7 +28,8 @@ public partial class Main : Control
         string[] args = OS.GetCmdlineUserArgs();
 
         bool regionCheck = args.Contains("--check-regions") || args.Contains("--check-exits") || args.Contains("--check-start");
-        if (args.Contains("--check-install") || (install is null && regionCheck))
+        bool screenCheck = args.Contains("--check-intro") || args.Contains("--check-menu");
+        if (args.Contains("--check-install") || (install is null && (regionCheck || screenCheck)))
         {
             GD.Print(install is null ? "No game install found." : Describe(install));
             GetTree().Quit(install is null ? 1 : 0);
@@ -37,7 +40,28 @@ public partial class Main : Control
         {
             OpenRegionView();
         }
+        else if (args.Contains("--check-menu"))
+        {
+            ChangeScene(MainMenu.ScenePath);
+        }
+        else if (install is not null)
+        {
+            Start(skipIntro: args.Contains("--no-intro"));
+        }
     }
+
+    /// <summary>The intro (once per run), then the main menu.</summary>
+    private void Start(bool skipIntro)
+    {
+        bool intro = !skipIntro && !_introPlayed;
+        _introPlayed = true;
+        ChangeScene(intro ? IntroView.ScenePath : MainMenu.ScenePath);
+    }
+
+    private static bool _introPlayed;
+
+    private void ChangeScene(string path) =>
+        GetTree().CallDeferred(SceneTree.MethodName.ChangeSceneToFile, path);
 
     private void BuildUi()
     {
@@ -51,8 +75,8 @@ public partial class Main : Control
         _status = new Label { HorizontalAlignment = HorizontalAlignment.Center };
         box.AddChild(_status);
 
-        _viewRegions = new Button { Text = "View regions" };
-        _viewRegions.Pressed += OpenRegionView;
+        _viewRegions = new Button { Text = "Play" };
+        _viewRegions.Pressed += () => Start(skipIntro: false);
         box.AddChild(_viewRegions);
         var choose = new Button { Text = "Choose game folder…" };
         choose.Pressed += () => _picker.PopupCentered(new Vector2I(600, 360));
@@ -89,8 +113,7 @@ public partial class Main : Control
         _viewRegions.Disabled = install is null;
     }
 
-    private void OpenRegionView() =>
-        GetTree().CallDeferred(SceneTree.MethodName.ChangeSceneToFile, "res://scenes/region_view.tscn");
+    private void OpenRegionView() => ChangeScene(RegionView.ScenePath);
 
     private static string Describe(GameInstall install) =>
         $"Game files: {install.Directory}\n{install.RegionFiles.Count} regions";

@@ -405,3 +405,35 @@
 3781:0343	data	gpl_gbignum	far ptr: global int32
 3781:0347	data	gpl_gnum	far ptr: global int16
 3781:034B	data	gpl_gflag	far ptr: global bit flags
+60B9:042E	func	play_cinematic	n: 0 intro (ACF 1-8), 1 arrival (9-10), 100 ending (11-13), 200/300 CMAT picture
+985F:0000	func	acf_run	run ACF script n from CINE.GFF; returns 0 if skipped
+985F:0612	func	acf_cleanup	free buffers, stop colour cycling
+985F:06F3	func	acf_init	allocate buffers, start the 70 Hz timer callback
+985F:0852	func	acf_load_bma_chunk	stream the next BMA chunk (64 KB buffer)
+985F:099A	func	acf_op05_next_frame	wait a tick, draw the next BMA frame
+985F:0A91	func	acf_op06_wait	wait n clock ticks
+985F:0AE2	func	acf_op07_restart	reset clock and frame counters
+985F:0B35	func	acf_op08_flip_wait	flip pages, wait n ticks
+985F:0BD0	func	acf_load_palette	set PAL n
+985F:0C60	func	acf_timer_tick	70 Hz: colour cycling
+985F:0CE5	func	acf_check_abort	any key stops the cinematic
+985F:0D40	func	acf_word	script word at index
+9B64:0000	func	acf_op14_stage_colour	(index<<8|R, G<<8|B)
+9B64:00A0	func	acf_op15_apply_palette	copy the staging palette to the DAC
+9B64:017B	func	acf_op19_cycle	slot, first, last, speed
+9B64:0235	func	acf_op1a_stop_cycle	slot
+9388:0000	func	acf_op28_load_bmp	slot, n
+9388:0105	func	acf_op29_free_bmp	slot
+9388:01D8	func	acf_op2a_draw_bmp	slot, x, y on the hidden page
+9388:02E4	func	acf_op2b_flip	show the hidden page
+9794:0000	func	acf_op3c_dissolve	17-bit LFSR pixel dissolve
+9794:046C	func	acf_op3f_fade_to_colour	first, last, R, G, B, ticks
+9794:07DD	func	acf_op40_fade_to_palette	PAL n, ticks
+93D2:112C	func	acf_op5b_wipe	bands opening from evenly spaced lines
+9936:0000	func	acf_op64_music	play sequence n
+9944:1AD7	func	acf_op7f	not decoded (ACF 11 only)
+3164:0033	func	music_callback	XMIDI callback 0x7F advances the cinematic clock 3931:02C5
+22F8:0387	func	palette_cycle_set	slot, first, count, speed
+22F8:047C	func	palette_cycle_step	rotate active ranges up by one
+0980:5814	func	vga_flip_pages	-1: swap the shown page (A000/A400)
+8015:0208	func	main_menu_open	BMP 20028/20029, WIND 3000
