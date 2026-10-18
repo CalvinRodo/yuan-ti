@@ -10,9 +10,6 @@ GET /api/gff/<name>/pal-png/<tag_url>/<number>      – render palette as a colo
 
 import io
 import os
-import sys
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from flask import Blueprint, jsonify, send_file, abort, request
 

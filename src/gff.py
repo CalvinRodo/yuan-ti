@@ -28,136 +28,24 @@ SecondaryGffiTable entry (8 bytes each):
   Resource numbers derived from inline numbering segments.
 """
 
+import os
 import struct
+import tomllib
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple
 
 
 # ---------------------------------------------------------------------------
-# Known chunk type descriptions
+# Known chunk type descriptions – loaded from src/data/gff_chunk_types.toml
 # ---------------------------------------------------------------------------
-GFF_CHUNK_TYPES: Dict[str, str] = {
-    # ── GFF structure ────────────────────────────────────────────────────
-    'FORM': 'GFF internal chunk',
-    'GFFI': 'GFFI internal chunk',
-    'GFRE': 'GFF internal chunk',
-    'GTOC': 'GFF internal chunk',
+def _load_chunk_types() -> Dict[str, str]:
+    _data_file = os.path.join(os.path.dirname(__file__), 'data', 'gff_chunk_types.toml')
+    with open(_data_file, 'rb') as _f:
+        return tomllib.load(_f)['chunk_types']
 
-    # ── Items ────────────────────────────────────────────────────────────
-    'IT1R': 'IT1R',
 
-    # ── Text ─────────────────────────────────────────────────────────────
-    'NAME': 'NAME',
-    'TEXT': 'Text resource',
-    'MERR': 'text error file',
-    'ETME': 'copyright notice',
-    'SPIN': 'Spell text.',
+GFF_CHUNK_TYPES: dict[str, str] = _load_chunk_types()
 
-    # ── Images (all use PAL palette) ─────────────────────────────────────
-    'BMP ': 'Bitmap (GIL bitmap table, 1+ bitmaps)',
-    'BMAP': '3DX Bump map (GIL bitmap table, 1 bitmap)',
-    'CBMP': 'Color Bit Map',
-    'PORT': 'Portrait',
-    'WALL': 'WALL?',
-    'ICON': 'Icon resource (GIL bitmap table, 1-4 bitmaps)',
-    'TILE': 'Tile graphic (GIL bitmap table, 1 bitmap)',
-    'FONT': 'Font (GIL font)',
-    'PAL ': 'VGA 256 color palette',
-    'CPAL': 'CPAL?',
-    'CMAT': 'CMAT?',
 
-    # ── Animation ────────────────────────────────────────────────────────
-    'SCMD': 'Animation script command table',
-    'SJMP': 'OENGINE animation script jump table',
-    'VECT': 'VECT?   rotate vector?',
-
-    # ── Objects ──────────────────────────────────────────────────────────
-    'OJFF': 'Object data?',
-    'MONR': 'monsters by region ids and level',
-    'PSIN': 'psionic and sphere selection',
-    'PSST': 'psionc list bytes',
-
-    # ── Map data ─────────────────────────────────────────────────────────
-    'ETAB': 'Object entry table',
-    'GMAP': 'Region map flags',
-    'RMAP': 'Region tile map',
-    'MAP ': 'Map data',
-    'RDAT': 'Names?',
-    'RNME': 'Region name',
-
-    # ── Window / UI data ─────────────────────────────────────────────────
-    'WIND': 'Window resource',
-    'BUTN': 'Button resource',
-    'APFM': 'Application frame resource',
-    'EBOX': 'Edit box resource',
-    'ACCL': 'Accelertor resource',
-    'SBAR': 'Scroll-bar resource',
-    'MENU': 'Menu resource',
-    'DBOX': 'Dialog box resource',
-
-    # ── GPL scripting ────────────────────────────────────────────────────
-    'GPLI': 'Compiled GPL file ID for subs',
-    'GPLX': 'GPL index file (GPLSHELL)',
-    'MAS ': 'Compiled MAS (GPL master) files',
-    'GPL ': 'Compiled GPL files',
-
-    # ── Characters ───────────────────────────────────────────────────────
-    'CHAR': 'saved character slot.',
-    'CACT': 'valid char id (0 if entry is invalid.)',
-
-    # ── Spell / combat status ────────────────────────────────────────────
-    'SPST': 'spell list bit-mask',
-
-    # ── Saveable object data (RDFF) ──────────────────────────────────────
-    'RDFF': 'RDFF?',
-    'FNFO': 'FNFO: Appears to have the object data for the game.',
-
-    # ── Audio ────────────────────────────────────────────────────────────
-    'BVOC': 'Background play samples',
-    'FVOC': 'Foreground play samples',
-    'GSEQ': 'GENERAL MIDI',
-    'LSEQ': 'LAPC',
-    'FSEQ': 'FM',
-    'CSEQ': 'Clock Sequences',
-    'PSEQ': 'PCSPKR',
-    'MSEQ': 'XMIDI sequence files (.XMI)',
-    'PLYL': 'PLYL?',
-    'VPLY': 'VPLY?',
-    'MGTL': 'Global timbre library',
-    'SINF': 'Sound card info',
-
-    # ── Cinematics ───────────────────────────────────────────────────────
-    'ACF ': 'Cinematic Binary Script File',
-    'BMA ': 'Cinematic Binary File',
-
-    # ── Audio drivers ────────────────────────────────────────────────────
-    'ADV ': 'AIL Audio Driver',
-    'DADV': 'AIL and .COM drivers (MEL version 1.x only)',
-    'DRV ': 'Run-time loadable code/data module',
-
-    # ── Save entries ─────────────────────────────────────────────────────
-    'STXT': 'name of the save file entry',
-    'SAVE': 'save entries...',
-    'POS ': 'save entry pos (not part of original engine.)',
-    'ROBJ': 'save entry region (not part of original engine.)',
-    'TRIG': 'save entry triggers (not part of original engine.)',
-    'GDAT': 'save entry GPL data (not part of original engine.)',
-    'PLAY': 'save entry player data (not part of original engine.)',
-    'RENT': 'save entry entity data (not part of original engine.)',
-
-    # ── Misc ─────────────────────────────────────────────────────────────
-    'ALL ': 'ALL',
-    'DATA': 'DATA?',
-    'EDAT': '3DX Environment database',
-    'GREQ': 'Global requirement',
-    'GSEC': 'Global secondary data',
-    'OMAP': 'Opacity map (GIL bitmap table, 1 bitmap)',
-    'POBJ': 'PolyMesh object database',
-    'PREF': 'Preferences',
-    'TMAP': 'Texture map (GIL bitmap table, 1 bitmap)',
-    'TXRF': 'Texture map (GIL bitmap table, 1 bitmap)',
-    'CMAP': 'Color map table',
-}
 
 
 # ---------------------------------------------------------------------------
@@ -188,7 +76,7 @@ class GffiTable:
         self._data = data
         self._start = start_position
         self._entry_count = entry_count
-        self._index_cache: Dict[int, Optional[int]] = {}
+        self._index_cache: dict[int, int | None] = {}
 
     @property
     def entry_count(self) -> int:
@@ -200,7 +88,7 @@ class GffiTable:
     def get_resource_number(self, index: int) -> int:
         raise NotImplementedError
 
-    def get_index_for_resource_number(self, resource_number: int) -> Optional[int]:
+    def get_index_for_resource_number(self, resource_number: int) -> int | None:
         if resource_number not in self._index_cache:
             result = None
             for i in range(self._entry_count):
@@ -265,7 +153,7 @@ class PrimaryGffiTable(GffiTable):
         return cls(data, start_position, entry_count, resource_numbers)
 
     def __init__(self, data: bytearray, start_position: int,
-                 entry_count: int, resource_numbers: List[int]):
+                 entry_count: int, resource_numbers: list[int]):
         super().__init__(data, start_position, entry_count)
         self._resource_numbers = resource_numbers
 
@@ -304,7 +192,7 @@ class SecondaryGffiTable(GffiTable):
         pos += 4
 
         # sorted dict: segmentStartIndex -> segmentStartResourceNumber
-        numbering: Dict[int, int] = {}
+        numbering: dict[int, int] = {}
         segment_start_index = 0
         for _ in range(segment_count):
             seg_start_resource = struct.unpack_from('<I', data, pos)[0]
@@ -317,7 +205,7 @@ class SecondaryGffiTable(GffiTable):
         return cls(data, table_offset, entry_count, numbering)
 
     def __init__(self, data: bytearray, table_offset: int,
-                 entry_count: int, numbering: Dict[int, int]):
+                 entry_count: int, numbering: dict[int, int]):
         super().__init__(data, table_offset, entry_count)
         # Keys sorted for floor-entry lookup
         self._numbering_keys = sorted(numbering.keys())
@@ -363,17 +251,17 @@ class GffFile:
         return cls(data, tables)
 
     @staticmethod
-    def _create_tables(data: bytearray) -> Dict[str, GffiTable]:
+    def _create_tables(data: bytearray) -> dict[str, GffiTable]:
         index_start = struct.unpack_from('<I', data, 12)[0]
         pos = index_start
 
         # skip 2 int32s
         pos += 8
 
-        tables_by_tag: Dict[str, GffiTable] = {}
+        tables_by_tag: dict[str, GffiTable] = {}
 
         # tag -> (secondaryTableIndex, resourceNumberingOffset)
-        secondary_descriptors: Dict[str, Tuple[int, int]] = {}
+        secondary_descriptors: dict[str, tuple[int, int]] = {}
 
         number_of_tags = struct.unpack_from('<H', data, pos)[0]
         pos += 2
@@ -414,11 +302,11 @@ class GffFile:
 
         return tables_by_tag
 
-    def __init__(self, data: bytearray, tables_by_tag: Dict[str, GffiTable]):
+    def __init__(self, data: bytearray, tables_by_tag: dict[str, GffiTable]):
         self._data = data
         self._tables = tables_by_tag
 
-    def describe_resources(self) -> List[ResourceDescriptor]:
+    def describe_resources(self) -> list[ResourceDescriptor]:
         descriptors = []
         for tag, table in self._tables.items():
             for i in range(table.entry_count):
@@ -479,10 +367,10 @@ class GffFile:
 class GffFileList:
     """Searches multiple GFF files as one logical reader."""
 
-    def __init__(self, gff_files: List[GffFile]):
+    def __init__(self, gff_files: list[GffFile]):
         self._files = list(gff_files)
 
-    def describe_resources(self) -> List[ResourceDescriptor]:
+    def describe_resources(self) -> list[ResourceDescriptor]:
         result = []
         for gff in self._files:
             result.extend(gff.describe_resources())

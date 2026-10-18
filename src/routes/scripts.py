@@ -7,11 +7,6 @@ GET /api/scripts                         – list all GPL/MAS scripts in GPLDATA
 GET /api/script/<tag_url>/<number>       – disassemble a single GPL or MAS script
 """
 
-import os
-import sys
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-
 from flask import Blueprint, jsonify, abort, request
 
 from gff import NoSuchResourceError

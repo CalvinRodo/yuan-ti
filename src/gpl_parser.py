@@ -23,7 +23,6 @@ list_scripts(gff) -> list[dict]
 """
 
 import struct
-from typing import Optional
 
 
 # ---------------------------------------------------------------------------
@@ -125,7 +124,7 @@ class _Reader:
         self.pos += 1
         return b
 
-    def peek_byte(self) -> Optional[int]:
+    def peek_byte(self) -> int | None:
         if self.pos >= len(self.data):
             return None
         return self.data[self.pos]

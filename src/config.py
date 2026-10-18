@@ -5,7 +5,9 @@ All other modules in the server package import from here rather than
 defining their own constants.
 """
 
+import glob
 import os
+import tomllib
 
 # ---------------------------------------------------------------------------
 # Directory layout
@@ -13,97 +15,119 @@ import os
 SRC_DIR  = os.path.dirname(os.path.abspath(__file__))
 BASE_DIR = os.path.dirname(SRC_DIR)
 WEB_DIR  = os.path.join(SRC_DIR, 'web')
+DATA_DIR = os.path.join(SRC_DIR, 'data')
+
+
+def _load_toml(filename: str) -> dict:
+    """Load a TOML file from src/data/."""
+    with open(os.path.join(DATA_DIR, filename), 'rb') as _f:
+        return tomllib.load(_f)
+
 
 # ---------------------------------------------------------------------------
-# Supported games
+# Supported games  (loaded from src/data/games.toml)
 # ---------------------------------------------------------------------------
-GAMES: dict[str, dict] = {
-    'dark_sun': {
-        'id':             'dark_sun',
-        'label':          'Dark Sun: Shattered Lands',
-        'dir':            os.path.join(BASE_DIR, 'dark_sun'),
-        'supported':      True,
-        'sfx_dir':        None,   # BVOC lives inside GFF files only
-        'music_dir':      None,
-        'cinematic_dir':  None,   # DS1 has no standalone FLI files
-    },
-    'dark_sun_2': {
-        'id':             'dark_sun_2',
-        'label':          'Dark Sun: Wake of the Ravager',
-        'dir':            os.path.join(BASE_DIR, 'dark_sun_2', 'data'),
-        'supported':      True,
-        'sfx_dir':        os.path.join(BASE_DIR, 'dark_sun_2', 'data'),
-        'music_dir':      os.path.join(BASE_DIR, 'dark_sun_2', 'data', 'MUSIC'),
-        'cinematic_dir':  os.path.join(BASE_DIR, 'dark_sun_2', 'data'),
-    },
-    'al-qadim': {
-        'id':             'al-qadim',
-        'label':          "Al-Qadim: The Genie's Curse",
-        'dir':            os.path.join(BASE_DIR, 'al-qadim', 'data'),
-        'supported':      True,
-        'sfx_dir':        os.path.join(BASE_DIR, 'al-qadim', 'data', 'SFX'),
-        'music_dir':      None,
-        'xmi_dir':        os.path.join(BASE_DIR, 'al-qadim', 'data', 'SFX'),
-        'cinematic_dir':  None,
-    },
-}
+def _build_games() -> dict[str, dict]:
+    raw = _load_toml('games.toml')
+    _dir_keys = ('dir', 'sfx_dir', 'music_dir', 'cinematic_dir', 'xmi_dir')
+    games: dict[str, dict] = {}
+    for game_id, entry in raw.items():
+        built: dict = {}
+        for key, value in entry.items():
+            built[key] = os.path.join(BASE_DIR, value) if key in _dir_keys else value
+        # Fill in None for optional dir keys not present in TOML
+        for key in _dir_keys:
+            built.setdefault(key, None)
+        games[game_id] = built
+    return games
+
+
+GAMES: dict[str, dict] = _build_games()
 
 DEFAULT_GAME = 'dark_sun'
 
 
+def get_game(game_id: str) -> dict:
+    """Return the game config dict for *game_id*, falling back to dark_sun."""
+    return GAMES.get(game_id, GAMES[DEFAULT_GAME])
+
+
 def resolve_game_dir(game_id: str) -> str:
     """Return the GFF data directory for *game_id*, falling back to dark_sun."""
-    return GAMES.get(game_id, GAMES[DEFAULT_GAME])['dir']
+    return get_game(game_id)['dir']
+
+
+def find_file_nocase(directory: str, filename: str) -> str | None:
+    """Return the full path to *filename* inside *directory*, matching case-insensitively.
+
+    Returns ``None`` when no match is found or the directory does not exist.
+    """
+    path = os.path.join(directory, filename)
+    if os.path.isfile(path):
+        return path
+    if not os.path.isdir(directory):
+        return None
+    upper = filename.upper()
+    match = next((f for f in os.listdir(directory) if f.upper() == upper), None)
+    return os.path.join(directory, match) if match else None
+
+
+def list_files_nocase(directory: str, ext: str) -> list[str]:
+    """Return sorted, case-insensitive-deduplicated file paths for *ext* in *directory*.
+
+    *ext* may include or omit the leading dot (e.g. ``'.voc'`` or ``'voc'``).
+    Returns an empty list when the directory does not exist.
+    """
+    if not os.path.isdir(directory):
+        return []
+    bare = ext.upper().lstrip('*.')
+    seen: set[str] = set()
+    result: list[str] = []
+    for filepath in sorted(
+        glob.glob(os.path.join(directory, f'*.{bare}')) +
+        glob.glob(os.path.join(directory, f'*.{bare.lower()}'))
+    ):
+        name = os.path.basename(filepath)
+        if name.upper() not in seen:
+            seen.add(name.upper())
+            result.append(filepath)
+    return result
 
 
 # ---------------------------------------------------------------------------
-# GFF resource-tag sets
+# GFF resource-tag sets  (loaded from src/data/tags.toml)
+# Labels derived from the canonical descriptions in src/data/gff_chunk_types.toml
 # ---------------------------------------------------------------------------
+_tags = _load_toml('tags.toml')
+_chunk_types: dict[str, str] = _load_toml('gff_chunk_types.toml')['chunk_types']
 
 # Tags that contain renderable image data
-IMAGE_TAGS = {'BMP ', 'CBMP', 'TILE', 'ICON', 'PORT', 'WALL', 'FONT'}
+IMAGE_TAGS: set[str] = set(_tags['image_tags']['tags'])
 
 # Tags that contain XMIDI music sequences
-MUSIC_TAGS = {'GSEQ', 'LSEQ', 'CSEQ', 'PSEQ', 'MSEQ'}
-
-MUSIC_TAG_LABELS = {
-    'GSEQ': 'Global audio/sync sequence (shared background themes and sync data)',
-    'LSEQ': 'Local audio sequence (region- or scene-specific music and ambience)',
-    'CSEQ': 'Cinematic sequence (cutscene/scripted music and playback control)',
-    'PSEQ': 'Playback sequence (short playback/playlist blocks used for cues)',
-    'MSEQ': 'XMIDI music sequence (XMIDI/EVNT format — game music data)',
-}
+MUSIC_TAGS: set[str] = set(_tags['music_tags']['tags'])
+MUSIC_TAG_LABELS: dict[str, str] = {t: _chunk_types[t] for t in MUSIC_TAGS if t in _chunk_types}
 
 # Tags that contain raw Creative Voice File (VOC) audio
-AUDIO_TAGS = {'BVOC'}
-
-AUDIO_TAG_LABELS = {
-    'BVOC': 'Background audio sample (Creative Voice File)',
-}
+AUDIO_TAGS: set[str] = set(_tags['audio_tags']['tags'])
+AUDIO_TAG_LABELS: dict[str, str] = {t: _chunk_types[t] for t in AUDIO_TAGS if t in _chunk_types}
 
 # Tags that contain human-readable text
-TEXT_TAGS = {'TEXT', 'MERR', 'SPIN', 'NAME'}
+TEXT_TAGS: set[str] = set(_tags['text_tags']['tags'])
 
 # ---------------------------------------------------------------------------
-# Spell / icon offset constants  (used by both the GFF spell route and
-# the high-level /api/spells game-data route)
+# Spell / icon offset constants  (loaded from src/data/spells.toml)
+# (used by both the GFF spell route and the high-level /api/spells route)
 # ---------------------------------------------------------------------------
+_spells = _load_toml('spells.toml')
 
-# Most spells: ICON = SPIN_ICON_OFFSET + spin_number
-SPIN_ICON_OFFSET = 21000
-
-# Psionic powers (SPIN 139–172) map to ICON 3000–3033
-PSIONICS_SPIN_START = 139
-PSIONICS_SPIN_END   = 172
-PSIONICS_ICON_BASE  = 3000
-
-# Turn Undead (SPIN 1000) expands to one card per elemental domain
-TURN_UNDEAD_SPIN = 1000
-TURN_UNDEAD_VARIANTS = [
-    ('AIR',   3044),
-    ('EARTH', 3045),
-    ('FIRE',  3046),
-    ('WATER', 3047),
+SPIN_ICON_OFFSET:    int = _spells['spin_icon_offset']
+PSIONICS_SPIN_START: int = _spells['psionics_spin_start']
+PSIONICS_SPIN_END:   int = _spells['psionics_spin_end']
+PSIONICS_ICON_BASE:  int = _spells['psionics_icon_base']
+TURN_UNDEAD_SPIN:    int = _spells['turn_undead_spin']
+TURN_UNDEAD_VARIANTS: list[tuple[str, int]] = [
+    (v['domain'], v['icon']) for v in _spells['turn_undead_variants']
 ]
 
 # ---------------------------------------------------------------------------

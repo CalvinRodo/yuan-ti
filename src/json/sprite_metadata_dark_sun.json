@@ -17891,7 +17891,8 @@
       "name": "",
       "linked_bmps": [],
       "notes": "",
-      "item_icon_bmp": null
+      "item_icon_bmp": null,
+      "item_index": 110
     },
     "2273": {
       "type": "Item",
@@ -18175,35 +18176,40 @@
       "name": "",
       "linked_bmps": [],
       "notes": "",
-      "item_icon_bmp": null
+      "item_icon_bmp": null,
+      "item_index": 34
     },
     "2166": {
       "type": "Item",
       "name": "",
       "linked_bmps": [],
       "notes": "",
-      "item_icon_bmp": null
+      "item_icon_bmp": null,
+      "item_index": 36
     },
     "2165": {
       "type": "Item",
       "name": "",
       "linked_bmps": [],
       "notes": "",
-      "item_icon_bmp": null
+      "item_icon_bmp": null,
+      "item_index": 37
     },
     "2164": {
       "type": "Item",
       "name": "",
       "linked_bmps": [],
       "notes": "",
-      "item_icon_bmp": null
+      "item_icon_bmp": null,
+      "item_index": 35
     },
     "2163": {
       "type": "Item",
       "name": "",
       "linked_bmps": [],
       "notes": "",
-      "item_icon_bmp": null
+      "item_icon_bmp": null,
+      "item_index": null
     },
     "2162": {
       "type": "Item",
@@ -18364,7 +18370,8 @@
       "name": "",
       "linked_bmps": [],
       "notes": "",
-      "item_icon_bmp": null
+      "item_icon_bmp": null,
+      "item_index": 109
     },
     "2108": {
       "type": "Item",
@@ -18441,7 +18448,8 @@
       "name": "",
       "linked_bmps": [],
       "notes": "",
-      "item_icon_bmp": null
+      "item_icon_bmp": null,
+      "item_index": 2
     },
     "2084": {
       "type": "Item",

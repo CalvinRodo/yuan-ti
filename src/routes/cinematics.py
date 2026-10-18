@@ -7,16 +7,12 @@ GET /api/cinematics                 – list FLI/FLC cinematic files for a game
 GET /api/cinematic/<filename>       – convert FLI/FLC to MP4 and stream it
 """
 
-import glob
 import io
 import os
-import sys
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from flask import Blueprint, jsonify, send_file, abort, request
 
-from config import DEFAULT_GAME, GAMES
+from config import DEFAULT_GAME, GAMES, get_game, find_file_nocase, list_files_nocase
 
 bp = Blueprint('cinematics', __name__)
 
@@ -28,25 +24,18 @@ _cinematic_cache: dict[tuple, bytes] = {}
 def api_cinematics():
     """Return a sorted list of FLI/FLC cinematic files for the current game."""
     game_id  = request.args.get('game', DEFAULT_GAME)
-    game     = GAMES.get(game_id, GAMES[DEFAULT_GAME])
-    cine_dir = game.get('cinematic_dir')
-    if not cine_dir or not os.path.isdir(cine_dir):
-        return jsonify([])
+    cine_dir = get_game(game_id).get('cinematic_dir') or ''
 
     results = []
-    seen    = set()
-    for filepath in sorted(glob.glob(os.path.join(cine_dir, '*.[Ff][Ll][Ii]')) +
-                            glob.glob(os.path.join(cine_dir, '*.[Ff][Ll][Cc]'))):
+    for filepath in sorted(
+        list_files_nocase(cine_dir, 'fli') + list_files_nocase(cine_dir, 'flc')
+    ):
         name = os.path.basename(filepath)
-        if name.upper() in seen:
-            continue
-        seen.add(name.upper())
         results.append({
             'filename': name,
             'name':     os.path.splitext(name)[0],
             'size':     os.path.getsize(filepath),
         })
-
     results.sort(key=lambda r: r['name'])
     return jsonify(results)
 
@@ -59,18 +48,13 @@ def api_cinematic(filename: str):
     """
     import subprocess
     game_id  = request.args.get('game', DEFAULT_GAME)
-    game     = GAMES.get(game_id, GAMES[DEFAULT_GAME])
-    cine_dir = game.get('cinematic_dir')
+    cine_dir = get_game(game_id).get('cinematic_dir')
     if not cine_dir or not os.path.isdir(cine_dir):
         abort(404, description='No cinematic directory for this game.')
 
-    filepath = os.path.join(cine_dir, filename)
-    if not os.path.isfile(filepath):
-        upper = filename.upper()
-        match = next((f for f in os.listdir(cine_dir) if f.upper() == upper), None)
-        if match is None:
-            abort(404, description=f'Cinematic not found: {filename}')
-        filepath = os.path.join(cine_dir, match)
+    filepath = find_file_nocase(cine_dir, filename)
+    if filepath is None:
+        abort(404, description=f'Cinematic not found: {filename}')
 
     cache_key = (game_id, os.path.basename(filepath).upper())
     if cache_key not in _cinematic_cache:

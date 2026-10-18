@@ -13,9 +13,6 @@ GET /api/spells      – spell descriptions from SPIN in RESOURCE.GFF
 """
 
 import os
-import sys
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from flask import Blueprint, jsonify, abort, request
 
@@ -23,9 +20,9 @@ from config import (
     DEFAULT_GAME, GAMES,
     SPIN_ICON_OFFSET,
     PSIONICS_SPIN_START, PSIONICS_SPIN_END, PSIONICS_ICON_BASE,
-    tag_to_url_seg,
+    get_game, tag_to_url_seg,
 )
-from gff_cache import load_gff
+from gff_cache import load_gff, try_load_gff
 from ds1_parsers import parse_items, parse_monsters, parse_spells
 from disk_cache import load_precomputed_json
 
@@ -33,23 +30,6 @@ bp = Blueprint('gamedata', __name__)
 
 # In-process cache so large SEGOBJEX scans aren't repeated per request.
 _gamedata_cache: dict[tuple, list] = {}
-
-
-def _try_load_gff(game_dir: str, filename: str, game_id: str):
-    """Load a GFF by filename from game_dir, with case-insensitive fallback."""
-    path = os.path.join(game_dir, filename)
-    if not os.path.isfile(path):
-        upper = filename.upper()
-        match = next(
-            (f for f in os.listdir(game_dir) if f.upper() == upper), None
-        )
-        if match is None:
-            return None
-        path = os.path.join(game_dir, match)
-    try:
-        return load_gff(os.path.basename(path), game_id)
-    except Exception:
-        return None
 
 
 def _load_gamedata(kind: str, game_id: str) -> list:
@@ -67,11 +47,10 @@ def _load_gamedata(kind: str, game_id: str) -> list:
         _gamedata_cache[key] = cached
         return cached
 
-    game     = GAMES.get(game_id, GAMES[DEFAULT_GAME])
-    game_dir = game['dir']
+    game_dir = get_game(game_id)['dir']
 
     if kind == 'items':
-        gff    = _try_load_gff(game_dir, 'GPLDATA.GFF', game_id)
+        gff    = try_load_gff(game_dir, 'GPLDATA.GFF', game_id)
         result = parse_items(gff) if gff else []
         for rec in result:
             rec['sprite_gff']     = 'GPLDATA.GFF'
@@ -79,10 +58,10 @@ def _load_gamedata(kind: str, game_id: str) -> list:
 
     elif kind == 'monsters':
         # DS1 uses SEGOBJEX.GFF; DS2 uses OBJEX.GFF
-        gff              = None
-        sprite_gff_name  = None
+        gff             = None
+        sprite_gff_name = None
         for candidate in ('SEGOBJEX.GFF', 'OBJEX.GFF'):
-            gff = _try_load_gff(game_dir, candidate, game_id)
+            gff = try_load_gff(game_dir, candidate, game_id)
             if gff is not None:
                 sprite_gff_name = candidate
                 break
@@ -92,7 +71,7 @@ def _load_gamedata(kind: str, game_id: str) -> list:
             rec['sprite_tag_url'] = tag_to_url_seg('BMP ')
 
     elif kind == 'spells':
-        gff = _try_load_gff(game_dir, 'RESOURCE.GFF', game_id)
+        gff = try_load_gff(game_dir, 'RESOURCE.GFF', game_id)
         result = parse_spells(gff) if gff else []
         icon_numbers = (
             {d.number for d in gff.describe_resources() if d.tag.strip() == 'ICON'}

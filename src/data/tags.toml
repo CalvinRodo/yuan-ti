@@ -1,0 +1,18 @@
+# GFF resource tag sets used by the server routes and pre-compute pipeline.
+# Tags are 4-byte space-padded ASCII; include trailing spaces where needed.
+
+[image_tags]
+# Tags whose resources contain renderable image data (decoded via image.py)
+tags = ["BMP ", "CBMP", "TILE", "ICON", "PORT", "WALL", "FONT"]
+
+[music_tags]
+# Tags whose resources contain XMIDI music sequences
+tags = ["GSEQ", "LSEQ", "CSEQ", "PSEQ", "MSEQ"]
+
+[audio_tags]
+# Tags whose resources contain raw Creative Voice File (VOC) audio
+tags = ["BVOC"]
+
+[text_tags]
+# Tags whose resources contain human-readable text
+tags = ["TEXT", "MERR", "SPIN", "NAME"]

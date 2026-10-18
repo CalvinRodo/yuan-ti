@@ -1,0 +1,29 @@
+# Supported game definitions.
+# All *_dir values are paths relative to the repository root (BASE_DIR).
+# Omit optional keys (sfx_dir, music_dir, cinematic_dir, xmi_dir) entirely
+# to have config.py treat them as None.
+
+[dark_sun]
+id            = "dark_sun"
+label         = "Dark Sun: Shattered Lands"
+dir           = "dark_sun"
+supported     = true
+# sfx_dir, music_dir, cinematic_dir all absent → None (BVOC lives inside GFFs only)
+
+[dark_sun_2]
+id            = "dark_sun_2"
+label         = "Dark Sun: Wake of the Ravager"
+dir           = "dark_sun_2/data"
+supported     = true
+sfx_dir       = "dark_sun_2/data"
+music_dir     = "dark_sun_2/data/MUSIC"
+cinematic_dir = "dark_sun_2/data"
+
+["al-qadim"]
+id            = "al-qadim"
+label         = "Al-Qadim: The Genie's Curse"
+dir           = "al-qadim/data"
+supported     = true
+sfx_dir       = "al-qadim/data/SFX"
+xmi_dir       = "al-qadim/data/SFX"
+# music_dir and cinematic_dir absent → None

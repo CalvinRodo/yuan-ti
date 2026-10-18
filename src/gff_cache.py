@@ -11,7 +11,7 @@ from flask import abort
 
 from gff import GffFile
 from image import Palette
-from config import DEFAULT_GAME, resolve_game_dir
+from config import DEFAULT_GAME, resolve_game_dir, find_file_nocase
 
 # ---------------------------------------------------------------------------
 # In-process GFF cache
@@ -35,6 +35,20 @@ def load_gff(name: str, game_id: str = DEFAULT_GAME) -> GffFile:
             _gff_cache.pop(next(iter(_gff_cache)))
         _gff_cache[cache_key] = GffFile.create(data)
     return _gff_cache[cache_key]
+
+
+def try_load_gff(game_dir: str, filename: str, game_id: str) -> GffFile | None:
+    """Load a GFF from *game_dir* with case-insensitive filename lookup.
+
+    Returns ``None`` when the file cannot be found or fails to parse.
+    """
+    path = find_file_nocase(game_dir, filename)
+    if path is None:
+        return None
+    try:
+        return load_gff(os.path.basename(path), game_id)
+    except Exception:
+        return None
 
 
 def find_palette(gff: GffFile,

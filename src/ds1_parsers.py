@@ -13,7 +13,6 @@ return plain Python lists-of-dicts suitable for jsonify().
 
 import os
 import struct
-from typing import Optional
 
 # ---------------------------------------------------------------------------
 # Constants derived from libgff headers
@@ -235,7 +234,7 @@ def parse_monsters(gff) -> list[dict]:
             continue
 
         # Resolve sprite via OJFF: obj_id is always -rdff_id for combat objects
-        bmp_num: Optional[int] = None
+        bmp_num: int | None = None
         ojff_num = d.number  # abs(-rdff_id) == rdff_id
         try:
             ojff_raw = gff.get_resource_data('OJFF', ojff_num)

@@ -1,0 +1,29 @@
+# Spell / icon offset constants used by the GFF spell route and the
+# high-level /api/spells game-data route.
+
+# Most spells: ICON = spin_icon_offset + spin_number
+spin_icon_offset = 21000
+
+# Psionic powers (SPIN 139–172) map to ICON 3000–3033
+psionics_spin_start = 139
+psionics_spin_end   = 172
+psionics_icon_base  = 3000
+
+# Turn Undead (SPIN 1000) expands to one card per elemental domain
+turn_undead_spin = 1000
+
+[[turn_undead_variants]]
+domain = "AIR"
+icon   = 3044
+
+[[turn_undead_variants]]
+domain = "EARTH"
+icon   = 3045
+
+[[turn_undead_variants]]
+domain = "FIRE"
+icon   = 3046
+
+[[turn_undead_variants]]
+domain = "WATER"
+icon   = 3047

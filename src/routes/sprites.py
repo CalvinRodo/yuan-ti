@@ -27,14 +27,11 @@ POST /api/sprite-metadata    - save / merge metadata updates
 
 import json
 import os
-import sys
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from flask import Blueprint, jsonify, request, abort
 
-from config import DEFAULT_GAME, GAMES
-from gff_cache import load_gff
+from config import DEFAULT_GAME, GAMES, get_game
+from gff_cache import load_gff, try_load_gff
 from ds1_parsers import parse_monsters
 from image import ImageReading
 
@@ -203,26 +200,16 @@ def _build_catalog(game_id: str) -> list[dict]:
     if game_id in _catalog_cache:
         return _catalog_cache[game_id]
 
-    game     = GAMES.get(game_id, GAMES[DEFAULT_GAME])
-    game_dir = game['dir']
+    game_dir = get_game(game_id)['dir']
 
     gff      = None
     gff_name = 'SEGOBJEX.GFF'
     for candidate in ('SEGOBJEX.GFF', 'OBJEX.GFF'):
-        p = os.path.join(game_dir, candidate)
-        if not os.path.isfile(p):
-            upper = candidate.upper()
-            match = next(
-                (f for f in os.listdir(game_dir) if f.upper() == upper), None
-            )
-            p = os.path.join(game_dir, match) if match else None
-        if p and os.path.isfile(p):
-            try:
-                gff_name = os.path.basename(p)
-                gff = load_gff(gff_name, game_id)
-                break
-            except Exception:
-                continue
+        loaded = try_load_gff(game_dir, candidate, game_id)
+        if loaded is not None:
+            gff_name = candidate
+            gff      = loaded
+            break
 
     if gff is None:
         return []

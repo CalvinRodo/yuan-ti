@@ -7,11 +7,6 @@ GET /api/gff/<name>/texts             – all TEXT / MERR / SPIN / NAME resource
 GET /api/gff/<name>/spells            – SPIN resources with icon lookup metadata
 """
 
-import os
-import sys
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-
 from flask import Blueprint, jsonify, request
 
 from config import (
