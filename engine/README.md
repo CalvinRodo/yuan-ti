@@ -56,10 +56,14 @@ $GODOT --headless --path engine/game -- --check-install
 $GODOT --headless --path engine/game -- --check-regions
 ```
 
-In the region viewer: arrows, WASD or drag to scroll; mouse wheel or +/- to
-zoom; PgUp/PgDn for the previous or next region; F1 to show blocked cells (red)
-and cells that block line of sight (blue outline); Esc to go back. Objects
-with an `SCMD` script animate.
+In the region viewer: click to walk the character there (it finds a path
+around blocked cells); Tab for the next character sprite (any object whose
+`SCMD` can walk); arrows, WASD or right-drag to scroll (the camera follows
+the character again after the next click); mouse wheel or +/- to zoom;
+PgUp/PgDn for the previous or next region; F1 to show blocked cells (red) and
+cells that block line of sight (blue outline); Esc to go back. Objects with an
+`SCMD` script animate. `--check-regions` also walks a character 20 cells in
+every region.
 
 ## Notes
 

@@ -12,9 +12,11 @@ public sealed record PlacedSprite(int X, int Y, ImageFrame Frame, bool Mirrored 
 /// (<paramref name="X"/>, <paramref name="Y"/>), which is how DSUN.EXE places
 /// objects until something moves them.
 /// </summary>
+/// <param name="EtabX">The <c>ETAB</c> position, which DSUN.EXE also uses to depth-sort objects.</param>
 /// <param name="Frames">All frames of the object's <c>BMP </c>; static objects show frame 0.</param>
 /// <param name="Scmd">The <c>SCMD</c> animation number (<c>OJFF</c> +0x0E), or 0.</param>
-public sealed record RegionObject(int EtabIndex, int Ojff, int X, int Y, bool Mirrored, IReadOnlyList<ImageFrame> Frames, int Scmd)
+public sealed record RegionObject(int EtabIndex, int Ojff, int EtabX, int EtabY, int X, int Y, bool Mirrored,
+    IReadOnlyList<ImageFrame> Frames, int Scmd)
 {
     public ImageFrame Frame => Frames[0];
 }
@@ -183,34 +185,28 @@ public sealed class Region
             }
             if (sprite is { } s)
             {
-                objects.Add(new RegionObject(at / 8, ojff, x - s.AnchorX, y - s.AnchorY, mirrored, s.Frames, s.Scmd));
+                objects.Add(new RegionObject(at / 8, ojff, x, y, x - s.Definition.AnchorX, y - s.Definition.AnchorY,
+                    mirrored, s.Frames, s.Definition.Scmd));
             }
         }
         return objects;
     }
 
-    private sealed record ObjectSprite(int AnchorX, int AnchorY, IReadOnlyList<ImageFrame> Frames, int Scmd);
+    private sealed record ObjectSprite(ObjectDefinition Definition, IReadOnlyList<ImageFrame> Frames);
 
     private static ObjectSprite? LoadObjectSprite(GffSet all, int ojff)
     {
-        if (!all.TryRead("OJFF", ojff, out var record) || record.Length < 0x10)
+        if (!all.TryRead("OJFF", ojff, out var record) || record.Length < ObjectDefinition.Size)
         {
             return null;
         }
-        ReadOnlySpan<byte> r = record.Span;
-        int bmp = BinaryPrimitives.ReadUInt16LittleEndian(r[0x0C..]);
-        if (!all.TryRead("BMP ", bmp, out var image))
+        ObjectDefinition definition = ObjectDefinition.Parse(record.Span);
+        if (!all.TryRead("BMP ", definition.Bmp, out var image))
         {
             return null;
         }
         var frames = ImageDecoder.ReadFrames(image.Span);
-        return frames.Count == 0
-            ? null
-            : new ObjectSprite(
-                BinaryPrimitives.ReadInt16LittleEndian(r[2..]),
-                BinaryPrimitives.ReadInt16LittleEndian(r[4..]) + (sbyte)r[0x0A],
-                frames,
-                BinaryPrimitives.ReadInt16LittleEndian(r[0x0E..]));
+        return frames.Count == 0 ? null : new ObjectSprite(definition, frames);
     }
 
     /// <summary>

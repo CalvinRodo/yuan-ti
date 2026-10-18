@@ -17,6 +17,7 @@ public static class Controls
     public const string NextRegion = "debug_next_region";
     public const string PreviousRegion = "debug_previous_region";
     public const string ToggleMapFlags = "debug_toggle_map_flags";
+    public const string NextCharacter = "debug_next_character";
     public const string Back = "ui_cancel";
 
     public static void Register()
@@ -30,6 +31,7 @@ public static class Controls
         Add(NextRegion, Key.Pagedown);
         Add(PreviousRegion, Key.Pageup);
         Add(ToggleMapFlags, Key.F1);
+        Add(NextCharacter, Key.Tab);
     }
 
     private static void Add(string action, params Key[] keys)

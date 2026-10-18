@@ -9,10 +9,8 @@ namespace DarkSun.Game.Animation;
 /// <c>dsun-exe-reference.md</c> §3). Time is counted in 96 Hz ticks.
 /// </summary>
 /// <remarks>
-/// Not modelled yet: the creature hot spot (width / 2, height) unless a record
-/// has <see cref="ScmdFlags.RecordHotSpot"/>, the zero delay of moving records
-/// in fast mode, stopping when an object leaves the map, and flags 0x10 and
-/// 0x20.
+/// Not modelled yet: the zero delay of moving records in fast mode, stopping
+/// when an object leaves the map, and flags 0x10 and 0x20.
 /// </remarks>
 public sealed class ScmdAnimator
 {
@@ -20,6 +18,7 @@ public sealed class ScmdAnimator
 
     private readonly Scmd _script;
     private readonly int _frameCount;
+    private readonly IReadOnlyList<(int Width, int Height)>? _creatureFrames;
     private long _lastStep;
     private int _delay;
     private readonly Queue<int> _sounds = new();
@@ -27,9 +26,24 @@ public sealed class ScmdAnimator
     /// <param name="frameCount">Frames in the object's <c>BMP </c>; out-of-range frames show frame 0.</param>
     /// <param name="startIndex">First record: 0 for objects, a stand slot for creatures.</param>
     public ScmdAnimator(Scmd script, int frameCount, int startIndex = 0, bool mirrored = false)
+        : this(script, frameCount, null, startIndex, mirrored)
+    {
+    }
+
+    /// <summary>
+    /// A creature's animation: its hot spot is the bottom centre of the
+    /// frame, (width / 2, height), unless a record has
+    /// <see cref="ScmdFlags.RecordHotSpot"/>.
+    /// </summary>
+    public static ScmdAnimator ForCreature(Scmd script, IReadOnlyList<(int Width, int Height)> frames, int startIndex) =>
+        new(script, frames.Count, frames, startIndex, mirrored: false);
+
+    private ScmdAnimator(Scmd script, int frameCount, IReadOnlyList<(int Width, int Height)>? creatureFrames,
+        int startIndex, bool mirrored)
     {
         _script = script;
         _frameCount = frameCount;
+        _creatureFrames = creatureFrames;
         Index = startIndex;
         Mirrored = mirrored;
         Animating = true;
@@ -48,6 +62,12 @@ public sealed class ScmdAnimator
     /// <summary>Total movement from the records' dx and dy, in pixels.</summary>
     public int OffsetX { get; private set; }
     public int OffsetY { get; private set; }
+
+    /// <summary>
+    /// The tick at which the current record's delay ends. After a stop, the
+    /// stopped frame stays on screen until then.
+    /// </summary>
+    public long NextStepAt => _lastStep + _delay;
 
     /// <summary>Sound effects triggered since the last call, oldest first.</summary>
     public IEnumerable<int> TakeSounds()
@@ -95,8 +115,16 @@ public sealed class ScmdAnimator
         if (record.Frame != ScmdRecord.KeepFrame)
         {
             Frame = record.Frame < _frameCount ? record.Frame : 0;
-            HotX = record.HotX;
-            HotY = record.HotY;
+            if (_creatureFrames is not null && !record.Flags.HasFlag(ScmdFlags.RecordHotSpot) && Frame < _creatureFrames.Count)
+            {
+                HotX = _creatureFrames[Frame].Width / 2;
+                HotY = _creatureFrames[Frame].Height;
+            }
+            else
+            {
+                HotX = record.HotX;
+                HotY = record.HotY;
+            }
             OffsetX += record.Dx;
             OffsetY += record.Dy;
         }

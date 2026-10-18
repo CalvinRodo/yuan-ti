@@ -114,17 +114,24 @@ Goal: a party sprite walking around a region at the original scale.
 - [ ] Y-sort objects and walls with characters, once characters move.
 - [ ] Camera following the party, with integer scaling to any window size
       (the original is 320 × 200, *unverified*).
-- [ ] Movement and collision from the `GMAP` bits (confirmed 2026-10-18:
-      0x40 blocks movement, 0x80 blocks sight, 0x20 occupied at run time;
-      `Region.IsBlocked`, `Region.BlocksSight`) and the creature footprint;
-      click-to-move with A* pathfinding.
+- [x] Movement and collision from the `GMAP` bits (0x40 blocks movement,
+      0x80 blocks sight, 0x20 occupied at run time; `Region.IsBlocked`,
+      `Region.BlocksSight`); click-to-move with A* pathfinding
+      (`DarkSun.Game.Movement`: `Pathfinder`, 8-way without cutting corners,
+      and `Walker`, one walk cycle per cell).
+- [ ] Creature footprints larger than one cell (`footprint_blocked`), and
+      marking occupied cells (0x20) so creatures don't overlap.
+- [ ] Compare with DSUN.EXE's own pathfinding (not yet located) and walking
+      speed in play (walk records move 4 px per 7 ticks: about 3.4 cells/s).
 - [x] Decode `SCMD` animation scripts (`DarkSun.Data.Animation.Scmd`,
       `DarkSun.Game.Animation.ScmdAnimator`, 96 Hz ticks); objects in the
       region view animate.
-- [ ] Character sprites: walking and standing by direction from the `SCMD`
-      header slots; the creature hot spot (width / 2, height).
-- [ ] Draw objects and walls depth-sorted by row, as DSUN.EXE does
-      (`draw_objects_and_walls`, `1DBD:0002`).
+- [x] Character sprites: walking and standing by direction from the `SCMD`
+      header slots; the creature hot spot (width / 2, height). Any of the 120
+      walking object sprites can be chosen (Tab) until party characters exist.
+- [x] Depth-sort objects, walls and characters (Godot y-sort on each
+      sprite's `ETAB` point or bottom edge; DSUN.EXE draws row by row,
+      `draw_objects_and_walls`, `1DBD:0002`).
 - [ ] Play `SCMD` sound effects (record byte 7).
 - [ ] Region transitions: map edges and doors to other `RGNxx` files.
 - [ ] Debug overlay: grid, passability, object numbers, hovered tile.
