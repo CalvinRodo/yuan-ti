@@ -7,7 +7,8 @@ namespace DarkSun.Engine;
 /// Start screen: finds the player's game files, then plays the intro and
 /// opens the main menu (<c>-- --no-intro</c>: straight to the menu;
 /// <c>-- --new-game</c>: straight into a new game, with <c>--region=N</c> and
-/// <c>--at=X,Y</c> to start elsewhere; <c>-- --mods</c>: the mod list). Only
+/// <c>--at=X,Y</c> to start elsewhere; <c>-- --mods</c>: the mod list;
+/// <c>-- --saves</c>: the saved games; <c>-- --load=quick</c>: load a save). Only
 /// shown when the files can't be found, to choose their folder.
 /// For headless checks: <c>-- --check-install</c> prints what was found and
 /// quits (exit code 1 if nothing); <c>-- --check-regions</c>,
@@ -69,8 +70,8 @@ public partial class Main : Control
             GetTree().Quit(ok > 0 ? 0 : 1);
             return;
         }
-        bool regionCheck = args.Contains("--check-regions") || args.Contains("--check-exits") || args.Contains("--check-start") || args.Contains("--check-verbs") || args.Contains("--check-memory");
-        bool screenCheck = args.Contains("--check-intro") || args.Contains("--check-menu") || args.Contains("--check-mods");
+        bool regionCheck = args.Contains("--check-regions") || args.Contains("--check-exits") || args.Contains("--check-start") || args.Contains("--check-verbs") || args.Contains("--check-memory") || args.Contains("--check-save");
+        bool screenCheck = args.Contains("--check-intro") || args.Contains("--check-menu") || args.Contains("--check-mods") || args.Contains("--check-saves");
         if (args.Contains("--check-install") || (install is null && (regionCheck || screenCheck)))
         {
             GD.Print(install is null ? "No game install found." : Describe(install));
@@ -85,6 +86,25 @@ public partial class Main : Control
         else if (args.Contains("--check-menu"))
         {
             ChangeScene(MainMenu.ScenePath);
+        }
+        else if (install is not null && args.FirstOrDefault(a => a.StartsWith("--load=")) is { } load)
+        {
+            // Straight into a saved game (a name in the saves folder, e.g. --load=quick).
+            string path = Session.SavePath(load["--load=".Length..]);
+            try
+            {
+                RegionView.PendingLoad = DarkSun.Game.Saves.SaveGame.Read(path);
+                ChangeScene(RegionView.ScenePath);
+            }
+            catch (Exception e) when (e is IOException or InvalidDataException)
+            {
+                SavesView.Message = $"Can't read {path}: {e.Message}";
+                ChangeScene(SavesView.ScenePath);
+            }
+        }
+        else if (args.Contains("--check-saves") || install is not null && args.Contains("--saves"))
+        {
+            ChangeScene(SavesView.ScenePath);
         }
         else if (install is not null && args.Contains("--mods") || args.Contains("--check-mods"))
         {

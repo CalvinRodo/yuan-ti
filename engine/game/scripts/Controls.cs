@@ -22,6 +22,8 @@ public static class Controls
     public const string ChangeSprite = "debug_change_sprite";
     public const string ToggleScriptLog = "debug_toggle_script_log";
     public const string ToggleGrid = "debug_toggle_grid";
+    public const string QuickSave = "quick_save";
+    public const string QuickLoad = "quick_load";
     public const string ToggleObjectNumbers = "debug_toggle_object_numbers";
     public const string Back = "ui_cancel";
 
@@ -41,6 +43,8 @@ public static class Controls
         Add(ChangeSprite, Key.C);
         Add(ToggleScriptLog, Key.F2);
         Add(ToggleGrid, Key.F3);
+        Add(QuickSave, Key.F5);
+        Add(QuickLoad, Key.F9);
         Add(ToggleObjectNumbers, Key.F4);
     }
 

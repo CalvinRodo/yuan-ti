@@ -87,8 +87,7 @@ music. Any key or click skips it; `-- --no-intro` leaves it out. Then comes the 
 Start Game (or S) plays the arrival cinematic and starts a new game, and
 Exit (E) quits; Mods (M, bottom right; `-- --mods` goes straight there) opens the mod list. The music changes as in the original: the menu's
 theme (17), each region's own track (its `RDAT` record), with 5-second fades
-between them. Create Characters (C) and Load Saved Game (L) aren't ported
-yet. Arrow keys and Enter work too. Esc in the region viewer returns to the
+between them. Create Characters (C) isn't ported yet. Arrow keys and Enter work too. Esc in the region viewer returns to the
 menu. The start screen only appears when the game files can't be found.
 
 The region viewer starts a new game where DSUN.EXE does: region 42
@@ -117,7 +116,19 @@ the party's cells run once, when a new game starts. A region the party has
 left comes back as it was left (DSUN.EXE saves it too): doors open or
 closed, cells scripts blocked, objects moved, taken off the map or cloned,
 creatures' allegiance and script fields; its script then runs again, as in
-the original. This lasts for the session; there are no saved games yet. Creatures (objects with an `RDFF` combat record) walk where their
+the original. Saved games keep it, with everything else.
+
+Saved games: F5 saves (a quick save), F9 loads it, and entering a region
+autosaves; Load Saved Game (L) on the main menu lists every save, newest
+first, to load or delete. A save is a JSON file in `saves` in the Godot user
+data folder holding the party (sprite, cell, facing, the selected member),
+the script globals and engine variables, the trigger table, the creatures'
+scripts, the random generator, and every region visited as it was left (the
+current one as it is). Loading enters the region without running its script
+again, since its triggers are saved. Saving waits until a conversation is
+over. A save that can't be read, or comes from another version, says why and
+leaves the game in progress alone. `-- --load=quick` starts straight into a
+save, `-- --saves` opens the list. Creatures (objects with an `RDFF` combat record) walk where their
 scripts send them (HUNT, GO, GOXY, FOLLOW, FLEE, FETCH, WAIT), and run their
 no-orders and line-of-sight scripts; RANGE, GETXY, GET_LOS and the other
 queries read the world (`DarkSun.Game.World`). Items, combat and some
@@ -140,7 +151,9 @@ animate. `--check-regions` also walks the party 20 cells in every region and
 fails if two characters ever overlap; `--check-exits` walks the active member into
 every move trigger from each side and uses every object with a use trigger,
 answering Yes, and lists the region exits it finds and the regions none
-lead to (`--only=RGN0E` for one region, `-v` to see each try); `--check-memory` changes every region (doors,
+lead to (`--only=RGN0E` for one region, `-v` to see each try); `--check-save` saves a changed game, changes it again, loads
+it and checks that it came back; `--check-saves` lists the saved games;
+`--check-memory` changes every region (doors,
 a creature gone, one moved, a clone), leaves and comes back, and checks it
 is as it was left; `--check-start` starts a new game and
 prints where the party stands and what the scripts did. `--check-verbs` opens every region's verb menus and does every verb

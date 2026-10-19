@@ -4,6 +4,7 @@ using DarkSun.Data.Images;
 using DarkSun.Data.Regions;
 using DarkSun.Game.Animation;
 using DarkSun.Game.Movement;
+using DarkSun.Game.Saves;
 using DarkSun.Game.Scripting;
 using DarkSun.Game.World;
 using Godot;
@@ -167,12 +168,29 @@ public partial class RegionView : Node2D
             CheckVerbs();
             return;
         }
+        if (PendingLoad is { } save)
+        {
+            PendingLoad = null;
+            if (!LoadSaved(save))
+            {
+                // Back to the list, which says why.
+                SavesView.Message = _notice.Text;
+                GetTree().CallDeferred(SceneTree.MethodName.ChangeSceneToFile, SavesView.ScenePath);
+            }
+            return;
+        }
         if (_regionIndex < 0)
         {
             // A new game begins where DSUN.EXE's does: region 42, the party at pixel (488, 152).
             _regionIndex = 0;
             EnterRegion(NewGameStart.Region, NewGameStart.At);
             FireArrivalTriggers();
+            if (OS.GetCmdlineUserArgs().Contains("--check-save"))
+            {
+                _instantTravel = true;
+                CheckSave();
+                return;
+            }
             if (OS.GetCmdlineUserArgs().Contains("--check-start"))
             {
                 GD.Print($"new game: {Session.Install!.RegionFiles[_regionIndex]} (region {_region.Number}); party at "
@@ -206,6 +224,14 @@ public partial class RegionView : Node2D
         };
         layer.AddChild(_dialogueWindow);
 
+        _notice = new Label { Visible = false, HorizontalAlignment = HorizontalAlignment.Center, MouseFilter = Control.MouseFilterEnum.Ignore };
+        _notice.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.CenterTop);
+        _notice.GrowHorizontal = Control.GrowDirection.Both;
+        _notice.OffsetTop = 22;
+        _notice.AddThemeFontSizeOverride("font_size", 10);
+        _notice.AddThemeColorOverride("font_outline_color", Colors.Black);
+        _notice.AddThemeConstantOverride("outline_size", 4);
+        layer.AddChild(_notice);
         _hoverPanel = new PanelContainer { Visible = false, MouseFilter = Control.MouseFilterEnum.Ignore };
         _hoverPanel.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.BottomRight);
         _hoverPanel.GrowHorizontal = Control.GrowDirection.Begin;
@@ -229,7 +255,8 @@ public partial class RegionView : Node2D
         return layer;
     }
 
-    private void ShowRegion(int index, Cell? start = null)
+    /// <param name="saved">Loading a game: the party as saved, and the region entered without running its script (its triggers are in the save).</param>
+    private void ShowRegion(int index, Cell? start = null, SaveGame? saved = null)
     {
         IReadOnlyList<string> files = Session.Install!.RegionFiles;
         _regionIndex = (index % files.Count + files.Count) % files.Count;
@@ -239,13 +266,21 @@ public partial class RegionView : Node2D
         // The party keeps its looks, facing and selection from region to region.
         var carried = _party.Select(m => (m.Sprite, m.Walker.Facing)).ToList();
         int selected = _selected;
-        if (_world is not null)
+        if (_world is not null && saved is null)
         {
             Session.Regions.Remember(_world);
         }
         LoadRegion(files[_regionIndex]);
-        PlaceParty(start, carried, selected);
-        RunRegionScripts();
+        if (saved is not null)
+        {
+            PlaceSavedParty(saved);
+            AttachScripts();
+        }
+        else
+        {
+            PlaceParty(start, carried, selected);
+            RunRegionScripts();
+        }
         UpdateHud();
         _follow = true;
         FollowCharacter();
@@ -740,6 +775,14 @@ public partial class RegionView : Node2D
             _overlay.Flags = !_overlay.Flags;
             UpdateHover(force: true);
         }
+        else if (e.IsActionPressed(Controls.QuickSave))
+        {
+            Save(QuickSave, "Quick save");
+        }
+        else if (e.IsActionPressed(Controls.QuickLoad))
+        {
+            QuickLoadGame();
+        }
         else if (e.IsActionPressed(Controls.ToggleGrid))
         {
             _overlay.Grid = !_overlay.Grid;
@@ -844,11 +887,18 @@ public partial class RegionView : Node2D
     }
 
     /// <summary>The game-start script once per session, then the region's <c>MAS</c> script.</summary>
+    /// <summary>Connect the dialogue window and the overlay to this region's scripts.</summary>
+    private void AttachScripts()
+    {
+        _portraits.Clear();
+        _dialogueWindow.Attach(Session.ScriptHost.Dialogue, Portrait);
+        _overlay.Show(_region, _occupancy, Session.Scripts.Triggers, _world);
+    }
+
     private void RunRegionScripts()
     {
         GplMachine scripts = Session.Scripts;
-        _portraits.Clear();
-        _dialogueWindow.Attach(Session.ScriptHost.Dialogue, Portrait);
+        AttachScripts();
         if (!Session.GameStarted)
         {
             Session.GameStarted = true;
@@ -1261,6 +1311,10 @@ public partial class RegionView : Node2D
             {
                 _entering = false;
             }
+            if (!Session.Scripts.IsSuspended && _world.PendingRegion is null)
+            {
+                Save(AutoSave, "Autosave", quiet: true);
+            }
         }));
         tween.TweenProperty(_fade, "color:a", 0f, FadeSeconds);
     }
@@ -1288,6 +1342,141 @@ public partial class RegionView : Node2D
     /// <summary>Change region at once, without the fade (headless checks that step the game themselves).</summary>
     private bool _instantTravel;
     private ColorRect? _fade;
+
+    // -- saved games -------------------------------------------------------------------
+
+    public const string QuickSave = "quick", AutoSave = "auto";
+
+    /// <summary>A game to load when the view opens (set by the load screen).</summary>
+    public static SaveGame? PendingLoad { get; set; }
+
+    private Label _notice = null!;
+    private Tween? _noticeTween;
+
+    /// <summary>
+    /// Save to <paramref name="file"/> in the saves folder. Not while a script
+    /// waits for the player or the party is between regions: the save would
+    /// have to capture a script half run.
+    /// </summary>
+    private void Save(string file, string name, bool quiet = false)
+    {
+        if (_checking)
+        {
+            return;
+        }
+        if (Session.Scripts.IsSuspended || _transitioning || _world.PendingRegion is not null)
+        {
+            if (!quiet)
+            {
+                Notice("Can't save now: finish the conversation first.");
+            }
+            return;
+        }
+        try
+        {
+            var party = _party.Select(m => new PartyMemberSave(m.Sprite.Ojff, m.Walker.Cell.X, m.Walker.Cell.Y, m.Walker.Facing));
+            SaveGame save = SaveGame.Capture(name, Session.Scripts, Session.ScriptHost.EngineVariables, _world, Session.Regions,
+                party, _selected, Session.Mods.Mods.Select(m => m.Name));
+            save.Write(Session.SavePath(file));
+            AddScriptLine($"    saved to {Session.SavePath(file)}");
+            if (!quiet)
+            {
+                Notice($"{name}: saved.");
+            }
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            Notice($"Couldn't save: {e.Message}");
+        }
+    }
+
+    private void QuickLoadGame()
+    {
+        string path = Session.SavePath(QuickSave);
+        if (!File.Exists(path))
+        {
+            Notice("No quick save yet (F5 saves).");
+            return;
+        }
+        try
+        {
+            LoadSaved(SaveGame.Read(path));
+        }
+        catch (InvalidDataException e)
+        {
+            Notice($"Couldn't load the quick save: {e.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Load <paramref name="save"/>: a fresh game with the saved scripts'
+    /// state and regions, then its region as saved, without running its
+    /// script, and the party where it stood.
+    /// </summary>
+    /// <returns>False, with a notice saying why, if it can't be loaded; the game in progress then goes on.</returns>
+    private bool LoadSaved(SaveGame save)
+    {
+        int index = Session.Install!.RegionFiles.ToList().FindIndex(f => f.Equals($"RGN{save.Region:X2}.GFF", StringComparison.OrdinalIgnoreCase));
+        if (index < 0)
+        {
+            Notice($"Can't load: no region file for region {save.Region}.");
+            return false;
+        }
+        try
+        {
+            // Try it on a scratch machine first, so a bad save leaves the game in progress alone.
+            save.Restore(new GplMachine(new GffScripts(new GffSet([])), new LoggingGplHost(), [], new DarkSun.Game.Rules.BorlandRandom()),
+                new int[15], new RegionMemory());
+        }
+        catch (InvalidDataException e)
+        {
+            Notice($"Can't load: {e.Message}");
+            return false;
+        }
+        Session.NewGame();
+        save.Restore(Session.Scripts, Session.ScriptHost.EngineVariables, Session.Regions);
+        Session.GameStarted = true;
+        _world = null!; // nothing of the game being left is remembered
+        _transitioning = false;
+        _fade?.Set("color", new Color(0, 0, 0, 0));
+        ShowRegion(index, saved: save);
+        _scriptLogSeen = Session.ScriptHost.Log.Count;
+        var missing = save.Mods.Except(Session.Mods.Mods.Select(m => m.Name)).ToList();
+        Notice($"Loaded {save.Name} ({save.Saved.LocalDateTime:g})." + (missing.Count > 0 ? $" Saved with mods now off: {string.Join(", ", missing)}." : ""));
+        return true;
+    }
+
+    /// <summary>The party as saved, each where it stood.</summary>
+    private void PlaceSavedParty(SaveGame save)
+    {
+        List<CharacterSprite> sprites = Characters();
+        _nextSprite = 0;
+        foreach (PartyMemberSave m in save.Party.Take(PartySize))
+        {
+            CharacterSprite? sprite = sprites.FirstOrDefault(c => c.Ojff == m.Sprite);
+            AddCharacter(new Cell(m.X, m.Y), sprite: sprite, facing: m.Facing);
+        }
+        _nextSprite = _party.Count;
+        _selected = Math.Clamp(save.Selected, 0, Math.Max(0, _party.Count - 1));
+        _world.ActiveMember = _selected;
+        foreach (PartyMember member in _party)
+        {
+            _lastCells[member.Walker] = member.Walker.Cell;
+        }
+    }
+
+    /// <summary>A line at the top of the screen for a few seconds.</summary>
+    private void Notice(string text)
+    {
+        AddScriptLine($"    {text}");
+        _notice.Text = text;
+        _notice.Visible = true;
+        _notice.Modulate = Colors.White;
+        _noticeTween?.Kill();
+        _noticeTween = CreateTween();
+        _noticeTween.TweenInterval(2.5);
+        _noticeTween.TweenProperty(_notice, "modulate:a", 0f, 0.5);
+    }
 
     /// <summary>Change to region <paramref name="number"/> with the party at <paramref name="start"/>.</summary>
     private void EnterRegion(int number, Cell start)
@@ -1317,6 +1506,73 @@ public partial class RegionView : Node2D
     private bool _checking;
     private int _scriptRuns, _scriptErrors;
     private bool _checkingVerbs;
+
+    /// <summary>
+    /// A new game, a region visited and left, a door moved, a global flag
+    /// set and the party moved; saved, all of it changed again, loaded back;
+    /// prints what didn't come back.
+    /// </summary>
+    private void CheckSave()
+    {
+        AnswerForThePlayer();
+        int home = _regionIndex;
+        ShowRegion(home + 1);
+        AnswerForThePlayer();
+        ShowRegion(home);
+        AnswerForThePlayer();
+        WorldObject? door = _world.Objects.FirstOrDefault(o => o.IsDoor);
+        if (door is not null)
+        {
+            _world.SetDoor(door, (door.DoorFlags & Doors.Closed) != 0 ? 0 : Doors.Closed, force: true);
+        }
+        Session.Scripts.Memory.Area(GplArea.GlobalFlags)[50] = 0x5A;
+        Walker leader = _party[0].Walker;
+        if (_world.NearestCell(new Cell(leader.Cell.X + 4, leader.Cell.Y + 2), c => leader.CanStand(c, _region.IsBlocked)) is { } cell)
+        {
+            leader.Teleport(cell, _region.IsBlocked);
+        }
+        var expected = (Region: _region.Number, Door: door?.DoorFlags, Leader: leader.Cell, Facing: leader.Facing,
+            Flag: (byte)0x5A, Remembered: Session.Regions.States.Count(r => r.Region != _region.Number) + 1, Random: Session.Scripts.Random.State,
+            Talk: Session.Scripts.Triggers.Count(GplTriggerList.TalkTo), Party: _party.Count);
+        string file = "check-" + Guid.NewGuid().ToString("N")[..8];
+        Save(file, "Check");
+        string path = Session.SavePath(file);
+        if (!File.Exists(path))
+        {
+            GD.Print("save check: nothing was saved");
+            GetTree().Quit(1);
+            return;
+        }
+
+        // Change everything, then load.
+        Session.Scripts.Memory.Area(GplArea.GlobalFlags)[50] = 0;
+        ShowRegion(home + 2);
+        AnswerForThePlayer();
+        LoadSaved(SaveGame.Read(path));
+        File.Delete(path);
+
+        var problems = new List<string>();
+        void Expect<T>(string what, T want, T got)
+        {
+            if (!EqualityComparer<T>.Default.Equals(want, got))
+            {
+                problems.Add($"{what}: {got} instead of {want}");
+            }
+        }
+        Expect("region", expected.Region, _region.Number);
+        Expect("door flags", expected.Door, door is null ? null : _world[door.Index]?.DoorFlags);
+        Expect("leader's cell", expected.Leader, _party[0].Walker.Cell);
+        Expect("leader's facing", expected.Facing, _party[0].Walker.Facing);
+        Expect("global flag byte", expected.Flag, Session.Scripts.Memory.Area(GplArea.GlobalFlags)[50]);
+        Expect("regions remembered", expected.Remembered, Session.Regions.Count);
+        Expect("random state", expected.Random, Session.Scripts.Random.State);
+        Expect("talk triggers", expected.Talk, Session.Scripts.Triggers.Count(GplTriggerList.TalkTo));
+        Expect("party size", expected.Party, _party.Count);
+        GD.Print(problems.Count == 0
+            ? $"save check: region {expected.Region}, door, party, globals, triggers, random and {Session.Regions.Count} regions came back"
+            : "save check: " + string.Join("; ", problems));
+        GetTree().Quit(problems.Count > 0 ? 1 : 0);
+    }
 
     /// <summary>
     /// For every region: open or close every door, send a creature off the

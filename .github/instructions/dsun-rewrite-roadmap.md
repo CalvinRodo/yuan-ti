@@ -271,8 +271,15 @@ this milestone brings most of the game's content.
       `GameWorld.Snapshot` / `Restore`), as DSUN.EXE saves the region it
       leaves (`7155:0C64`): `GMAP` flags, and each object's place, hidden
       state, door flags, second state, allegiance, status, script fields
-      and clones. Restored before the region script runs again. Kept for
-      the session only; saving it to disk waits for saved games.
+      and clones. Restored before the region script runs again, and kept in
+      saved games.
+- [x] **Saved games** (`DarkSun.Game.Saves.SaveGame`, JSON): party
+      (placeholder sprites, cells, facing, selection), globals, engine
+      variables, the 200-record trigger table as is, creature scripts, the
+      random generator and region memory. F5 / F9 quick save and load, an
+      autosave on entering a region, and the main menu's Load Saved Game.
+      Loading doesn't run the region script (its triggers are saved).
+      DSUN.EXE's own save format isn't read.
 - [x] **Find how scripts are triggered** (`dsun-exe-reference.md` §4):
       `MAS 99` at a new game, `MAS` *n* on entering region *n*, and the
       triggers those scripts register (move tile/box, look, talk, use, use

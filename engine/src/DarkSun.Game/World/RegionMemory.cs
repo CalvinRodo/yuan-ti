@@ -30,4 +30,17 @@ public sealed class RegionMemory
     public bool Knows(int region) => _regions.ContainsKey(region);
 
     public void Forget() => _regions.Clear();
+
+    /// <summary>Every region remembered (for a saved game).</summary>
+    public IReadOnlyCollection<RegionState> States => _regions.Values;
+
+    /// <summary>Remember <paramref name="states"/> instead of what was remembered (a saved game's).</summary>
+    public void Load(IEnumerable<RegionState> states)
+    {
+        _regions.Clear();
+        foreach (RegionState state in states)
+        {
+            _regions[state.Region] = state;
+        }
+    }
 }

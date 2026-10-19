@@ -3,6 +3,7 @@ using DarkSun.Data.Images;
 using DarkSun.Data.Regions;
 using DarkSun.Game.Movement;
 using DarkSun.Game.Rules;
+using DarkSun.Game.Saves;
 using DarkSun.Game.Scripting;
 using DarkSun.Game.World;
 
@@ -341,6 +342,73 @@ public class GameWorldTests
         Assert.Equal(3, again.First(-100)!.Allegiance);
         memory.Forget();
         Assert.False(memory.Knows(again.Region.Number));
+    }
+
+    [Fact]
+    public void ASavedGameComesBackFromDisk()
+    {
+        GameWorld world = World();
+        var host = new WorldGplHost { Map = world };
+        var machine = new GplMachine(new SingleScript([GplOpcodes.EndFunction]), host, [], new BorlandRandom(7));
+        machine.Memory.Area(GplArea.GlobalFlags)[3] = 0x21;
+        machine.Memory.Area(GplArea.GlobalStrings)[0] = (byte)'Z';
+        machine.Triggers.AddObject(GplTriggerList.TalkTo, 0x10, 12, -100, global: true);
+        machine.Creatures.SetSight(-100, 1, new GplEntry(12, 0x40), 5);
+        machine.Creatures.SetNoOrders(-100, new GplEntry(12, 0x50));
+        machine.Random.Next();
+        world.EngineVariables[5] = 2;
+        world.SetAllegiance(-100, 6);
+        var memory = new RegionMemory();
+        memory.Load([World().Snapshot() with { Region = 9 }]);
+        string path = Path.Combine(Path.GetTempPath(), $"darksun-save-{Guid.NewGuid():N}.json");
+        try
+        {
+            SaveGame.Capture("Test", machine, world.EngineVariables, world, memory,
+                [new PartyMemberSave(5, 1, 8, DarkSun.Data.Animation.Direction.East)], 0, ["MyMod"]).Write(path);
+
+            SaveGame save = SaveGame.Read(path);
+            GameWorld fresh = World();
+            var again = new GplMachine(new SingleScript([GplOpcodes.EndFunction]), new WorldGplHost { Map = fresh }, [], new BorlandRandom(1));
+            var recalled = new RegionMemory();
+            save.Restore(again, fresh.EngineVariables, recalled);
+
+            Assert.Equal(("Test", 5), (save.Name, save.Region));
+            Assert.Equal(["MyMod"], save.Mods);
+            Assert.Equal(DarkSun.Data.Animation.Direction.East, Assert.Single(save.Party).Facing);
+            Assert.Equal(0x21, again.Memory.Area(GplArea.GlobalFlags)[3]);
+            Assert.Equal((byte)'Z', again.Memory.Area(GplArea.GlobalStrings)[0]);
+            Assert.Equal(new GplEntry(12, 0x10), again.Triggers.MatchObject(GplTriggerList.TalkTo, -100));
+            Assert.Equal((1, new GplEntry(12, 0x40), 5), again.Creatures.Sight[-100]);
+            Assert.Equal(new GplEntry(12, 0x50), again.Creatures.NoOrders[-100]);
+            Assert.Equal(machine.Random.State, again.Random.State);
+            Assert.Equal(2, fresh.EngineVariables[5]);
+            Assert.True(recalled.Knows(9) && recalled.Knows(5));
+            Assert.NotNull(recalled.Recall(fresh));
+            Assert.Equal(6, fresh.First(-100)!.Allegiance);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void AnUnreadableSaveSaysWhy()
+    {
+        string path = Path.Combine(Path.GetTempPath(), $"darksun-save-{Guid.NewGuid():N}.json");
+        File.WriteAllText(path, "{ \"Version\": ");
+        try
+        {
+            Assert.Throws<InvalidDataException>(() => SaveGame.Read(path));
+            var future = new SaveGame { Version = 99 };
+            var e = Assert.Throws<InvalidDataException>(() => future.Restore(
+                new GplMachine(new SingleScript([]), new LoggingGplHost(), [], new BorlandRandom(1)), new int[15], new RegionMemory()));
+            Assert.Contains("version 99", e.Message);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
     }
 
     private sealed class SingleScript(byte[] code) : IGplScripts

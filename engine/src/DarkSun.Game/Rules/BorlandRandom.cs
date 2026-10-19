@@ -20,6 +20,13 @@ public sealed class BorlandRandom
     public static BorlandRandom FromTime(DateTimeOffset time) =>
         new((ushort)time.ToUnixTimeSeconds());
 
+    /// <summary>The whole generator state (for saved games).</summary>
+    public uint State
+    {
+        get => _seed;
+        set => _seed = value;
+    }
+
     /// <summary><c>srand</c>: the seed is the 16-bit argument, zero-extended.</summary>
     public void Seed(ushort seed) => _seed = seed;
 

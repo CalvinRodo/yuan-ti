@@ -46,6 +46,34 @@ public static class Session
 
     public static bool GameStarted { get; set; }
 
+    /// <summary>Where saved games go: <c>saves</c> in the Godot user data folder.</summary>
+    public static string SavesFolder => Godot.ProjectSettings.GlobalizePath("user://saves");
+
+    public static string SavePath(string name) => Path.Combine(SavesFolder, name + ".json");
+
+    /// <summary>The saved games, newest first, with the ones that can't be read (and why).</summary>
+    public static IReadOnlyList<(string Path, DarkSun.Game.Saves.SaveGame? Save, string? Error)> ListSaves()
+    {
+        if (!Directory.Exists(SavesFolder))
+        {
+            return [];
+        }
+        var list = new List<(string, DarkSun.Game.Saves.SaveGame?, string?)>();
+        foreach (string path in Directory.EnumerateFiles(SavesFolder, "*.json"))
+        {
+            try
+            {
+                list.Add((path, DarkSun.Game.Saves.SaveGame.Read(path), null));
+            }
+            catch (Exception e) when (e is InvalidDataException or IOException)
+            {
+                list.Add((path, null, e.Message));
+            }
+        }
+        // Readable saves first, newest first; the ones that can't be read after.
+        return [.. list.OrderBy(s => s.Item2 is null).ThenByDescending(s => s.Item2?.Saved ?? File.GetLastWriteTime(s.Item1))];
+    }
+
     /// <summary>The regions the party has left this game, as it left them.</summary>
     public static RegionMemory Regions { get; } = new();
 

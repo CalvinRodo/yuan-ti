@@ -43,6 +43,25 @@ public sealed class GplTriggers
 
     public GplTriggers() => Reset();
 
+    /// <summary>The whole table, list heads and free list, for a saved game.</summary>
+    public (byte[] Table, IReadOnlyDictionary<GplTriggerList, int> Heads, int Free) Save() =>
+        ([.. _table], new Dictionary<GplTriggerList, int>(_heads), _free);
+
+    /// <summary>Put back what <see cref="Save"/> returned.</summary>
+    public void Load(byte[] table, IReadOnlyDictionary<GplTriggerList, int> heads, int free)
+    {
+        if (table.Length != _table.Length)
+        {
+            throw new InvalidDataException($"trigger table of {table.Length} bytes, expected {_table.Length}");
+        }
+        table.CopyTo(_table, 0);
+        foreach (GplTriggerList list in Enum.GetValues<GplTriggerList>())
+        {
+            _heads[list] = heads.GetValueOrDefault(list, -1);
+        }
+        _free = free;
+    }
+
     /// <summary>As a new game does (<c>main</c>): every byte 0xFF, all records free, all lists empty.</summary>
     public void Reset()
     {
@@ -346,5 +365,19 @@ public sealed class GplCreatureScripts
     {
         _noOrders.Clear();
         _sight.Clear();
+    }
+
+    /// <summary>Replace every script with <paramref name="noOrders"/> and <paramref name="sight"/> (a saved game's).</summary>
+    public void Load(IEnumerable<KeyValuePair<int, GplEntry>> noOrders, IEnumerable<KeyValuePair<int, (int Kind, GplEntry Entry, int Range)>> sight)
+    {
+        Clear();
+        foreach (var (obj, entry) in noOrders)
+        {
+            _noOrders[obj] = entry;
+        }
+        foreach (var (obj, s) in sight)
+        {
+            _sight[obj] = s;
+        }
     }
 }
