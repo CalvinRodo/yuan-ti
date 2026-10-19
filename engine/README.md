@@ -113,7 +113,11 @@ to leave), step into a building's doorway, or Use a door, stairs or portal
 whose script sends the party on. The screen fades to black and back,
 and the party keeps its members, looks, facing and selected character. As in
 DSUN.EXE, arriving runs only the new region's script; the move triggers of
-the party's cells run once, when a new game starts. Creatures (objects with an `RDFF` combat record) walk where their
+the party's cells run once, when a new game starts. A region the party has
+left comes back as it was left (DSUN.EXE saves it too): doors open or
+closed, cells scripts blocked, objects moved, taken off the map or cloned,
+creatures' allegiance and script fields; its script then runs again, as in
+the original. This lasts for the session; there are no saved games yet. Creatures (objects with an `RDFF` combat record) walk where their
 scripts send them (HUNT, GO, GOXY, FOLLOW, FLEE, FETCH, WAIT), and run their
 no-orders and line-of-sight scripts; RANGE, GETXY, GET_LOS and the other
 queries read the world (`DarkSun.Game.World`). Items, combat and some
@@ -136,7 +140,9 @@ animate. `--check-regions` also walks the party 20 cells in every region and
 fails if two characters ever overlap; `--check-exits` walks the active member into
 every move trigger from each side and uses every object with a use trigger,
 answering Yes, and lists the region exits it finds and the regions none
-lead to (`--only=RGN0E` for one region, `-v` to see each try); `--check-start` starts a new game and
+lead to (`--only=RGN0E` for one region, `-v` to see each try); `--check-memory` changes every region (doors,
+a creature gone, one moved, a clone), leaves and comes back, and checks it
+is as it was left; `--check-start` starts a new game and
 prints where the party stands and what the scripts did. `--check-verbs` opens every region's verb menus and does every verb
 (but Use with) to every object that offers it.
 

@@ -76,6 +76,9 @@ public partial class RegionView : Node2D
     private GameWorld _world = null!;
     private readonly Dictionary<WorldObject, Sprite2D> _creatureNodes = [];
     private readonly Dictionary<RegionObject, WorldObject> _worldObjects = [];
+
+    /// <summary>Things made by CLONE, each with a sprite of its own (they share their original's region object).</summary>
+    private readonly Dictionary<WorldObject, Sprite2D> _cloneSprites = [];
     private SelectionMarker _marker = null!;
     private int _selected;
     private int _nextSprite;
@@ -150,6 +153,12 @@ public partial class RegionView : Node2D
         {
             _instantTravel = true;
             CheckExits();
+            return;
+        }
+        if (OS.GetCmdlineUserArgs().Contains("--check-memory"))
+        {
+            _instantTravel = true;
+            CheckMemory();
             return;
         }
         if (OS.GetCmdlineUserArgs().Contains("--check-verbs"))
@@ -230,6 +239,10 @@ public partial class RegionView : Node2D
         // The party keeps its looks, facing and selection from region to region.
         var carried = _party.Select(m => (m.Sprite, m.Walker.Facing)).ToList();
         int selected = _selected;
+        if (_world is not null)
+        {
+            Session.Regions.Remember(_world);
+        }
         LoadRegion(files[_regionIndex]);
         PlaceParty(start, carried, selected);
         RunRegionScripts();
@@ -270,15 +283,18 @@ public partial class RegionView : Node2D
         _lastCells.Clear();
         _creatureNodes.Clear();
         _worldObjects.Clear();
+        _cloneSprites.Clear();
         _clock = 0;
 
         _region = Region.Load(Session.Open(file), [Session.Open("SEGOBJEX.GFF"), Session.Open("GPLDATA.GFF")], Session.Assets);
         var objectData = new GffSet([Session.Open("SEGOBJEX.GFF"), Session.Open("GPLDATA.GFF")]);
         _world = new GameWorld(_region, objectData, Session.ScriptHost.EngineVariables);
+        // Back in a region visited before: as the party left it (before its script runs, as in DSUN.EXE).
+        IReadOnlyList<WorldObject>? restored = _checking ? null : Session.Regions.Recall(_world);
         _world.Changed += OnWorldChanged;
         Session.ScriptHost.Map = _world;
         _occupancy = _world.Occupancy;
-        foreach (WorldObject o in _world.Objects.Where(o => o.Source is not null))
+        foreach (WorldObject o in _world.Objects.Where(o => o.Source is not null && !o.IsClone))
         {
             _worldObjects[o.Source!] = o;
         }
@@ -332,6 +348,14 @@ public partial class RegionView : Node2D
             AddSprite(wall.Frame, sortPoint, new Vector2(wall.X, wall.Y), wall.Mirrored);
         }
         _overlay.Show(_region, _occupancy, Session.Scripts.Triggers, _world);
+        foreach (WorldObject o in restored ?? [])
+        {
+            OnWorldChanged(o, _world.SecondStateAnimation(o));
+        }
+        if (restored is not null)
+        {
+            AddScriptLine($"    region {_region.Number} as the party left it ({restored.Count} objects)");
+        }
         Animate();
     }
 
@@ -838,6 +862,7 @@ public partial class RegionView : Node2D
     private WorldObject? ObjectAt(Vector2 at) =>
         _objectSprites.Where(o => _worldObjects.ContainsKey(o.Object)).Select(o => (Object: _worldObjects[o.Object], o.Sprite))
             .Concat(_creatureNodes.Select(c => (Object: c.Key, Sprite: c.Value)))
+            .Concat(_cloneSprites.Select(c => (Object: c.Key, Sprite: c.Value)))
             .Where(o => o.Sprite.Visible && o.Sprite.Texture is { } tex
                 && new Rect2(o.Sprite.Position + o.Sprite.Offset, tex.GetSize()).HasPoint(at))
             .OrderByDescending(o => o.Sprite.Position.Y)
@@ -1152,6 +1177,22 @@ public partial class RegionView : Node2D
             DrawCreature(obj);
             return;
         }
+        if (obj.IsClone && obj.Walker is null && obj.Source is { } cloned)
+        {
+            // A cloned thing: a sprite of its own, standing at its cell's bottom centre.
+            if (!_cloneSprites.TryGetValue(obj, out Sprite2D? copy))
+            {
+                copy = AddSprite(cloned.Frame, new Vector2(cloned.EtabX, cloned.EtabY), new Vector2(cloned.X, cloned.Y), cloned.Mirrored);
+                if (copy is null)
+                {
+                    return;
+                }
+                _cloneSprites[obj] = copy;
+            }
+            copy.Position = new Vector2(obj.FixedCell.X * Region.TileSize + Region.TileSize / 2, (obj.FixedCell.Y + 1) * Region.TileSize - 1);
+            copy.Visible = !obj.Hidden;
+            return;
+        }
         if (obj.Walker is not null && obj.Source is not null)
         {
             // A clone of a walking creature: give it a node of its own.
@@ -1276,6 +1317,92 @@ public partial class RegionView : Node2D
     private bool _checking;
     private int _scriptRuns, _scriptErrors;
     private bool _checkingVerbs;
+
+    /// <summary>
+    /// For every region: open or close every door, send a creature off the
+    /// map, move another and clone a thing; leave for another region and come
+    /// back; and check that all of it is as it was left (in the world, the
+    /// map flags and the drawn sprites).
+    /// </summary>
+    private void CheckMemory()
+    {
+        IReadOnlyList<string> files = Session.Install!.RegionFiles;
+        int failures = 0;
+        for (int index = 0; index < files.Count; index++)
+        {
+            ShowRegion(index);
+            AnswerForThePlayer();
+            var doors = _world.Objects.Where(o => o.IsDoor).ToList();
+            foreach (WorldObject door in doors)
+            {
+                _world.SetDoor(door, (door.DoorFlags & Doors.Closed) != 0 ? 0 : Doors.Closed, force: true);
+            }
+            var creatures = _world.Objects.Where(o => o.Kind == ObjectKind.Creature && !o.Hidden).ToList();
+            WorldObject? gone = creatures.FirstOrDefault();
+            WorldObject? moved = creatures.Skip(1).FirstOrDefault(c => c.Walker is not null);
+            if (gone is not null)
+            {
+                // Off the map: to region 255, or (in region 255 itself) to another one.
+                _world.Teleport(gone.Index, _region.Number == Region.TestRegion ? 2 : Region.TestRegion, 0, 0);
+            }
+            Cell? movedTo = null;
+            if (moved is not null && _world.NearestCell(new Cell(moved.Cell.X + 3, moved.Cell.Y), c => moved.Walker!.CanStand(c, _region.IsBlocked)) is { } target)
+            {
+                _world.Teleport(moved.Index, _region.Number, target.X, target.Y);
+                movedTo = moved.Cell;
+            }
+            WorldObject? thing = _world.Objects.FirstOrDefault(o => o.Kind == ObjectKind.Thing && !o.IsDoor && !o.Hidden && o.Id != 0);
+            int clones = thing is null ? 0 : _world.Clone(thing.Id, 1, thing.Cell.X + 1, thing.Cell.Y);
+            RegionState left = _world.Snapshot();
+            var doorStates = doors.ToDictionary(d => d.Index, d => d.DoorFlags);
+
+            ShowRegion(index + 1);
+            AnswerForThePlayer();
+            ShowRegion(index);
+            AnswerForThePlayer();
+
+            var problems = new List<string>();
+            foreach (var (i, flags) in doorStates)
+            {
+                if (_world[i]?.DoorFlags != flags)
+                {
+                    problems.Add($"door #{i} flags {_world[i]?.DoorFlags} instead of {flags}");
+                }
+            }
+            byte[] now = _world.Snapshot().Flags;
+            int differing = Enumerable.Range(0, Math.Min(now.Length, left.Flags.Length)).Count(i => now[i] != left.Flags[i]);
+            if (differing > 0)
+            {
+                problems.Add($"{differing} map cells' flags differ");
+            }
+            if (gone is not null && _world[gone.Index] is { Hidden: false })
+            {
+                problems.Add($"#{gone.Index} is back on the map");
+            }
+            if (gone is not null && _creatureNodes.FirstOrDefault(c => c.Key.Index == gone.Index).Value is { Visible: true })
+            {
+                problems.Add($"#{gone.Index} is still drawn");
+            }
+            if (movedTo is { } cell && moved is not null && _world[moved.Index]?.Cell != cell)
+            {
+                problems.Add($"#{moved.Index} at {_world[moved.Index]?.Cell} instead of {cell}");
+            }
+            int clonesNow = _world.Objects.Count(o => o.IsClone);
+            if (clonesNow < clones)
+            {
+                problems.Add($"{clonesNow} clones instead of {clones}");
+            }
+            if (clones > 0 && _world.Objects.First(o => o.IsClone) is { Walker: null } c && !_cloneSprites.ContainsKey(c) && thing!.Source!.Frame.Width > 0)
+            {
+                problems.Add("the cloned thing isn't drawn");
+            }
+            failures += problems.Count > 0 ? 1 : 0;
+            GD.Print($"{files[index]}: {doors.Count} doors, {(gone is null ? 0 : 1)} gone, {(movedTo is null ? 0 : 1)} moved, {clones} cloned: "
+                + (problems.Count == 0 ? "as left" : string.Join("; ", problems)));
+        }
+        GD.Print($"region memory: {files.Count - failures}/{files.Count} regions came back as left");
+        GetTree().Quit(failures > 0 ? 1 : 0);
+    }
 
     /// <summary>
     /// For every region: the verbs each object's menu offers, and each of them

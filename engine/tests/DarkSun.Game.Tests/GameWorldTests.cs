@@ -300,6 +300,49 @@ public class GameWorldTests
         Assert.Equal((actor.Cell.X, actor.Cell.Y, 0), (host.ReadEngineVariable(machine, 0x21), host.ReadEngineVariable(machine, 0x22), host.ReadEngineVariable(machine, 0x23)));
     }
 
+    [Fact]
+    public void ARegionComesBackAsItWasLeft()
+    {
+        GameWorld before = World();
+        WorldObject templar = before.First(-100)!, torch = before.First(-200)!;
+        Assert.Equal(1, before.Clone(-200, 1, 6, 6));     // a cloned torch
+        before.Teleport(templar.Index, 5, 15, 2);           // moved within the region
+        before.Teleport(torch.Index, 255, 0, 0);           // the original taken off the map
+        before.SetAllegiance(-100, 9);
+        templar.WriteField(40, 7);
+        before.SetCellFlags(3, 3, Data.Regions.CellFlags.Blocked, true);
+        RegionState state = before.Snapshot();
+
+        GameWorld after = World();
+        var changed = after.Restore(state);
+
+        WorldObject t = after.First(-100)!;
+        Assert.Equal((new Cell(15, 2), 9, 7), (t.Cell, t.Allegiance, t.ReadField(40)));
+        Assert.True(after[torch.Index]!.Hidden);
+        WorldObject copy = Assert.Single(after.Objects, o => o.IsClone);
+        Assert.Equal((new Cell(6, 6), -200, false), (copy.Cell, copy.Id, copy.Hidden));
+        Assert.True(after.Region.IsBlocked(3, 3));
+        Assert.Contains(copy, changed);
+        Assert.Equal(4, after.Party.Count());
+    }
+
+    [Fact]
+    public void MemoryRecallsOnlyRegionsVisited()
+    {
+        var memory = new RegionMemory();
+        GameWorld world = World();
+        Assert.Null(memory.Recall(world));
+
+        world.SetAllegiance(-100, 3);
+        memory.Remember(world);
+
+        GameWorld again = World();
+        Assert.NotNull(memory.Recall(again));
+        Assert.Equal(3, again.First(-100)!.Allegiance);
+        memory.Forget();
+        Assert.False(memory.Knows(again.Region.Number));
+    }
+
     private sealed class SingleScript(byte[] code) : IGplScripts
     {
         public byte[]? Load(int file, GplFileKind kind) => file == 1 ? code : null;

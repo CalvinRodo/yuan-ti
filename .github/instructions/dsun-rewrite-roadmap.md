@@ -267,8 +267,12 @@ this milestone brings most of the game's content.
       DAMAGE. FLEE and the orders' arrival distances are approximations;
       the original order handlers (`1A0A`) are not ported line by line.
 - [ ] SOUND (251 uses): queued by the host; needs the audio layer (M7).
-- [ ] Remember each region's changes (moved and removed objects) between
-      visits.
+- [x] Remember each region's changes between visits (`RegionMemory`,
+      `GameWorld.Snapshot` / `Restore`), as DSUN.EXE saves the region it
+      leaves (`7155:0C64`): `GMAP` flags, and each object's place, hidden
+      state, door flags, second state, allegiance, status, script fields
+      and clones. Restored before the region script runs again. Kept for
+      the session only; saving it to disk waits for saved games.
 - [x] **Find how scripts are triggered** (`dsun-exe-reference.md` §4):
       `MAS 99` at a new game, `MAS` *n* on entering region *n*, and the
       triggers those scripts register (move tile/box, look, talk, use, use

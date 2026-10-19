@@ -46,12 +46,16 @@ public static class Session
 
     public static bool GameStarted { get; set; }
 
+    /// <summary>The regions the party has left this game, as it left them.</summary>
+    public static RegionMemory Regions { get; } = new();
+
     /// <summary>Forget the current game: fresh scripts, globals and triggers.</summary>
     public static void NewGame()
     {
         _scripts = null;
         ScriptHost = new WorldGplHost();
         GameStarted = false;
+        Regions.Forget();
     }
 
     public static void Use(GameInstall install)
@@ -68,6 +72,7 @@ public static class Session
         _scripts = null;
         ScriptHost = new WorldGplHost();
         GameStarted = false;
+        Regions.Forget();
     }
 
     /// <summary>Where mods are looked for, first first: <c>DARKSUN_MODS</c>, the user data folder's <c>mods</c>, the game folder's <c>mods</c>.</summary>

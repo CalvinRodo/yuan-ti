@@ -78,6 +78,9 @@ public sealed class WorldObject
     /// <summary>The region object this came from, if any.</summary>
     public RegionObject? Source { get; init; }
 
+    /// <summary>Made by CLONE: a copy of the object that has <see cref="Source"/>, drawn on its own.</summary>
+    public bool IsClone { get; init; }
+
     public CombatRecord? Record { get; init; }
 
     /// <summary>A creature's character record (its size, …), from its <c>RDFF</c>.</summary>
@@ -140,6 +143,18 @@ public sealed class WorldObject
             case 72: Id = value; break;
             case 75: Allegiance = value; break;
             default: _fields[field] = value; break;
+        }
+    }
+
+    /// <summary>The fields scripts wrote that aren't modelled (for <see cref="RegionState"/>).</summary>
+    public IReadOnlyDictionary<int, int> StoredFields => _fields;
+
+    internal void RestoreFields(IReadOnlyDictionary<int, int> fields)
+    {
+        _fields.Clear();
+        foreach (var (field, value) in fields)
+        {
+            _fields[field] = value;
         }
     }
 }
@@ -482,6 +497,7 @@ public sealed class GameWorld
             var copy = new WorldObject(index, original.Kind, original.Id)
             {
                 Source = original.Source,
+                IsClone = true,
                 Record = original.Record,
                 Item = original.Item,
                 Character = original.Character,
@@ -707,19 +723,131 @@ public sealed class GameWorld
     {
         foreach (WorldObject door in Objects.Where(o => o.IsDoor))
         {
-            door.DoorFlags = door.Item!.Flags;
-            if ((door.DoorFlags & Doors.Locked) != 0)
-            {
-                door.DoorFlags |= Doors.Closed;
-            }
-            bool closed = (door.DoorFlags & Doors.Closed) != 0;
-            SetDoorCells(door, door.DoorFlags);
-            if (door.Source!.Scmd > 0 && ScriptOf(door.Source.Scmd) is { } scmd)
-            {
-                door.AnimationStart = scmd.Slots[closed ? 1 : 2];
-            }
+            int flags = door.Item!.Flags;
+            SetUpDoor(door, (flags & Doors.Locked) != 0 ? flags | Doors.Closed : flags);
         }
     }
+
+    private void SetUpDoor(WorldObject door, int flags)
+    {
+        door.DoorFlags = flags;
+        bool closed = (flags & Doors.Closed) != 0;
+        SetDoorCells(door, flags);
+        if (door.Source!.Scmd > 0 && ScriptOf(door.Source.Scmd) is { } scmd)
+        {
+            door.AnimationStart = scmd.Slots[closed ? 1 : 2];
+        }
+    }
+
+    // -- remembering the region ---------------------------------------------------------
+
+    /// <summary>
+    /// What this region is like now, to restore on the next visit
+    /// (DSUN.EXE saves the region it leaves, <c>7155:0C64</c>): the <c>GMAP</c>
+    /// flags (opened doors, cells scripts blocked) and every object but the
+    /// party, clones included.
+    /// </summary>
+    public RegionState Snapshot()
+    {
+        byte[] flags = [.. Region.Flags];
+        for (int i = 0; i < flags.Length; i++)
+        {
+            flags[i] &= unchecked((byte)~(byte)CellFlags.Occupied);
+        }
+        var objects = Objects.Where(o => o.Kind != ObjectKind.Party).Select(o => new ObjectState(
+            o.Index, o.Source?.EtabIndex, o.Id, o.Name, o.Hidden, o.Cell, o.Allegiance, o.Status,
+            o.DoorFlags, o.SecondState, new Dictionary<int, int>(o.StoredFields))).ToList();
+        return new RegionState(Region.Number, flags, objects);
+    }
+
+    /// <summary>
+    /// Make this freshly loaded region as <paramref name="state"/> left it:
+    /// objects it no longer had are removed, clones it had are made again,
+    /// and the others take back their place and state. Call before the
+    /// region's script runs (DSUN.EXE runs it on a saved region too). Returns
+    /// the objects whose picture may differ from the files', for the view.
+    /// </summary>
+    public IReadOnlyList<WorldObject> Restore(RegionState state)
+    {
+        if (state.Region != Region.Number)
+        {
+            throw new ArgumentException($"state of region {state.Region}, not {Region.Number}");
+        }
+        var saved = state.Objects.ToDictionary(o => o.Index);
+        // Gone since the files: removed (the party keeps its slots).
+        for (int i = PartySize; i < MaxObjects; i++)
+        {
+            if (_objects[i] is { } obj && !saved.ContainsKey(i))
+            {
+                obj.Walker?.Remove();
+                _objects[i] = null;
+            }
+        }
+        var bySource = Objects.Where(o => o.Source is not null && !o.IsClone).GroupBy(o => o.Source!.EtabIndex).ToDictionary(g => g.Key, g => g.First());
+        var changed = new List<WorldObject>();
+        foreach (ObjectState o in state.Objects)
+        {
+            WorldObject? obj = _objects[o.Index];
+            if (obj is null || obj.Source?.EtabIndex != o.Etab)
+            {
+                // A clone: made again from the object it copied.
+                if (o.Etab is not int etab || !bySource.TryGetValue(etab, out WorldObject? original))
+                {
+                    continue;
+                }
+                obj?.Walker?.Remove();
+                obj = new WorldObject(o.Index, original.Kind, o.Id)
+                {
+                    Source = original.Source,
+                    IsClone = true,
+                    Record = original.Record,
+                    Item = original.Item,
+                    Character = original.Character,
+                    FixedCell = o.Cell,
+                };
+                if (original.Walker is { } w && o.Index < MaxCreatures)
+                {
+                    obj.Walker = new Walker(o.Index, w.Script, w.Frames, o.Cell, w.Footprint, Occupancy);
+                }
+                _objects[o.Index] = obj;
+            }
+            obj.Id = o.Id;
+            obj.Name = o.Name;
+            obj.Hidden = o.Hidden;
+            obj.Allegiance = o.Allegiance;
+            obj.Status = o.Status;
+            obj.SecondState = o.SecondState;
+            obj.RestoreFields(o.Fields);
+            if (obj.Walker is { } walker)
+            {
+                if (o.Hidden)
+                {
+                    walker.Remove();
+                }
+                else if (walker.Cell != o.Cell && !walker.Teleport(o.Cell, Region.IsBlocked))
+                {
+                    walker.Teleport(o.Cell, (_, _) => false);
+                }
+            }
+            else
+            {
+                obj.FixedCell = o.Cell;
+            }
+            if (obj.IsDoor)
+            {
+                SetUpDoor(obj, o.DoorFlags);
+            }
+            changed.Add(obj);
+        }
+        Array.Copy(state.Flags, Region.Flags, Math.Min(state.Flags.Length, Region.Flags.Length));
+        return changed;
+    }
+
+    /// <summary>Where the animation of <paramref name="obj"/> should start for its second state (<c>REQUEST(5)</c>), or null for its normal one.</summary>
+    public int? SecondStateAnimation(WorldObject obj) =>
+        obj.SecondState && obj.Source is { Scmd: > 0 } source && ScriptOf(source.Scmd) is { } scmd
+            ? scmd.Extra[4] | (scmd.Extra[5] << 8)
+            : null;
 
     /// <summary>
     /// <c>REQUEST(10–13)</c>: set or clear <c>GMAP</c> bits at cell (x, y)
