@@ -229,11 +229,30 @@ public static class Session
     /// <summary>The regions the party has left this game, as it left them.</summary>
     public static RegionMemory Regions { get; } = new();
 
+    /// <summary>
+    /// A script host for a new game: AWARD reaches the party's characters,
+    /// and each member starts with their character's hit points (10 for a
+    /// placeholder member).
+    /// </summary>
+    private static WorldGplHost NewHost()
+    {
+        var host = new WorldGplHost { PartyCharacter = slot => slot < Party.Count ? Party[slot] : null };
+        for (int slot = 0; slot < host.PartyMembers.Count; slot++)
+        {
+            if (slot < Party.Count && Party[slot].Hp > 0)
+            {
+                Vitals v = host.PartyMembers[slot].Vitals;
+                (v.Hp, v.MaxHp) = (Party[slot].Hp, Party[slot].Hp);
+            }
+        }
+        return host;
+    }
+
     /// <summary>Forget the current game: fresh scripts, globals and triggers.</summary>
     public static void NewGame()
     {
         _scripts = null;
-        ScriptHost = new WorldGplHost();
+        ScriptHost = NewHost();
         GameStarted = false;
         Regions.Forget();
     }
@@ -252,7 +271,7 @@ public static class Session
             Godot.GD.Print($"Mods: {string.Join(", ", Mods.Mods.Select(m => m.Name))} ({Mods.Count} resources)");
         }
         _scripts = null;
-        ScriptHost = new WorldGplHost();
+        ScriptHost = NewHost();
         GameStarted = false;
         Regions.Forget();
     }

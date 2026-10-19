@@ -78,8 +78,8 @@ public sealed class WorldObject
     /// <summary>The region object this came from, if any.</summary>
     public RegionObject? Source { get; init; }
 
-    /// <summary>Made by CLONE: a copy of the object that has <see cref="Source"/>, drawn on its own.</summary>
-    public bool IsClone { get; init; }
+    /// <summary>Made at run time, drawn on its own: a CLONE copy of the object that has <see cref="Source"/>, or a new object (a dropped item, <c>REQUEST(9)</c>) whose <see cref="Source"/> has <c>EtabIndex</c> −1.</summary>
+    public bool IsClone { get; internal set; }
 
     public CombatRecord? Record { get; init; }
 
@@ -119,8 +119,18 @@ public sealed class WorldObject
     /// <summary>Combat record allegiance (<c>+0x1D</c>), set by <c>REQUEST(18)</c>; also field 75 (inferred).</summary>
     public int Allegiance { get; set; }
 
-    /// <summary>Combat record status (<c>+0x1C</c>), read by GET_STATUS.</summary>
-    public int Status { get; set; }
+    /// <summary>Combat record status (<c>+0x1C</c>), read by GET_STATUS (see <see cref="Vitals"/>).</summary>
+    public int Status
+    {
+        get => Vitals.Status;
+        set => Vitals.Status = value;
+    }
+
+    /// <summary>Hit points and status; a party member's are kept for the whole game (<see cref="PartyMemberState"/>).</summary>
+    public Vitals Vitals { get; set; } = new();
+
+    /// <summary>What it carries (a creature, a party member, a container); a party member's list is kept for the whole game.</summary>
+    public List<Item> Items { get; set; } = [];
 
     /// <summary>Facing 0–7 clockwise from north (field 95).</summary>
     public int Facing => Walker is { } w ? (int)w.Facing : _fields.GetValueOrDefault(95);
@@ -169,7 +179,7 @@ public sealed record CharacterSpec(Scmd Script, IReadOnlyList<(int Width, int He
 /// creature table (<c>3972:08AA</c>) and the script engine variables.
 /// <see cref="Update"/> carries out the creatures' orders.
 /// </summary>
-public sealed class GameWorld
+public sealed partial class GameWorld
 {
     public const int MaxObjects = 0x140;
     public const int MaxCreatures = 0x30;
@@ -186,15 +196,18 @@ public sealed class GameWorld
     private readonly int[] _engine;
     private readonly Dictionary<int, Scmd?> _scripts = [];
     private readonly IResourceSource _objectData;
+    private readonly IReadOnlyList<PartyMemberState> _party;
     private readonly Dictionary<int, long> _nextPlan = [];
     private long _nextScriptCheck;
 
     /// <summary>A world for <paramref name="region"/>: its <c>ETAB</c> objects, creatures from their <c>RDFF</c> records.</summary>
     /// <param name="objectData"><c>SEGOBJEX.GFF</c> (and <c>GPLDATA.GFF</c>): <c>RDFF</c> and <c>SCMD</c> resources.</param>
     /// <param name="engine">The engine variables (<c>gname[0–14]</c>), kept across regions; a new set if null.</param>
-    public GameWorld(Region region, IResourceSource objectData, int[]? engine = null)
+    /// <param name="party">What the party members carry and how they are, kept across regions; new ones if null.</param>
+    public GameWorld(Region region, IResourceSource objectData, int[]? engine = null, IReadOnlyList<PartyMemberState>? party = null)
     {
         Region = region;
+        _party = party ?? [.. Enumerable.Range(0, PartySize).Select(_ => new PartyMemberState())];
         _objectData = objectData;
         _engine = engine ?? new int[15];
         _engine[4] = region.Number;
@@ -204,43 +217,54 @@ public sealed class GameWorld
 
         foreach (RegionObject source in region.Objects)
         {
-            ReadOnlyMemory<byte> rdff = objectData.TryRead("RDFF", source.Ojff, out var data) ? data : default;
-            CombatRecord? record = rdff.IsEmpty ? null : CombatRecord.Parse(rdff.Span);
-            ItemRecord? item = record is null && !rdff.IsEmpty ? ItemRecord.FromRdff(rdff) : null;
-            CharacterRecord? character = record is not null ? CharacterRecord.FromRdff(rdff) : null;
-            bool creature = record is not null;
+            bool creature = IsCreature(source.Ojff);
             int index = creature && nextCreature < MaxCreatures ? nextCreature++ : nextThing < MaxObjects ? nextThing++ : -1;
-            if (index < 0)
+            if (index >= 0)
             {
-                continue;
-            }
-            var obj = new WorldObject(index, creature ? ObjectKind.Creature : ObjectKind.Thing, -source.Ojff)
-            {
-                Source = source,
-                Record = record,
-                Item = item,
-                Character = character,
-                Name = record?.Name ?? (item is not null ? Items.NameOf(item) : ""),
-                Allegiance = record?.Allegiance ?? 0,
-                Status = record?.Status ?? 0,
-                FixedCell = new Cell(source.EtabX / Region.TileSize, Math.Max(0, source.EtabY - 1) / Region.TileSize),
-            };
-            _objects[index] = obj;
-
-            // Creatures whose animation can walk get a walker, so orders can move them.
-            if (creature && source.Scmd > 0)
-            {
-                if (ScriptOf(source.Scmd) is { CanWalk: true } scmd)
-                {
-                    var spec = new CharacterSpec(scmd, [.. source.Frames.Select(f => (f.Width, f.Height))], Footprint.Of(character));
-                    if (NearestCell(obj.FixedCell, c => Fits(c, spec.Footprint)) is { } cell)
-                    {
-                        obj.Walker = new Walker(index, spec.Script, spec.Frames, cell, spec.Footprint, Occupancy);
-                    }
-                }
+                _objects[index] = MakeObject(index, source);
             }
         }
         SetUpDoors();
+    }
+
+    /// <summary>Has <c>OJFF</c> <paramref name="ojff"/> a combat record (a creature, which takes an index below 48)?</summary>
+    private bool IsCreature(int ojff) =>
+        _objectData.TryRead("RDFF", ojff, out var rdff) && CombatRecord.Parse(rdff.Span) is not null;
+
+    /// <summary>
+    /// The object for <paramref name="source"/> at <paramref name="index"/>:
+    /// a creature (from its combat and character records; with a walker if its
+    /// <c>SCMD</c> can walk) or a thing (an item if its <c>RDFF</c> is an item record).
+    /// </summary>
+    private WorldObject MakeObject(int index, RegionObject source)
+    {
+        ReadOnlyMemory<byte> rdff = _objectData.TryRead("RDFF", source.Ojff, out var data) ? data : default;
+        CombatRecord? record = rdff.IsEmpty ? null : CombatRecord.Parse(rdff.Span);
+        ItemRecord? item = record is null && !rdff.IsEmpty ? ItemRecord.FromRdff(rdff) : null;
+        CharacterRecord? character = record is not null ? CharacterRecord.FromRdff(rdff) : null;
+        bool creature = record is not null;
+        var obj = new WorldObject(index, creature ? ObjectKind.Creature : ObjectKind.Thing, -source.Ojff)
+        {
+            Source = source,
+            Record = record,
+            Item = item,
+            Character = character,
+            Name = record?.Name ?? (item is not null ? Items.NameOf(item) : ""),
+            Allegiance = record?.Allegiance ?? 0,
+            Vitals = new Vitals { Hp = record?.Hp ?? 0, MaxHp = record?.Hp ?? 0, Status = record?.Status ?? 0 },
+            FixedCell = new Cell(source.EtabX / Region.TileSize, Math.Max(0, source.EtabY - 1) / Region.TileSize),
+        };
+
+        // Creatures whose animation can walk get a walker, so orders can move them.
+        if (creature && source.Scmd > 0 && ScriptOf(source.Scmd) is { CanWalk: true } scmd)
+        {
+            var spec = new CharacterSpec(scmd, [.. source.Frames.Select(f => (f.Width, f.Height))], Footprint.Of(character));
+            if (NearestCell(obj.FixedCell, c => Fits(c, spec.Footprint)) is { } cell)
+            {
+                obj.Walker = new Walker(index, spec.Script, spec.Frames, cell, spec.Footprint, Occupancy);
+            }
+        }
+        return obj;
     }
 
     public Region Region { get; }
@@ -289,6 +313,8 @@ public sealed class GameWorld
         {
             Name = $"Character {slot + 1}",
             Walker = new Walker(slot, spec.Script, spec.Frames, cell, spec.Footprint, Occupancy, facing),
+            Items = _party[slot].Items,
+            Vitals = _party[slot].Vitals,
         };
         _objects[slot] = obj;
         return obj;
@@ -307,12 +333,22 @@ public sealed class GameWorld
 
     /// <summary>
     /// The objects a script value refers to: a negative value is a name (every
-    /// object whose id is that value), 0 or more an object index, 9999 none.
+    /// object whose id is that value), 0 or more an object index, 32766 the
+    /// party, 9999 none.
     /// </summary>
     public IEnumerable<WorldObject> Select(int value)
     {
         if (value == None)
         {
+            yield break;
+        }
+        if (value == DialogueGplHost.WholeParty)
+        {
+            // 32766: the party members (1A0A:0922 walks them as 1A0A:02E5 does).
+            foreach (WorldObject member in Party.Where(p => !p.Hidden))
+            {
+                yield return member;
+            }
             yield break;
         }
         if (value >= 0)
@@ -503,7 +539,7 @@ public sealed class GameWorld
                 Character = original.Character,
                 Name = original.Name,
                 Allegiance = original.Allegiance,
-                Status = original.Status,
+                Vitals = new Vitals { Hp = original.Vitals.MaxHp, MaxHp = original.Vitals.MaxHp, Status = original.Status },
                 FixedCell = new Cell(x, y),
             };
             if (original.Walker is { } w && index < MaxCreatures)
@@ -756,7 +792,9 @@ public sealed class GameWorld
         }
         var objects = Objects.Where(o => o.Kind != ObjectKind.Party).Select(o => new ObjectState(
             o.Index, o.Source?.EtabIndex, o.Id, o.Name, o.Hidden, o.Cell, o.Allegiance, o.Status,
-            o.DoorFlags, o.SecondState, new Dictionary<int, int>(o.StoredFields))).ToList();
+            o.DoorFlags, o.SecondState, new Dictionary<int, int>(o.StoredFields),
+            o.Items.Count > 0 ? [.. o.Items.Select(i => i.Save())] : null, o.Vitals.Save(),
+            o.Source is { EtabIndex: < 0 } made ? made.Ojff : null)).ToList();
         return new RegionState(Region.Number, flags, objects);
     }
 
@@ -788,7 +826,20 @@ public sealed class GameWorld
         foreach (ObjectState o in state.Objects)
         {
             WorldObject? obj = _objects[o.Index];
-            if (obj is null || obj.Source?.EtabIndex != o.Etab)
+            if ((obj is null || obj.Source?.EtabIndex != o.Etab) && o.Ojff is int ojff)
+            {
+                // Made at run time from nothing: made again.
+                obj?.Walker?.Remove();
+                _objects[o.Index] = null;
+                if (Region.MakeObject(_objectData, ojff, 0, 0) is not { } made)
+                {
+                    continue;
+                }
+                obj = MakeObject(o.Index, made);
+                obj.IsClone = true;
+                _objects[o.Index] = obj;
+            }
+            else if (obj is null || obj.Source?.EtabIndex != o.Etab)
             {
                 // A clone: made again from the object it copied.
                 if (o.Etab is not int etab || !bySource.TryGetValue(etab, out WorldObject? original))
@@ -815,7 +866,12 @@ public sealed class GameWorld
             obj.Name = o.Name;
             obj.Hidden = o.Hidden;
             obj.Allegiance = o.Allegiance;
+            if (o.Vitals is { } vitals)
+            {
+                obj.Vitals.Load(vitals);
+            }
             obj.Status = o.Status;
+            obj.Items = [.. (o.Items ?? []).Select(i => NewItem(i.Rdff, i.Quantity, i.Slot)).OfType<Item>()];
             obj.SecondState = o.SecondState;
             obj.RestoreFields(o.Fields);
             if (obj.Walker is { } walker)

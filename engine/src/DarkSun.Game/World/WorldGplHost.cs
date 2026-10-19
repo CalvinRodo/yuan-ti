@@ -8,9 +8,11 @@ namespace DarkSun.Game.World;
 /// commands that act on creatures and the map carried out on a
 /// <see cref="GameWorld"/>: orders (HUNT, GO, GOXY, FOLLOW, FLEE, FETCH,
 /// WAIT, READORDERS), queries (GETXY, RANGE, NEXTTO, GET_LOS, SET_OTHER,
-/// GET_STATUS, GETPARTY), TELEPORT, CLONE and the REQUEST codes that change
-/// objects and cells. Engine variables and object fields live in the world.
-/// Items, combat and the remaining REQUEST codes are logged only.
+/// GET_STATUS, GETPARTY), TELEPORT, CLONE, items (GIVE, TAKE, DROP, SEARCH,
+/// SHOP, CHANGE_MONEY), experience (AWARD), damage (DAMAGE, PHYS_DAMAGE)
+/// and the REQUEST codes that are traced. Engine variables and object
+/// fields live in the world. Combat (FIGHT) and REQUEST 3, 7, 8 and 14 are
+/// logged only.
 /// </summary>
 public sealed class WorldGplHost : DialogueGplHost
 {
@@ -25,6 +27,29 @@ public sealed class WorldGplHost : DialogueGplHost
 
     /// <summary>The current region's world, or null outside a region.</summary>
     public GameWorld? Map { get; set; }
+
+    /// <summary>What each party member carries and how they are, for the whole game (each region's world shares them).</summary>
+    public IReadOnlyList<PartyMemberState> PartyMembers { get; } =
+        [.. Enumerable.Range(0, GameWorld.PartySize).Select(_ => new PartyMemberState())];
+
+    /// <summary>The character in a party slot, for AWARD (experience); null for a slot without one.</summary>
+    public Func<int, Characters.Character?> PartyCharacter { get; set; } = _ => null;
+
+    /// <summary>The party's money: <c>gname[10]</c> (<c>3781:0357</c>, int32), which CHANGE_MONEY adds to (<c>1A0A:28F6</c>).</summary>
+    public int Money
+    {
+        get => Engine[10];
+        set => Engine[10] = value;
+    }
+
+    /// <summary>
+    /// <c>REQUEST(16, who, n)</c> (<c>6BB8:0FA9</c> → <c>361A:0000</c>): the
+    /// music's intensity level n (1–5 in the scripts), a section within the
+    /// piece playing; set only when sound is on and it changes.
+    /// </summary>
+    public int MusicLevel { get; private set; }
+
+    public event Action<int>? MusicLevelChanged;
 
     /// <summary>FIGHT: combat was asked for at this cell (<c>gname[1]</c>, <c>[2]</c>); combat is not modelled yet.</summary>
     public (int X, int Y)? PendingFight { get; set; }
@@ -57,13 +82,56 @@ public sealed class WorldGplHost : DialogueGplHost
             "CLONE" => world.Clone(v[0], v[1], v[2], v[3]),
             "REQUEST" => Request(world, v),
             "FIGHT" => Fight(world),
+            "GIVE" => world.Give(v[0], v[1], v[2], v[3]),
+            "TAKE" => world.Take(v[0], v[1], v[2], v[3]),
+            "DROP" => world.Drop(v[0], v[1], v[2]),
+            "DAMAGE" => Do(() => world.Damage(v[0], v[1], percent: false)),
+            "PHYS_DAMAGE" => Do(() => world.Damage(v[0], v[1], percent: true)),
+            "AWARD" => Do(() => Award(world, v[0], v[1])),
+            "CHANGE_MONEY" => Do(() => Money = unchecked(Money + v[0])),
+            "SHOP" => Shop(machine, world, v[0]),
             _ => null,
         };
         return command.Mnemonic is "HUNT" or "GO" or "FETCH" or "FOLLOW" or "GOXY" or "WAIT" or "FLEE" or "READORDERS"
             or "GETXY" or "RANGE" or "NEXTTO" or "GET_LOS" or "SET_OTHER" or "GET_STATUS" or "GETPARTY" or "TELEPORT"
-            or "CLONE" or "REQUEST" or "FIGHT"
+            or "CLONE" or "REQUEST" or "FIGHT" or "GIVE" or "TAKE" or "DROP" or "DAMAGE" or "PHYS_DAMAGE" or "AWARD"
+            or "CHANGE_MONEY" or "SHOP"
             ? Logged(command, result)
             : base.Execute(machine, command);
+    }
+
+    public override int Search(GplMachine machine, int who, IReadOnlyList<GplSearchTest> tests) =>
+        Map?.Search(who, tests) ?? 0;
+
+    /// <summary>
+    /// AWARD(who, xp) (<c>043D:10EC</c>, <c>7372:1467</c>): each party member
+    /// (32766) or the member in slot who, if alive, gains xp split among their
+    /// classes, to at most 2 000 000 000. (A character's
+    /// <see cref="Characters.Character.Experience"/> is the total over its
+    /// classes, so it grows by xp rounded down to a multiple of their number.)
+    /// </summary>
+    private void Award(GameWorld world, int who, int xp)
+    {
+        IEnumerable<int> slots = who == WholeParty ? world.Party.Where(p => !p.Hidden).Select(p => p.Index)
+            : who is >= 0 and < GameWorld.PartySize ? [who] : [];
+        foreach (int slot in slots)
+        {
+            if (world[slot] is { Vitals.Alive: true } && PartyCharacter(slot) is { } c)
+            {
+                int classes = Math.Max(1, c.Classes.Count);
+                c.Experience = (int)Math.Min(2_000_000_000L, c.Experience + (long)(xp / classes) * classes);
+            }
+        }
+    }
+
+    /// <summary>SHOP(merchant): open the merchant's shop; the script waits until it closes.</summary>
+    private int? Shop(GplMachine machine, GameWorld world, int merchant)
+    {
+        if (world.First(merchant) is { } m)
+        {
+            Wait(machine, new GplShopPrompt(m.Index), out _);
+        }
+        return null;
     }
 
     private int? Logged(GplCommand command, int? result)
@@ -114,7 +182,7 @@ public sealed class WorldGplHost : DialogueGplHost
     }
 
     /// <summary>REQUEST(code, who, a, b): <c>87B3:0000</c>; see <c>dsun-exe-reference.md</c> §4.</summary>
-    private static int? Request(GameWorld world, IReadOnlyList<int> v)
+    private int? Request(GameWorld world, IReadOnlyList<int> v)
     {
         (int code, int who, int a, int b) = (v[0], v[1], v[2], v[3]);
         switch (code)
@@ -132,6 +200,14 @@ public sealed class WorldGplHost : DialogueGplHost
             case 13: world.SetCellFlags(a, b, CellFlags.BlocksSight, false); break;
             case 17 when who < 0: world.Show(who, a, b); break;
             case 18: world.SetAllegiance(who, a); break;
+            case 1: world.Rest(raiseDead: true); break; // 87B3:073D(1): "THE PARTY RESTS"
+            case 4: world.Rest(raiseDead: false); break;
+            case 9: world.Transform(who, a, b != 0); break;
+            case 16 when a != MusicLevel:
+                MusicLevel = a;
+                MusicLevelChanged?.Invoke(a);
+                break;
+            case 20: return world.CountCreatures(a);
         }
         return null;
     }

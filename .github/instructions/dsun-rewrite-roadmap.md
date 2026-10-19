@@ -262,10 +262,28 @@ this milestone brings most of the game's content.
       rest stored), the special objects (`obj_special(n)` = the object whose
       index is in `gname` n) and the engine variables (actor, target and
       other set per run).
-- [ ] Still logged only: GIVE / TAKE / SEARCH / AWARD / DROP (need items),
-      FIGHT's combat (M5), REQUEST 1–4, 6–9, 14–16 and 19–20, SHOP,
-      DAMAGE. FLEE and the orders' arrival distances are approximations;
-      the original order handlers (`1A0A`) are not ported line by line.
+- [x] Items (`DarkSun.Game.World.Item`, `GameWorld.Items.cs`; traced in
+      `dsun-exe-reference.md`, "Items in scripts"): creatures, party
+      members and containers carry items; GIVE, TAKE, DROP and SEARCH as
+      `7372` and `043D:08F8` do them, Get puts an item in the pack and runs
+      its pickup trigger, the 14 equipment slots, money (`gname[10]`,
+      CHANGE_MONEY), AWARD, DAMAGE / PHYS_DAMAGE (`612E:18DA`'s hit point
+      and status rules), SHOP (the script waits for a shop window: prices
+      are the item's value, half to sell; the original screen isn't
+      traced), and REQUEST 1 / 4 (rest), 9 (turn an object into another),
+      16 (music level; the music player doesn't play XMIDI sections yet)
+      and 20 (count creatures). Party items and hit points last the whole
+      game and are saved; regions remember what their creatures carry and
+      items left on the ground. An inventory window (I): wear, give, drop.
+      `--check-items`; `--give=RDFF,…` and `--open-items` for testing.
+- [ ] Still logged only: FIGHT's combat (M5), and REQUEST 3 (a check), 7
+      (trap / blast), 8 (random monster), 14 (ambush), 15 (unidentified).
+      Not traced: SEARCH's per-member work (`0826:0344`, op 3 is taken to
+      count items), the range bytes, the shop screen, what happens to a
+      dead creature (`612E:1AAF`: here it leaves the map), healing details
+      of a rest, class restrictions on wearing items. FLEE and the orders'
+      arrival distances are approximations; the original order handlers
+      (`1A0A`) are not ported line by line.
 - [ ] SOUND (251 uses): queued by the host; needs the audio layer (M7).
 - [x] Remember each region's changes between visits (`RegionMemory`,
       `GameWorld.Snapshot` / `Restore`), as DSUN.EXE saves the region it

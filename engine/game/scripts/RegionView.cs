@@ -67,6 +67,8 @@ public partial class RegionView : Node2D
     private Node2D _sorted = null!;
     private DebugOverlay _overlay = null!;
     private ScriptDebugger _debugger = null!;
+    private InventoryWindow _inventory = null!;
+    private ShopWindow _shop = null!;
 
     /// <summary>Scripts to start once none is paused (the region's after the game-start script, …): see <see cref="WhenScriptsFree"/>.</summary>
     private readonly Queue<Action> _whenFree = new();
@@ -208,6 +210,28 @@ public partial class RegionView : Node2D
                 }
                 Session.SaveParty();
             }
+            if (OS.GetCmdlineUserArgs().FirstOrDefault(a => a.StartsWith("--give=")) is { } give)
+            {
+                // Development: items for the active member, by RDFF number (--give=1051,1095).
+                foreach (string n in give["--give=".Length..].Split(','))
+                {
+                    if (int.TryParse(n, out int rdff) && _world.Give(1, -rdff, _selected, GameWorld.None) == 0)
+                    {
+                        AddScriptLine($"    --give: RDFF {rdff} is not an item");
+                    }
+                }
+            }
+            if (OS.GetCmdlineUserArgs().Contains("--open-items"))
+            {
+                _inventory.World = _world;
+                _inventory.CallDeferred(InventoryWindow.MethodName.Open, _selected);
+            }
+            if (OS.GetCmdlineUserArgs().Contains("--check-items"))
+            {
+                _instantTravel = true;
+                CheckItems();
+                return;
+            }
             if (OS.GetCmdlineUserArgs().Contains("--check-save"))
             {
                 _instantTravel = true;
@@ -274,6 +298,27 @@ public partial class RegionView : Node2D
             Default = () => _region is null ? null : new GplEntry(_region.Number, 0, GplFileKind.Mas),
         };
         layer.AddChild(_debugger);
+        _inventory = new InventoryWindow
+        {
+            MemberName = slot => _world?[slot]?.Name ?? $"Character {slot + 1}",
+            Money = () => Session.ScriptHost.Money,
+            Did = text => AddScriptLine($"> {text}"),
+        };
+        layer.AddChild(_inventory);
+        _shop = new ShopWindow
+        {
+            Money = () => Session.ScriptHost.Money,
+            SetMoney = money => Session.ScriptHost.Money = money,
+            Did = text => AddScriptLine($"    {text}"),
+            Closed = () =>
+            {
+                if (Session.ScriptHost.Dialogue.Prompt is GplShopPrompt && Session.Scripts.IsSuspended && Session.Scripts.PausedFor is null)
+                {
+                    ReportScript("shop closed", Session.Scripts.Resume(0));
+                }
+            },
+        };
+        layer.AddChild(_shop);
         _prompt = new Label { Visible = false, HorizontalAlignment = HorizontalAlignment.Center };
         _prompt.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.CenterTop);
         _prompt.GrowHorizontal = Control.GrowDirection.Both;
@@ -360,7 +405,7 @@ public partial class RegionView : Node2D
 
         _region = Region.Load(Session.Open(file), [Session.Open("SEGOBJEX.GFF"), Session.Open("GPLDATA.GFF")], Session.Assets);
         var objectData = new GffSet([Session.Open("SEGOBJEX.GFF"), Session.Open("GPLDATA.GFF")]);
-        _world = new GameWorld(_region, objectData, Session.ScriptHost.EngineVariables);
+        _world = new GameWorld(_region, objectData, Session.ScriptHost.EngineVariables, Session.ScriptHost.PartyMembers);
         // Back in a region visited before: as the party left it (before its script runs, as in DSUN.EXE).
         IReadOnlyList<WorldObject>? restored = _checking ? null : Session.Regions.Recall(_world);
         _world.Changed += OnWorldChanged;
@@ -729,6 +774,11 @@ public partial class RegionView : Node2D
         _clock += delta;
         Animate();
         FinishApproach();
+        if (Session.ScriptHost.Dialogue.Prompt is GplShopPrompt shop && !_shop.IsOpen && _world[shop.Merchant] is { } merchant
+            && _world[_selected] is { } who)
+        {
+            _shop.Open(_world, merchant, who);
+        }
 
         Vector2 direction = Input.GetVector(Controls.PanLeft, Controls.PanRight, Controls.PanUp, Controls.PanDown);
         if (direction != Vector2.Zero)
@@ -858,6 +908,10 @@ public partial class RegionView : Node2D
         else if (e is InputEventMouseButton { ButtonIndex: MouseButton.Right, Pressed: true } right)
         {
             OpenVerbMenu(GetGlobalMousePosition(), right.Position);
+        }
+        else if (e.IsActionPressed(Controls.ToggleInventory) && !_inventory.Visible && !Session.Scripts.IsSuspended)
+        {
+            _inventory.Open(_world, _selected);
         }
         else if (e.IsActionPressed(Controls.ToggleScriptLog))
         {
@@ -1083,6 +1137,21 @@ public partial class RegionView : Node2D
             }
             return;
         }
+        if (verb == Verb.Get && target.Item is not null && _world[actor] is { } taker)
+        {
+            // 7BEB:0A60: the item goes into the pack first, then its pickup trigger runs.
+            if (!_world.PickUp(taker, target))
+            {
+                Say(what, $"{taker.Name} can't carry any more.");
+                return;
+            }
+            AddScriptLine($"> {taker.Name} picks up {Describe(target)}");
+            if (scripts.OnObject(GplTriggerList.Pickup, actor, target.Index) is { } picked)
+            {
+                ReportScript(what, picked);
+            }
+            return;
+        }
         if (list is { } l && scripts.OnObject(l, actor, target.Index) is { } run)
         {
             ReportScript(what, run);
@@ -1094,7 +1163,7 @@ public partial class RegionView : Node2D
                 Say(what, Called(target));
                 break;
             case Verb.Get:
-                Say(what, $"{Called(target)}: carrying items isn't in the engine yet.");
+                Say(what, $"{Called(target)} can't be picked up.");
                 break;
             case Verb.Attack:
                 Say(what, "Combat isn't in the engine yet.");
@@ -1449,7 +1518,7 @@ public partial class RegionView : Node2D
             var party = _party.Select((m, i) => new PartyMemberSave(m.Sprite.Ojff, m.Walker.Cell.X, m.Walker.Cell.Y, m.Walker.Facing,
                 i < Session.Party.Count ? Session.Party[i] : null));
             SaveGame save = SaveGame.Capture(name, Session.Scripts, Session.ScriptHost.EngineVariables, _world, Session.Regions,
-                party, _selected, Session.Mods.Mods.Select(m => m.Name));
+                party, _selected, Session.Mods.Mods.Select(m => m.Name), Session.ScriptHost.PartyMembers);
             save.Write(Session.SavePath(file));
             AddScriptLine($"    saved to {Session.SavePath(file)}");
             if (!quiet)
@@ -1518,6 +1587,7 @@ public partial class RegionView : Node2D
         _transitioning = false;
         _fade?.Set("color", new Color(0, 0, 0, 0));
         ShowRegion(index, saved: save);
+        save.RestoreParty(Session.ScriptHost.PartyMembers, i => _world.NewItem(i.Rdff, i.Quantity, i.Slot));
         _scriptLogSeen = Session.ScriptHost.Log.Count;
         var missing = save.Mods.Except(Session.Mods.Mods.Select(m => m.Name)).ToList();
         Notice($"Loaded {save.Name} ({save.Saved.LocalDateTime:g})." + (missing.Count > 0 ? $" Saved with mods now off: {string.Join(", ", missing)}." : ""));
@@ -1684,6 +1754,85 @@ public partial class RegionView : Node2D
         }
         GD.Print(problems.Count == 0 ? "debugger: OK" : $"debugger: {problems.Count} problems");
         GetTree().Quit(problems.Count == 0 ? 0 : 1);
+    }
+
+    /// <summary>
+    /// <c>--check-items</c>, with the game's own items: make some for the
+    /// active member, drop one on the map and pick it up, wear boots and
+    /// SEARCH for them, leave an item on the ground and come back to it, turn
+    /// a creature into an item (<c>REQUEST(9)</c>), hurt and rest, and save
+    /// and load what the party carries.
+    /// </summary>
+    private void CheckItems()
+    {
+        AnswerForThePlayer();
+        var problems = new List<string>();
+        void Expect(bool ok, string what)
+        {
+            if (!ok)
+            {
+                problems.Add(what);
+            }
+        }
+        const int Water = 1095, Boots = 1051, Grain = 1254;
+        IReadOnlyList<PartyMemberState> party = Session.ScriptHost.PartyMembers;
+        WorldObject me = _world[0]!;
+        Expect(_world.Give(2, -Water, 0, GameWorld.None) == 2, "GIVE made two pots of water");
+        Expect(_world.Give(1, -Boots, 0, GameWorld.None) == 1, "GIVE made boots");
+        Expect(_world.Give(5, -Grain, 1, GameWorld.None) == 5, "GIVE made grain");
+        Item pot = party[0].Items.First(i => i.Rdff == Water);
+
+        WorldObject? ground = _world.DropItem(me, pot, 1);
+        Expect(ground is { IsClone: true, Source.EtabIndex: -1 } && ground.Item is not null, "dropped: a new item object on the map");
+        Expect(ground is not null && _cloneSprites.ContainsKey(ground), "the dropped item has a sprite");
+        Expect(ground is not null && _world.PickUp(me, ground) && _world[ground.Index] is null, "picked it up again");
+        Expect(party[0].Items.Count(i => i.Rdff == Water) == 2, "two pots again");
+
+        Item boots = party[0].Items.First(i => i.Rdff == Boots);
+        Expect(_world.Equip(me, boots) && boots.Slot == 13, $"boots worn on the feet (slot {boots.Slot})");
+        Expect(_world.Search(GameWorld.WholeParty, [new(72, 4, -Boots), new(85, 4, 13)]) == 1, "SEARCH finds the boots worn");
+        Expect(_world.Search(GameWorld.WholeParty, [new(72, 4, -Water), new(72, 3, 0)]) == 2, "SEARCH counts two pots");
+
+        // Left on the ground, there on the next visit.
+        WorldObject? left = _world.DropItem(me, party[0].Items.First(i => i.Rdff == Water), 1);
+        int leftAt = left?.Index ?? -1;
+        int home = _regionIndex;
+        ShowRegion(home + 1);
+        AnswerForThePlayer();
+        ShowRegion(home);
+        AnswerForThePlayer();
+        Expect(_world[leftAt] is { Item: not null } back && back.Id == -Water && _cloneSprites.ContainsKey(back), "the dropped pot is still there after leaving");
+
+        // A creature turned into an item, then the party hurt and rested.
+        if (_world.Objects.FirstOrDefault(o => o.Kind == ObjectKind.Creature && !o.Hidden) is { } creature)
+        {
+            int before = _world.Objects.Count();
+            _world.Transform(creature.Index, Boots, atStart: false);
+            Expect(_world[creature.Index] is null && _world.Objects.Count() == before
+                && _world.First(-Boots) is { Item: not null }, "REQUEST(9) made boots where the creature stood");
+        }
+        party[0].Vitals.Hp = party[0].Vitals.MaxHp = 12;
+        _world.Damage(0, 5, percent: false);
+        Expect(party[0].Vitals.Hp == 7, "DAMAGE took 5 hit points");
+        _world.Rest(raiseDead: false);
+        Expect(party[0].Vitals.Hp == 12, "REQUEST(4) healed");
+
+        // Saved and loaded.
+        var carried = party.Select(p => string.Join(",", p.Items.Select(i => $"{i.Rdff}x{i.Quantity}@{i.Slot}"))).ToList();
+        string file = "check-" + Guid.NewGuid().ToString("N")[..8];
+        Save(file, "Check");
+        string path = Session.SavePath(file);
+        party[0].Items.Clear();
+        LoadSaved(SaveGame.Read(path));
+        File.Delete(path);
+        var loaded = Session.ScriptHost.PartyMembers.Select(p => string.Join(",", p.Items.Select(i => $"{i.Rdff}x{i.Quantity}@{i.Slot}"))).ToList();
+        Expect(carried.SequenceEqual(loaded), $"the party's items came back from the save ({string.Join(" | ", loaded)})");
+        Expect(Session.ScriptHost.PartyMembers[0].Vitals.Hp == 12, "hit points came back");
+
+        GD.Print(problems.Count == 0
+            ? $"items: made, dropped, picked up, worn, searched, left and found, transformed, hurt, rested, saved and loaded ({carried[0]}; {carried[1]})"
+            : "items: " + string.Join("; ", problems));
+        GetTree().Quit(problems.Count > 0 ? 1 : 0);
     }
 
     private void CheckSave()

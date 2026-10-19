@@ -82,5 +82,8 @@ public class LoggingGplHost : IGplHost
     {
     }
 
+    /// <summary>SEARCH with no world: nothing is carried.</summary>
+    public virtual int Search(GplMachine machine, int who, IReadOnlyList<GplSearchTest> tests) => 0;
+
     private static string Key(GplObjectRef field) => $"{field.Id}:{string.Join('.', field.Path)}";
 }

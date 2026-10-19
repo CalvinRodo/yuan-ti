@@ -45,6 +45,9 @@ public sealed record SaveGame
 
     public List<PartyMemberSave> Party { get; init; } = [];
 
+    /// <summary>What each party slot carries, its hit points and status (empty in saves from before items).</summary>
+    public List<PartyMemberSaveState> PartyStates { get; init; } = [];
+
     /// <summary>The global variable areas (flags, numbers, big numbers, strings), as stored.</summary>
     public Dictionary<GplArea, byte[]> Globals { get; init; } = [];
 
@@ -72,7 +75,7 @@ public sealed record SaveGame
 
     /// <summary>The game as it is now. <paramref name="world"/> is the current region (saved as it is); <paramref name="memory"/> the others.</summary>
     public static SaveGame Capture(string name, GplMachine machine, int[] engine, GameWorld world, RegionMemory memory,
-        IEnumerable<PartyMemberSave> party, int selected, IEnumerable<string> mods)
+        IEnumerable<PartyMemberSave> party, int selected, IEnumerable<string> mods, IEnumerable<PartyMemberState>? states = null)
     {
         var (table, heads, free) = machine.Triggers.Save();
         int current = world.Region.Number;
@@ -83,6 +86,7 @@ public sealed record SaveGame
             Region = current,
             Selected = selected,
             Party = [.. party],
+            PartyStates = [.. (states ?? []).Select(s => s.Save())],
             Globals = GlobalAreas.ToDictionary(a => a, a => machine.Memory.Area(a).ToArray()),
             Engine = [.. engine],
             Triggers = table,
@@ -94,6 +98,21 @@ public sealed record SaveGame
             Regions = [.. memory.States.Where(r => r.Region != current), world.Snapshot()],
             Mods = [.. mods],
         };
+    }
+
+    /// <summary>
+    /// Give the party slots back what they carried and how they were;
+    /// <paramref name="newItem"/> makes an item from its saved state (null if
+    /// its <c>RDFF</c> is gone).
+    /// </summary>
+    public void RestoreParty(IReadOnlyList<PartyMemberState> members, Func<ItemState, Item?> newItem)
+    {
+        for (int slot = 0; slot < members.Count && slot < PartyStates.Count; slot++)
+        {
+            members[slot].Vitals.Load(PartyStates[slot].Vitals);
+            members[slot].Items.Clear();
+            members[slot].Items.AddRange(PartyStates[slot].Items.Select(newItem).OfType<Item>());
+        }
     }
 
     /// <summary>Put the scripts' state and the regions back (the party and the current region are the view's to place).</summary>

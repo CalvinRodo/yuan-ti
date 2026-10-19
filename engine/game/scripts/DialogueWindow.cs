@@ -78,7 +78,8 @@ public partial class DialogueWindow : PanelContainer
             return;
         }
         _shownVersion = _dialogue.Version;
-        Visible = !_dialogue.IsEmpty;
+        // A shop has a window of its own (ShopWindow).
+        Visible = !_dialogue.IsEmpty && _dialogue.Prompt is not GplShopPrompt;
         if (!Visible)
         {
             return;

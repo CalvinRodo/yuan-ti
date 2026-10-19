@@ -61,6 +61,13 @@ public interface IGplHost
     /// without asking (<c>GPL 210</c> clones a rope next to the user).
     /// </summary>
     void FocusActor(GplMachine machine, int actor) { }
+
+    /// <summary>
+    /// SEARCH (<c>043D:08F8</c>): what the items <paramref name="who"/> carries
+    /// say, by <paramref name="tests"/> (see <c>GameWorld.Search</c>); it goes in
+    /// the accumulator.
+    /// </summary>
+    int Search(GplMachine machine, int who, IReadOnlyList<GplSearchTest> tests) => 0;
 }
 
 /// <summary>Where scripts come from: <c>GPL </c> and <c>MAS </c> resources by number.</summary>

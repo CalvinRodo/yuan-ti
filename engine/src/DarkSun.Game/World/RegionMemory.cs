@@ -2,10 +2,16 @@ using DarkSun.Game.Movement;
 
 namespace DarkSun.Game.World;
 
-/// <summary>An object as a region left it (<see cref="GameWorld.Snapshot"/>); <paramref name="Etab"/> is its region object, null for one made at run time from nothing.</summary>
+/// <summary>
+/// An object as a region left it (<see cref="GameWorld.Snapshot"/>):
+/// <paramref name="Etab"/> is its region object (−1 for one made at run time
+/// from nothing, which <paramref name="Ojff"/> names), what it carries, and
+/// its hit points.
+/// </summary>
 public sealed record ObjectState(
     int Index, int? Etab, int Id, string Name, bool Hidden, Cell Cell, int Allegiance, int Status,
-    int DoorFlags, bool SecondState, IReadOnlyDictionary<int, int> Fields);
+    int DoorFlags, bool SecondState, IReadOnlyDictionary<int, int> Fields,
+    IReadOnlyList<ItemState>? Items = null, VitalsState? Vitals = null, int? Ojff = null);
 
 /// <summary>A region as the party left it: its <c>GMAP</c> flags (without the run-time occupied bit) and objects.</summary>
 public sealed record RegionState(int Region, byte[] Flags, IReadOnlyList<ObjectState> Objects);

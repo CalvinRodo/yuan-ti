@@ -94,6 +94,9 @@ public sealed record GplTarget(GplVariable? Variable, GplObjectRef? Field)
 /// <summary>One SEARCH criterion: field, mode, and a value for some field types.</summary>
 public sealed record GplSearchCriterion(byte Field, byte Mode, GplExpression? Value);
 
+/// <summary>A SEARCH criterion with its value worked out: <paramref name="Op"/> 0–3 say what to return (smallest, largest, total, count), 4–6 compare.</summary>
+public readonly record struct GplSearchTest(int Field, int Op, int Value);
+
 public sealed record GplSearch(GplExpression Who, byte Low, byte High, IReadOnlyList<GplSearchCriterion> Criteria);
 
 public sealed record GplMenuEntry(

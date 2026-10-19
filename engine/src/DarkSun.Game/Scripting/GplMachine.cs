@@ -579,7 +579,9 @@ public sealed class GplMachine
             case GplOpcodes.Search:
             {
                 Result who = Evaluate(i.Search!.Who);
+                var tests = i.Search.Criteria.Select(c => new GplSearchTest(c.Field, c.Mode, c.Value is { } v ? Evaluate(v).Value : 0)).ToList();
                 Host(i, [who]);
+                Accumulator = _host.Search(this, who.Value, tests);
                 return;
             }
             case 0x52: // RAND: draws before evaluating n (gpl_op_52_RAND)

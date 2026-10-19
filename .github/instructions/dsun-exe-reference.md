@@ -665,7 +665,17 @@ From the handlers (2026-10-18); the engine's model is `DarkSun.Game.World`.
   | 17 | if who < 0, place `OJFF` −who at cell (a, b) (`896E:0E2E`) |
   | 18 | set the allegiance (combat record +0x1D) of matching creatures (index ≥ 4, kind 2) |
   | 19 | `DS:116A` = 1 (reload) |
-  | 1–4, 6–9, 14–16, 20 | not identified: `073D`, `6BB8:0D13`, `028D`, `0AC7`, `0AE1` (spawns a creature, combat-related), `0CB4`, `0F1C`, `0FE9`, `1587:2927`, `6BB8:0FA9`, `13B9` |
+  | 1 / 4 | the party rests (`073D(1, a)` / `073D(0, a)`): "THE PARTY RESTS"; members with status 2 or 3 (with 1: any) get status 1, then healing and spells (not traced further) |
+  | 2 | a door: `6BB8:0D13(object, a, 1)` (see Doors) |
+  | 3 | `028D(who, a, b)`: for the party, the member with the lowest `030B` score, then `caseD_e`; a check used in conditions (13 uses), not traced |
+  | 6 | play cinematic a (`0AC7`) |
+  | 7 | `0AE1(who, x, y)`: makes object −who at cell (x, y); an item there sets off an area effect (a party check `028D(party, 2)`, damage to creatures around), then the object is removed. A trap or blast; combat |
+  | 8 | `0CB4(a, b)`: a random monster from the region's `MONR` table (42-byte records); combat |
+  | 9 | `0F1C(who, ojff, b)` (each match when who ≤ 0): remove the object and make `OJFF` a where it stood (b ≠ 0: at its saved start), with its facing; the new one becomes "other" (`37B7:0003`) |
+  | 14 | `0FE9`: an ambush: makes objects around the active member, sets allegiances and starts combat there |
+  | 15 | `1587:2927(1)`: sets `577D:09B5` and `DS:11B8` and calls `191F:0A99(1)`; not identified |
+  | 16 | `6BB8:0FA9(a)`: if sound is on and a ≠ `DS:0D9A`, `361A:0000(a)` sets the music's intensity level (an XMIDI section, at most the track's byte at `DS:1675 + 3·track`) |
+  | 20 | `13B9(a)`: how many objects 5–319 are creatures (kind 2) whose allegiance has a bit of a (all with a = 0) |
 
   The scripts use these codes this often: 18 ×515, 16 ×382, 17 ×144,
   2 ×126, 5 ×85, 11 ×67, 9 ×62, 7 ×50.
@@ -681,7 +691,7 @@ From the handlers (2026-10-18); the engine's model is `DarkSun.Game.World`.
   | 7 | `0365` | target |
   | 8 | `0363` | other |
   | 9 | `035B` | game clock (int32) |
-  | 10 | `0357` | int32, unknown |
+  | 10 | `0357` | the party's money (int32; CHANGE_MONEY adds to it) |
   | 11 | `035F` | unknown |
   | 12 | `0361` | SET_OTHER |
 
@@ -703,7 +713,7 @@ From the handlers (2026-10-18); the engine's model is `DarkSun.Game.World`.
 ## 6. Open questions
 
 * `OP_28` (expr, expr, string; sets the trace flag like SOURCE_TRACE) is unnamed.
-* Engine variables 10 and 11 (`3781:0357`, `035F`); object fields other than
+* Engine variable 11 (`3781:035F`); object fields other than
   19, 72, 75 (allegiance, inferred) and 95.
 * The order handlers themselves (how GO, FOLLOW, HUNT and FLEE move a
   creature, and when no-orders and line-of-sight scripts run); the engine
@@ -838,6 +848,63 @@ each record are not read.
     next string, `"%d%s*%dD%d%+d"`, formats damage.
   * Every item `RDFF` that references an `IT1R` or `NAME` entry (745 and
     706 of 755) references the record's own type and name.
+
+### Items in scripts
+
+* **Who carries what:** each holder (creature, party member, or an item:
+  a container) has a list of item-table entries, read with
+  `1A0A:1A2D(object, buffer)` (10-byte entries: kind 1, item index),
+  added with `1A0A:20EC` and removed with `1A0A:1CD6`. An object's kind
+  is the byte at `0C36 + 3·index` (0 scenery, 1 item, 2 creature), its
+  record index the word after it.
+* **GIVE(count, item, to, from)** (`043D:15FE` → `7372:0D93(from, to,
+  count, item)`) and **TAKE(count, item, from, to)** (`043D:1DE9` →
+  `7372:0D1D`): from 9999 makes new items (`7372:0FEE`: `RDFF` |item| loaded
+  with `7155:0000`; one entry with a quantity when the type's `IT1R` +0x0F
+  has bit 2, else one entry each; refused past 0x4E entries); to 9999
+  destroys them, one at a time (a stack loses 1). Otherwise entries move
+  (part of a stack: new ones for the receiver). Item 32767 is any item.
+  TAKE from 32766 asks each party member in turn (for the whole count
+  each time); TAKE from a party member takes from the active member
+  (`DS:179E`) first. Both return how many moved.
+* **DROP(count, item, who)** (`043D:12A5`, `7372:0370`): who 32766 is the
+  party, 32767 nothing; matching creatures put items on the map
+  (`7372:04E4`: a new object at their place, with the quantity in field
+  0x52). Returns 1 if as many as asked (or count 32767) were dropped.
+* **SEARCH(who, range, criteria…)** (`043D:08F8`): who 32766 is each party
+  member, an index one object, a name nothing. Each criterion is a field,
+  an op byte and, for ops 4–6, a value. The last criterion's op decides
+  the result, combined over members: 0 the smallest, 1 the largest, 2 and 3
+  added, 4–6 or'ed (jump table at `043D:0B04`). Per member the work is
+  `0826:0344` (not traced). The fields used: 72 (0x48) the item's id,
+  82 (0x52) its quantity, 85 (0x55) its equipment slot. The range bytes
+  (77–80 or 0–0 in every script) go through `1A0A:0234` per kind.
+* **Equipment slots** (`6466:0854`): 14, item record +0x11 (255 in the
+  pack); slot n takes the `IT1R` placement at `3B67:0000` + n: 3 arms,
+  11 ammunition, 12 missile weapon, 5 hand, 9 finger, 2 waist, 10 legs,
+  6 head, 7 neck, 1 chest, 5 hand, 9 finger, 8 cloak, 4 feet. Scripts test
+  slot 13 (the Serpent Boots, worn) and 2 (a bow).
+* **Pick up** (`7BEB:0A60`): an item goes into the pack (`7BEB:01F5`),
+  then its pickup trigger runs (`039D:02A7`); a party member's box opens
+  their inventory.
+* **Money** is `gname[10]` (`3781:0357`, int32): CHANGE_MONEY (`043D:24C4`
+  → `1A0A:28F6`) adds to it; scripts compare and print it.
+* **AWARD(who, xp)** (`043D:10EC`, `7372:1467`): 32766 each party member,
+  32767 nobody; a member below status 3 gains xp ÷ their number of classes
+  (`8E77:02E5`) in the character record (+0, the most at +4), up to
+  2 000 000 000; out of combat `8E77:0A8F` follows (level-up, not traced).
+* **DAMAGE(who, n)** / **PHYS_DAMAGE(who, percent)** (`043D:0C8A` →
+  `7372:12AA` / `1342`, `80F5:0E61`, `612E:18DA`): 32766 the party, 32767
+  nobody, a name each match. PHYS_DAMAGE takes that percentage of the hit
+  points (+0); scripts use 1000 to kill. For a creature: damage below its
+  hit points takes them; up to 9 more leaves status 3 and 0 hit points;
+  more, status 5 (dead); 10 000 or more, 8. The status is also copied to
+  `DS:0333 + |id|` (|id| 1–50). Status above 2 takes it out of combat and
+  calls `612E:1AAF`. An item takes damage above its type's +6 word.
+* **SHOP(merchant)** (`043D:1192` → `7372:08D2` → `74F1:042B(actor,
+  merchant)`, `84C9:11B4`): the shop screen, not traced. Scripts count the
+  merchant's items with SEARCH before and after it to tell whether
+  something was bought.
 
 ### Sound effects
 

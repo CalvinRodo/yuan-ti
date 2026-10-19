@@ -25,6 +25,7 @@ public static class Controls
     public const string QuickSave = "quick_save";
     public const string QuickLoad = "quick_load";
     public const string ToggleObjectNumbers = "debug_toggle_object_numbers";
+    public const string ToggleInventory = "inventory";
     public const string ToggleScriptDebugger = "debug_toggle_script_debugger";
     public const string DebugContinue = "debug_continue";
     public const string DebugStepOver = "debug_step_over";
@@ -37,7 +38,7 @@ public static class Controls
     [
         PanLeft, PanRight, PanUp, PanDown, ZoomIn, ZoomOut, NextRegion, PreviousRegion, ToggleMapFlags, NextCharacter,
         AddCharacter, ChangeSprite, ToggleScriptLog, ToggleGrid, QuickSave, QuickLoad, ToggleObjectNumbers,
-        ToggleScriptDebugger, DebugContinue, DebugStepOver, DebugStepInto, DebugStepOut, Back,
+        ToggleInventory, ToggleScriptDebugger, DebugContinue, DebugStepOver, DebugStepInto, DebugStepOut, Back,
     ];
 
     public static void Register()
@@ -59,6 +60,7 @@ public static class Controls
         Add(QuickSave, Key.F5);
         Add(QuickLoad, Key.F9);
         Add(ToggleObjectNumbers, Key.F4);
+        Add(ToggleInventory, Key.I);
         Add(ToggleScriptDebugger, Key.F6);
         Add(DebugContinue, Key.F8);
         Add(DebugStepOver, Key.F10);

@@ -94,7 +94,7 @@ public partial class Main : Control
             return;
         }
         bool regionCheck = args.Contains("--check-regions") || args.Contains("--check-exits") || args.Contains("--check-start") || args.Contains("--check-verbs") || args.Contains("--check-memory") || args.Contains("--check-save")
-            || args.Contains("--check-debugger");
+            || args.Contains("--check-debugger") || args.Contains("--check-items");
         bool screenCheck = args.Contains("--check-intro") || args.Contains("--check-menu") || args.Contains("--check-mods") || args.Contains("--check-saves")
             || args.Contains("--check-party") || args.Contains("--check-chargen");
         if (args.Contains("--check-install") || (install is null && (regionCheck || screenCheck)))

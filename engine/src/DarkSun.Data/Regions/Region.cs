@@ -213,7 +213,26 @@ public sealed class Region
 
     private sealed record ObjectSprite(ObjectDefinition Definition, IReadOnlyList<ImageFrame> Frames);
 
-    private static ObjectSprite? LoadObjectSprite(GffSet all, int ojff, Func<ReadOnlyMemory<byte>, IReadOnlyList<ImageFrame>> decode)
+    /// <summary>
+    /// An object made at run time (an item dropped on the map, a creature a
+    /// script turns into another): <c>OJFF</c> <paramref name="ojff"/> standing
+    /// at pixel (x, y) as an <c>ETAB</c> entry would put it. Its
+    /// <see cref="RegionObject.EtabIndex"/> is −1. Null if the <c>OJFF</c> or its
+    /// image is missing.
+    /// </summary>
+    public static RegionObject? MakeObject(IResourceSource all, int ojff, int x, int y,
+        Func<ReadOnlyMemory<byte>, IReadOnlyList<ImageFrame>>? decode = null)
+    {
+        decode ??= d => ImageDecoder.ReadFrames(d.Span);
+        if (LoadObjectSprite(all, ojff, decode) is not { } s)
+        {
+            return null;
+        }
+        return new RegionObject(-1, ojff, x, y, x - s.Definition.AnchorX, y - s.Definition.AnchorY, false, s.Frames,
+            s.Definition.Scmd, s.Definition.AnchorX, s.Definition.AnchorY - s.Definition.YAdjust, s.Definition.YAdjust);
+    }
+
+    private static ObjectSprite? LoadObjectSprite(IResourceSource all, int ojff, Func<ReadOnlyMemory<byte>, IReadOnlyList<ImageFrame>> decode)
     {
         if (!all.TryRead("OJFF", ojff, out var record) || record.Length < ObjectDefinition.Size)
         {

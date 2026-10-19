@@ -12,6 +12,9 @@ public sealed record GplYesNoPrompt : GplPrompt;
 /// <summary>MENU: the options in script order; disabled ones are not offered. The answer is an option's index.</summary>
 public sealed record GplMenuPrompt(string Title, IReadOnlyList<GplMenuOption> Options) : GplPrompt;
 
+/// <summary>SHOP (<c>7372:08D2</c>): the shop of <paramref name="Merchant"/> (an object index) is open; the script goes on when it closes.</summary>
+public sealed record GplShopPrompt(int Merchant) : GplPrompt;
+
 /// <summary>A piece of text from PRINT_STRING / PRINT_NUMBER / PRINT_NEWLINE, with its style byte (98 or 115 in the scripts).</summary>
 public readonly record struct GplText(string Text, int Style);
 
@@ -158,7 +161,7 @@ public class DialogueGplHost : LoggingGplHost
     /// The player's answer if the script is being resumed; otherwise show the
     /// prompt and pause the script.
     /// </summary>
-    private bool Wait(GplMachine machine, GplPrompt prompt, out int answer)
+    protected bool Wait(GplMachine machine, GplPrompt prompt, out int answer)
     {
         if (machine.TryTakeAnswer(out answer))
         {

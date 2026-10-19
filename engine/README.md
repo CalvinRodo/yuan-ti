@@ -131,8 +131,15 @@ leaves the game in progress alone. `-- --load=quick` starts straight into a
 save, `-- --saves` opens the list. Creatures (objects with an `RDFF` combat record) walk where their
 scripts send them (HUNT, GO, GOXY, FOLLOW, FLEE, FETCH, WAIT), and run their
 no-orders and line-of-sight scripts; RANGE, GETXY, GET_LOS and the other
-queries read the world (`DarkSun.Game.World`). Items, combat and some
+queries read the world (`DarkSun.Game.World`). Combat and a few
 REQUEST codes are still only logged: F2 shows the script log, F6 the script debugger (see Mods).
+Items: party members, creatures and containers carry items that scripts give, take, drop and search
+for; Get picks an item up; I opens the party's items (wear, give to the next member, drop); a script's
+SHOP opens a shop (buy at an item's value, sell at half) and waits for it to close; the party's money
+is `gname[10]`. AWARD gives experience to the party's characters, DAMAGE and PHYS_DAMAGE hurt and kill,
+REQUEST 1 and 4 rest the party. Party items and hit points are saved; regions remember what their
+creatures carry and items left on the ground. `-- --new-game --give=1051,1095` hands out items by
+`RDFF` number, `--open-items` opens the items window; `--check-items` checks it all with the game's items.
 On any screen, `?` lists every key and click that screen takes, with the keys as they are bound now
 (`KeyHelp`; `--check-help` fails if a `Controls` action is listed nowhere, `--show-keys` opens it at start). Click: the selected character (green ring) walks there;
 Shift+click: the whole party; Tab: select
