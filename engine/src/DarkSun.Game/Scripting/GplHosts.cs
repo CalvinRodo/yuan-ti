@@ -78,5 +78,9 @@ public class LoggingGplHost : IGplHost
 
     public virtual int TriggerId(GplMachine machine, int obj) => obj;
 
+    public virtual void FocusActor(GplMachine machine, int actor)
+    {
+    }
+
     private static string Key(GplObjectRef field) => $"{field.Id}:{string.Join('.', field.Path)}";
 }

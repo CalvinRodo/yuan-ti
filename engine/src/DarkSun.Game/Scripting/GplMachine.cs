@@ -159,6 +159,7 @@ public sealed class GplMachine
             return null;
         }
         SetContext(who, who, who);
+        _host.FocusActor(this, who);
         return Run(entry);
     }
 
@@ -170,6 +171,7 @@ public sealed class GplMachine
             return null;
         }
         SetContext(actor, target, target);
+        _host.FocusActor(this, actor);
         return Run(entry);
     }
 
@@ -181,6 +183,7 @@ public sealed class GplMachine
             return null;
         }
         SetContext(actor, first, second);
+        _host.FocusActor(this, actor);
         return Run(entry);
     }
 

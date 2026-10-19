@@ -53,6 +53,14 @@ public interface IGplHost
 
     /// <summary>The id object triggers match for an object (DSUN.EXE: object field 0x48).</summary>
     int TriggerId(GplMachine machine, int obj) => obj;
+
+    /// <summary>
+    /// Before a trigger's script runs, DSUN.EXE puts the actor's cell in
+    /// <c>gname[1]</c>, <c>gname[2]</c> and 0 in <c>gname[3]</c>, as GETXY
+    /// does (<c>1A0A:0256</c>, called by every trigger check); scripts use it
+    /// without asking (<c>GPL 210</c> clones a rope next to the user).
+    /// </summary>
+    void FocusActor(GplMachine machine, int actor) { }
 }
 
 /// <summary>Where scripts come from: <c>GPL </c> and <c>MAS </c> resources by number.</summary>

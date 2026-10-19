@@ -286,6 +286,20 @@ public class GameWorldTests
         Assert.Equal(5, host.ReadEngineVariable(machine, 0x22));
     }
 
+    [Fact]
+    public void TriggersStartWithTheActorsCellInGetxysVariables()
+    {
+        GameWorld world = World();
+        var host = new WorldGplHost { Map = world };
+        var machine = new GplMachine(new SingleScript([GplOpcodes.EndFunction, 0x31]), host, [], new BorlandRandom(1));
+        WorldObject torch = world.First(-200)!, actor = world[0]!;
+        machine.Triggers.AddObject(GplTriggerList.Use, 1, 1, torch.Id, global: false);
+
+        Assert.NotNull(machine.OnObject(GplTriggerList.Use, actor.Index, torch.Index));
+
+        Assert.Equal((actor.Cell.X, actor.Cell.Y, 0), (host.ReadEngineVariable(machine, 0x21), host.ReadEngineVariable(machine, 0x22), host.ReadEngineVariable(machine, 0x23)));
+    }
+
     private sealed class SingleScript(byte[] code) : IGplScripts
     {
         public byte[]? Load(int file, GplFileKind kind) => file == 1 ? code : null;

@@ -139,6 +139,7 @@ public partial class RegionView : Node2D
         }
         if (OS.GetCmdlineUserArgs().Contains("--check-exits"))
         {
+            _instantTravel = true;
             CheckExits();
             return;
         }
@@ -153,6 +154,7 @@ public partial class RegionView : Node2D
             // A new game begins where DSUN.EXE's does: region 42, the party at pixel (488, 152).
             _regionIndex = 0;
             EnterRegion(NewGameStart.Region, NewGameStart.At);
+            FireArrivalTriggers();
             if (OS.GetCmdlineUserArgs().Contains("--check-start"))
             {
                 GD.Print($"new game: {Session.Install!.RegionFiles[_regionIndex]} (region {_region.Number}); party at "
@@ -186,6 +188,9 @@ public partial class RegionView : Node2D
         };
         layer.AddChild(_dialogueWindow);
 
+        _fade = new ColorRect { Color = new Color(0, 0, 0, 0), MouseFilter = Control.MouseFilterEnum.Ignore };
+        _fade.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
+        layer.AddChild(_fade);
         _verbMenu = new VerbMenu { Chosen = ChooseVerb };
         layer.AddChild(_verbMenu);
         _prompt = new Label { Visible = false, HorizontalAlignment = HorizontalAlignment.Center };
@@ -206,8 +211,11 @@ public partial class RegionView : Node2D
         _pendingUse = null;
         _verbMenu.Close();
         SetUseWith(null);
+        // The party keeps its looks, facing and selection from region to region.
+        var carried = _party.Select(m => (m.Sprite, m.Walker.Facing)).ToList();
+        int selected = _selected;
         LoadRegion(files[_regionIndex]);
-        PlaceParty(start);
+        PlaceParty(start, carried, selected);
         RunRegionScripts();
         UpdateHud();
         _follow = true;
@@ -382,16 +390,51 @@ public partial class RegionView : Node2D
     private PartyMember? Selected => _party.Count > 0 ? _party[_selected] : null;
 
     /// <summary>Put a party of <see cref="PartySize"/> near <paramref name="start"/>, or the middle of the map.</summary>
-    private void PlaceParty(Cell? start = null)
+    /// <summary>
+    /// The party at <paramref name="start"/> (else the middle of the map):
+    /// <paramref name="carried"/> (the members coming from the last region,
+    /// with their sprites and facing), or a new party of four.
+    /// </summary>
+    private void PlaceParty(Cell? start, IReadOnlyList<(CharacterSprite Sprite, Direction Facing)> carried, int selected)
     {
-        _selected = 0;
         _nextSprite = 0;
         Cell centre = start ?? new(_region.Width / 2, _region.Height / 2);
-        for (int i = 0; i < PartySize; i++)
+        for (int i = 0; i < (carried.Count > 0 ? carried.Count : PartySize); i++)
         {
-            AddCharacter(_party.Count > 0 ? _party[^1].Walker.Cell : centre);
+            Cell near = _party.Count > 0 ? _party[^1].Walker.Cell : centre;
+            if (i < carried.Count)
+            {
+                AddCharacter(near, sprite: carried[i].Sprite, facing: carried[i].Facing);
+            }
+            else
+            {
+                AddCharacter(near);
+            }
         }
+        _nextSprite = _party.Count;
+        _selected = Math.Clamp(selected, 0, Math.Max(0, _party.Count - 1));
         _world.ActiveMember = _selected;
+    }
+
+    /// <summary>
+    /// When the adventure screen is first built (a new game, <c>1587:1F83</c>),
+    /// DSUN.EXE checks the move triggers of each party member's cell, after
+    /// the region's script has registered them. A region change by TELEPORT
+    /// (<c>7155:1487</c>) doesn't: it only runs the region's script, so a
+    /// party arriving inside the new region's exit box isn't sent straight back.
+    /// </summary>
+    private void FireArrivalTriggers()
+    {
+        int region = _region.Number;
+        for (int i = 0; i < _party.Count && _region.Number == region && _world.PendingRegion is null; i++)
+        {
+            Cell cell = _party[i].Walker.Cell;
+            _lastCells[_party[i].Walker] = cell;
+            if (Session.Scripts.OnMove(i, cell.X, cell.Y, i == _selected) is { } run)
+            {
+                ReportScript($"character {i + 1} starts at ({cell.X},{cell.Y})", run);
+            }
+        }
     }
 
     /// <summary>
@@ -399,7 +442,7 @@ public partial class RegionView : Node2D
     /// to <paramref name="near"/>, as party member <paramref name="slot"/>
     /// (the next free one if null).
     /// </summary>
-    private PartyMember? AddCharacter(Cell near, int? slot = null)
+    private PartyMember? AddCharacter(Cell near, int? slot = null, CharacterSprite? sprite = null, Direction facing = Direction.South)
     {
         List<CharacterSprite> sprites = Characters();
         int index = slot ?? _party.Count;
@@ -407,8 +450,8 @@ public partial class RegionView : Node2D
         {
             return null;
         }
-        CharacterSprite sprite = sprites[_nextSprite++ % sprites.Count];
-        if (_world.AddPartyMember(index, new CharacterSpec(sprite.Script, sprite.Sizes, sprite.Footprint), near) is not { Walker: { } walker })
+        sprite ??= sprites[_nextSprite++ % sprites.Count];
+        if (_world.AddPartyMember(index, new CharacterSpec(sprite.Script, sprite.Sizes, sprite.Footprint), near, facing) is not { Walker: { } walker })
         {
             return null;
         }
@@ -494,7 +537,8 @@ public partial class RegionView : Node2D
             sprite.Offset = -new Vector2(animator.HotX, animator.HotY + obj.YAdjust);
             PlaySounds(animator.TakeSounds(), sprite.Position);
         }
-        for (int i = 0; i < _party.Count; i++)
+        int region = _region.Number;
+        for (int i = 0; i < _party.Count && _region.Number == region && !_transitioning; i++)
         {
             PartyMember member = _party[i];
             if (member.Walker.Update(now, _region.IsBlocked))
@@ -586,6 +630,10 @@ public partial class RegionView : Node2D
 
     public override void _Process(double delta)
     {
+        if (_transitioning)
+        {
+            return; // fading to the next region
+        }
         _clock += delta;
         Animate();
         FinishApproach();
@@ -989,11 +1037,11 @@ public partial class RegionView : Node2D
         {
             _world.PendingRegion = null;
         }
-        if (!run.Suspended && _world.PendingRegion is { } go)
+        if (!run.Suspended && _world.PendingRegion is { } go && !_transitioning)
         {
             _world.PendingRegion = null;
             AddScriptLine($"    party leaves for region {go.Region} ({go.X},{go.Y})");
-            EnterRegion(go.Region, new Cell(go.X, go.Y));
+            Travel(go.Region, new Cell(go.X, go.Y));
         }
     }
 
@@ -1089,6 +1137,62 @@ public partial class RegionView : Node2D
         }
     }
 
+    /// <summary>
+    /// Leave for region <paramref name="number"/>: fade to black, enter it,
+    /// fade back in (at once in headless checks). Nothing moves meanwhile.
+    /// </summary>
+    private void Travel(int number, Cell start)
+    {
+        if (_checking || _instantTravel || _fade is null || _entering)
+        {
+            // Headless, or already black (an arrival trigger sending the party on): go at once.
+            EnterRegion(number, start);
+            return;
+        }
+        _transitioning = true;
+        _verbMenu.Close();
+        Tween tween = CreateTween();
+        tween.TweenProperty(_fade, "color:a", 1f, FadeSeconds);
+        tween.TweenCallback(Callable.From(() =>
+        {
+            _transitioning = false;
+            _entering = true;
+            try
+            {
+                EnterRegion(number, start);
+            }
+            finally
+            {
+                _entering = false;
+            }
+        }));
+        tween.TweenProperty(_fade, "color:a", 0f, FadeSeconds);
+    }
+
+    /// <summary>A free cell 3–6 cells from <paramref name="at"/> where <paramref name="w"/> can stand (for the exits check).</summary>
+    private Cell? NearestFree(Walker w, Cell at)
+    {
+        for (int r = 3; r <= 6; r++)
+        {
+            foreach (var (dx, dy) in new[] { (0, r), (r, 0), (0, -r), (-r, 0), (r, r), (-r, r), (r, -r), (-r, -r) })
+            {
+                var c = new Cell(at.X + dx, at.Y + dy);
+                if (w.CanStand(c, _region.IsBlocked))
+                {
+                    return c;
+                }
+            }
+        }
+        return null;
+    }
+
+    private const float FadeSeconds = 0.25f;
+    private bool _transitioning, _entering;
+
+    /// <summary>Change region at once, without the fade (headless checks that step the game themselves).</summary>
+    private bool _instantTravel;
+    private ColorRect? _fade;
+
     /// <summary>Change to region <paramref name="number"/> with the party at <paramref name="start"/>.</summary>
     private void EnterRegion(int number, Cell start)
     {
@@ -1156,55 +1260,136 @@ public partial class RegionView : Node2D
     }
 
     /// <summary>
-    /// For every region: put the active member on each move trigger (a box's
-    /// top-left cell) and report the triggers whose scripts take the party to
-    /// another region.
+    /// For every region: walk the active member into each move trigger as a
+    /// player would, one step from a neighbouring free cell (so it faces the
+    /// way it moved, which the map-edge exits of <c>GPL 80</c> test), and use
+    /// every object with a use trigger; answer Yes, and report what takes the
+    /// party to another region, and the regions no exit leads to.
     /// </summary>
     private void CheckExits()
     {
         IReadOnlyList<string> files = Session.Install!.RegionFiles;
         int exits = 0;
+        var reached = new HashSet<int>();
+        (Cell Step, string Name)[] steps = [(new Cell(0, -1), "north"), (new Cell(1, 0), "east"), (new Cell(0, 1), "south"), (new Cell(-1, 0), "west")];
+        string? only = OS.GetCmdlineUserArgs().FirstOrDefault(a => a.StartsWith("--only="))?[7..];
+        bool verbose = OS.GetCmdlineUserArgs().Contains("-v");
         for (int index = 0; index < files.Count; index++)
         {
+            if (only is not null && !files[index].StartsWith(only, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
             ShowRegion(index);
             AnswerForThePlayer();
             int number = _region.Number;
-            var spots = Session.Scripts.Triggers.Records(GplTriggerList.MoveTile).Select(t => (t.A, t.B, W: 1, H: 1, "tile"))
-                .Concat(Session.Scripts.Triggers.Records(GplTriggerList.MoveBox).Select(t => (t.A, t.B, W: (int)t.B8, H: (int)t.B9, "box"))).ToList();
+            var spots = Session.Scripts.Triggers.Records(GplTriggerList.MoveTile).Select(t => (t.A, t.B, W: 1, H: 1, Kind: "tile"))
+                .Concat(Session.Scripts.Triggers.Records(GplTriggerList.MoveBox).Select(t => (t.A, t.B, W: (int)t.B8, H: (int)t.B9, Kind: "box"))).ToList();
             var found = new List<string>();
             foreach (var (x0, y0, width, height, kind) in spots)
             {
+                var cells = (from dy in Enumerable.Range(0, Math.Max(1, height))
+                             from dx in Enumerable.Range(0, Math.Max(1, width))
+                             select new Cell(x0 + dx, y0 + dy)).ToList();
+                bool Inside(Cell c) => c.X >= x0 && c.X < x0 + Math.Max(1, width) && c.Y >= y0 && c.Y < y0 + Math.Max(1, height);
+                // A few cells spread over the trigger, each entered from every side that is outside it.
+                var tries = cells.Where((_, i) => i % Math.Max(1, cells.Count / 6) == 0)
+                    .SelectMany(c => steps.Select(s => (To: c, From: new Cell(c.X - s.Step.X, c.Y - s.Step.Y), s.Name)))
+                    .Where(t => !Inside(t.From));
+                foreach (var (to, from, direction) in tries)
+                {
+                    if (_region.Number != number)
+                    {
+                        ShowRegion(index);
+                        AnswerForThePlayer();
+                    }
+                    Walker w = _party[_selected].Walker;
+                    if (!w.CanStand(from, _region.IsBlocked) || !w.CanStand(to, _region.IsBlocked) || !w.Teleport(from, _region.IsBlocked))
+                    {
+                        continue;
+                    }
+                    _lastCells[w] = from;
+                    if (!w.WalkTo(to, _region.IsBlocked))
+                    {
+                        continue;
+                    }
+                    for (int tick = 0; tick < 600 && _region.Number == number && (w.IsWalking || Session.Scripts.IsSuspended); tick++)
+                    {
+                        _clock += 1.0 / ScmdAnimator.TicksPerSecond;
+                        Animate();
+                        AnswerForThePlayer(yes: true);
+                    }
+                    if (verbose)
+                    {
+                        GD.Print($"  {kind} ({x0},{y0}) {width}x{height}: ({from.X},{from.Y}) -> ({to.X},{to.Y}) {direction}: now region {_region.Number} at {_party[0].Walker.Cell}, facing {_party[_selected].Walker.Facing}");
+                        GD.Print("    " + string.Join("\n    ", _scriptLines.TakeLast(6)));
+                    }
+                    if (_region.Number != number)
+                    {
+                        found.Add($"{kind} ({to.X},{to.Y}) going {direction} -> region {_region.Number} at ({_party[0].Walker.Cell.X},{_party[0].Walker.Cell.Y})");
+                        reached.Add(_region.Number);
+                        break;
+                    }
+                }
+            }
+            // Exits behind a use trigger: doors, stairs, portals.
+            if (_region.Number != number)
+            {
+                ShowRegion(index);
+                AnswerForThePlayer();
+            }
+            List<int> Usable() => [.. _world.Objects.Where(o => o.Kind != ObjectKind.Party && !o.Hidden && Session.Scripts.Triggers.MatchObject(GplTriggerList.Use, o.Id) is not null)
+                .Select(o => o.Index)];
+            var usable = Usable();
+            for (int u = 0; u < usable.Count; u++)
+            {
+                int objIndex = usable[u];
+                if (u == usable.Count - 1 && _region.Number == number)
+                {
+                    // Objects the uses made (CLONE) get their turn too.
+                    usable.AddRange(Usable().Except(usable));
+                }
                 if (_region.Number != number)
                 {
                     ShowRegion(index);
                     AnswerForThePlayer();
                 }
-                // The first cell of the trigger the active member can stand on (creatures hold cells too).
-                Walker w = _party[0].Walker;
-                var cells = from dy in Enumerable.Range(0, Math.Max(1, height))
-                            from dx in Enumerable.Range(0, Math.Max(1, width))
-                            select new Cell(x0 + dx, y0 + dy);
-                if (cells.FirstOrDefault(c => w.CanStand(c, _region.IsBlocked), new Cell(-1, -1)) is not { X: >= 0 } at
-                    || !w.Teleport(at, _region.IsBlocked))
+                if (_world[objIndex] is not { } obj)
                 {
                     continue;
                 }
-                var (x, y) = (at.X, at.Y);
-                for (int tick = 0; tick < 4 && _region.Number == number; tick++)
+                // Walk up to it from nearby, as the player would (scripts may test where the user stands).
+                Walker w = _party[_selected].Walker;
+                if (_world.CellsOf(obj) is [var at, ..] && NearestFree(w, at) is { } near)
+                {
+                    w.Teleport(near, _region.IsBlocked);
+                    _lastCells[w] = near;
+                }
+                StartVerb(obj, Verb.Use, null);
+                for (int tick = 0; tick < 30 * ScmdAnimator.TicksPerSecond && _region.Number == number && (_pendingUse is not null || w.IsWalking || Session.Scripts.IsSuspended); tick++)
                 {
                     _clock += 1.0 / ScmdAnimator.TicksPerSecond;
                     Animate();
+                    FinishApproach();
                     AnswerForThePlayer(yes: true);
+                }
+                AnswerForThePlayer(yes: true);
+                if (verbose)
+                {
+                    GD.Print($"  use {Describe(obj)} at {string.Join(" ", _world.CellsOf(obj).Take(1))}: user at {w.Cell}; now region {_region.Number}");
+                    GD.Print("    " + string.Join("\n    ", _scriptLines.TakeLast(5)));
                 }
                 if (_region.Number != number)
                 {
-                    found.Add($"{kind} ({x},{y}) -> region {_region.Number} at ({_party[0].Walker.Cell.X},{_party[0].Walker.Cell.Y})");
+                    found.Add($"use {Describe(obj)} -> region {_region.Number} at ({_party[0].Walker.Cell.X},{_party[0].Walker.Cell.Y})");
+                    reached.Add(_region.Number);
                 }
             }
             exits += found.Count;
-            GD.Print($"{files[index]}: {spots.Count} move triggers, {found.Count} exits{(found.Count > 0 ? ": " + string.Join("; ", found) : "")}");
+            GD.Print($"{files[index]}: {spots.Count} move triggers, {usable.Count} usable objects, {found.Count} exits{(found.Count > 0 ? ": " + string.Join("; ", found) : "")}");
         }
-        GD.Print($"{exits} region exits found");
+        var unreached = files.Select(f => Convert.ToInt32(f[3..5], 16)).Where(n => n != 255 && !reached.Contains(n)).ToList();
+        GD.Print($"{exits} region exits found (move triggers and use triggers); no exit leads to region{(unreached.Count == 1 ? "" : "s")} {string.Join(", ", unreached)}");
         GetTree().Quit();
     }
 
@@ -1242,7 +1427,7 @@ public partial class RegionView : Node2D
             RunRegionScripts();
             AnswerForThePlayer();
             string scriptLine = _scriptLines.Count > linesBefore ? _scriptLines[linesBefore] : "";
-            PlaceParty();
+            PlaceParty(null, [], 0);
             Cell start = _party[0].Walker.Cell;
             Cell goal = new(start.X + 20, start.Y);
             WalkTo(goal, wholeParty: true);

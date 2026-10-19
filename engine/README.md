@@ -107,8 +107,13 @@ second object to click; Look works from anywhere and names an object with
 no look script. Get and Attack say so when there's no script, since items
 and combat aren't in yet. Dialogue (text, portraits, Continue, Yes/No,
 menus) opens in a window and pauses the script until answered; TELEPORT moves
-the party (region exits: walk out through a map edge and answer Yes) and
-creatures. Creatures (objects with an `RDFF` combat record) walk where their
+the party and creatures. Region transitions are the game's own scripts:
+walk out through a map edge facing out of the map (`GPL 80` asks whether
+to leave), step into a building's doorway, or Use a door, stairs or portal
+whose script sends the party on. The screen fades to black and back,
+and the party keeps its members, looks, facing and selected character. As in
+DSUN.EXE, arriving runs only the new region's script; the move triggers of
+the party's cells run once, when a new game starts. Creatures (objects with an `RDFF` combat record) walk where their
 scripts send them (HUNT, GO, GOXY, FOLLOW, FLEE, FETCH, WAIT), and run their
 no-orders and line-of-sight scripts; RANGE, GETXY, GET_LOS and the other
 queries read the world (`DarkSun.Game.World`). Items, combat and some
@@ -124,8 +129,10 @@ zoom (½, 1–4; 2, the default, shows what the original showed); PgUp/PgDn chan
 F1 shows blocked cells (red), cells that block line of sight (blue outline),
 occupied cells (yellow) and move triggers (magenta); Esc goes back. Objects with an `SCMD` script
 animate. `--check-regions` also walks the party 20 cells in every region and
-fails if two characters ever overlap; `--check-exits` steps on every move
-trigger and lists the region exits; `--check-start` starts a new game and
+fails if two characters ever overlap; `--check-exits` walks the active member into
+every move trigger from each side and uses every object with a use trigger,
+answering Yes, and lists the region exits it finds and the regions none
+lead to (`--only=RGN0E` for one region, `-v` to see each try); `--check-start` starts a new game and
 prints where the party stands and what the scripts did. `--check-verbs` opens every region's verb menus and does every verb
 (but Use with) to every object that offers it.
 

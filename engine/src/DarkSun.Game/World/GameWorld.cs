@@ -262,8 +262,8 @@ public sealed class GameWorld
 
     // -- party -------------------------------------------------------------------------
 
-    /// <summary>Put a party member (0–3) at the free cell nearest <paramref name="near"/>.</summary>
-    public WorldObject? AddPartyMember(int slot, CharacterSpec spec, Cell near)
+    /// <summary>Put a party member (0–3) at the free cell nearest <paramref name="near"/>, facing <paramref name="facing"/>.</summary>
+    public WorldObject? AddPartyMember(int slot, CharacterSpec spec, Cell near, Direction facing = Direction.South)
     {
         if (slot is < 0 or >= PartySize || NearestCell(near, c => Fits(c, spec.Footprint)) is not { } cell)
         {
@@ -273,7 +273,7 @@ public sealed class GameWorld
         var obj = new WorldObject(slot, ObjectKind.Party, slot)
         {
             Name = $"Character {slot + 1}",
-            Walker = new Walker(slot, spec.Script, spec.Frames, cell, spec.Footprint, Occupancy),
+            Walker = new Walker(slot, spec.Script, spec.Frames, cell, spec.Footprint, Occupancy, facing),
         };
         _objects[slot] = obj;
         return obj;

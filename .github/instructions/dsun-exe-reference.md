@@ -547,7 +547,17 @@ Matching (first match in list order runs, and the check returns 1):
 
 Before running, the checks set the script's context: `37B7:0007` (=
 `3781:0367`) the actor, `37B7:0005` and `37B7:0003` the target or the two
-objects; `1A0A:0256` focuses the actor.
+objects; then `1A0A:0256(actor)`, GETXY's core, puts the actor's cell in
+`gname[1]`, `gname[2]` and 0 in `gname[3]` (`477E:001B/1D/1F`). Scripts read
+them without a GETXY of their own: `GPL 210` clones a rope at
+(`gname[1]` + 1, `gname[2]` − 1).
+
+**Region changes.** TELEPORT of the party to another region
+(`7155:1487`) saves the old region (`7155:0C64`), loads the new one and runs
+`region_enter_scripts` (`039D:0000`); it checks no move triggers.
+`1587:1F83`, which builds the adventure screen (from the main menu, `8015`,
+and two other screens, `60B9`, `6CCA`), runs `region_enter_scripts` for a new
+game and then `trigger_on_move` for each party member's cell.
 
 **Lifetime.** `region_enter_scripts` empties the tile, door and box lists, and
 removes object and use-with triggers whose "global" byte is 0. That byte is

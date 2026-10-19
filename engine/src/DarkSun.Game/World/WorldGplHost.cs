@@ -170,6 +170,8 @@ public sealed class WorldGplHost : DialogueGplHost
 
     public override int TriggerId(GplMachine machine, int obj) => Map?[obj] is { } o ? o.Id : obj;
 
+    public override void FocusActor(GplMachine machine, int actor) => Map?.GetXY(actor);
+
     public override string SpeakerName(GplMachine machine) =>
         Map?[Map.ActiveMember] is { Name: { Length: > 0 } name } ? name : base.SpeakerName(machine);
 

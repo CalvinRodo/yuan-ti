@@ -205,8 +205,17 @@ Goal: a party sprite walking around a region at the original scale.
       next to it, it stops up to 3 cells away; beyond that it uses it from
       where it stands, so no script is out of reach. DSUN.EXE's own rule is
       not traced.
-- [ ] The game's other verbs (look, take, talk as separate actions).
-- [ ] Region transitions: map edges and doors to other `RGNxx` files.
+- [x] Region transitions (2026-10-19): the game's own scripts do them
+      (TELEPORT of the party; 123 such teleports reachable from triggers:
+      map-edge move boxes through `GPL 80`, which asks only when the active
+      member faces out of the map; doorway tiles and boxes; use triggers on
+      doors, stairs and portals). The view fades between regions and keeps
+      the party's members, sprites, facing and selection. A region change
+      (`7155:1487`) runs only the region script; the party's cells' move
+      triggers run once, at a new game (`1587:1F83`). Every trigger now
+      starts with the actor's cell in `gname[1..3]` (`1A0A:0256`), which
+      scripts rely on. `--check-exits` walks into every move trigger from
+      each side and walks up to and uses every object with a use trigger.
 - [ ] Debug overlay: grid, passability, object numbers, hovered tile.
 
 ---
