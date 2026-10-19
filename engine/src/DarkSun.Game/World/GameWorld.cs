@@ -652,6 +652,33 @@ public sealed class GameWorld
     /// blocked when the cell before it (west, or north) is free, or when it runs
     /// south.
     /// </summary>
+    /// <summary>A door's cells (<c>6BB8:0FF8</c>): from its position ÷ 16, item +0x0E more east (0–9) or south (10 and up, less 10).</summary>
+    private static IEnumerable<Cell> DoorCells(WorldObject door)
+    {
+        if (door.Source is not { } source || door.Item is not { } item)
+        {
+            yield break;
+        }
+        int size = (sbyte)item.Charges;
+        (int across, int down) = size > 9 ? (0, size - 10) : (size, 0);
+        for (int dx = 0; dx <= across; dx++)
+        {
+            for (int dy = 0; dy <= down; dy++)
+            {
+                yield return new Cell((source.EtabX >> 4) + dx, (source.EtabY >> 4) + dy);
+            }
+        }
+    }
+
+    /// <summary>
+    /// The cells an object stands on, for walking up to it: a creature's
+    /// footprint, a door's width, or the cell of anything else.
+    /// </summary>
+    public IReadOnlyList<Cell> CellsOf(WorldObject obj) =>
+        obj.Walker is { } walker ? [.. walker.Footprint.Cells(walker.Cell)]
+        : obj.IsDoor ? [.. DoorCells(obj)]
+        : [obj.Cell];
+
     private void SetDoorCells(WorldObject door, int state)
     {
         if (door.Source is not { } source || door.Item is not { } item)
@@ -660,19 +687,15 @@ public sealed class GameWorld
         }
         int x = source.EtabX >> 4, y = source.EtabY >> 4;
         int size = (sbyte)item.Charges;
-        (int across, int down) = size > 9 ? (0, size - 10) : (size, 0);
         bool closed = (state & Doors.Closed) != 0;
-        for (int dx = 0; dx <= across; dx++)
+        foreach (Cell cell in DoorCells(door))
         {
-            for (int dy = 0; dy <= down; dy++)
-            {
-                SetCellFlags(x + dx, y + dy, CellFlags.Blocked | CellFlags.BlocksSight, closed);
-            }
+            SetCellFlags(cell.X, cell.Y, CellFlags.Blocked | CellFlags.BlocksSight, closed);
         }
         if (!closed)
         {
             bool beforeBlocked = size > 9 ? Region.IsBlocked(x, y - 1) : Region.IsBlocked(x - 1, y);
-            if (!beforeBlocked || (size > 9 ? down : across) != 0)
+            if (!beforeBlocked || (size > 9 ? size - 10 : size) != 0)
             {
                 SetCellFlags(x, y, CellFlags.Blocked | CellFlags.BlocksSight, true);
             }

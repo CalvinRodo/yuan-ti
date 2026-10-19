@@ -186,8 +186,13 @@ Goal: a party sprite walking around a region at the original scale.
       Scripts move doors with `REQUEST(2)`. Lever-like objects (item type
       flag 1) toggle on use. Door triggers (`CREATE_DOOR_*`) turned out to be
       unused by the game and its scripts.
-- [ ] Walk to an object before using it (now used from anywhere), and the
-      game's other verbs (look, take, talk as separate actions).
+- [x] Walk to an object before using it (`Approach`): right-click sends the
+      selected character to the nearest cell next to the object (a door's
+      whole width, a creature's footprint), then uses it. Where it can't get
+      next to it, it stops up to 3 cells away; beyond that it uses it from
+      where it stands, so no script is out of reach. DSUN.EXE's own rule is
+      not traced.
+- [ ] The game's other verbs (look, take, talk as separate actions).
 - [ ] Region transitions: map edges and doors to other `RGNxx` files.
 - [ ] Debug overlay: grid, passability, object numbers, hovered tile.
 

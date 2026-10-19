@@ -73,6 +73,9 @@ public partial class RegionView : Node2D
     private int _selected;
     private int _nextSprite;
     private bool _follow = true;
+
+    /// <summary>A right-click waiting for its character to walk up to the object.</summary>
+    private (Walker Walker, int Actor, WorldObject Target, int Tries)? _pendingUse;
     private readonly List<(RegionObject Object, Sprite2D Sprite)> _objectSprites = [];
     private readonly Dictionary<Walker, Cell> _lastCells = [];
     private readonly List<string> _scriptLines = [];
@@ -174,6 +177,7 @@ public partial class RegionView : Node2D
     {
         IReadOnlyList<string> files = Session.Install!.RegionFiles;
         _regionIndex = (index % files.Count + files.Count) % files.Count;
+        _pendingUse = null;
         LoadRegion(files[_regionIndex]);
         PlaceParty(start);
         RunRegionScripts();
@@ -431,6 +435,7 @@ public partial class RegionView : Node2D
 
     private void WalkTo(Cell goal, bool wholeParty)
     {
+        _pendingUse = null;
         foreach (PartyMember member in wholeParty ? _party : Selected is { } m ? [m] : [])
         {
             member.Walker.WalkTo(goal, _region.IsBlocked);
@@ -555,6 +560,7 @@ public partial class RegionView : Node2D
     {
         _clock += delta;
         Animate();
+        FinishApproach();
 
         Vector2 direction = Input.GetVector(Controls.PanLeft, Controls.PanRight, Controls.PanUp, Controls.PanDown);
         if (direction != Vector2.Zero)
@@ -684,9 +690,9 @@ public partial class RegionView : Node2D
     }
 
     /// <summary>
-    /// Right-click: the front-most object under the pointer gets its talk-to,
-    /// use, look or pick-up trigger, the first one it has. Scripts name
-    /// objects by negated <c>OJFF</c> number.
+    /// Right-click: the selected character walks up to the front-most object
+    /// under the pointer (<see cref="Approach"/>), then uses it
+    /// (<see cref="Act"/>). Already in reach, or without a party, it acts at once.
     /// </summary>
     private void Interact(Vector2 at)
     {
@@ -701,8 +707,67 @@ public partial class RegionView : Node2D
         {
             return;
         }
+        _pendingUse = null;
+        if (Selected is not { } member)
+        {
+            Act(hit, _selected);
+            return;
+        }
+        StartApproach(member.Walker, _selected, hit, tries: 0);
+    }
+
+    /// <summary>Walk <paramref name="walker"/> up to <paramref name="target"/>, or act at once if it is in reach.</summary>
+    private void StartApproach(Walker walker, int actor, WorldObject target, int tries)
+    {
+        IReadOnlyList<Cell> cells = _world.CellsOf(target);
+        if (Approach.Distance(walker.Cell, cells) <= Approach.Reach)
+        {
+            walker.Stop();
+            Act(target, actor);
+            return;
+        }
+        Cell? goal = Approach.Goal(c => c == walker.Cell || walker.CanStand(c, _region.IsBlocked), walker.Cell, [.. cells]);
+        if (goal is not { } cell || cell == walker.Cell)
+        {
+            // Out of reach: use it from here, so no script is ever out of reach.
+            AddScriptLine($"{Describe(target)}: can't get nearer, using it from here");
+            walker.Stop();
+            Act(target, actor);
+            return;
+        }
+        walker.WalkTo(cell, _region.IsBlocked);
+        _pendingUse = (walker, actor, target, tries);
+        _follow = true;
+    }
+
+    /// <summary>When the character walking up to an object stops, use the object (or try again if it moved away).</summary>
+    private void FinishApproach()
+    {
+        if (_pendingUse is not { } pending || pending.Walker.IsWalking)
+        {
+            return;
+        }
+        _pendingUse = null;
+        if (!_party.Any(m => m.Walker == pending.Walker) || Session.Scripts.IsSuspended)
+        {
+            return;
+        }
+        if (Approach.Distance(pending.Walker.Cell, _world.CellsOf(pending.Target)) > Approach.MaxReach && pending.Tries < 2)
+        {
+            StartApproach(pending.Walker, pending.Actor, pending.Target, pending.Tries + 1); // it walked off
+            return;
+        }
+        Act(pending.Target, pending.Actor);
+    }
+
+    /// <summary>
+    /// Use an object: a door or lever works (<see cref="UseObject"/>);
+    /// anything else gets its talk-to, use, look or pick-up trigger, the
+    /// first one it has. Scripts name objects by negated <c>OJFF</c> number.
+    /// </summary>
+    private void Act(WorldObject hit, int actor)
+    {
         // Scripts see the object by its index; triggers match its id (−OJFF).
-        int actor = _selected;
         if (UseObject(hit, actor))
         {
             return;

@@ -95,7 +95,7 @@ of the map. The party is four placeholder sprites (any object whose `SCMD`
 can walk). Entering a region
 runs its script (and, once, the game-start script); characters reaching a
 cell fire its move trigger; right-click an object to fire its talk-to, use,
-look or pick-up trigger; right-clicking a door opens or closes it, a lever toggles. Dialogue (text, portraits, Continue, Yes/No,
+look or pick-up trigger; the selected character walks up to the object first; right-clicking a door opens or closes it, a lever toggles. Dialogue (text, portraits, Continue, Yes/No,
 menus) opens in a window and pauses the script until answered; TELEPORT moves
 the party (region exits: walk out through a map edge and answer Yes) and
 creatures. Creatures (objects with an `RDFF` combat record) walk where their
