@@ -16,8 +16,11 @@ public sealed record PlacedSprite(int X, int Y, ImageFrame Frame, bool Mirrored 
 /// <param name="EtabX">The <c>ETAB</c> position, which DSUN.EXE also uses to depth-sort objects.</param>
 /// <param name="Frames">All frames of the object's <c>BMP </c>; static objects show frame 0.</param>
 /// <param name="Scmd">The <c>SCMD</c> animation number (<c>OJFF</c> +0x0E), or 0.</param>
+/// <param name="AnchorX">Where the frame hangs from the <c>ETAB</c> position (<c>OJFF</c>
+/// +2 and +4), until an <c>SCMD</c> record gives a hot spot of its own.</param>
+/// <param name="YAdjust"><c>OJFF</c> +0x0A, which also lifts the frames of animated objects.</param>
 public sealed record RegionObject(int EtabIndex, int Ojff, int EtabX, int EtabY, int X, int Y, bool Mirrored,
-    IReadOnlyList<ImageFrame> Frames, int Scmd)
+    IReadOnlyList<ImageFrame> Frames, int Scmd, int AnchorX = 0, int AnchorY = 0, int YAdjust = 0)
 {
     public ImageFrame Frame => Frames[0];
 }
@@ -201,7 +204,8 @@ public sealed class Region
             if (sprite is { } s)
             {
                 objects.Add(new RegionObject(at / 8, ojff, x, y, x - s.Definition.AnchorX, y - s.Definition.AnchorY,
-                    mirrored, s.Frames, s.Definition.Scmd));
+                    mirrored, s.Frames, s.Definition.Scmd, s.Definition.AnchorX, s.Definition.AnchorY - s.Definition.YAdjust,
+                    s.Definition.YAdjust));
             }
         }
         return objects;

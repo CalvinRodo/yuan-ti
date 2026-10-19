@@ -119,6 +119,12 @@ public sealed class WorldGplHost : DialogueGplHost
         (int code, int who, int a, int b) = (v[0], v[1], v[2], v[3]);
         switch (code)
         {
+            case 2: // 87B3: 6BB8:0D13(object, a, 1) for each match: open (0) or close (1) a door
+                foreach (WorldObject door in world.Select(who).ToList())
+                {
+                    world.SetDoor(door, a, force: true);
+                }
+                break;
             case 5: world.ToggleState(who); break;
             case 10: world.SetCellFlags(a, b, CellFlags.Blocked, true); break;
             case 11: world.SetCellFlags(a, b, CellFlags.Blocked, false); break;

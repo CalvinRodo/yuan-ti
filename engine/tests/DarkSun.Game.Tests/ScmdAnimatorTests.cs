@@ -124,4 +124,20 @@ public class ScmdAnimatorTests
         Assert.Equal([7], a.TakeSounds());
         Assert.Empty(a.TakeSounds());
     }
+
+    [Fact]
+    public void ObjectsHangFromTheirAnchorUntilARecordGivesAHotSpot()
+    {
+        // The right leaf of a double door (SCMD 78): its frames narrow towards
+        // the hinge on the right, and the hot spot follows (bytes 5 and 6).
+        Scmd s = Build([], [0xFF, 0, 0, 0, 0, 0, 0, 0], [4, 0, 0, 0, 0, 22, 60, 0], [1, 0, 0, 0, 0, 0xF9, 60, 0]);
+        var a = new ScmdAnimator(s, frameCount: 6, hotX: 23, hotY: 60) { MinimumDelay = 0 };
+
+        a.Update(0);
+        Assert.Equal((23, 60), (a.HotX, a.HotY)); // a kept frame keeps the hot spot
+        a.Update(0);
+        Assert.Equal((22, 60), (a.HotX, a.HotY));
+        a.Update(0);
+        Assert.Equal((-7, 60), (a.HotX, a.HotY)); // signed, as DSUN.EXE reads it
+    }
 }

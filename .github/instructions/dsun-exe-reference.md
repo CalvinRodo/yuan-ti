@@ -407,7 +407,7 @@ initial index being read as 0).
 | 1 | delay before the next step, in 96 Hz ticks; values above 99 are × 10. Forced to 0 for a moving record while `377E:0019` is set |
 | 2 | flags: 0x01 jump to byte 0 (taken when the step lands on this record, which is not shown), 0x02 stop after this record, 0x04 mirror (clear: not mirrored), 0x10 mark moved, 0x20 calls `1DF3:2BCF` (unknown), 0x40 creatures: take the hot spot from bytes 5–6 instead of (width / 2, height) |
 | 3, 4 | int8 dx, dy added to the world position; leaving −64…0x800 × −64…0x620 stops the animation |
-| 5, 6 | hot spot x, y |
+| 5, 6 | hot spot x, y (signed): replaces the object's hot spot (first the `OJFF` anchor), and the object is drawn at its world position minus it (`217D:0070`; y also minus object byte +0x0D). Creatures use (width / 2, height) unless flag 0x40. A door leaf's frames narrow towards the hinge, so its hot spot changes every frame (`SCMD` 78: x 23 → 7) |
 | 7 | sound effect (`play_sound_effect`), 0: none |
 
 **Stepping** (`object_animate_step`, `1DF3:23A9`): when the last step plus the
@@ -848,4 +848,46 @@ each record are not read.
 * `SCMD` sounds in the data: 1, 2, 6, 8, 42, 45, 57 and 60. Almost all are on
   the records of door and lever sequences: slot 2 opening, slot 3 closing, or
   the header word 0x44 start that `REQUEST(5)` plays.
+
+### Doors
+
+* **What a door is** (`6BB8:0B33`): an item object with an `OJFF` number in
+  0x46A–0x49C or 0x803–0x898 (166 in `SEGOBJEX.GFF`, 123 placed in 9
+  regions). The other leaf of a double door is the `OJFF` number one up (odd)
+  or one down (even).
+* **State:** the item record's byte +0x0F. 0x01 closed, 0x02 locked, 0x04
+  stuck, 0x08 secret. In the data, 48 doors start closed, 38 closed and
+  locked, 72 closed and stuck, 6 open and stuck, and 2 open.
+* **Size:** byte +0x0E. 0–9 is that many extra cells east; 10 and more is
+  n − 10 extra cells south.
+* **Animations:** `SCMD` slot 1 is closed, 2 opening (ends open), 3 closing.
+  The header slot k is word k.
+* **Use** (`6BB8:0B56`, called for verb 0x10 from `68BD`):
+  * A door is set to the opposite of its closed bit with `6BB8:0D13(object,
+    state, 0)`. The object's use trigger runs next (`039D:0319`).
+  * If the door didn't move: with 0x08 set it says "THERE'S A SECRET DOOR!"
+    and clears 0x08; with 0x02 "THE DOOR IS LOCKED"; when closed "THE DOOR
+    WON'T OPEN".
+  * A non-door whose item type has flag 1 (`IT1R` +0x0F) toggles object flag
+    0x40 and plays the header word 0x44 start, as `REQUEST(5)`.
+* **`6BB8:0D13(object, state, force)`:**
+  * It does nothing when 0x0C is set, unless forced. So a locked (0x02)
+    door does open when used, as far as this code goes.
+  * State 0 opens it and clears 0x03. A state with 0x02 sets 0x03. Otherwise
+    it sets 0x01. Both leaves get the same flags.
+  * When the closed bit changes it plays slot 2 (state 0) or 3, and updates
+    the map with `6BB8:0FF8`.
+  * `REQUEST(2, door, state)` calls it forced: 98 opens and 22 closes in
+    the scripts.
+* **`6BB8:0FF8`:**
+  * Closed sets `GMAP` 0xC0 on the door's cells, from its position ÷ 16;
+    open clears them.
+  * When opening, the first cell is blocked again if the cell before it
+    (west, or north) is free or the door is longer than one cell. That is
+    its hinge.
+  * The map files block only those hinge cells, so a door's state comes
+    from its record when the region loads.
+* **Loading a region:** a door with 0x02 also gets 0x01. Its cells are set
+  as above and its animation starts at slot 1 (closed) or 2 (open).
+* **`CREATE_DOOR_TILE/BOX_TRIGGER`:** nothing in DSUN.EXE reads these lists.
 

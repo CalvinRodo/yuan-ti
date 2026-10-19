@@ -457,3 +457,8 @@
 1A0A:2AB4	func	creature_footprint	footprint from the character record's size byte (+0x3D): half-width size & 7, height size / 8; 0 without one
 3172:04F1	func	sound_play	n: sound table entry (3A98:08A2, 6 bytes: byte, type 4 MIDI / 5 sample, far descriptor; +7 BVOC number)
 1A0A:0663	func	gpl_sound	GPL SOUND: play_sound_effect(n)
+6BB8:0B33	func	is_door	OJFF 0x46A-0x49C or 0x803-0x898
+6BB8:0B56	func	use_object	doors open/close (0D13), lever items (IT1R flag 1) toggle; use trigger; door messages
+6BB8:0D13	func	door_set_state	object, state (0 open, 1 close, |2 lock), force: both leaves, SCMD slot 2/3, map cells
+6BB8:0FF8	func	door_set_cells	closed: GMAP 0xC0 on the door's cells (size at item +0x0E); open: cleared, hinge cell kept
+217D:0070	func	object_place	screen position = world position - hot spot (y also - byte +0x0D)

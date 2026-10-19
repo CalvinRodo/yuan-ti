@@ -34,9 +34,12 @@ public sealed class ScmdAnimator
 
     /// <param name="frameCount">Frames in the object's <c>BMP </c>; out-of-range frames show frame 0.</param>
     /// <param name="startIndex">First record: 0 for objects, a stand slot for creatures.</param>
-    public ScmdAnimator(Scmd script, int frameCount, int startIndex = 0, bool mirrored = false)
+    /// <param name="hotX">Hot spot until a record sets one: the <c>OJFF</c> anchor, or where the object's last animation left it.</param>
+    public ScmdAnimator(Scmd script, int frameCount, int startIndex = 0, bool mirrored = false, int hotX = 0, int hotY = 0)
         : this(script, frameCount, null, startIndex, mirrored)
     {
+        HotX = hotX;
+        HotY = hotY;
     }
 
     /// <summary>
@@ -68,6 +71,12 @@ public sealed class ScmdAnimator
 
     public int Frame { get; private set; }
     public bool Mirrored { get; private set; }
+    /// <summary>
+    /// The point of the frame that sits on the object's position: DSUN.EXE
+    /// draws an object at its position minus the hot spot (<c>217D:0070</c>),
+    /// which each shown record sets (signed bytes 5 and 6). A door leaf's
+    /// frames narrow towards its hinge, so their hot spots differ.
+    /// </summary>
     public int HotX { get; private set; }
     public int HotY { get; private set; }
 
@@ -145,8 +154,8 @@ public sealed class ScmdAnimator
             }
             else
             {
-                HotX = record.HotX;
-                HotY = record.HotY;
+                HotX = (sbyte)record.HotX;
+                HotY = (sbyte)record.HotY;
             }
             OffsetX += record.Dx;
             OffsetY += record.Dy;

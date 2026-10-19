@@ -260,7 +260,9 @@ public partial class RegionView : Node2D
             if (sprite is not null && obj.Scmd > 0 && objectData.TryRead("SCMD", obj.Scmd, out var data))
             {
                 var scmd = Scmd.Parse(data.Span);
-                _animated.Add(new AnimatedObject(sprite, obj, scmd, new ScmdAnimator(scmd, obj.Frames.Count, mirrored: obj.Mirrored)));
+                // Doors start closed or open as their state says (the world sets the start).
+                int start = _worldObjects.TryGetValue(obj, out WorldObject? state) ? state.AnimationStart : 0;
+                _animated.Add(new AnimatedObject(sprite, obj, scmd, AnimatorFor(obj, scmd, start, obj.AnchorX, obj.AnchorY)));
             }
         }
         // DSUN.EXE draws row by row (draw_objects_and_walls, 1DBD:0002): before
@@ -296,6 +298,16 @@ public partial class RegionView : Node2D
     }
 
     private Texture2D TextureFor(ImageFrame frame) => Textures.ToTexture(frame, _palette);
+
+    /// <summary>
+    /// An object's animation, hanging from <paramref name="hotX"/>, <paramref name="hotY"/>
+    /// until a record moves its hot spot. Creatures that stand still are
+    /// drawn as DSUN.EXE draws all creatures: from the bottom centre of each frame.
+    /// </summary>
+    private ScmdAnimator AnimatorFor(RegionObject obj, Scmd scmd, int start, int hotX, int hotY) =>
+        _worldObjects.TryGetValue(obj, out WorldObject? wo) && wo.Kind == ObjectKind.Creature
+            ? ScmdAnimator.ForCreature(scmd, [.. obj.Frames.Select(f => (f.Width, f.Height))], start)
+            : new ScmdAnimator(scmd, obj.Frames.Count, start, obj.Mirrored, hotX, hotY);
 
     // -- character ------------------------------------------------------------
 
@@ -446,6 +458,7 @@ public partial class RegionView : Node2D
             sprite.FlipH = animator.Mirrored;
             Vector2 at = _moved.TryGetValue(obj, out Vector2 m) ? m : new Vector2(obj.EtabX, obj.EtabY);
             sprite.Position = at + new Vector2(animator.OffsetX, animator.OffsetY);
+            sprite.Offset = -new Vector2(animator.HotX, animator.HotY + obj.YAdjust);
             PlaySounds(animator.TakeSounds(), sprite.Position);
         }
         for (int i = 0; i < _party.Count; i++)
@@ -690,6 +703,10 @@ public partial class RegionView : Node2D
         }
         // Scripts see the object by its index; triggers match its id (−OJFF).
         int actor = _selected;
+        if (UseObject(hit, actor))
+        {
+            return;
+        }
         foreach (var (list, verb) in new[] { (GplTriggerList.TalkTo, "talk to"), (GplTriggerList.Use, "use"), (GplTriggerList.Look, "look at"), (GplTriggerList.Pickup, "pick up") })
         {
             if (Session.Scripts.OnObject(list, actor, hit.Index) is { } run)
@@ -699,6 +716,38 @@ public partial class RegionView : Node2D
             }
         }
         AddScriptLine($"{Describe(hit)}: no talk, use, look or pick-up trigger");
+    }
+
+    /// <summary>
+    /// Use a door or a lever-like object (<c>6BB8:0B56</c>): a door opens or
+    /// closes, then its use trigger runs, then, if the door stayed as it was,
+    /// the game's message ("THE DOOR IS LOCKED", …). Returns false for other objects.
+    /// </summary>
+    private bool UseObject(WorldObject obj, int actor)
+    {
+        if (Session.Scripts.IsSuspended)
+        {
+            return false;
+        }
+        DoorUse use = _world.UseObject(obj);
+        if (!obj.IsDoor && !use.Toggled)
+        {
+            return false;
+        }
+        AddScriptLine(obj.IsDoor
+            ? $"use {Describe(obj)}: {(use.Toggled ? (use.WasClosed ? "opens" : "closes") : "stays " + (use.WasClosed ? "closed" : "open"))}"
+            : $"use {Describe(obj)}: toggled");
+        if (Session.Scripts.OnObject(GplTriggerList.Use, actor, obj.Index) is { } run)
+        {
+            ReportScript($"use {Describe(obj)}", run);
+        }
+        if (_world.DoorRefusal(use) is { } message && !Session.Scripts.IsSuspended)
+        {
+            AddScriptLine($"    {message}");
+            Session.ScriptHost.Dialogue.Append(message, 98);
+        }
+        _overlay.QueueRedraw();
+        return true;
     }
 
     private static string Describe(WorldObject obj) =>
@@ -822,7 +871,8 @@ public partial class RegionView : Node2D
         }
         if (animationStart is int start && _animated.FirstOrDefault(a => a.Object == source) is { } animated)
         {
-            animated.Animator = new ScmdAnimator(animated.Script, source.Frames.Count, start, source.Mirrored);
+            ScmdAnimator old = animated.Animator;
+            animated.Animator = AnimatorFor(source, animated.Script, start, old.HotX, old.HotY);
         }
     }
 

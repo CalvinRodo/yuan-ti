@@ -10,6 +10,29 @@ namespace DarkSun.Game.World;
 public enum ObjectKind { Party, Creature, Thing }
 
 /// <summary>
+/// A door's flags (its item record's byte +0x0F; <c>6BB8:0D13</c>, <c>0B56</c>,
+/// <c>0FF8</c>). In the shipped data 48 doors start closed, 38 closed and
+/// locked, 72 closed and stuck, 6 open and stuck, 2 open.
+/// </summary>
+public static class Doors
+{
+    /// <summary>Closed: its cells block movement and sight.</summary>
+    public const int Closed = 0x01;
+
+    /// <summary>Locked ("THE DOOR IS LOCKED" when it doesn't move). Using it still opens it, as DSUN.EXE's code does; scripts lock and unlock.</summary>
+    public const int Locked = 0x02;
+
+    /// <summary>Stuck: using it does nothing ("THE DOOR WON'T OPEN"); scripts can still move it.</summary>
+    public const int Stuck = 0x04;
+
+    /// <summary>A secret door: using it reveals it ("THERE'S A SECRET DOOR!") and clears this flag.</summary>
+    public const int Secret = 0x08;
+}
+
+/// <summary>Using an object: whether a door was closed before, and whether anything moved or toggled.</summary>
+public sealed record DoorUse(WorldObject Object, bool WasClosed, bool Toggled);
+
+/// <summary>
 /// A creature's order (<c>1A0A:03CA</c>, table <c>3972:08AA</c>): what it is
 /// doing, set by HUNT, GO, GOXY, FOLLOW, FLEE, FETCH and WAIT.
 /// </summary>
@@ -75,8 +98,20 @@ public sealed class WorldObject
 
     public Order Order { get; set; }
 
-    /// <summary>Object flag 0x40, toggled by <c>REQUEST(5)</c>: e.g. a door open.</summary>
+    /// <summary>Object flag 0x40, toggled by <c>REQUEST(5)</c> and by using a lever-like object.</summary>
     public bool SecondState { get; set; }
+
+    /// <summary>
+    /// A door: an item whose <c>OJFF</c> number is 0x46A–0x49C or 0x803–0x898
+    /// (<c>6BB8:0B33</c>). Its state is <see cref="DoorFlags"/>.
+    /// </summary>
+    public bool IsDoor => Item is not null && Source is { } s && GameWorld.IsDoorNumber(s.Ojff);
+
+    /// <summary>A door's state: its item record's flags (+0x0F), changed by opening and closing (<see cref="Doors"/>).</summary>
+    public int DoorFlags { get; set; }
+
+    /// <summary>Where its animation starts when the region is loaded (an <c>SCMD</c> record), e.g. a door's closed or open state.</summary>
+    public int AnimationStart { get; set; }
 
     /// <summary>Combat record allegiance (<c>+0x1D</c>), set by <c>REQUEST(18)</c>; also field 75 (inferred).</summary>
     public int Allegiance { get; set; }
@@ -190,6 +225,7 @@ public sealed class GameWorld
                 }
             }
         }
+        SetUpDoors();
     }
 
     public Region Region { get; }
@@ -490,13 +526,175 @@ public sealed class GameWorld
     {
         foreach (WorldObject obj in Select(who))
         {
-            if (obj.Source is not { Scmd: > 0 } source || ScriptOf(source.Scmd) is not { } scmd)
+            ToggleState(obj);
+        }
+    }
+
+    private void ToggleState(WorldObject obj)
+    {
+        if (obj.Source is not { Scmd: > 0 } source || ScriptOf(source.Scmd) is not { } scmd)
+        {
+            return;
+        }
+        obj.SecondState = !obj.SecondState;
+        int start = obj.SecondState ? scmd.Extra[4] | (scmd.Extra[5] << 8) : scmd.Slots[0];
+        Changed?.Invoke(obj, start);
+    }
+
+    // -- doors and using objects (6BB8) -------------------------------------------------
+
+    public static bool IsDoorNumber(int ojff) => ojff is >= 0x46A and <= 0x49C or >= 0x803 and <= 0x898;
+
+    /// <summary>
+    /// <c>REQUEST(2)</c> and using a door (<c>6BB8:0D13</c>): set the door,
+    /// and the other leaf of a double door (<c>OJFF</c> ± 1), to
+    /// <paramref name="state"/> (<see cref="Doors.Closed"/> set: closed; with
+    /// <see cref="Doors.Locked"/>: closed and locked; 0: open). A door that is
+    /// stuck or secret (<see cref="Doors.Stuck"/>, <see cref="Doors.Secret"/>)
+    /// only moves when <paramref name="force"/>d. When it moves it plays
+    /// <c>SCMD</c> slot 2 (opening) or 3 (closing) and blocks or frees its
+    /// cells. Returns whether it moved.
+    /// </summary>
+    public bool SetDoor(WorldObject door, int state, bool force)
+    {
+        if (!door.IsDoor)
+        {
+            return false;
+        }
+        int before = door.DoorFlags;
+        if ((before & (Doors.Stuck | Doors.Secret)) != 0 && !force)
+        {
+            return false;
+        }
+        int after = (state & Doors.Locked) != 0 ? before | Doors.Closed | Doors.Locked
+            : state == 0 ? before & ~(Doors.Closed | Doors.Locked)
+            : before | Doors.Closed;
+        WorldObject? pair = PairOf(door);
+        door.DoorFlags = after;
+        if (pair is not null)
+        {
+            pair.DoorFlags = after;
+        }
+        if (((state & Doors.Closed) != 0) == ((before & Doors.Closed) != 0))
+        {
+            return false;
+        }
+        int slot = (state & (Doors.Closed | Doors.Locked)) == 0 ? 2 : 3;
+        foreach (WorldObject leaf in pair is null ? [door] : new[] { door, pair })
+        {
+            SetDoorCells(leaf, state);
+            if (leaf.Source is { Scmd: > 0 } source && ScriptOf(source.Scmd) is { } scmd)
             {
-                continue;
+                Changed?.Invoke(leaf, scmd.Slots[slot]);
             }
-            obj.SecondState = !obj.SecondState;
-            int start = obj.SecondState ? scmd.Extra[4] | (scmd.Extra[5] << 8) : scmd.Slots[0];
-            Changed?.Invoke(obj, start);
+        }
+        return true;
+    }
+
+    /// <summary>
+    /// Use an object (<c>6BB8:0B56</c>): a door opens or closes; an object
+    /// whose item type has flag 1 (<c>IT1R</c> +0x0F) toggles its second state,
+    /// as <c>REQUEST(5)</c>. Returns what the game would say when a door stays
+    /// as it was (check it after the object's use trigger has run, as DSUN.EXE
+    /// does, with <see cref="DoorRefusal"/>), or null.
+    /// </summary>
+    public DoorUse UseObject(WorldObject obj)
+    {
+        if (!obj.IsDoor)
+        {
+            if (obj.Item is { } item && Items.TypeOf(item) is { } type && (type.Flags & 1) != 0)
+            {
+                ToggleState(obj);
+                return new DoorUse(obj, false, Toggled: true);
+            }
+            return new DoorUse(obj, false, Toggled: false);
+        }
+        bool wasClosed = (obj.DoorFlags & Doors.Closed) != 0;
+        bool moved = SetDoor(obj, wasClosed ? 0 : Doors.Closed, force: false);
+        return new DoorUse(obj, wasClosed, Toggled: moved);
+    }
+
+    /// <summary>
+    /// After using a door and running its use trigger: the message DSUN.EXE
+    /// shows if it stayed as it was (<c>6BB8:0B56</c>). Revealing a secret
+    /// door clears its secret flag.
+    /// </summary>
+    public string? DoorRefusal(DoorUse use)
+    {
+        WorldObject door = use.Object;
+        if (!door.IsDoor || ((door.DoorFlags & Doors.Closed) != 0) != use.WasClosed)
+        {
+            return null;
+        }
+        if ((door.DoorFlags & Doors.Secret) != 0)
+        {
+            door.DoorFlags &= ~Doors.Secret;
+            return "THERE'S A SECRET DOOR!";
+        }
+        return (door.DoorFlags & Doors.Locked) != 0 ? "THE DOOR IS LOCKED"
+            : (door.DoorFlags & Doors.Closed) != 0 ? "THE DOOR WON'T OPEN"
+            : null;
+    }
+
+    /// <summary>The other leaf of a double door: the door numbered one more (odd) or one less (even).</summary>
+    private WorldObject? PairOf(WorldObject door)
+    {
+        int ojff = door.Source!.Ojff;
+        int other = ojff % 2 == 0 ? ojff - 1 : ojff + 1;
+        return Objects.FirstOrDefault(o => o.Index >= 5 && o != door && o.IsDoor && o.Source!.Ojff == other);
+    }
+
+    /// <summary>
+    /// <c>6BB8:0FF8</c>: a closed door blocks movement and sight (<c>GMAP</c>
+    /// 0xC0) on its cells, an open one frees them. The cells start at its
+    /// position ÷ 16 and run east for a width of 0–9 (item record +0x0E), or
+    /// south for 10 and more (n − 10). An open door keeps its first cell
+    /// blocked when the cell before it (west, or north) is free, or when it runs
+    /// south.
+    /// </summary>
+    private void SetDoorCells(WorldObject door, int state)
+    {
+        if (door.Source is not { } source || door.Item is not { } item)
+        {
+            return;
+        }
+        int x = source.EtabX >> 4, y = source.EtabY >> 4;
+        int size = (sbyte)item.Charges;
+        (int across, int down) = size > 9 ? (0, size - 10) : (size, 0);
+        bool closed = (state & Doors.Closed) != 0;
+        for (int dx = 0; dx <= across; dx++)
+        {
+            for (int dy = 0; dy <= down; dy++)
+            {
+                SetCellFlags(x + dx, y + dy, CellFlags.Blocked | CellFlags.BlocksSight, closed);
+            }
+        }
+        if (!closed)
+        {
+            bool beforeBlocked = size > 9 ? Region.IsBlocked(x, y - 1) : Region.IsBlocked(x - 1, y);
+            if (!beforeBlocked || (size > 9 ? down : across) != 0)
+            {
+                SetCellFlags(x, y, CellFlags.Blocked | CellFlags.BlocksSight, true);
+            }
+        }
+    }
+
+    /// <summary>On loading the region (<c>6BB8</c> setup): each door's cells as its state says, and its animation at slot 1 (closed) or 2 (opening, to open).</summary>
+    private void SetUpDoors()
+    {
+        foreach (WorldObject door in Objects.Where(o => o.IsDoor))
+        {
+            door.DoorFlags = door.Item!.Flags;
+            if ((door.DoorFlags & Doors.Locked) != 0)
+            {
+                door.DoorFlags |= Doors.Closed;
+            }
+            bool closed = (door.DoorFlags & Doors.Closed) != 0;
+            SetDoorCells(door, door.DoorFlags);
+            if (door.Source!.Scmd > 0 && ScriptOf(door.Source.Scmd) is { } scmd)
+            {
+                door.AnimationStart = scmd.Slots[closed ? 1 : 2];
+            }
         }
     }
 

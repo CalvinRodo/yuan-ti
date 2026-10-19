@@ -178,8 +178,16 @@ Goal: a party sprite walking around a region at the original scale.
       `[audio] sound_volume` in `user://settings.cfg`. Most `SCMD` sounds are
       in state changes (doors opening and closing, levers: `SCMD` slots 2 and
       3, or the `REQUEST(5)` start), so they are heard when those run.
-- [ ] Open and close doors (door triggers, "use"): `SCMD` slots 2 and 3 of
-      door objects, with their sounds.
+- [x] Open and close doors (`GameWorld.UseObject`, `SetDoor`): right-click
+      uses a door (`6BB8:0B56`): it opens or closes with its other leaf
+      (`OJFF` ± 1), plays `SCMD` slot 2 (opening) or 3 (closing) with their
+      sounds, and frees or blocks its cells (`6BB8:0FF8`); then its use trigger
+      runs, and a door that didn't move says why ("THE DOOR WON'T OPEN", …).
+      Scripts move doors with `REQUEST(2)`. Lever-like objects (item type
+      flag 1) toggle on use. Door triggers (`CREATE_DOOR_*`) turned out to be
+      unused by the game and its scripts.
+- [ ] Walk to an object before using it (now used from anywhere), and the
+      game's other verbs (look, take, talk as separate actions).
 - [ ] Region transitions: map edges and doors to other `RGNxx` files.
 - [ ] Debug overlay: grid, passability, object numbers, hovered tile.
 
