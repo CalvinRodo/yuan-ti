@@ -444,7 +444,7 @@
 3592:000E	func	music_start_track	n, if its flags at DS:1676+3n allow
 6BB8:0A41	func	region_load_rdat	RDAT n (49 bytes) to 4931:025D: colour cycles, music at +0x2F
 78A9:2A9F	func	item_describe	item name ("%+d %Fs" with a bonus), to-hit and damage for the item screen
-7155:0482	func	object_load_record	copy an object's RDFF record into the item table (DS:165D) or combat table (DS:1665)
+7155:0732	func	object_load_record	copy an RDFF entry by object kind: 1 item (DS:165D, 0x15), 2 combat (DS:1665, 0x3A), 4 character (DS:1661, 0x47)
 08BB:07F3	func	pathfind	nodes, x, y, gx, gy, path, maxNodes, mode, pathLength, skip: line, nodes, wall-following, replay
 08BB:0000	func	pathfind_line	straight line by the signs of (goal - here), 6-byte points
 08BB:00B9	func	pathfind_nodes	start, the free cells around each blocked stretch, target (18-byte nodes)
@@ -454,3 +454,4 @@
 096C:009B	func	direction_towards	by signs; 8-way table at 3779:0000 when DS:01F8 = 1, else 4-way
 096C:006B	func	step_direction	add the direction's step (CS:0002/0012); returns footprint_blocked
 096C:011C	func	rotate_direction	(by, dir) mod 8
+1A0A:2AB4	func	creature_footprint	footprint from the character record's size byte (+0x3D): half-width size & 7, height size / 8; 0 without one

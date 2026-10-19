@@ -11,6 +11,7 @@
 //   N  file  number  index  name                    NAME table records
 //   Y  file  type  weapon,weight,placement,range,attacks,dice,sides,bonus,AC,classes,material   IT1R
 //   Q  file  rdff  id  type  name number  bonus  name  item records (RDFF type 1)
+//   C  file  rdff  size  word at +8  sha1(record)    character records (RDFF type 4)
 
 using System.Security.Cryptography;
 using System.Text;
@@ -125,6 +126,13 @@ foreach (string name in files!)
     }
     if (name == "SEGOBJEX.GFF")
     {
+        foreach (var r in resources.Where(r => r.Tag == "RDFF"))
+        {
+            if (CharacterRecord.FromRdff(gff.Read(r.Tag, r.Number)) is { } character)
+            {
+                output.WriteLine($"C\t{name}\t{r.Number}\t{character.Size}\t{character.DifficultyScaled}\t{Sha1(character.Bytes)}");
+            }
+        }
         var catalog = ItemCatalog.Load(gplData);
         foreach (var r in resources.Where(r => r.Tag == "RDFF"))
         {

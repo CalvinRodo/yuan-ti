@@ -1,3 +1,5 @@
+using DarkSun.Data.Regions;
+
 namespace DarkSun.Game.Movement;
 
 /// <summary>
@@ -10,23 +12,15 @@ public readonly record struct Footprint(int HalfWidth, int Height)
     public static readonly Footprint OneCell = new(0, 0);
 
     /// <summary>
-    /// From a creature's size byte, as <c>find_free_cell</c> (<c>7372:0909</c>)
-    /// decodes it: half-width = size &amp; 7, height = size / 8. The game reads it
-    /// from byte 0x3D of a 0x47-byte creature record (table <c>DS:1661</c>),
-    /// whose source is not yet traced.
+    /// From a creature's size byte, as DSUN.EXE decodes it (<c>1A0A:2AB4</c>,
+    /// <c>find_free_cell</c> <c>7372:0909</c>): half-width = size &amp; 7, height =
+    /// size / 8. The byte is +0x3D of the creature's character record
+    /// (<c>CharacterRecord</c>, from its <c>RDFF</c>).
     /// </summary>
     public static Footprint FromSizeByte(byte size) => new(size & 7, size >> 3);
 
-    /// <summary>
-    /// An estimate from the widest sprite frame, until the size bytes are
-    /// traced: as many cells across as the sprite covers, rounded down to an
-    /// odd number (under 48 pixels: one cell; 48–79: 3 × 2; 80–111: 5 × 3).
-    /// </summary>
-    public static Footprint EstimateFromWidth(int widestFrame)
-    {
-        int halfWidth = Math.Clamp((widestFrame / 16 - 1) / 2, 0, 7);
-        return new Footprint(halfWidth, halfWidth);
-    }
+    /// <summary>The footprint of a creature with this character record; without one, a single cell, as in DSUN.EXE.</summary>
+    public static Footprint Of(CharacterRecord? record) => FromSizeByte(record?.Size ?? 0);
 
     public IEnumerable<Cell> Cells(Cell feet)
     {

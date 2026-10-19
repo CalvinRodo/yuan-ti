@@ -31,7 +31,7 @@ public class GameWorldTests
     private static byte[] CombatRecord(int ojff, byte status, byte allegiance, string name)
     {
         var data = new byte[DarkSun.Data.Regions.CombatRecord.HeaderSize + DarkSun.Data.Regions.CombatRecord.Size];
-        data[2] = 2;
+        (data[0], data[2], data[8]) = (1, 2, DarkSun.Data.Regions.CombatRecord.Size); // inline, combat record, 58 bytes
         int r = DarkSun.Data.Regions.CombatRecord.HeaderSize;
         data[r + 6] = (byte)-ojff;
         data[r + 7] = 0xFF;
@@ -47,10 +47,18 @@ public class GameWorldTests
     /// A 20×10 open region with a creature (<c>OJFF</c> 100, which walks) at
     /// cell (10, 5), a thing (<c>OJFF</c> 200) at (2, 2), and the party at (1, 8).
     /// </summary>
-    private static GameWorld World(byte[]? flags = null)
+    private static GameWorld World(byte[]? flags = null, byte? size = null)
     {
         var resources = new Resources();
         resources.Data[("RDFF", 100)] = CombatRecord(100, 3, 1, "Templar");
+        if (size is { } s)
+        {
+            // A character record (type 4, 0x47 bytes) after the combat record, with the size at +0x3D.
+            var character = new byte[10 + 0x47];
+            (character[0], character[2], character[6], character[8]) = (3, 4, 0x47, 0x47);
+            character[10 + 0x3D] = s;
+            resources.Data[("RDFF", 100)] = [.. resources.Data[("RDFF", 100)], .. character, 0xFF];
+        }
         resources.Data[("SCMD", 7)] = ScmdBytes();
         // OJFF 200 is an item: a +1 "Torch" (NAME 1) of type 0.
         var item = new byte[10 + 21 + 1];
@@ -281,5 +289,19 @@ public class GameWorldTests
     private sealed class SingleScript(byte[] code) : IGplScripts
     {
         public byte[]? Load(int file, GplFileKind kind) => file == 1 ? code : null;
+    }
+
+    [Fact]
+    public void CreatureFootprintsComeFromTheirCharacterRecord()
+    {
+        WorldObject small = World().First(-100)!;
+        Assert.Equal(Footprint.OneCell, small.Walker!.Footprint);
+        Assert.Null(small.Character);
+
+        GameWorld world = World(size: 9);
+        WorldObject large = world.First(-100)!;
+        Assert.Equal(9, large.Character!.Size);
+        Assert.Equal(new Footprint(1, 1), large.Walker!.Footprint);
+        Assert.Equal(6, world.Occupancy.Cells.Count(c => c.Value == large.Index)); // 3 × 2 cells held
     }
 }

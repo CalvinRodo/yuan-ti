@@ -144,9 +144,13 @@ Goal: a party sprite walking around a region at the original scale.
       `footprint_blocked` tests them) and occupied cells (`Occupancy`, the
       engine's form of `GMAP` 0x20): characters never overlap, wait for each
       other, and detour when that is short.
-- [ ] Creature sizes from the game data: byte 0x3D of the 0x47-byte creature
-      records (table `DS:1661`), whose source file is not yet traced; until
-      then sizes are estimated from sprite width.
+- [x] Creature sizes from the game data (`CharacterRecord`, `Footprint.Of`):
+      byte 0x3D of each creature's 0x47-byte character record, the type-4
+      entry of its `RDFF` after the combat record. An object without one is a
+      single cell, as in DSUN.EXE. 263 of the 290 creatures are 1 × 1; the rest
+      are 3 × 1, 1 × 2, 3 × 2 or 3 × 3. This replaces the estimate from
+      sprite width, which made 53 creatures too wide. Checked against the
+      Python port by `make engine-compare`.
 - [x] Compare with DSUN.EXE's own pathfinding and walking speed
       (`make engine-movement`). The original's pathfinder (`08BB`, a "bug"
       algorithm: straight line, then wall-following round each obstacle) is

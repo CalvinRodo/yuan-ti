@@ -139,6 +139,37 @@ def item_name(names: bytes, name_idx: int, bonus: int) -> str:
     return f'{bonus:+d} {name}' if bonus else name
 
 
+def rdff_entries(raw: bytes) -> list[tuple]:
+    """An RDFF's entries: (load_action, type, index, data), up to the 0xFF end byte.
+
+    Both load actions (1 and 3) are followed by 'len' bytes of data: an item's
+    references to its IT1R and NAME entries have none, a creature's character
+    record (type 4) 71. Same as DarkSun.Data.Gff.Rdff.
+    """
+    entries, pos = [], 0
+    while pos + _RDFF_HDR_SIZE <= len(raw) and raw[pos] != 0xFF:
+        load_action, _bnum, rtype, idx, _from, rlen = struct.unpack_from(_RDFF_HDR_FMT, raw, pos)
+        if load_action not in (1, 3) or rlen < 0 or pos + _RDFF_HDR_SIZE + rlen > len(raw):
+            break
+        entries.append((load_action, rtype, idx, raw[pos + _RDFF_HDR_SIZE:pos + _RDFF_HDR_SIZE + rlen]))
+        pos += _RDFF_HDR_SIZE + rlen
+    return entries
+
+
+# Character record (RDFF type 4, 0x47 bytes): +0x3D size byte, the footprint
+# (half-width size & 7, height size // 8); +8 a word DSUN.EXE scales by
+# difficulty for creatures outside the party.
+CHARACTER_RECORD_SIZE = 0x47
+
+
+def character_record(raw: bytes):
+    """The character record of an RDFF resource, or None."""
+    for _action, rtype, _idx, data in rdff_entries(raw):
+        if rtype == 4 and len(data) >= CHARACTER_RECORD_SIZE:
+            return data[:CHARACTER_RECORD_SIZE]
+    return None
+
+
 def parse_item_records(objex, gpldata) -> list[dict]:
     """Every item RDFF (first entry an inline type-1 record) in SEGOBJEX.GFF, with its name."""
     try:
@@ -287,9 +318,13 @@ def parse_monsters(gff) -> list[dict]:
         except Exception:
             pass
 
+        character = character_record(raw)
+        size = character[0x3D] if character else 0
         monsters.append({
             'rdff_id':       d.number,
             'name':          name,
+            'size':          size,
+            'footprint':     f'{(size & 7) * 2 + 1}x{size // 8 + 1}',
             'hp':            hp,
             'psp':           psp,
             'ac':            ac,

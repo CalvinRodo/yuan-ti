@@ -325,7 +325,8 @@ public partial class RegionView : Node2D
             if (script is { CanWalk: true } && objects.TryRead("BMP ", def.Bmp, out var image))
             {
                 seenBmps.Add(def.Bmp);
-                _characters.Add(new CharacterSprite(r.Number, script, Session.Assets.Frames(image)));
+                CharacterRecord? record = objects.TryRead("RDFF", r.Number, out var rdff) ? CharacterRecord.FromRdff(rdff) : null;
+                _characters.Add(new CharacterSprite(r.Number, script, Session.Assets.Frames(image), Footprint.Of(record)));
             }
         }
         return _characters;
@@ -360,7 +361,7 @@ public partial class RegionView : Node2D
             return null;
         }
         CharacterSprite sprite = sprites[_nextSprite++ % sprites.Count];
-        if (_world.AddPartyMember(index, new CharacterSpec(sprite.Script, sprite.Sizes), near) is not { Walker: { } walker })
+        if (_world.AddPartyMember(index, new CharacterSpec(sprite.Script, sprite.Sizes, sprite.Footprint), near) is not { Walker: { } walker })
         {
             return null;
         }
@@ -975,9 +976,12 @@ public partial class SelectionMarker : Node2D
 }
 
 /// <summary>An object definition usable as a walking character.</summary>
-public sealed class CharacterSprite(int ojff, Scmd script, IReadOnlyList<ImageFrame> frames)
+public sealed class CharacterSprite(int ojff, Scmd script, IReadOnlyList<ImageFrame> frames, Footprint footprint)
 {
     public int Ojff { get; } = ojff;
+
+    /// <summary>From the object's character record (its <c>RDFF</c>); one cell if it has none.</summary>
+    public Footprint Footprint { get; } = footprint;
     public Scmd Script { get; } = script;
     public IReadOnlyList<ImageFrame> Frames { get; } = frames;
     public IReadOnlyList<(int Width, int Height)> Sizes { get; } = [.. frames.Select(f => (f.Width, f.Height))];

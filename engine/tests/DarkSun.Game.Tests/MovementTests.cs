@@ -265,11 +265,11 @@ public class FootprintTests
             new Footprint(1, 1).Cells(new Cell(5, 5)));
 
     [Theory]
-    [InlineData(24, 0)]
-    [InlineData(47, 0)]
-    [InlineData(48, 1)]
-    [InlineData(79, 1)]
-    [InlineData(80, 2)]
-    public void EstimatesFromSpriteWidth(int width, int halfWidth) =>
-        Assert.Equal(halfWidth, Footprint.EstimateFromWidth(width).HalfWidth);
+    [InlineData(0, 0, 0)]
+    [InlineData(1, 1, 0)]
+    [InlineData(8, 0, 1)]
+    [InlineData(9, 1, 1)]
+    [InlineData(17, 1, 2)]
+    public void DecodesSizeBytes(byte size, int halfWidth, int height) =>
+        Assert.Equal(new Footprint(halfWidth, height), Footprint.FromSizeByte(size));
 }

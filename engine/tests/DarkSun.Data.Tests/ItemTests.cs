@@ -1,6 +1,7 @@
 using System.Text;
 using DarkSun.Data.Gff;
 using DarkSun.Data.Items;
+using DarkSun.Data.Regions;
 using DarkSun.Data.Text;
 
 namespace DarkSun.Data.Tests;
@@ -69,5 +70,22 @@ public class ItemTests
         Assert.Equal("+2 Long Sword", catalog.NameOf(Item(1, 2)));
         Assert.Equal("-1 Sling", catalog.NameOf(Item(0, -1)));
         Assert.Equal("", catalog.NameOf(Item(ItemRecord.None, 0)));
+    }
+
+    [Fact]
+    public void ReadsTheCharacterRecordAfterACombatRecord()
+    {
+        var b = new Bytes();
+        b.Byte(1, 0).Short(2).Short(249).Short(0).Short(58).Zero(58);   // combat record
+        b.Byte(3, 0).Short(4).Short(5).Short(71).Short(71);             // character record, 71 bytes
+        byte[] character = new byte[71];
+        (character[8], character[0x3D]) = (18, 17);
+        b.Byte(character).Byte(0xFF);
+
+        CharacterRecord record = CharacterRecord.FromRdff(b.ToArray())!;
+
+        Assert.Equal(17, record.Size);
+        Assert.Equal(18, record.DifficultyScaled);
+        Assert.Null(CharacterRecord.FromRdff(ItemRdff(1, 0, 0, 0)));
     }
 }

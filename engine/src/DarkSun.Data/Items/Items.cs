@@ -78,7 +78,7 @@ public sealed record ItemType(
 /// <summary>
 /// One item: the 21-byte record DSUN.EXE keeps in its item table
 /// (<c>DS:165D</c>, 399 entries), copied from the first entry of an item's
-/// <c>RDFF</c> (<c>7155:0482</c>). Confirmed by the code: +0x0A the
+/// <c>RDFF</c> (<c>7155:0732</c>). Confirmed by the code: +0x0A the
 /// <see cref="ItemType"/> number, +0x0F flags (bits 1 and 8 tested), +0x12 the
 /// <c>NAME</c> number, +0x14 the bonus (shown as <c>"%+d name"</c>, added to
 /// the type's damage bonus). The other fields follow libgff's

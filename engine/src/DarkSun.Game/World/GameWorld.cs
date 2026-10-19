@@ -57,6 +57,9 @@ public sealed class WorldObject
 
     public CombatRecord? Record { get; init; }
 
+    /// <summary>A creature's character record (its size, …), from its <c>RDFF</c>.</summary>
+    public CharacterRecord? Character { get; init; }
+
     /// <summary>For an item (an object whose <c>RDFF</c> is an item record): that record.</summary>
     public ItemRecord? Item { get; init; }
 
@@ -107,10 +110,8 @@ public sealed class WorldObject
 }
 
 /// <summary>What the view needs to draw a walking character: its script and frame sizes.</summary>
-public sealed record CharacterSpec(Scmd Script, IReadOnlyList<(int Width, int Height)> Frames)
-{
-    public Footprint Footprint => Footprint.EstimateFromWidth(Frames.Count == 0 ? 0 : Frames.Max(f => f.Width));
-}
+/// <summary>What a walking character needs: its script, its frame sizes and the cells it covers.</summary>
+public sealed record CharacterSpec(Scmd Script, IReadOnlyList<(int Width, int Height)> Frames, Footprint Footprint = default);
 
 /// <summary>
 /// The objects of the current region and what scripts do to them: the
@@ -156,6 +157,7 @@ public sealed class GameWorld
             ReadOnlyMemory<byte> rdff = objectData.TryRead("RDFF", source.Ojff, out var data) ? data : default;
             CombatRecord? record = rdff.IsEmpty ? null : CombatRecord.Parse(rdff.Span);
             ItemRecord? item = record is null && !rdff.IsEmpty ? ItemRecord.FromRdff(rdff) : null;
+            CharacterRecord? character = record is not null ? CharacterRecord.FromRdff(rdff) : null;
             bool creature = record is not null;
             int index = creature && nextCreature < MaxCreatures ? nextCreature++ : nextThing < MaxObjects ? nextThing++ : -1;
             if (index < 0)
@@ -167,6 +169,7 @@ public sealed class GameWorld
                 Source = source,
                 Record = record,
                 Item = item,
+                Character = character,
                 Name = record?.Name ?? (item is not null ? Items.NameOf(item) : ""),
                 Allegiance = record?.Allegiance ?? 0,
                 Status = record?.Status ?? 0,
@@ -179,7 +182,7 @@ public sealed class GameWorld
             {
                 if (ScriptOf(source.Scmd) is { CanWalk: true } scmd)
                 {
-                    var spec = new CharacterSpec(scmd, [.. source.Frames.Select(f => (f.Width, f.Height))]);
+                    var spec = new CharacterSpec(scmd, [.. source.Frames.Select(f => (f.Width, f.Height))], Footprint.Of(character));
                     if (NearestCell(obj.FixedCell, c => Fits(c, spec.Footprint)) is { } cell)
                     {
                         obj.Walker = new Walker(index, spec.Script, spec.Frames, cell, spec.Footprint, Occupancy);
@@ -445,6 +448,7 @@ public sealed class GameWorld
                 Source = original.Source,
                 Record = original.Record,
                 Item = original.Item,
+                Character = original.Character,
                 Name = original.Name,
                 Allegiance = original.Allegiance,
                 Status = original.Status,
@@ -452,7 +456,7 @@ public sealed class GameWorld
             };
             if (original.Walker is { } w && index < MaxCreatures)
             {
-                var spec = new CharacterSpec(w.Script, w.Frames);
+                var spec = new CharacterSpec(w.Script, w.Frames, w.Footprint);
                 if (NearestCell(new Cell(x, y), c => Fits(c, spec.Footprint)) is not { } cell)
                 {
                     continue;

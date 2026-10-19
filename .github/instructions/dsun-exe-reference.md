@@ -327,9 +327,24 @@ Most `0x80` cells also have `0x40` (walls); outdoor regions have few
 x − w to x + w and from y − h to y, with w = `DS:1650` and h = `DS:1652`.
 `find_free_cell` (`7372:0909`) sets them from a size byte: w = size & 7,
 h = size / 8. Both are 0 by default (a single cell). Its caller at
-`7372:0388` reads the size from byte 0x3D of a 0x47-byte record in the table
-at far pointer `DS:1661` (*unverified*: per-creature data; the file it is
-loaded from is not traced).
+`7372:0388` and `1A0A:2AB4` read the size from byte 0x3D of the object's
+character record, in the table at far pointer `DS:1661` (17 records of 0x47
+bytes). An object without one has size 0. The records come from the
+creatures' `RDFF` resources: after the combat record (type 2, 58 bytes) comes
+an entry with load action 3, type 4 and length 0x47, then the record.
+`7155:0732` copies type 4 (object kind 4) into `DS:1661`, type 2 into
+`DS:1665` and type 1 into `DS:165D`. For creatures outside the party it
+multiplies the word at +8 by ((difficulty − 1) × 50 + 100) / 100.
+
+The 290 creatures in `SEGOBJEX.GFF` have these sizes:
+
+| Size | Footprint | Creatures |
+|---|---|---|
+| 0 | 1 × 1 | 263 |
+| 1 | 3 × 1 | 3 (Daggoran, Wyvern) |
+| 8 | 1 × 2 | 9 (Psurlon, Rampager, …) |
+| 9 | 3 × 2 | 8 (Mastyrial, Otyugh, …) |
+| 17 | 3 × 3 | 7 (Dark Spider, Spider Mage, …) |
 
 **Directions** (tables `DS:2F52` dx and `DS:2F5B` dy): 0 N (0, −1), 1 NE,
 2 E (1, 0), 3 SE, 4 S (0, 1), 5 SW, 6 W (−1, 0), 7 NW.
@@ -803,7 +818,7 @@ each record are not read.
   shipped data fits them (daggers 1d4, chest armour in slot 1, …).
 * **Item records:** a table of 399 records of 0x15 bytes at `DS:165D`
   (`7155`). Loading an object copies the first entry of its `RDFF` there when
-  it is an item (`7155:0482`), and sets +4 and +8 to 9999 (none) and +0x0C
+  it is an item (`7155:0732`), and sets +4 and +8 to 9999 (none) and +0x0C
   to 0. Combat records (0x3A bytes) go to `DS:1665` instead.
   * Read by the code: +0 id (−RDFF number), +0x0A the `IT1R` number, +0x0F
     flags (bit 1 → `6BB8:0FF8`; bit 8 → cursor 0x1778), +0x12 the `NAME`
