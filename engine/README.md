@@ -106,8 +106,9 @@ the next character; N: add a character; C: change the selected character's
 sprite. Characters cover a footprint of cells (estimated from the sprite's
 width until the game's size data is traced) and never overlap: one blocked by
 another waits, goes round if that's short, or gives up after about 4 s.
-Arrows, WASD or middle-drag scroll (the camera follows the selected character
-again after the next click); mouse wheel or +/- zoom; PgUp/PgDn change region;
+Arrows, WASD or middle-drag scroll (the camera eases after the selected
+character, and follows it again after the next click); mouse wheel or +/-
+zoom (½, 1–4; 2, the default, shows what the original showed); PgUp/PgDn change region;
 F1 shows blocked cells (red), cells that block line of sight (blue outline),
 occupied cells (yellow) and move triggers (magenta); Esc goes back. Objects with an `SCMD` script
 animate. `--check-regions` also walks the party 20 cells in every region and
@@ -143,6 +144,14 @@ Changes take effect the next time the game starts.
 Decoded images and palettes are cached for the session
 (`Session.Assets`), with one texture per frame and palette, so returning to a
 region or screen doesn't decode again.
+
+## Display
+
+The game is drawn for a 640 × 400 viewport (twice the original's 320 × 200)
+and shown at the largest whole-number scale that fits the window; the
+viewport grows to fill the rest (`PixelScaler`), so pixels stay square and
+sharp at any window size. `-- --check-display` prints the window, viewport
+and scale; `-- --new-game` goes straight into a new game.
 
 ## Notes
 

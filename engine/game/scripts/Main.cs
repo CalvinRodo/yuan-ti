@@ -5,7 +5,8 @@ namespace DarkSun.Engine;
 
 /// <summary>
 /// Start screen: finds the player's game files, then plays the intro and
-/// opens the main menu (<c>-- --no-intro</c>: straight to the menu). Only
+/// opens the main menu (<c>-- --no-intro</c>: straight to the menu;
+/// <c>-- --new-game</c>: straight into a new game). Only
 /// shown when the files can't be found, to choose their folder.
 /// For headless checks: <c>-- --check-install</c> prints what was found and
 /// quits (exit code 1 if nothing); <c>-- --check-regions</c>,
@@ -27,6 +28,16 @@ public partial class Main : Control
             ?? GameInstall.Locate([LoadConfiguredDirectory(), DevelopmentDirectory()]);
         string[] args = OS.GetCmdlineUserArgs();
 
+        if (args.Contains("--check-display"))
+        {
+            // How the window shows the 640 × 400 viewport: the scale must be a whole number.
+            Window window = GetWindow();
+            Transform2D t = window.GetFinalTransform();
+            GD.Print($"window {window.Size.X}x{window.Size.Y}, viewport {GetViewportRect().Size.X}x{GetViewportRect().Size.Y}, "
+                + $"scale {t.Scale.X}x{t.Scale.Y}, offset {t.Origin.X},{t.Origin.Y}");
+            GetTree().Quit();
+            return;
+        }
         bool regionCheck = args.Contains("--check-regions") || args.Contains("--check-exits") || args.Contains("--check-start");
         bool screenCheck = args.Contains("--check-intro") || args.Contains("--check-menu");
         if (args.Contains("--check-install") || (install is null && (regionCheck || screenCheck)))
@@ -43,6 +54,13 @@ public partial class Main : Control
         else if (args.Contains("--check-menu"))
         {
             ChangeScene(MainMenu.ScenePath);
+        }
+        else if (install is not null && args.Contains("--new-game"))
+        {
+            // Straight into a new game, for development.
+            Session.NewGame();
+            RegionView.StartNewGame();
+            ChangeScene(RegionView.ScenePath);
         }
         else if (install is not null)
         {

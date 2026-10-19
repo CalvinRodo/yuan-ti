@@ -6,11 +6,19 @@
 //   I  file  tag  number  frame   WxH   sha1(pixels + mask)    (or "-  error")
 //   P  file  tag  number  colors  sha1(rgb)                     (or "error")
 //   M  file  WxH  sha1(rgb)   whole-region render, for RGNxx.GFF  (or "error")
+//   T  file  tag  number  sha1(decoded text)        TEXT, MERR, SPIN
+//   S  file  number  spell name  sha1(description)  SPIN
+//   N  file  number  index  name                    NAME table records
+//   Y  file  type  weapon,weight,placement,range,attacks,dice,sides,bonus,AC,classes,material   IT1R
+//   Q  file  rdff  id  type  name number  bonus  name  item records (RDFF type 1)
 
 using System.Security.Cryptography;
+using System.Text;
 using DarkSun.Data.Gff;
 using DarkSun.Data.Images;
 using DarkSun.Data.Regions;
+using DarkSun.Data.Items;
+using DarkSun.Data.Text;
 using DarkSun.Game.Scripting;
 
 string[] imageTags = ["BMP ", "CBMP", "TILE", "ICON", "PORT", "WALL", "FONT"];
@@ -84,6 +92,46 @@ foreach (string name in files!)
         catch (Exception e) when (e is IndexOutOfRangeException or ArgumentException)
         {
             output.WriteLine($"{prefix}\terror");
+        }
+    }
+    foreach (var r in resources)
+    {
+        if (GameText.TextTags.Contains(r.Tag))
+        {
+            ReadOnlySpan<byte> raw = gff.Read(r.Tag, r.Number).Span;
+            output.WriteLine($"T\t{name}\t{r.Tag}\t{r.Number}\t{Sha1(Encoding.UTF8.GetBytes(GameText.Decode(raw)))}");
+            if (r.Tag == "SPIN")
+            {
+                SpellInfo spell = SpellInfo.Parse(r.Number, raw);
+                output.WriteLine($"S\t{name}\t{r.Number}\t{spell.Name}\t{Sha1(Encoding.UTF8.GetBytes(spell.Description))}");
+            }
+        }
+        else if (r.Tag == "NAME")
+        {
+            NameTable names = NameTable.Parse(gff.Read(r.Tag, r.Number).Span);
+            for (int i = 0; i < names.Count; i++)
+            {
+                output.WriteLine($"N\t{name}\t{r.Number}\t{i}\t{names[i]}");
+            }
+        }
+    }
+    if (name == "GPLDATA.GFF" && gff.TryRead("IT1R", 1, out var it1r))
+    {
+        foreach (ItemType t in ItemType.ParseAll(it1r.Span))
+        {
+            output.WriteLine($"Y\t{name}\t{t.Number}\t{(int)t.Weapon},{t.Weight},{(int)t.Placement},{t.Range},{t.Attacks},"
+                + $"{t.DamageDice},{t.DamageSides},{t.DamageBonus},{t.ArmorClass},{t.LegalClasses},{t.Material}");
+        }
+    }
+    if (name == "SEGOBJEX.GFF")
+    {
+        var catalog = ItemCatalog.Load(gplData);
+        foreach (var r in resources.Where(r => r.Tag == "RDFF"))
+        {
+            if (ItemRecord.FromRdff(gff.Read(r.Tag, r.Number)) is { } item)
+            {
+                output.WriteLine($"Q\t{name}\t{r.Number}\t{item.Id}\t{item.Type}\t{item.NameIndex}\t{item.Bonus}\t{catalog.NameOf(item)}");
+            }
         }
     }
     if (name!.StartsWith("RGN", StringComparison.Ordinal))

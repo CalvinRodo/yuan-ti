@@ -1,12 +1,9 @@
 """
 Text resource parsing helpers.
 
-Handles decoding of plain text resources (TEXT, MERR, SPIN) and the
-structured NAME resource which packs multiple named entries with binary
-separator sequences.
+Handles decoding of plain text resources (TEXT, MERR, SPIN) and the NAME
+table of 25-byte name records. Ported to C# as DarkSun.Data.Text.
 """
-
-import re
 
 
 def decode_text(raw: bytes) -> str:
@@ -14,62 +11,42 @@ def decode_text(raw: bytes) -> str:
     return raw.split(b'\x00')[0].decode('latin-1').replace('\r\n', '\n').replace('\r', '\n')
 
 
-# NAME entry separator pattern.
-#
-# Each entry is:  name\x00 + path_fragment\x00 + 1-3 type bytes ending with \xff+
-#
-# Observed variants:
-#   \x00 XX \x00 \xff           – 4 bytes (most common)
-#   \x00 XX \x00 \xff \xff+     – extended
-#   \x00 \xff \xff              – 3 bytes
-#   \x00 \xff \xff \xff         – 4 bytes
-_NAME_SEP_RE = re.compile(rb'\x00(?:.\x00\xff+|\xff{2,4})', re.DOTALL)
+def parse_spell(raw: bytes) -> tuple[str, str]:
+    """Split a SPIN resource ("NAME: description") at the first ': '."""
+    name, _, desc = decode_text(raw).strip().partition(': ')
+    return name, desc
+
+
+# NAME table: 25-byte records, each a NUL-terminated name. DSUN.EXE copies a
+# name from table + 25 * n (see dsun-exe-reference.md); the bytes after the
+# NUL are leftovers from the tool that wrote the file, not data.
+NAME_RECORD_SIZE = 25
 
 
 def parse_name_resource(raw: bytes) -> list:
-    """Parse a NAME resource blob into a list of structured entry dicts.
+    """Parse the NAME table into a list of entry dicts, one per record.
 
     Each dict has:
-      text      – display name (null-terminated C string)
-      path      – ASCII path fragment between the two nulls (non-printable as \\xNN)
-      sep_hex   – separator bytes as space-separated hex pairs
-      raw_bytes – complete entry bytes (segment + separator) as list[int]
-      seg_len   – byte length of the content portion
+      index     – record number (what item records refer to)
+      text      – the name
+      path      – the leftover bytes after the name's NUL (printable ASCII
+                  as-is, others as \\xNN), kept for inspection only
+      sep_hex   – the record's last three bytes as hex (also leftovers)
+      raw_bytes – the whole record as list[int]
+      seg_len   – length of the name and its NUL
     """
     entries = []
-    sep_spans = [(m.start(), m.end()) for m in _NAME_SEP_RE.finditer(raw)]
-    starts = [0] + [end for _, end in sep_spans]
-    ends   = [start for start, _ in sep_spans] + [len(raw)]
-    seps   = [raw[s:e] for s, e in sep_spans] + [b'']
-
-    for seg_start, seg_end, sep in zip(starts, ends, seps):
-        seg = raw[seg_start:seg_end]
-        if not seg:
-            continue
-
-        null_pos = seg.find(b'\x00')
-        if null_pos >= 0:
-            text     = seg[:null_pos].decode('latin-1', errors='replace')
-            path_raw = seg[null_pos + 1:]
-        else:
-            text     = seg.decode('latin-1', errors='replace')
-            path_raw = b''
-
-        # Render path bytes: printable ASCII as-is, others as \xNN
-        path_str = ''.join(
-            chr(b) if 32 <= b < 127 else f'\\x{b:02x}'
-            for b in path_raw
-        )
-
-        sep_hex = ' '.join(f'{b:02x}' for b in sep) if sep else ''
-
-        if text.strip():
-            entries.append({
-                'text':      text,
-                'path':      path_str,
-                'sep_hex':   sep_hex,
-                'raw_bytes': list(seg) + list(sep),
-                'seg_len':   len(seg),
-            })
-
+    for index in range((len(raw) + NAME_RECORD_SIZE - 1) // NAME_RECORD_SIZE):
+        record = raw[index * NAME_RECORD_SIZE:(index + 1) * NAME_RECORD_SIZE]
+        null_pos = record.find(b'\x00')
+        name = record if null_pos < 0 else record[:null_pos]
+        rest = b'' if null_pos < 0 else record[null_pos + 1:]
+        entries.append({
+            'index':     index,
+            'text':      name.decode('latin-1'),
+            'path':      ''.join(chr(b) if 32 <= b < 127 else f'\\x{b:02x}' for b in rest[:-3]),
+            'sep_hex':   ' '.join(f'{b:02x}' for b in record[-3:]),
+            'raw_bytes': list(record),
+            'seg_len':   len(name) + (1 if null_pos >= 0 else 0),
+        })
     return entries

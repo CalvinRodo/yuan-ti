@@ -408,10 +408,14 @@ with delay 0. Every 8 ticks `timer_tick` also sets `DS:1194`, which makes the
 loop run `22F8:047C`, a palette step (it calls the palette code `22F8:0514`),
 not a frame limiter.
 
-**Drawing order.** `draw_objects_and_walls` (`1DBD:0002`) walks the visible
-rows top to bottom, drawing each row's walls and the objects whose `ETAB` y
-falls in it, so objects and walls are depth-sorted by row. `region_renderer.py`
-draws all objects and then all walls.
+**Drawing order.** `draw_objects_and_walls` (`1DBD:0002`) draws the objects
+in list order (`DS:2420`, 8 bytes each; every shipped `ETAB` is sorted by y).
+Before an object whose y is in row `y >> 4`, it draws the walls of every
+visible row above that row, top to bottom and left to right. A wall on row r
+therefore lies over objects with y < (r + 1) × 16 and under those at or below
+that line. The walls are drawn at (x × 16 + 8 − `DS:574C`[w], y × 16 + 16 −
+`DS:574D`[w]). `region_renderer.py` draws all objects and then all walls; the
+engine's region view sorts by these rules.
 
 ## 4. What runs the scripts
 
@@ -735,4 +739,34 @@ Ops 2, 9–0x13, 0x17, 0x18, 0x2C, 0x3D, 0x3E, 0x50–0x5A, 0x5C–0x5E, 0x67 an
     volume; `(ms, 0x33)` ramps to 0.
   * `3592:000E(n)` starts a track if its flags at `DS:1676 + 3n` allow it
     (bit 4); bit 2 hands it to a hook.
+
+### Names (`NAME`)
+
+`GPLDATA.GFF` `NAME` 1 is loaded whole at start-up (`60B9:0165`, after the
+item-type table; pointer at `DS:166D`, also `577D:1179`). It is read as
+`char[25]` records. Name n is `_fstrcpy`'d from `table + n * 0x19`
+(`612E`, `78A9:5642`, `88F4:0237`). The number comes from the word at +0x12 of
+a 0x15-byte item record in the table at `DS:165D`. When the byte at +0x14 is
+set, the name is formatted instead (`1D53:0002`). The 3 bytes at the end of
+each record are not read.
+
+### Items (`IT1R`, item records)
+
+* **Item types:** `GPLDATA.GFF` `IT1R` 1 loads to `DS:1669`, as 20-byte
+  records (×0x14), at start-up (`7155`, `7372`, `60B9:0165`). The code reads
+  +0x0A (range; below 2 is melee) and +0x0E (damage bonus) when showing a
+  weapon (`78A9:2A9F`). The other offsets follow libgff's `ds_item1r_t`; the
+  shipped data fits them (daggers 1d4, chest armour in slot 1, …).
+* **Item records:** a table of 399 records of 0x15 bytes at `DS:165D`
+  (`7155`). Loading an object copies the first entry of its `RDFF` there when
+  it is an item (`7155:0482`), and sets +4 and +8 to 9999 (none) and +0x0C
+  to 0. Combat records (0x3A bytes) go to `DS:1665` instead.
+  * Read by the code: +0 id (−RDFF number), +0x0A the `IT1R` number, +0x0F
+    flags (bit 1 → `6BB8:0FF8`; bit 8 → cursor 0x1778), +0x12 the `NAME`
+    number, +0x14 the bonus.
+  * The name shown is `NAME` n, or with a bonus `sprintf("%+d %Fs", bonus,
+    name)` (`DS:1D3E`). The bonus is added to the type's damage bonus. The
+    next string, `"%d%s*%dD%d%+d"`, formats damage.
+  * Every item `RDFF` that references an `IT1R` or `NAME` entry (745 and
+    706 of 755) references the record's own type and name.
 

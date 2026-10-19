@@ -443,3 +443,5 @@
 35D1:000A	func	music_set_volume	0-100
 3592:000E	func	music_start_track	n, if its flags at DS:1676+3n allow
 6BB8:0A41	func	region_load_rdat	RDAT n (49 bytes) to 4931:025D: colour cycles, music at +0x2F
+78A9:2A9F	func	item_describe	item name ("%+d %Fs" with a bonus), to-hit and damage for the item screen
+7155:0482	func	object_load_record	copy an object's RDFF record into the item table (DS:165D) or combat table (DS:1665)

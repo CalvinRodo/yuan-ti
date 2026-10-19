@@ -34,7 +34,16 @@ public partial class RegionView : Node2D
     public const string ScenePath = "res://scenes/region_view.tscn";
 
     private const float PanSpeed = 400f;
-    private static readonly float[] ZoomLevels = [0.25f, 0.5f, 1f, 2f, 3f, 4f];
+    /// <summary>
+    /// Map pixels per viewport pixel. The viewport is 640 × 400, twice the
+    /// original's 320 × 200, so zoom 2 shows what DSUN.EXE showed; the window
+    /// scales the viewport by a whole number too (stretch scale mode
+    /// "integer"), so every map pixel stays a crisp block. ½ is an overview.
+    /// </summary>
+    private static readonly float[] ZoomLevels = [0.5f, 1f, 2f, 3f, 4f];
+
+    /// <summary>How quickly the camera catches up with the character it follows.</summary>
+    private const float CameraSmoothing = 6f;
 
     /// <summary>The original game's party size.</summary>
     private const int PartySize = GameWorld.PartySize;
@@ -74,7 +83,7 @@ public partial class RegionView : Node2D
     private readonly Dictionary<int, ImageTexture?> _portraits = [];
     private readonly HashSet<RegionObject> _hidden = [];
     private readonly Dictionary<RegionObject, Vector2> _moved = [];
-    private int _zoomLevel = Array.IndexOf(ZoomLevels, 1f);
+    private int _zoomLevel = Array.IndexOf(ZoomLevels, 2f);
     private Vector2 _mapSize;
 
     private long Now => (long)(_clock * ScmdAnimator.TicksPerSecond);
@@ -93,7 +102,12 @@ public partial class RegionView : Node2D
         AddChild(_sorted);
         _overlay = new MapFlagsOverlay { Visible = false };
         AddChild(_overlay);
-        _camera = new Camera2D();
+        _camera = new Camera2D
+        {
+            Zoom = Vector2.One * ZoomLevels[_zoomLevel],
+            PositionSmoothingEnabled = true,
+            PositionSmoothingSpeed = CameraSmoothing,
+        };
         AddChild(_camera);
         AddChild(BuildHud());
 
@@ -159,6 +173,7 @@ public partial class RegionView : Node2D
         UpdateHud();
         _follow = true;
         FollowCharacter();
+        SnapCamera();
     }
 
     private void UpdateHud()
@@ -241,10 +256,15 @@ public partial class RegionView : Node2D
                 _animated.Add(new AnimatedObject(sprite, obj, scmd, new ScmdAnimator(scmd, obj.Frames.Count, mirrored: obj.Mirrored)));
             }
         }
+        // DSUN.EXE draws row by row (draw_objects_and_walls, 1DBD:0002): before
+        // an object whose ETAB y is in row y >> 4 it draws the walls of every
+        // row above. So a wall on cell row r sorts just before y = (r + 1) * 16,
+        // the bottom of its cell (where it is drawn bottom-aligned): objects
+        // and characters standing on that line or lower are drawn over it.
         foreach (PlacedSprite wall in _region.Walls)
         {
-            var bottom = new Vector2(wall.X + wall.Frame.Width / 2, wall.Y + wall.Frame.Height);
-            AddSprite(wall.Frame, bottom, new Vector2(wall.X, wall.Y), wall.Mirrored);
+            var sortPoint = new Vector2(wall.X + wall.Frame.Width / 2, wall.Y + wall.Frame.Height - 0.5f);
+            AddSprite(wall.Frame, sortPoint, new Vector2(wall.X, wall.Y), wall.Mirrored);
         }
         _overlay.Show(_region, _occupancy, Session.Scripts.Triggers);
         Animate();
@@ -451,6 +471,12 @@ public partial class RegionView : Node2D
         _marker.Follow(Selected?.Walker);
     }
 
+    /// <summary>
+    /// Keep the camera on the party's active member (the selected character),
+    /// as DSUN.EXE scrolls with the active member; the camera eases after it
+    /// rather than jumping a cell at a time. Scrolling by hand stops following
+    /// until the next click.
+    /// </summary>
     private void FollowCharacter()
     {
         if (_follow && Selected is { } member)
@@ -458,6 +484,13 @@ public partial class RegionView : Node2D
             _camera.Position = new Vector2(member.Walker.Feet.X, member.Walker.Feet.Y);
         }
         ClampCamera();
+    }
+
+    /// <summary>Put the view where the camera is at once (new region, teleport), without easing.</summary>
+    private void SnapCamera()
+    {
+        ClampCamera();
+        _camera.ResetSmoothing();
     }
 
     public override void _Process(double delta)
@@ -696,6 +729,11 @@ public partial class RegionView : Node2D
             {
                 member.Node.Visible = !obj.Hidden;
                 DrawMember(member);
+            }
+            if (Selected?.Walker == obj.Walker)
+            {
+                FollowCharacter();
+                SnapCamera();
             }
             return;
         }

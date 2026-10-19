@@ -327,7 +327,7 @@ def step_gamedata(game_id: str, game: dict, force: bool) -> None:
     if not os.path.isfile(items_path) or force:
         gff = try_load('GPLDATA.GFF')
         if gff:
-            result = parse_items(gff)
+            result = parse_items(gff, try_load('SEGOBJEX.GFF'))
             for rec in result:
                 rec['sprite_gff']     = 'GPLDATA.GFF'
                 rec['sprite_tag_url'] = tag_to_url_seg('PORT')

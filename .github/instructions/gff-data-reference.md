@@ -292,10 +292,12 @@ GET /api/gff/<name>/spells
 
 ### 4e. Text Resources: `TEXT`, `MERR`, `NAME`, `SPIN`
 
-All decoded the same way — latin-1, null-terminated, `\r\n` normalized to `\n`:
+`TEXT`, `MERR` and `SPIN` are decoded the same way — latin-1, up to a NUL if
+there is one (the shipped files end with `\r\n` instead), `\r\n` normalized to
+`\n`. C#: `DarkSun.Data.Text.GameText`, `SpellInfo`, `NameTable`.
 
 ```python
-raw  = gff.get_resource_data('TEXT', number)   # also MERR, NAME, SPIN
+raw  = gff.get_resource_data('TEXT', number)   # also MERR, SPIN
 text = raw.split(b'\x00')[0].decode('latin-1').replace('\r\n', '\n').replace('\r', '\n')
 ```
 
@@ -304,7 +306,7 @@ text = raw.split(b'\x00')[0].decode('latin-1').replace('\r\n', '\n').replace('\r
 | `TEXT` | Generic text strings (names, labels…)   | RESOURCE.GFF  |
 | `MERR` | Error message strings                   | RESOURCE.GFF, CINE.GFF |
 | `SPIN` | Spell info (see §4d for extra parsing)  | RESOURCE.GFF  |
-| `NAME` | Named entity labels                     | Various       |
+| `NAME` | Name table: 25-byte records, each a NUL-terminated name; bytes after the NUL are tool leftovers (`text_parsers.parse_name_resource`) | GPLDATA.GFF `NAME` 1 (322 names) |
 
 Constant: `TEXT_TAGS = {'TEXT', 'MERR', 'SPIN', 'NAME'}` in `server.py`.
 

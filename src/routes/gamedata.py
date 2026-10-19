@@ -51,7 +51,8 @@ def _load_gamedata(kind: str, game_id: str) -> list:
 
     if kind == 'items':
         gff    = try_load_gff(game_dir, 'GPLDATA.GFF', game_id)
-        result = parse_items(gff) if gff else []
+        objex  = try_load_gff(game_dir, 'SEGOBJEX.GFF', game_id)
+        result = parse_items(gff, objex) if gff else []
         for rec in result:
             rec['sprite_gff']     = 'GPLDATA.GFF'
             rec['sprite_tag_url'] = tag_to_url_seg('PORT')

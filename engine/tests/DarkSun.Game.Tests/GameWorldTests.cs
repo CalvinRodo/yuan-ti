@@ -52,6 +52,16 @@ public class GameWorldTests
         var resources = new Resources();
         resources.Data[("RDFF", 100)] = CombatRecord(100, 3, 1, "Templar");
         resources.Data[("SCMD", 7)] = ScmdBytes();
+        // OJFF 200 is an item: a +1 "Torch" (NAME 1) of type 0.
+        var item = new byte[10 + 21 + 1];
+        (item[0], item[2], item[8]) = (1, 1, 21);
+        item[10 + 18] = 1;
+        item[10 + 20] = 1;
+        item[^1] = 0xFF;
+        resources.Data[("RDFF", 200)] = item;
+        var names = new byte[50];
+        System.Text.Encoding.Latin1.GetBytes("Torch").CopyTo(names, 25);
+        resources.Data[("NAME", 1)] = names;
         RegionObject[] objects =
         [
             new(0, 100, 10 * 16 + 8, 6 * 16 - 1, 0, 0, false, [Frame, Frame, Frame], 7),
@@ -113,6 +123,8 @@ public class GameWorldTests
         Assert.Equal(ObjectKind.Thing, thing.Kind);
         Assert.True(thing.Index >= GameWorld.MaxCreatures);
         Assert.Equal(new Cell(2, 2), thing.Cell);
+        Assert.Equal("+1 Torch", thing.Name);
+        Assert.NotNull(thing.Item);
 
         Assert.Same(templar, Assert.Single(world.Select(templar.Index)));
         Assert.Empty(world.Select(GameWorld.None));

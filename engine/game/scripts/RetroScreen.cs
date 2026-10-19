@@ -4,8 +4,9 @@ namespace DarkSun.Engine;
 
 /// <summary>
 /// A black full-window backdrop holding a 320 × 200 <see cref="Canvas"/>, the
-/// original screen, scaled up as far as it fits and centred. Children of the
-/// canvas use the game's own pixel coordinates.
+/// original screen, scaled up by the largest whole number that fits and
+/// centred, so its pixels stay square and sharp. Children of the canvas use
+/// the game's own pixel coordinates.
 /// </summary>
 public partial class RetroScreen : Control
 {
@@ -28,7 +29,7 @@ public partial class RetroScreen : Control
 
     private void Fit()
     {
-        float scale = Math.Max(0.25f, Math.Min(Size.X / Width, Size.Y / Height));
+        float scale = Math.Max(1f, MathF.Floor(Math.Min(Size.X / Width, Size.Y / Height)));
         Canvas.Scale = new Vector2(scale, scale);
         Canvas.Position = ((Size - new Vector2(Width, Height) * scale) / 2).Floor();
     }

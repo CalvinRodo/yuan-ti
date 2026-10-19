@@ -3,7 +3,8 @@ Parsers for Dark Sun 1/2 game-data tables embedded in GFF files.
 
 Three data sources are supported:
 
-  items     — IT1R + NAME resources in GPLDATA.GFF (item type lookup table)
+  items     — IT1R item types (GPLDATA.GFF), named from the item records
+              (SEGOBJEX.GFF RDFF type 1) and NAME
   monsters  — RDFF combat objects (type 2) in SEGOBJEX.GFF / OBJEX.GFF
   spells    — SPIN text resources in RESOURCE.GFF
 
@@ -80,11 +81,20 @@ _WEAPON_FLAGS = {
     0x80: 'Armour',
 }
 
+# IT1R placement (+9), named from the items that use each value; same as
+# DarkSun.Data.Items.ItemPlacement.
 _SLOT_NAMES = [
-    'Arm', 'Ammo', 'Missile', 'Hand', 'Finger', 'Waist',
-    'Legs', 'Head', 'Neck', 'Chest', 'Hand (off)', 'Finger (off)',
-    'Cloak', 'Foot',
+    'None', 'Chest', 'Waist', 'Arms', 'Feet', 'Hand', 'Head', 'Neck',
+    'Cloak', 'Finger', 'Legs', 'Ammunition', 'Missile weapon',
 ]
+
+# ds1_item_t (21 bytes): the item record DSUN.EXE copies from an RDFF's first
+# entry. id i16, quantity u16, next i16, value u16, pack_index i16,
+# item_index i16 (IT1R), icon i16, charges u8, flags u8, special u8, slot u8,
+# name_idx u16 (NAME), bonus i8.
+_ITEM_FMT = '<hHhHhhhBBBBHb'
+_ITEM_FIELDS = ['id', 'quantity', 'next', 'value', 'pack_index', 'item_index', 'icon',
+                'charges', 'flags', 'special', 'slot', 'name_idx', 'bonus']
 
 _RACE_NAMES = [
     'Monster', 'Human', 'Dwarf', 'Elf', 'Half-Elf',
@@ -121,12 +131,47 @@ def _weapon_type_label(wt: int) -> str:
 # Items  (IT1R + NAME in GPLDATA.GFF)
 # ---------------------------------------------------------------------------
 
-def parse_items(gff) -> list[dict]:
-    """Return a list of item-type dicts from IT1R + NAME resources.
+def item_name(names: bytes, name_idx: int, bonus: int) -> str:
+    """An item's name as DSUN.EXE shows it: NAME entry, "%+d name" with a bonus."""
+    if name_idx >= 9999 or name_idx * _NAME_SIZE >= len(names):
+        return ''
+    name = names[name_idx * _NAME_SIZE:(name_idx + 1) * _NAME_SIZE].split(b'\x00')[0].decode('latin-1')
+    return f'{bonus:+d} {name}' if bonus else name
 
-    *gff* should be the GPLDATA.GFF GffFile object.
-    Returns [] if the GFF does not contain IT1R data.
+
+def parse_item_records(objex, gpldata) -> list[dict]:
+    """Every item RDFF (first entry an inline type-1 record) in SEGOBJEX.GFF, with its name."""
+    try:
+        names = gpldata.get_resource_data('NAME', 1)
+    except Exception:
+        names = b''
+    items = []
+    for d in objex.describe_resources():
+        if d.tag != 'RDFF':
+            continue
+        raw = objex.get_resource_data('RDFF', d.number)
+        if len(raw) < _RDFF_HDR_SIZE + 21:
+            continue
+        load_action, _bnum, rtype, _idx, _from, rlen = struct.unpack_from(_RDFF_HDR_FMT, raw, 0)
+        if load_action != 1 or rtype != GFF_ITEM_OBJECT or rlen < 21:
+            continue
+        rec = dict(zip(_ITEM_FIELDS, struct.unpack_from(_ITEM_FMT, raw, _RDFF_HDR_SIZE)))
+        rec['rdff'] = d.number
+        rec['name'] = item_name(names, rec['name_idx'], rec['bonus'])
+        rec['base_name'] = item_name(names, rec['name_idx'], 0)
+        items.append(rec)
+    return items
+
+
+def parse_items(gff, objex=None) -> list[dict]:
+    """Return the item types (IT1R in GPLDATA.GFF).
+
+    Item types have no names of their own: names belong to the item records
+    (an RDFF's NAME number), so with *objex* (SEGOBJEX.GFF) each type is
+    named after the items of that type ('name': the most common name
+    without a bonus, 'names': every name, with bonuses as the game shows them). Returns [] if the GFF has no IT1R.
     """
+    from collections import Counter
     from gff import NoSuchResourceError
 
     try:
@@ -134,22 +179,18 @@ def parse_items(gff) -> list[dict]:
     except (NoSuchResourceError, Exception):
         return []
 
-    try:
-        name_data = gff.get_resource_data('NAME', 1)
-    except (NoSuchResourceError, Exception):
-        name_data = b''
+    used, base = {}, {}
+    if objex is not None:
+        for rec in parse_item_records(objex, gff):
+            used.setdefault(rec['item_index'], Counter())[rec['name']] += 1
+            base.setdefault(rec['item_index'], Counter())[rec['base_name']] += 1
 
-    num_items = len(it1r_data) // _ITEM1R_SIZE
-    num_names  = len(name_data) // _NAME_SIZE
     items = []
-
-    for i in range(num_items):
+    for i in range(len(it1r_data) // _ITEM1R_SIZE):
         raw = struct.unpack_from(_ITEM1R_FMT, it1r_data, i * _ITEM1R_SIZE)
         d   = dict(zip(_ITEM1R_FIELDS, raw))
-
-        name = ''
-        if i < num_names:
-            name = _decode_name(name_data[i * _NAME_SIZE: (i + 1) * _NAME_SIZE])
+        names = [n for n, _ in used.get(i, Counter()).most_common() if n]
+        base_names = [n for n, _ in base.get(i, Counter()).most_common() if n]
 
         damage = ''
         if d['dice'] > 0 and d['sides'] > 0:
@@ -159,13 +200,13 @@ def parse_items(gff) -> list[dict]:
             elif d['mod'] < 0:
                 damage += str(d['mod'])
 
-        # PORT resources in GPLDATA.GFF are 1-indexed relative to IT1R order
-        port_num = i + 1
-
+        placement = d['placement']
         items.append({
             'index':       i,
-            'name':        name,
+            'name':        base_names[0] if base_names else '',
+            'names':       names,
             'weapon_type': _weapon_type_label(d['weapon_type']),
+            'slot':        _SLOT_NAMES[placement] if placement < len(_SLOT_NAMES) else str(placement),
             'damage':      damage,
             'weight':      d['weight'],
             'base_AC':     d['base_AC'],
@@ -174,7 +215,8 @@ def parse_items(gff) -> list[dict]:
             'material':    d['material'],
             'flags':       d['flags'],
             'legal_class': d['legal_class'],
-            'port_num':    port_num,
+            # PORT resources in GPLDATA.GFF are 1-indexed relative to IT1R order (unverified)
+            'port_num':    i + 1,
         })
 
     return items

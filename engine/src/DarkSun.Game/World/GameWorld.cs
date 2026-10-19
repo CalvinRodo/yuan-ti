@@ -1,5 +1,6 @@
 using DarkSun.Data.Animation;
 using DarkSun.Data.Gff;
+using DarkSun.Data.Items;
 using DarkSun.Data.Regions;
 using DarkSun.Game.Movement;
 using DarkSun.Game.Scripting;
@@ -55,6 +56,9 @@ public sealed class WorldObject
     public RegionObject? Source { get; init; }
 
     public CombatRecord? Record { get; init; }
+
+    /// <summary>For an item (an object whose <c>RDFF</c> is an item record): that record.</summary>
+    public ItemRecord? Item { get; init; }
 
     public Walker? Walker { get; set; }
 
@@ -143,12 +147,15 @@ public sealed class GameWorld
         _objectData = objectData;
         _engine = engine ?? new int[15];
         _engine[4] = region.Number;
+        Items = ItemCatalog.Load(objectData);
         int nextCreature = PartySize;
         int nextThing = MaxCreatures;
 
         foreach (RegionObject source in region.Objects)
         {
-            CombatRecord? record = objectData.TryRead("RDFF", source.Ojff, out var rdff) ? CombatRecord.Parse(rdff.Span) : null;
+            ReadOnlyMemory<byte> rdff = objectData.TryRead("RDFF", source.Ojff, out var data) ? data : default;
+            CombatRecord? record = rdff.IsEmpty ? null : CombatRecord.Parse(rdff.Span);
+            ItemRecord? item = record is null && !rdff.IsEmpty ? ItemRecord.FromRdff(rdff) : null;
             bool creature = record is not null;
             int index = creature && nextCreature < MaxCreatures ? nextCreature++ : nextThing < MaxObjects ? nextThing++ : -1;
             if (index < 0)
@@ -159,7 +166,8 @@ public sealed class GameWorld
             {
                 Source = source,
                 Record = record,
-                Name = record?.Name ?? "",
+                Item = item,
+                Name = record?.Name ?? (item is not null ? Items.NameOf(item) : ""),
                 Allegiance = record?.Allegiance ?? 0,
                 Status = record?.Status ?? 0,
                 FixedCell = new Cell(source.EtabX / Region.TileSize, Math.Max(0, source.EtabY - 1) / Region.TileSize),
@@ -182,6 +190,9 @@ public sealed class GameWorld
     }
 
     public Region Region { get; }
+
+    /// <summary>Item types and names (<c>IT1R</c>, <c>NAME</c>), for naming and describing items.</summary>
+    public ItemCatalog Items { get; }
 
     /// <summary>The engine variables (<c>gname[0–14]</c>) this world reads and writes.</summary>
     public int[] EngineVariables => _engine;
@@ -433,6 +444,7 @@ public sealed class GameWorld
             {
                 Source = original.Source,
                 Record = original.Record,
+                Item = original.Item,
                 Name = original.Name,
                 Allegiance = original.Allegiance,
                 Status = original.Status,

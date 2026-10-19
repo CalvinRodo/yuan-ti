@@ -28,14 +28,15 @@ What already exists, and what the engine can reuse:
 | Images (`BMP `, `TILE`, `ICON`, `PORT`, `WALL`) and palettes (`PAL `, `CPAL`) | Decoded | `src/image.py`, `gff-data-reference.md` §4a–4b |
 | Region maps (`RMAP`, `GMAP`, `ETAB`) and object sprites (`OJFF` → `BMP`) | Rendered | `src/region_renderer.py` |
 | Text (`TEXT`, `MERR`, `NAME`, `SPIN`) | Parsed | `src/text_parsers.py` |
-| Items, monsters, spells (`IT1R`, `RDFF`, `SPIN`) | Partly parsed | `src/ds1_parsers.py` |
+| Items (`IT1R`, `NAME`, `RDFF` item records) | Decoded | `DarkSun.Data.Items`, `DarkSun.Data.Gff.Rdff`; `src/ds1_parsers.py` |
+| Monsters, spells (`RDFF` combat records, `SPIN`) | Partly parsed | `CombatRecord`, `SpellInfo`; `src/ds1_parsers.py` |
 | Music (`CSEQ`/`GSEQ`/`LSEQ`/`PSEQ`, `MSEQ`; XMIDI) | Converts to MIDI | `src/xmi_tool.py` |
 | Sound samples (`BVOC`) | Extracted as Creative `.VOC` | `src/precompute.py` (audio step) |
 | GPL scripts (217 `GPL `, 33 `MAS `) | Bytecode fully documented, disassembler | `src/gpl_parser.py`, `dsun-exe-reference.md` |
 | Executable | Overlays unpacked; 2 402 functions decompiled; runtime, GPL interpreter and all handlers named | `make decomp` |
 | Cinematics (`ACF `, `BMA `, `CINE.GFF` `BMP`/`PAL`) | Decoded and played | `DarkSun.Data.Cinematics`, `DarkSun.Game.Cinematics`, `dsun-exe-reference.md` §7 |
 | UI windows (`WIND`, `BUTN`, `ACCL`) | Layout decoded (the main menu uses them) | `DarkSun.Data.Ui` |
-| Not yet decoded | `FONT`, `APFM`, `EBOX`, `DBOX`, `MENU`, most of `RDFF` | |
+| Not yet decoded | `FONT`, `APFM`, `EBOX`, `DBOX`, `MENU`; what follows combat records in `RDFF` (type 4 references and the data after them: inventories?) | |
 
 The GOG install ships DOSBox, so the original game is always available to
 compare against by eye.
@@ -97,7 +98,12 @@ Goal: every resource the first playable region needs, loaded in C#.
 - [x] Region 255 (`RGNFF.GFF`) is a test map holding every item and effect;
       it has no `PAL ` 255 and uses `GPLDATA.GFF` `PAL ` 1 (also in the Python
       tools).
-- [ ] Port the text parsers and the `NAME` table.
+- [x] Port the text parsers and the `NAME` table (`DarkSun.Data.Text`:
+      `GameText` for `TEXT`/`MERR`/`SPIN`, `SpellInfo`, `NameTable`). `NAME`
+      is fixed 25-byte records (from the code that reads it), not the
+      separator patterns `text_parsers.py` used to guess at; the Python
+      parser now reads it the same way, and `make engine-compare` checks the
+      text, spells and every name.
 - [x] **Check against the Python tools**: `make engine-compare` hashes every
       resource, image frame and palette in the game files with both
       (`tools/compare/gff_dump.py`, `engine/tools/DarkSun.Dump`) and requires
@@ -119,9 +125,16 @@ Goal: a party sprite walking around a region at the original scale.
       2048 × 1568 texture from `RMAP` and `TILE`; objects and walls as sprites
       in the original draw order. Scroll, zoom, and PgUp/PgDn through all 33
       regions.
-- [ ] Y-sort objects and walls with characters, once characters move.
-- [ ] Camera following the party, with integer scaling to any window size
-      (the original is 320 × 200, *unverified*).
+- [x] Y-sort objects and walls with characters (`RegionView`): objects by
+      their `ETAB` y (every `ETAB` is sorted by y, so this is also the game's
+      list order), characters by their feet, a wall on cell row r just before
+      y = (r + 1) × 16, as `draw_objects_and_walls` (`1DBD:0002`) orders them.
+- [x] Camera following the party's active member, easing after it and
+      jumping on region changes and teleports; whole-number scaling to any
+      window size (`PixelScaler`: the 640 × 400 viewport, twice the original's
+      320 × 200, which the menus and cinematics confirm, is shown at the
+      largest whole-number scale and grows to fill the window). Zoom 2, the
+      default, shows the original's view; zoom levels are ½ and 1–4.
 - [x] Movement and collision from the `GMAP` bits (0x40 blocks movement,
       0x80 blocks sight, 0x20 occupied at run time; `Region.IsBlocked`,
       `Region.BlocksSight`); click-to-move with A* pathfinding
@@ -238,7 +251,15 @@ this milestone brings most of the game's content.
 
 - [ ] Character data model: races, classes, stats, levels, psionics
       (reverse engineering, §10).
-- [ ] Items from `IT1R` and `NAME`; inventory, equipping, containers, shops.
+- [x] Items from `IT1R` and `NAME` (`DarkSun.Data.Items`): `ItemType`
+      (115 types: weapon kind, slot, damage, AC, weight, classes),
+      `ItemRecord` (the 21-byte record of each item `RDFF`, 755 in
+      `SEGOBJEX.GFF`), `ItemCatalog.NameOf` (the game's `"%+d name"`).
+      Region items get their names in the world. Checked against the Python
+      port by `make engine-compare`.
+- [ ] Inventory, equipping, containers, shops. Still to decode: item-record
+      `special`, `charges`, `flags` bits, `IT1R` `material` and the bits of the
+      class mask; containers' contents.
 - [ ] Character sheet and inventory screens.
 - [ ] Party creation, plus a pre-made party option.
 
