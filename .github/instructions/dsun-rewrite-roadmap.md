@@ -81,6 +81,11 @@ compare against by eye.
       `make engine-gpl-check`); `mod.json` metadata; unusable mod files are
       reported, not fatal. The main menu's Mods screen (`ModsView`) lists
       mods, their problems, turns them on and off and reorders them.
+- [x] **Verb menu** (2026-10-19): right-click shows the object's verbs
+      (`ObjectVerbs`, from DSUN.EXE's verb window `68BD:0040` plus Attack and
+      Use with), with the original's icons (`VerbMenu`); the chosen verb's
+      trigger runs once the character has walked up. Get and Attack without
+      a script wait on the inventory and combat.
 - [ ] More JSON forms as formats are decoded (spells `SPIN`, the rest of
       the character record, `RDAT`'s other 43 bytes, `ETAB` placements).
 - [x] **Tests**: xUnit tests for `Data` and `Game`, run by `make engine-test`

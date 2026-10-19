@@ -17,13 +17,15 @@ namespace DarkSun.Engine;
 /// <c>SCMD</c> script animate on a 96 Hz tick. Characters hold their
 /// footprint's cells, so they never overlap. Entering a region runs its
 /// <c>MAS</c> script (after the game-start script, once); characters stepping
-/// into cells fire move triggers; right-clicking an object fires its talk-to,
-/// use, look or pick-up trigger. The region's objects live in a
+/// into cells fire move triggers; right-clicking an object opens its verb
+/// menu (<see cref="VerbMenu"/>: Talk, Get, Use, Use with…, Attack, Look, as
+/// it offers them), and the selected character walks up to it and does that
+/// (Look works from anywhere). The region's objects live in a
 /// <see cref="GameWorld"/>: creatures that can walk carry out their scripted
 /// orders and run their no-orders and line-of-sight scripts; every world
 /// command is listed in the script log (F2).
 /// Click: the selected character walks there; Shift+click: the whole party;
-/// Right-click: interact; Tab: select the next character; N: add one; C:
+/// Right-click: verb menu; Tab: select the next character; N: add one; C:
 /// change its sprite; arrows, WASD or middle-drag scroll; wheel or +/- zoom;
 /// PgUp/PgDn change region; Esc returns to the main menu; F1 shows the <c>GMAP</c> flags, occupied cells and
 /// triggers. Run with <c>-- --check-regions</c> to load every region, run its
@@ -74,8 +76,15 @@ public partial class RegionView : Node2D
     private int _nextSprite;
     private bool _follow = true;
 
-    /// <summary>A right-click waiting for its character to walk up to the object.</summary>
-    private (Walker Walker, int Actor, WorldObject Target, int Tries)? _pendingUse;
+    /// <summary>A verb waiting for its character to walk up to the object (<c>With</c>: Use with's first object).</summary>
+    private (Walker Walker, int Actor, WorldObject Target, Verb Verb, WorldObject? With, int Tries)? _pendingUse;
+
+    private VerbMenu _verbMenu = null!;
+    private WorldObject? _menuTarget;
+
+    /// <summary>Use with…: the first object, waiting for the player to click the second.</summary>
+    private WorldObject? _useWith;
+    private Label _prompt = null!;
     private readonly List<(RegionObject Object, Sprite2D Sprite)> _objectSprites = [];
     private readonly Dictionary<Walker, Cell> _lastCells = [];
     private readonly List<string> _scriptLines = [];
@@ -133,6 +142,12 @@ public partial class RegionView : Node2D
             CheckExits();
             return;
         }
+        if (OS.GetCmdlineUserArgs().Contains("--check-verbs"))
+        {
+            _checking = _checkingVerbs = true;
+            CheckVerbs();
+            return;
+        }
         if (_regionIndex < 0)
         {
             // A new game begins where DSUN.EXE's does: region 42, the party at pixel (488, 152).
@@ -170,6 +185,17 @@ public partial class RegionView : Node2D
             Answer = answer => ReportScript("answer", Session.Scripts.Resume(answer)),
         };
         layer.AddChild(_dialogueWindow);
+
+        _verbMenu = new VerbMenu { Chosen = ChooseVerb };
+        layer.AddChild(_verbMenu);
+        _prompt = new Label { Visible = false, HorizontalAlignment = HorizontalAlignment.Center };
+        _prompt.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.CenterTop);
+        _prompt.GrowHorizontal = Control.GrowDirection.Both;
+        _prompt.OffsetTop = 6;
+        _prompt.AddThemeFontSizeOverride("font_size", 10);
+        _prompt.AddThemeColorOverride("font_outline_color", Colors.Black);
+        _prompt.AddThemeConstantOverride("outline_size", 4);
+        layer.AddChild(_prompt);
         return layer;
     }
 
@@ -178,6 +204,8 @@ public partial class RegionView : Node2D
         IReadOnlyList<string> files = Session.Install!.RegionFiles;
         _regionIndex = (index % files.Count + files.Count) % files.Count;
         _pendingUse = null;
+        _verbMenu.Close();
+        SetUseWith(null);
         LoadRegion(files[_regionIndex]);
         PlaceParty(start);
         RunRegionScripts();
@@ -199,7 +227,7 @@ public partial class RegionView : Node2D
             + $"{_region.Objects.Count} objects ({_animated.Count} animated) · {selected}\n"
             + $"Triggers: {t.Count(GplTriggerList.MoveTile)} tile, {t.Count(GplTriggerList.MoveBox)} box, {objectTriggers} object, "
             + $"{Session.Scripts.Creatures.NoOrders.Count + Session.Scripts.Creatures.Sight.Count} creature\n"
-            + "Click: walk · Shift+click: party · Right-click: interact · Tab: select · N: add · C: sprite · "
+            + "Click: walk · Shift+click: party · Right-click: verbs · Tab: select · N: add · C: sprite · "
             + "Arrows/WASD or middle-drag: scroll · Wheel or +/-: zoom · PgUp/PgDn: region · F1: map · F2: script log · Esc: back";
     }
 
@@ -573,7 +601,21 @@ public partial class RegionView : Node2D
 
     public override void _UnhandledInput(InputEvent e)
     {
-        if (e.IsActionPressed(Controls.Back))
+        if (_useWith is not null && e.IsActionPressed(Controls.Back))
+        {
+            SetUseWith(null);
+        }
+        else if (_useWith is not null && !_dialogueWindow.Visible && e is InputEventMouseButton { ButtonIndex: MouseButton.Left or MouseButton.Right, Pressed: true })
+        {
+            // Use with…: the click picks the second object.
+            WorldObject first = _useWith;
+            SetUseWith(null);
+            if (ObjectAt(GetGlobalMousePosition()) is { } second && second != first)
+            {
+                StartVerb(second, Verb.UseWith, first);
+            }
+        }
+        else if (e.IsActionPressed(Controls.Back))
         {
             GetTree().ChangeSceneToFile(MainMenu.ScenePath);
         }
@@ -626,9 +668,9 @@ public partial class RegionView : Node2D
             Vector2 at = GetGlobalMousePosition();
             WalkTo(new Cell((int)Math.Floor(at.X / Region.TileSize), (int)Math.Floor(at.Y / Region.TileSize)), click.ShiftPressed);
         }
-        else if (e is InputEventMouseButton { ButtonIndex: MouseButton.Right, Pressed: true })
+        else if (e is InputEventMouseButton { ButtonIndex: MouseButton.Right, Pressed: true } right)
         {
-            Interact(GetGlobalMousePosition());
+            OpenVerbMenu(GetGlobalMousePosition(), right.Position);
         }
         else if (e.IsActionPressed(Controls.ToggleScriptLog))
         {
@@ -689,58 +731,101 @@ public partial class RegionView : Node2D
         _overlay.Show(_region, _occupancy, scripts.Triggers);
     }
 
-    /// <summary>
-    /// Right-click: the selected character walks up to the front-most object
-    /// under the pointer (<see cref="Approach"/>), then uses it
-    /// (<see cref="Act"/>). Already in reach, or without a party, it acts at once.
-    /// </summary>
-    private void Interact(Vector2 at)
-    {
-        var hit = _objectSprites.Where(o => _worldObjects.ContainsKey(o.Object)).Select(o => (Object: _worldObjects[o.Object], o.Sprite))
+    /// <summary>The front-most object whose sprite is under <paramref name="at"/> (map position), if any.</summary>
+    private WorldObject? ObjectAt(Vector2 at) =>
+        _objectSprites.Where(o => _worldObjects.ContainsKey(o.Object)).Select(o => (Object: _worldObjects[o.Object], o.Sprite))
             .Concat(_creatureNodes.Select(c => (Object: c.Key, Sprite: c.Value)))
             .Where(o => o.Sprite.Visible && o.Sprite.Texture is { } tex
                 && new Rect2(o.Sprite.Position + o.Sprite.Offset, tex.GetSize()).HasPoint(at))
             .OrderByDescending(o => o.Sprite.Position.Y)
             .Select(o => o.Object)
             .FirstOrDefault();
-        if (hit is null)
+
+    /// <summary>The verbs <paramref name="obj"/> offers (<see cref="ObjectVerbs"/>).</summary>
+    private IReadOnlyList<Verb> VerbsOf(WorldObject obj) => ObjectVerbs.For(obj, _world.Items, Session.Scripts.Triggers);
+
+    /// <summary>Right-click: the verb menu of the object under the pointer (<paramref name="screen"/>: where to show it), or its only verb done at once.</summary>
+    private void OpenVerbMenu(Vector2 at, Vector2 screen)
+    {
+        if (ObjectAt(at) is not { } hit || Session.Scripts.IsSuspended)
         {
             return;
         }
+        IReadOnlyList<Verb> verbs = VerbsOf(hit);
+        _menuTarget = hit;
+        if (verbs.Count == 1)
+        {
+            // Only one thing to do: do it, as DSUN.EXE does.
+            ChooseVerb(verbs[0]);
+            return;
+        }
+        _verbMenu.Open(hit.Name.Length > 0 ? hit.Name : $"Object {-hit.Id}", verbs, hit.Kind == ObjectKind.Creature, screen);
+    }
+
+    private void ChooseVerb(Verb verb)
+    {
+        if (_menuTarget is not { } target)
+        {
+            return;
+        }
+        _menuTarget = null;
+        if (verb == Verb.UseWith)
+        {
+            SetUseWith(target);
+            return;
+        }
+        StartVerb(target, verb, null);
+    }
+
+    /// <summary>Use with…: wait for the second object (null: stop waiting).</summary>
+    private void SetUseWith(WorldObject? first)
+    {
+        _useWith = first;
+        _prompt.Visible = first is not null;
+        _prompt.Text = first is null ? "" : $"Use {Called(first)} with… (click an object; Esc cancels)";
+    }
+
+    /// <summary>
+    /// Do <paramref name="verb"/> to <paramref name="target"/>: Look at once;
+    /// the others once the selected character has walked up to it
+    /// (<see cref="Approach"/>). Without a party it acts at once.
+    /// </summary>
+    private void StartVerb(WorldObject target, Verb verb, WorldObject? with)
+    {
         _pendingUse = null;
-        if (Selected is not { } member)
+        if (verb == Verb.Look || Selected is not { } member)
         {
-            Act(hit, _selected);
+            Act(target, _selected, verb, with);
             return;
         }
-        StartApproach(member.Walker, _selected, hit, tries: 0);
+        StartApproach(member.Walker, _selected, target, verb, with, tries: 0);
     }
 
     /// <summary>Walk <paramref name="walker"/> up to <paramref name="target"/>, or act at once if it is in reach.</summary>
-    private void StartApproach(Walker walker, int actor, WorldObject target, int tries)
+    private void StartApproach(Walker walker, int actor, WorldObject target, Verb verb, WorldObject? with, int tries)
     {
         IReadOnlyList<Cell> cells = _world.CellsOf(target);
         if (Approach.Distance(walker.Cell, cells) <= Approach.Reach)
         {
             walker.Stop();
-            Act(target, actor);
+            Act(target, actor, verb, with);
             return;
         }
         Cell? goal = Approach.Goal(c => c == walker.Cell || walker.CanStand(c, _region.IsBlocked), walker.Cell, [.. cells]);
         if (goal is not { } cell || cell == walker.Cell)
         {
-            // Out of reach: use it from here, so no script is ever out of reach.
-            AddScriptLine($"{Describe(target)}: can't get nearer, using it from here");
+            // Out of reach: act from here, so no script is ever out of reach.
+            AddScriptLine($"{Describe(target)}: can't get nearer, acting from here");
             walker.Stop();
-            Act(target, actor);
+            Act(target, actor, verb, with);
             return;
         }
         walker.WalkTo(cell, _region.IsBlocked);
-        _pendingUse = (walker, actor, target, tries);
+        _pendingUse = (walker, actor, target, verb, with, tries);
         _follow = true;
     }
 
-    /// <summary>When the character walking up to an object stops, use the object (or try again if it moved away).</summary>
+    /// <summary>When the character walking up to an object stops, do the verb (or try again if the object moved away).</summary>
     private void FinishApproach()
     {
         if (_pendingUse is not { } pending || pending.Walker.IsWalking)
@@ -754,34 +839,91 @@ public partial class RegionView : Node2D
         }
         if (Approach.Distance(pending.Walker.Cell, _world.CellsOf(pending.Target)) > Approach.MaxReach && pending.Tries < 2)
         {
-            StartApproach(pending.Walker, pending.Actor, pending.Target, pending.Tries + 1); // it walked off
+            StartApproach(pending.Walker, pending.Actor, pending.Target, pending.Verb, pending.With, pending.Tries + 1); // it walked off
             return;
         }
-        Act(pending.Target, pending.Actor);
+        Act(pending.Target, pending.Actor, pending.Verb, pending.With);
     }
 
     /// <summary>
-    /// Use an object: a door or lever works (<see cref="UseObject"/>);
-    /// anything else gets its talk-to, use, look or pick-up trigger, the
-    /// first one it has. Scripts name objects by negated <c>OJFF</c> number.
+    /// Do a verb: run the object's trigger for it (scripts see the object by
+    /// its index; triggers match its id, −<c>OJFF</c>). Use works a door or a
+    /// lever first (<see cref="UseObject"/>); Look without a look trigger
+    /// names the object; Use with runs the trigger pairing the two objects.
+    /// What the engine can't do yet (carrying items, combat) is said so.
     /// </summary>
-    private void Act(WorldObject hit, int actor)
+    private void Act(WorldObject target, int actor, Verb verb, WorldObject? with = null)
     {
-        // Scripts see the object by its index; triggers match its id (−OJFF).
-        if (UseObject(hit, actor))
+        GplMachine scripts = Session.Scripts;
+        GplTriggerList? list = verb switch
+        {
+            Verb.Talk => GplTriggerList.TalkTo,
+            Verb.Get => GplTriggerList.Pickup,
+            Verb.Use => GplTriggerList.Use,
+            Verb.Attack => GplTriggerList.Attack,
+            Verb.Look => GplTriggerList.Look,
+            _ => null,
+        };
+        string what = $"{VerbText(verb)} {Describe(target)}";
+        if (verb == Verb.Use && UseObject(target, actor))
         {
             return;
         }
-        foreach (var (list, verb) in new[] { (GplTriggerList.TalkTo, "talk to"), (GplTriggerList.Use, "use"), (GplTriggerList.Look, "look at"), (GplTriggerList.Pickup, "pick up") })
+        if (verb == Verb.UseWith && with is not null)
         {
-            if (Session.Scripts.OnObject(list, actor, hit.Index) is { } run)
+            if (scripts.OnUseWith(actor, with.Index, target.Index) is { } paired)
             {
-                ReportScript($"{verb} {Describe(hit)}", run);
-                return;
+                ReportScript($"use {Describe(with)} with {Describe(target)}", paired);
             }
+            else
+            {
+                Say($"use {Describe(with)} with {Describe(target)}", "Nothing happens.");
+            }
+            return;
         }
-        AddScriptLine($"{Describe(hit)}: no talk, use, look or pick-up trigger");
+        if (list is { } l && scripts.OnObject(l, actor, target.Index) is { } run)
+        {
+            ReportScript(what, run);
+            return;
+        }
+        switch (verb)
+        {
+            case Verb.Look:
+                Say(what, Called(target));
+                break;
+            case Verb.Get:
+                Say(what, $"{Called(target)}: carrying items isn't in the engine yet.");
+                break;
+            case Verb.Attack:
+                Say(what, "Combat isn't in the engine yet.");
+                break;
+            default:
+                Say(what, "Nothing happens.");
+                break;
+        }
     }
+
+    /// <summary>Tell the player something (narration in the dialogue window) and log it.</summary>
+    private void Say(string what, string message)
+    {
+        AddScriptLine($"> {what}: {message}");
+        if (!_checking)
+        {
+            Session.ScriptHost.Dialogue.Append(message, 98);
+        }
+    }
+
+    private static string VerbText(Verb verb) => verb switch
+    {
+        Verb.Talk => "talk to",
+        Verb.Get => "get",
+        Verb.Use => "use",
+        Verb.UseWith => "use with",
+        Verb.Attack => "attack",
+        _ => "look at",
+    };
+
+    private static string Called(WorldObject obj) => obj.Name.Length > 0 ? obj.Name : "it";
 
     /// <summary>
     /// Use a door or a lever-like object (<c>6BB8:0B56</c>): a door opens or
@@ -821,8 +963,14 @@ public partial class RegionView : Node2D
     /// <summary>Log a script run and the world commands it issued (PRINT_STRING as its text).</summary>
     private void ReportScript(string what, GplRunResult run)
     {
+        _scriptRuns++;
+        _scriptErrors += run.Error is null || run.Suspended ? 0 : 1;
         string status = run.Suspended ? ", waiting for the player" : run.Error is null ? "" : $", stopped: {run.Error}";
         AddScriptLine($"> {what}: {run.Entry.Kind} {run.Entry.File} @{run.Entry.Address:x4}, {run.Instructions} instructions{status}");
+        if (_checkingVerbs && run.Error is not null && !run.Suspended)
+        {
+            GD.Print($"  {Session.Install!.RegionFiles[_regionIndex]}: {what}: {run.Error}");
+        }
         var log = Session.ScriptHost.Log;
         for (; _scriptLogSeen < log.Count; _scriptLogSeen++)
         {
@@ -967,6 +1115,45 @@ public partial class RegionView : Node2D
 
     private int _answered;
     private bool _checking;
+    private int _scriptRuns, _scriptErrors;
+    private bool _checkingVerbs;
+
+    /// <summary>
+    /// For every region: the verbs each object's menu offers, and each of them
+    /// done (without walking) to every object that offers it; prints the
+    /// counts and how many scripts ran or stopped with an error.
+    /// </summary>
+    private void CheckVerbs()
+    {
+        IReadOnlyList<string> files = Session.Install!.RegionFiles;
+        var offered = Enum.GetValues<Verb>().ToDictionary(v => v, _ => 0);
+        int objects = 0;
+        (_scriptRuns, _scriptErrors) = (0, 0);
+        for (int index = 0; index < files.Count; index++)
+        {
+            ShowRegion(index);
+            AnswerForThePlayer();
+            int number = _region.Number;
+            var targets = _world.Objects.Where(o => o.Kind != ObjectKind.Party && !o.Hidden).ToList();
+            foreach (WorldObject obj in targets)
+            {
+                objects++;
+                foreach (Verb verb in VerbsOf(obj))
+                {
+                    offered[verb]++;
+                    if (verb == Verb.UseWith || _region.Number != number)
+                    {
+                        continue;
+                    }
+                    Act(obj, 0, verb);
+                    AnswerForThePlayer();
+                }
+            }
+        }
+        GD.Print($"verbs: {objects} objects in {files.Count} regions; offered "
+            + string.Join(", ", offered.Select(o => $"{o.Key} {o.Value}")) + $"; {_scriptRuns} script runs, {_scriptErrors} stopped with an error");
+        GetTree().Quit();
+    }
 
     /// <summary>
     /// For every region: put the active member on each move trigger (a box's

@@ -849,6 +849,29 @@ each record are not read.
   the records of door and lever sequences: slot 2 opening, slot 3 closing, or
   the header word 0x44 start that `REQUEST(5)` plays.
 
+### Verb window (`68BD:0040`)
+
+Right-clicking an object (kind 1 item or 2 creature) runs its look trigger
+(`039D:02F3`), then works out verb bits: `68BD:0C6D` from the object, and
+`039D:08AA` from its triggers (masked to 0x15). Bits: 0x01 get (an item
+whose `IT1R` +8 lacks 0x20), 0x04 talk, 0x10 use (an item type with
+`IT1R` +0x0F bit 1; for a door, `6BB8:0B33`, only this bit), 0x40
+(`IT1R` +0x0F bit 8, `6527:002C`, not traced), 0x08 info (creatures; items
+via `68BD:0B91`). One verb alone is done at once (get `7BEB`, talk
+`039D:021F`, use `6BB8:0B56`); otherwise a window opens: `WIND` 15500 for
+items, 3020 for creatures (`RESOURCE.GFF`). Each has three 15 × 15 buttons,
+disabled unless their bit is set, and INFO:
+
+| Window | Get | Talk | Use | Info |
+|--------|-----|------|-----|------|
+| 15500 | `BUTN` 15303 | 15301 | 15302 | 15304 |
+| 3020 | 15308 | 15306 | 15307 | 15309 |
+
+A `BUTN` whose +0x5A is its own number shows the `ICON` named at +0x64
+(15101–15103 for items, 15105–15107 for creatures: mouth = talk, hand =
+use, grasping hand = get; 15108/15109 INFO, text "INFO" at +0x6E). The
+frame is `APFM` 15200.
+
 ### Doors
 
 * **What a door is** (`6BB8:0B33`): an item object with an `OJFF` number in

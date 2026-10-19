@@ -97,8 +97,15 @@ The region viewer starts a new game where DSUN.EXE does: region 42
 of the map. The party is four placeholder sprites (any object whose `SCMD`
 can walk). Entering a region
 runs its script (and, once, the game-start script); characters reaching a
-cell fire its move trigger; right-click an object to fire its talk-to, use,
-look or pick-up trigger; the selected character walks up to the object first; right-clicking a door opens or closes it, a lever toggles. Dialogue (text, portraits, Continue, Yes/No,
+cell fire its move trigger; right-click an object for its verb menu: Talk, Get,
+Use, Use with…, Attack and Look, as the object offers them (Talk, Get and Use
+with the original's icons; click one, or press its number or T/G/U/L; an
+object with only one verb, usually just Look, skips the menu). The
+selected character walks up to the object, then its trigger for that verb
+runs; Use opens or closes a door and toggles a lever; Use with… asks for a
+second object to click; Look works from anywhere and names an object with
+no look script. Get and Attack say so when there's no script, since items
+and combat aren't in yet. Dialogue (text, portraits, Continue, Yes/No,
 menus) opens in a window and pauses the script until answered; TELEPORT moves
 the party (region exits: walk out through a map edge and answer Yes) and
 creatures. Creatures (objects with an `RDFF` combat record) walk where their
@@ -119,7 +126,8 @@ occupied cells (yellow) and move triggers (magenta); Esc goes back. Objects with
 animate. `--check-regions` also walks the party 20 cells in every region and
 fails if two characters ever overlap; `--check-exits` steps on every move
 trigger and lists the region exits; `--check-start` starts a new game and
-prints where the party stands and what the scripts did.
+prints where the party stands and what the scripts did. `--check-verbs` opens every region's verb menus and does every verb
+(but Use with) to every object that offers it.
 
 ## Mods
 

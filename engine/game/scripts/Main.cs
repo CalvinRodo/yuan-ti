@@ -69,7 +69,7 @@ public partial class Main : Control
             GetTree().Quit(ok > 0 ? 0 : 1);
             return;
         }
-        bool regionCheck = args.Contains("--check-regions") || args.Contains("--check-exits") || args.Contains("--check-start");
+        bool regionCheck = args.Contains("--check-regions") || args.Contains("--check-exits") || args.Contains("--check-start") || args.Contains("--check-verbs");
         bool screenCheck = args.Contains("--check-intro") || args.Contains("--check-menu") || args.Contains("--check-mods");
         if (args.Contains("--check-install") || (install is null && (regionCheck || screenCheck)))
         {

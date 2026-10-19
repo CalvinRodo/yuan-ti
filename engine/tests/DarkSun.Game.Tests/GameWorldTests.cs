@@ -304,4 +304,23 @@ public class GameWorldTests
         Assert.Equal(new Footprint(1, 1), large.Walker!.Footprint);
         Assert.Equal(6, world.Occupancy.Cells.Count(c => c.Value == large.Index)); // 3 × 2 cells held
     }
+
+    [Fact]
+    public void VerbsComeFromTheObjectAndItsTriggers()
+    {
+        GameWorld world = World();
+        var triggers = new GplTriggers();
+        WorldObject templar = world.First(-100)!, torch = world.First(-200)!;
+
+        Assert.Equal([Verb.Attack, Verb.Look], ObjectVerbs.For(templar, world.Items, triggers));
+        Assert.Equal([Verb.Get, Verb.Look], ObjectVerbs.For(torch, world.Items, triggers));
+
+        triggers.AddObject(GplTriggerList.TalkTo, 0x10, 12, -100, global: false);
+        triggers.AddObject(GplTriggerList.Use, 0x20, 12, -200, global: false);
+        triggers.AddUseWith(-200, -100, 0x30, 12, global: false);
+
+        Assert.Equal([Verb.Talk, Verb.UseWith, Verb.Attack, Verb.Look], ObjectVerbs.For(templar, world.Items, triggers));
+        Assert.Equal([Verb.Get, Verb.Use, Verb.UseWith, Verb.Look], ObjectVerbs.For(torch, world.Items, triggers));
+        Assert.Equal([-100], ObjectVerbs.UseWithPartners(torch, triggers));
+    }
 }
