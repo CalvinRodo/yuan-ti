@@ -8,7 +8,8 @@ namespace DarkSun.Engine;
 /// opens the main menu (<c>-- --no-intro</c>: straight to the menu;
 /// <c>-- --new-game</c>: straight into a new game, with <c>--region=N</c> and
 /// <c>--at=X,Y</c> to start elsewhere; <c>-- --mods</c>: the mod list;
-/// <c>-- --saves</c>: the saved games; <c>-- --load=quick</c>: load a save). Only
+/// <c>-- --saves</c>: the saved games; <c>-- --load=quick</c>: load a save;
+/// <c>-- --party</c> / <c>-- --chargen</c>: the character screens). Only
 /// shown when the files can't be found, to choose their folder.
 /// For headless checks: <c>-- --check-install</c> prints what was found and
 /// quits (exit code 1 if nothing); <c>-- --check-regions</c>,
@@ -71,7 +72,8 @@ public partial class Main : Control
             return;
         }
         bool regionCheck = args.Contains("--check-regions") || args.Contains("--check-exits") || args.Contains("--check-start") || args.Contains("--check-verbs") || args.Contains("--check-memory") || args.Contains("--check-save");
-        bool screenCheck = args.Contains("--check-intro") || args.Contains("--check-menu") || args.Contains("--check-mods") || args.Contains("--check-saves");
+        bool screenCheck = args.Contains("--check-intro") || args.Contains("--check-menu") || args.Contains("--check-mods") || args.Contains("--check-saves")
+            || args.Contains("--check-party") || args.Contains("--check-chargen");
         if (args.Contains("--check-install") || (install is null && (regionCheck || screenCheck)))
         {
             GD.Print(install is null ? "No game install found." : Describe(install));
@@ -101,6 +103,14 @@ public partial class Main : Control
                 SavesView.Message = $"Can't read {path}: {e.Message}";
                 ChangeScene(SavesView.ScenePath);
             }
+        }
+        else if (args.Contains("--check-party") || install is not null && args.Contains("--party"))
+        {
+            ChangeScene(PartyView.ScenePath);
+        }
+        else if (args.Contains("--check-chargen") || install is not null && args.Contains("--chargen"))
+        {
+            CharacterGenView.Open(null, 0);
         }
         else if (args.Contains("--check-saves") || install is not null && args.Contains("--saves"))
         {

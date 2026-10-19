@@ -87,7 +87,7 @@ music. Any key or click skips it; `-- --no-intro` leaves it out. Then comes the 
 Start Game (or S) plays the arrival cinematic and starts a new game, and
 Exit (E) quits; Mods (M, bottom right; `-- --mods` goes straight there) opens the mod list. The music changes as in the original: the menu's
 theme (17), each region's own track (its `RDAT` record), with 5-second fades
-between them. Create Characters (C) isn't ported yet. Arrow keys and Enter work too. Esc in the region viewer returns to the
+between them. Create Characters (C) opens the View Character screen (see Characters below). Arrow keys and Enter work too. Esc in the region viewer returns to the
 menu. The start screen only appears when the game files can't be found.
 
 The region viewer starts a new game where DSUN.EXE does: region 42
@@ -216,6 +216,42 @@ them up and down (`load_order.txt`), applying changes at once.
 Decoded images and palettes are cached for the session
 (`Session.Assets`), with one texture per frame and palette, so returning to a
 region or screen doesn't decode again.
+
+## Characters
+
+Create Characters (C) opens the View Character screen (`WIND` 11500 over
+`BMP` 11000): four character boxes and the selected character's details.
+An empty box offers NEW and ADD, a full one EDIT (NAME once the character
+has adventured) and DROP, from the bottom buttons or a right-click on the
+box, as in the manual. NEW and EDIT open the Character Generation screen,
+laid out as `WIND` 3011 with the original art: body portraits (`BMP`
+20000–20013; left-click the portrait for the next race and gender,
+right-click for the previous), the class list (`ICON` 2002–2009), the die
+(`BMP` 20048–20058, new abilities and hit points), the psionic disciplines
+and clerical spheres (`ICON` 2038–2047), EXIT and DONE. Left-click an
+ability, the hit points or the alignment to raise it, right-click to lower
+it; click the map icon to change it (the original's icon per race isn't
+traced); new characters get a random name from `TEXT` 0–32 (male), 100–118
+(female) or 200–207 (thri-kreen). The screen's backdrop is drawn by the
+engine: the original's frames (`APFM`) aren't decoded.
+
+The rules (`DarkSun.Game.Characters.CharacterRules`) are the manual's:
+racial adjustments, the classes each race may take (humans one; the others
+up to three, never cleric with druid), class requirements (choosing a class
+raises the abilities it needs), hit dice with Constitution's bonus, good or
+neutral alignments, one psionic discipline (psionicists all three) and a
+sphere for clerics, druids and rangers. Abilities are rolled 4d4+4 (at least
+9) before adjustments, up to 20 plus the adjustment (24 at most). Where the
+manual contradicts itself, half-giants can't be rangers and muls and
+thri-kreen can't be druids. A mod can replace the rules with
+`rules/characters.json` in its folder (the same JSON `CharacterRules` reads).
+
+The party is kept in `party.json` in the Godot user data folder and starts
+the next new game (no party: four placeholder characters); characters made
+or dropped are kept in `characters/` for ADD. Party members walk as their
+chosen sprite and dialogue calls them by name; saved games keep them.
+`-- --party` and `-- --chargen` open the screens; `-- --check-chargen` makes
+a character of every race, gender and class and checks the art is there.
 
 ## Sound
 

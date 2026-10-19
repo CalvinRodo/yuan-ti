@@ -11,7 +11,8 @@ namespace DarkSun.Engine;
 /// and window 3000's buttons (Start Game, Create Characters, Load Saved
 /// Game, Exit to DOS), each an <c>ICON</c> whose frames are its normal,
 /// highlighted, disabled and pressed looks. The window's accelerator table
-/// gives the keys S, C, L and E; Load Saved Game opens <see cref="SavesView"/>. Arrow keys and Enter work too. A small
+/// gives the keys S, C, L and E; Create Characters opens <see cref="PartyView"/>,
+/// Load Saved Game <see cref="SavesView"/>. Arrow keys and Enter work too. A small
 /// Mods button (M), not in the original, opens the mod list (<see cref="ModsView"/>).
 /// Run with <c>-- --check-menu</c> to print the menu and quit.
 /// </summary>
@@ -179,7 +180,7 @@ public partial class MainMenu : RetroScreen
                 GetTree().CallDeferred(SceneTree.MethodName.ChangeSceneToFile, IntroView.ScenePath);
                 break;
             case Command.CreateCharacters:
-                _status.Text = "Character creation is not ported yet.";
+                GetTree().CallDeferred(SceneTree.MethodName.ChangeSceneToFile, PartyView.ScenePath);
                 break;
             case Command.LoadGame:
                 GetTree().CallDeferred(SceneTree.MethodName.ChangeSceneToFile, SavesView.ScenePath);

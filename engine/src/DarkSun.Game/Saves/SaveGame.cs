@@ -6,8 +6,8 @@ using DarkSun.Game.World;
 
 namespace DarkSun.Game.Saves;
 
-/// <summary>A party member as saved: the placeholder sprite (its <c>OJFF</c> number), cell and facing.</summary>
-public sealed record PartyMemberSave(int Sprite, int X, int Y, Direction Facing);
+/// <summary>A party member as saved: the sprite (its <c>OJFF</c> number), cell, facing, and the character made on Create Characters, if any.</summary>
+public sealed record PartyMemberSave(int Sprite, int X, int Y, Direction Facing, Characters.Character? Character = null);
 
 /// <summary>A creature's line-of-sight script (<see cref="GplCreatureScripts.Sight"/>).</summary>
 public sealed record SightScriptSave(int Object, int Kind, GplEntry Entry, int Range);

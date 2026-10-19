@@ -319,8 +319,15 @@ this milestone brings most of the game's content.
 
 ## 6. Milestone 5: characters, items and party
 
-- [ ] Character data model: races, classes, stats, levels, psionics
-      (reverse engineering, §10).
+- [x] Character data model and creation rules (`DarkSun.Game.Characters`,
+      2026-10-19), from the manual: races, genders, classes, multi-class
+      limits, abilities and racial adjustments, class requirements, hit
+      dice, levels by experience, alignments, disciplines and spheres.
+      Moddable as JSON.
+- [ ] DSUN.EXE's own creation tables (`9106`, `8F23`, `91F7`), to check the
+      manual's rules against: ability roll and limits, starting experience
+      (the manual says characters start with some), the map icon per race
+      and gender, and how a character becomes a combat and character record.
 - [x] Items from `IT1R` and `NAME` (`DarkSun.Data.Items`): `ItemType`
       (115 types: weapon kind, slot, damage, AC, weight, classes),
       `ItemRecord` (the 21-byte record of each item `RDFF`, 755 in
@@ -331,7 +338,12 @@ this milestone brings most of the game's content.
       `special`, `charges`, `flags` bits, `IT1R` `material` and the bits of the
       class mask; containers' contents.
 - [ ] Character sheet and inventory screens.
-- [ ] Party creation, plus a pre-made party option.
+- [x] Party creation: Create Characters (View Character, `WIND` 11500) and
+      Character Generation (`WIND` 3011) screens; the party starts new games
+      and is kept in saves; a roster for ADD and DROP.
+- [ ] A pre-made party option; dual-classing for humans; party leader and
+      computer-control buttons; decode `APFM` and `FONT` to draw the screens
+      exactly as the original.
 
 ---
 

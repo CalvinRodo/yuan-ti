@@ -882,6 +882,33 @@ A `BUTN` whose +0x5A is its own number shows the `ICON` named at +0x64
 use, grasping hand = get; 15108/15109 INFO, text "INFO" at +0x6E). The
 frame is `APFM` 15200.
 
+### Character screens
+
+* Create Characters (`8015:00F9`) calls `9106:0622` with the character
+  table (`DS:1661`): the View Character screen, `WIND` 11500 (backdrop
+  `BMP` 11000; `BMP` *n* is generally the backdrop of `WIND` *n*): character
+  boxes `BUTN` 11300–11303 (34 × 34, frame `ICON` 11100), leader and
+  computer-control buttons 11309–11316, name bar 11318, text buttons
+  11319–11320, the screen icons 10300 and 11304–11306, game menu 11308,
+  return 10308.
+* The Character Generation screen is `WIND` 3011: portrait area `BUTN` 2001
+  (100 × 116), map icon 2027 (45 × 35), die 2010, class list 2002–2009
+  (`ICON`s of the names, frames normal / chosen / unavailable), name `EBOX`
+  4003, abilities 2012–2017, hit points 2011, alignment 2018, EXIT 2058,
+  DONE 2000. `WIND` 3012 lists the psionic disciplines (`ICON` 2038–2041;
+  2041, psychoportation, has a blank normal frame) with VIEW SPHERES 2046;
+  `WIND` 3013 the spheres (2042–2045) with VIEW PSIONICS 2047.
+* Body portraits are `BMP` 20000–20013, in the string table's race order
+  with male then female (mul male only, thri-kreen female only); the die
+  faces are `BMP` 20048–20058. Random names are `TEXT` 0–32 (male),
+  100–118 (female) and 200–207 (thri-kreen).
+* A `BUTN` whose `+0x5A` is its own number shows the `ICON` at `+0x64`; text
+  buttons keep a placeholder at `+0x6E` ("XXXXX"). `APFM` is a frame: `+0x08`
+  number, `+0x28`/`+0x2A` size, `+0x58` a style word; it holds no image.
+* The names of genders, races, classes, abilities and alignments are one
+  string block at linear `0x52062`, with a far-pointer table to them at
+  `0x51F5A`. The roster file is `CHARSAVE.GFF`.
+
 ### Doors
 
 * **What a door is** (`6BB8:0B33`): an item object with an `OJFF` number in

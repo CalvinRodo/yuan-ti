@@ -2,6 +2,7 @@ using DarkSun.Data;
 using DarkSun.Data.Assets;
 using DarkSun.Data.Mods;
 using DarkSun.Data.Gff;
+using DarkSun.Game.Characters;
 using DarkSun.Game.Rules;
 using DarkSun.Game.Scripting;
 using DarkSun.Game.World;
@@ -45,6 +46,109 @@ public static class Session
     }
 
     public static bool GameStarted { get; set; }
+
+    private static List<CharacterSprite>? _sprites;
+
+    /// <summary>
+    /// Object definitions that can walk: an <c>SCMD</c> with a moving walk
+    /// sequence in every direction, one per <c>BMP </c>, in <c>OJFF</c> order.
+    /// Party members walk as one of these (DSUN.EXE's choice per race isn't traced).
+    /// </summary>
+    public static List<CharacterSprite> CharacterSprites => _sprites ??= LoadSprites();
+
+    private static List<CharacterSprite> LoadSprites()
+    {
+        GffFile objects = Open("SEGOBJEX.GFF");
+        var scripts = new Dictionary<int, DarkSun.Data.Animation.Scmd?>();
+        var seenBmps = new HashSet<int>();
+        var list = new List<CharacterSprite>();
+        foreach (ResourceDescriptor r in objects.DescribeResources().Where(r => r.Tag == "OJFF").OrderBy(r => r.Number))
+        {
+            var def = DarkSun.Data.Regions.ObjectDefinition.Parse(objects.Read(r.Tag, r.Number).Span);
+            if (def.Scmd <= 0 || seenBmps.Contains(def.Bmp))
+            {
+                continue;
+            }
+            if (!scripts.TryGetValue(def.Scmd, out var script))
+            {
+                script = objects.TryRead("SCMD", def.Scmd, out var data) ? DarkSun.Data.Animation.Scmd.Parse(data.Span) : null;
+                scripts[def.Scmd] = script;
+            }
+            if (script is { CanWalk: true } && objects.TryRead("BMP ", def.Bmp, out var image))
+            {
+                seenBmps.Add(def.Bmp);
+                var record = objects.TryRead("RDFF", r.Number, out var rdff) ? DarkSun.Data.Regions.CharacterRecord.FromRdff(rdff) : null;
+                list.Add(new CharacterSprite(r.Number, script, Assets.Frames(image), DarkSun.Game.Movement.Footprint.Of(record)));
+            }
+        }
+        return list;
+    }
+
+    /// <summary>The party for the next new game, as made on the Create Characters screen (empty: four placeholder characters).</summary>
+    public static List<Character> Party { get; } = [];
+
+    /// <summary>Characters kept between games (the manual's ADD and DROP): <c>characters</c> in the Godot user data folder.</summary>
+    public static CharacterRoster Roster => new(Godot.ProjectSettings.GlobalizePath("user://characters"));
+
+    private static string PartyPath => Godot.ProjectSettings.GlobalizePath("user://party.json");
+
+    /// <summary>Keep <see cref="Party"/> for the next run.</summary>
+    public static void SaveParty()
+    {
+        try
+        {
+            File.WriteAllText(PartyPath, System.Text.Json.JsonSerializer.Serialize(Party.Select(CharacterRoster.ToJson).ToList()));
+        }
+        catch (IOException e)
+        {
+            Godot.GD.PushWarning($"Couldn't keep the party: {e.Message}");
+        }
+    }
+
+    private static void LoadParty()
+    {
+        Party.Clear();
+        try
+        {
+            if (File.Exists(PartyPath) && System.Text.Json.JsonSerializer.Deserialize<List<string>>(File.ReadAllText(PartyPath)) is { } list)
+            {
+                Party.AddRange(list.Select(CharacterRoster.FromJson).Take(GameWorld.PartySize));
+            }
+        }
+        catch (Exception e) when (e is IOException or System.Text.Json.JsonException or InvalidDataException)
+        {
+            Godot.GD.PushWarning($"Couldn't read the party: {e.Message}");
+        }
+    }
+
+    private static CharacterRules? _rules;
+
+    /// <summary>The character creation rules: a mod's <c>rules/characters.json</c> if one has it, else the original's (<see cref="CharacterRules.Default"/>).</summary>
+    public static CharacterRules Rules
+    {
+        get
+        {
+            if (_rules is null)
+            {
+                string? path = Mods.Mods.Select(m => Path.Combine(m.Directory, "rules", "characters.json")).FirstOrDefault(File.Exists);
+                try
+                {
+                    _rules = path is null ? CharacterRules.Default : CharacterRules.Read(path);
+                }
+                catch (InvalidDataException e)
+                {
+                    Godot.GD.PushWarning($"Mod file not used: {path}: {e.Message}");
+                    _rules = CharacterRules.Default;
+                }
+            }
+            return _rules;
+        }
+    }
+
+    /// <summary>The names new characters get (<c>TEXT</c> in <c>RESOURCE.GFF</c>).</summary>
+    public static CharacterNames Names => _names ??= CharacterNames.Load(Open("RESOURCE.GFF"));
+
+    private static CharacterNames? _names;
 
     /// <summary>Where saved games go: <c>saves</c> in the Godot user data folder.</summary>
     public static string SavesFolder => Godot.ProjectSettings.GlobalizePath("user://saves");
@@ -91,6 +195,8 @@ public static class Session
         Install = install;
         Files.Clear();
         Assets.Clear();
+        (_sprites, _rules, _names) = (null, null, null);
+        LoadParty();
         Mods = ModSet.Load(ModFolders(install), GplModFormat.Builders);
         Mods.ProblemFound += p => Godot.GD.PushWarning($"Mod file not used: {p}");
         if (Mods.Mods.Count > 0)

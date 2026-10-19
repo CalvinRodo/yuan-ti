@@ -60,7 +60,6 @@ public partial class RegionView : Node2D
     private static int _regionIndex = -1;
 
     private readonly List<AnimatedObject> _animated = [];
-    private List<CharacterSprite>? _characters;
     private Region _region = null!;
     private Palette _palette = null!;
     private double _clock;
@@ -185,6 +184,16 @@ public partial class RegionView : Node2D
             _regionIndex = 0;
             EnterRegion(NewGameStart.Region, NewGameStart.At);
             FireArrivalTriggers();
+            if (Session.Party.Count > 0 && !_checking)
+            {
+                // They have adventured now: only their names can change (the manual's EDIT NAME).
+                foreach (var c in Session.Party)
+                {
+                    c.Adventured = true;
+                    Session.Roster.Save(c);
+                }
+                Session.SaveParty();
+            }
             if (OS.GetCmdlineUserArgs().Contains("--check-save"))
             {
                 _instantTravel = true;
@@ -430,37 +439,7 @@ public partial class RegionView : Node2D
     /// Object definitions that can walk: an <c>SCMD</c> with a moving walk
     /// sequence in every direction. One per <c>BMP </c>, in <c>OJFF</c> order.
     /// </summary>
-    private List<CharacterSprite> Characters()
-    {
-        if (_characters is not null)
-        {
-            return _characters;
-        }
-        GffFile objects = Session.Open("SEGOBJEX.GFF");
-        var scripts = new Dictionary<int, Scmd?>();
-        var seenBmps = new HashSet<int>();
-        _characters = [];
-        foreach (ResourceDescriptor r in objects.DescribeResources().Where(r => r.Tag == "OJFF").OrderBy(r => r.Number))
-        {
-            ObjectDefinition def = ObjectDefinition.Parse(objects.Read(r.Tag, r.Number).Span);
-            if (def.Scmd <= 0 || seenBmps.Contains(def.Bmp))
-            {
-                continue;
-            }
-            if (!scripts.TryGetValue(def.Scmd, out Scmd? script))
-            {
-                script = objects.TryRead("SCMD", def.Scmd, out var data) ? Scmd.Parse(data.Span) : null;
-                scripts[def.Scmd] = script;
-            }
-            if (script is { CanWalk: true } && objects.TryRead("BMP ", def.Bmp, out var image))
-            {
-                seenBmps.Add(def.Bmp);
-                CharacterRecord? record = objects.TryRead("RDFF", r.Number, out var rdff) ? CharacterRecord.FromRdff(rdff) : null;
-                _characters.Add(new CharacterSprite(r.Number, script, Session.Assets.Frames(image), Footprint.Of(record)));
-            }
-        }
-        return _characters;
-    }
+    private static List<CharacterSprite> Characters() => Session.CharacterSprites;
 
     private PartyMember? Selected => _party.Count > 0 ? _party[_selected] : null;
 
@@ -474,6 +453,12 @@ public partial class RegionView : Node2D
     {
         _nextSprite = 0;
         Cell centre = start ?? new(_region.Width / 2, _region.Height / 2);
+        // A new game's party: the characters made on Create Characters, else four placeholders.
+        if (carried.Count == 0 && Session.Party.Count > 0)
+        {
+            carried = [.. Session.Party.Take(PartySize).Select((c, i) =>
+                (Session.CharacterSprites.FirstOrDefault(s => s.Ojff == c.Sprite) ?? Characters()[i % Characters().Count], Direction.South))];
+        }
         for (int i = 0; i < (carried.Count > 0 ? carried.Count : PartySize); i++)
         {
             Cell near = _party.Count > 0 ? _party[^1].Walker.Cell : centre;
@@ -529,6 +514,10 @@ public partial class RegionView : Node2D
         if (_world.AddPartyMember(index, new CharacterSpec(sprite.Script, sprite.Sizes, sprite.Footprint), near, facing) is not { Walker: { } walker })
         {
             return null;
+        }
+        if (index < Session.Party.Count && _world[index] is { } created)
+        {
+            created.Name = Session.Party[index].Name; // what dialogue calls the speaker
         }
         var member = new PartyMember(walker, sprite, new Sprite2D { Centered = false });
         _sorted.AddChild(member.Node);
@@ -1374,7 +1363,8 @@ public partial class RegionView : Node2D
         }
         try
         {
-            var party = _party.Select(m => new PartyMemberSave(m.Sprite.Ojff, m.Walker.Cell.X, m.Walker.Cell.Y, m.Walker.Facing));
+            var party = _party.Select((m, i) => new PartyMemberSave(m.Sprite.Ojff, m.Walker.Cell.X, m.Walker.Cell.Y, m.Walker.Facing,
+                i < Session.Party.Count ? Session.Party[i] : null));
             SaveGame save = SaveGame.Capture(name, Session.Scripts, Session.ScriptHost.EngineVariables, _world, Session.Regions,
                 party, _selected, Session.Mods.Mods.Select(m => m.Name));
             save.Write(Session.SavePath(file));
@@ -1436,6 +1426,11 @@ public partial class RegionView : Node2D
         Session.NewGame();
         save.Restore(Session.Scripts, Session.ScriptHost.EngineVariables, Session.Regions);
         Session.GameStarted = true;
+        if (save.Party.Any(m => m.Character is not null))
+        {
+            Session.Party.Clear();
+            Session.Party.AddRange(save.Party.Select(m => m.Character).OfType<DarkSun.Game.Characters.Character>());
+        }
         _world = null!; // nothing of the game being left is remembered
         _transitioning = false;
         _fade?.Set("color", new Color(0, 0, 0, 0));
