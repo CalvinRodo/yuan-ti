@@ -25,8 +25,25 @@ public sealed class WorldGplHost : DialogueGplHost
 
     private int[] Engine => Map?.EngineVariables ?? EngineVariables;
 
-    /// <summary>The current region's world, or null outside a region.</summary>
-    public GameWorld? Map { get; set; }
+    private GameWorld? _map;
+
+    /// <summary>The current region's world, or null outside a region; a region new to the party goes in the journal.</summary>
+    public GameWorld? Map
+    {
+        get => _map;
+        set
+        {
+            _map = value;
+            if (value is not null)
+            {
+                Journal.Visit(value.Region.Number);
+            }
+        }
+    }
+
+    /// <summary>Speech (style 115) is the creature talked to (the run's target), unless that is the party; narration is no one's.</summary>
+    protected override string SpeakerOf(GplMachine machine, int style) =>
+        style == 115 && Map?[machine.Target] is { Kind: not ObjectKind.Party, Name.Length: > 0 } who ? who.Name : "";
 
     /// <summary>What each party member carries and how they are, for the whole game (each region's world shares them).</summary>
     public IReadOnlyList<PartyMemberState> PartyMembers { get; } =
@@ -82,13 +99,20 @@ public sealed class WorldGplHost : DialogueGplHost
             "CLONE" => world.Clone(v[0], v[1], v[2], v[3]),
             "REQUEST" => Request(world, v),
             "FIGHT" => Fight(world),
-            "GIVE" => world.Give(v[0], v[1], v[2], v[3]),
-            "TAKE" => world.Take(v[0], v[1], v[2], v[3]),
+            "GIVE" => Noted(world.Give(v[0], v[1], v[2], v[3]), n => Gained(world, n, v[1], v[2], v[3])),
+            "TAKE" => Noted(world.Take(v[0], v[1], v[2], v[3]), n => Lost(world, n, v[1], v[2], v[3])),
             "DROP" => world.Drop(v[0], v[1], v[2]),
             "DAMAGE" => Do(() => world.Damage(v[0], v[1], percent: false)),
             "PHYS_DAMAGE" => Do(() => world.Damage(v[0], v[1], percent: true)),
             "AWARD" => Do(() => Award(world, v[0], v[1])),
-            "CHANGE_MONEY" => Do(() => Money = unchecked(Money + v[0])),
+            "CHANGE_MONEY" => Do(() =>
+            {
+                Money = unchecked(Money + v[0]);
+                if (v[0] != 0)
+                {
+                    Journal.Event(world.Region.Number, v[0] > 0 ? $"The party gets {v[0]} money ({Money} in all)." : $"The party pays {-v[0]} money ({Money} left).");
+                }
+            }),
             "SHOP" => Shop(machine, world, v[0]),
             _ => null,
         };
@@ -98,6 +122,40 @@ public sealed class WorldGplHost : DialogueGplHost
             or "CHANGE_MONEY" or "SHOP"
             ? Logged(command, result)
             : base.Execute(machine, command);
+    }
+
+    private static int Noted(int moved, Action<int> note)
+    {
+        if (moved > 0)
+        {
+            note(moved);
+        }
+        return moved;
+    }
+
+    private string ItemName(GameWorld world, int item) =>
+        world.NewItem(Math.Abs(item)) is { } i && world.Items.NameOf(i.Record) is { Length: > 0 } n ? n : "something";
+
+    private static bool IsParty(GameWorld world, int who) =>
+        who == WholeParty || world.First(who) is { Kind: ObjectKind.Party };
+
+    /// <summary>The journal notes items the party is given.</summary>
+    private void Gained(GameWorld world, int count, int item, int to, int from)
+    {
+        if (IsParty(world, to) && !IsParty(world, from))
+        {
+            string whom = world.First(to)?.Name is { Length: > 0 } n ? n : "The party";
+            Journal.Event(world.Region.Number, $"{whom} receives {(count > 1 ? $"{count} × " : "")}{ItemName(world, item)}.");
+        }
+    }
+
+    /// <summary>The journal notes items taken from the party.</summary>
+    private void Lost(GameWorld world, int count, int item, int from, int to)
+    {
+        if (IsParty(world, from) && !IsParty(world, to))
+        {
+            Journal.Event(world.Region.Number, $"The party gives up {(count > 1 ? $"{count} × " : "")}{ItemName(world, item)}.");
+        }
     }
 
     public override int Search(GplMachine machine, int who, IReadOnlyList<GplSearchTest> tests) =>
@@ -114,6 +172,10 @@ public sealed class WorldGplHost : DialogueGplHost
     {
         IEnumerable<int> slots = who == WholeParty ? world.Party.Where(p => !p.Hidden).Select(p => p.Index)
             : who is >= 0 and < GameWorld.PartySize ? [who] : [];
+        if (xp > 0 && slots.Any())
+        {
+            Journal.Event(world.Region.Number, who == WholeParty ? $"The party gains {xp} experience each." : $"{world[who]?.Name ?? "A member"} gains {xp} experience.");
+        }
         foreach (int slot in slots)
         {
             if (world[slot] is { Vitals.Alive: true } && PartyCharacter(slot) is { } c)

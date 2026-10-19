@@ -32,6 +32,7 @@ public partial class MainMenu : RetroScreen
     private enum Command { StartGame, CreateCharacters, LoadGame, Exit }
 
     private readonly List<TextureButton> _buttons = [];
+    private OptionsWindow _options = null!;
     private readonly Dictionary<char, int> _keys = [];
     private Label _status = null!;
 
@@ -109,6 +110,17 @@ public partial class MainMenu : RetroScreen
         Vector2 size = mods.GetCombinedMinimumSize();
         mods.Position = new Vector2(Width - size.X - 4, Height - size.Y - 2);
 
+        // Options (O), not in the original: a window over the menu.
+        var layer = new CanvasLayer { Layer = 10 };
+        AddChild(layer);
+        _options = new OptionsWindow();
+        layer.AddChild(_options);
+        var options = new LinkButton { Text = "Options", Underline = LinkButton.UnderlineMode.OnHover, FocusMode = FocusModeEnum.None };
+        GameFonts.Use(options, new Color(0.75f, 0.6f, 0.4f));
+        options.Pressed += () => _options.Open();
+        Canvas.AddChild(options);
+        options.Position = new Vector2(4, Height - options.GetCombinedMinimumSize().Y - 2);
+
         if (OS.GetCmdlineUserArgs().Contains("--check-menu"))
         {
             GD.Print($"main menu: window {window.Window.Number}, {window.Window.Items.Count} items; buttons "
@@ -125,6 +137,16 @@ public partial class MainMenu : RetroScreen
 
     public override void _UnhandledInput(InputEvent e)
     {
+        if (_options.Visible)
+        {
+            return;
+        }
+        if (e.IsActionPressed(Controls.ToggleOptions))
+        {
+            GetViewport().SetInputAsHandled();
+            _options.Open();
+            return;
+        }
         if (e is InputEventKey { Pressed: true, Echo: false, Keycode: Key.M })
         {
             GetViewport().SetInputAsHandled();

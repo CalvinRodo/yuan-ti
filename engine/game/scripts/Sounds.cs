@@ -38,9 +38,7 @@ public partial class Sounds : Node
     public override void _Ready()
     {
         ProcessMode = ProcessModeEnum.Always;
-        var config = new ConfigFile();
-        config.Load("user://settings.cfg");
-        Volume = Math.Clamp((float)config.GetValue("audio", "sound_volume", 1.0).AsDouble(), 0f, 1f);
+        Volume = Settings.SoundVolume;
         for (int i = 0; i < Voices; i++)
         {
             _voices[i] = new AudioStreamPlayer();

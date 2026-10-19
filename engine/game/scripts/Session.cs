@@ -50,6 +50,36 @@ public static class Session
 
     public static bool GameStarted { get; set; }
 
+    private static DarkSun.Game.History.QuestBook? _quests;
+
+    /// <summary>
+    /// The quest log's quests: a mod's <c>journal/quests.json</c>, else the
+    /// engine's (<c>res://journal/quests.json</c>). A file that can't be read is
+    /// reported and no quests are shown.
+    /// </summary>
+    public static DarkSun.Game.History.QuestBook Quests
+    {
+        get
+        {
+            if (_quests is null)
+            {
+                string? mod = Mods.Mods.Select(m => Path.Combine(m.Directory, "journal", "quests.json")).FirstOrDefault(File.Exists);
+                string? json = mod is not null ? File.ReadAllText(mod)
+                    : Godot.FileAccess.FileExists("res://journal/quests.json") ? Godot.FileAccess.GetFileAsString("res://journal/quests.json") : null;
+                try
+                {
+                    _quests = json is null ? DarkSun.Game.History.QuestBook.Empty : DarkSun.Game.History.QuestBook.Parse(json);
+                }
+                catch (InvalidDataException e)
+                {
+                    Godot.GD.PushWarning($"{mod ?? "res://journal/quests.json"}: {e.Message}");
+                    _quests = DarkSun.Game.History.QuestBook.Empty;
+                }
+            }
+            return _quests;
+        }
+    }
+
     /// <summary>A headless check is running (<c>--check-…</c>).</summary>
     public static bool Checking { get; } = Godot.OS.GetCmdlineUserArgs().Any(a => a.StartsWith("--check", StringComparison.Ordinal));
 
@@ -262,7 +292,7 @@ public static class Session
         Install = install;
         Files.Clear();
         Assets.Clear();
-        (_sprites, _rules, _names) = (null, null, null);
+        (_sprites, _rules, _names, _quests) = (null, null, null, null);
         GameFonts.Reset();
         LoadParty();
         Mods = ModSet.Load(ModFolders(install), GplModFormat.Builders);

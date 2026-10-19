@@ -37,11 +37,28 @@ public partial class Music : Node
 
     public override void _EnterTree() => Instance = this;
 
+    private float _volume = 1f;
+
+    /// <summary>Loudness of the music, 0–1 (<c>[audio] music_volume</c>); 0 is silent.</summary>
+    public float Volume
+    {
+        get => _volume;
+        set
+        {
+            _volume = Math.Clamp(value, 0f, 1f);
+            if (_output is not null)
+            {
+                _output.VolumeDb = _volume <= 0 ? -80 : -2 + Mathf.LinearToDb(_volume);
+            }
+        }
+    }
+
     public override void _Ready()
     {
         ProcessMode = ProcessModeEnum.Always;
         var stream = new AudioStreamGenerator { MixRate = SampleRate, BufferLength = 0.2f };
         _output = new AudioStreamPlayer { Stream = stream, VolumeDb = -2 };
+        Volume = Settings.MusicVolume;
         AddChild(_output);
         _output.Play();
         _playback = (AudioStreamGeneratorPlayback)_output.GetStreamPlayback();

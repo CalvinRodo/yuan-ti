@@ -68,6 +68,9 @@ public partial class RegionView : Node2D
     private DebugOverlay _overlay = null!;
     private ScriptDebugger _debugger = null!;
     private InventoryWindow _inventory = null!;
+    private JournalWindow _journal = null!;
+    private OptionsWindow _options = null!;
+    private Control _hudPanel = null!;
     private ShopWindow _shop = null!;
 
     /// <summary>Scripts to start once none is paused (the region's after the game-start script, …): see <see cref="WhenScriptsFree"/>.</summary>
@@ -124,10 +127,8 @@ public partial class RegionView : Node2D
     public override void _Ready()
     {
         Controls.Register();
-        // [game] original_pathfinding=true in user://settings.cfg: walk as DSUN.EXE plans.
-        var settings = new ConfigFile();
-        settings.Load("user://settings.cfg");
-        Walker.UseOriginalPathfinding = settings.GetValue("game", "original_pathfinding", false).AsBool();
+        // [game] original_pathfinding in user://settings.cfg (Options): walk as DSUN.EXE plans.
+        Walker.UseOriginalPathfinding = Settings.OriginalPathfinding;
         _ground = new Node2D();
         AddChild(_ground);
         _marker = new SelectionMarker();
@@ -232,6 +233,12 @@ public partial class RegionView : Node2D
                 _inventory.World = _world;
                 _inventory.CallDeferred(InventoryWindow.MethodName.Open, _selected);
             }
+            if (OS.GetCmdlineUserArgs().Contains("--check-journal"))
+            {
+                _instantTravel = true;
+                CheckJournal();
+                return;
+            }
             if (OS.GetCmdlineUserArgs().Contains("--check-dialogue"))
             {
                 CheckDialogue();
@@ -264,10 +271,11 @@ public partial class RegionView : Node2D
     private CanvasLayer BuildHud()
     {
         var layer = new CanvasLayer();
-        var panel = new PanelContainer { Position = new Vector2(4, 4) };
+        var panel = new PanelContainer { Position = new Vector2(4, 4), Visible = Settings.DebugHud };
         _hud = new Label { LabelSettings = new LabelSettings { FontSize = 10 } };
         panel.AddChild(_hud);
         layer.AddChild(panel);
+        _hudPanel = panel;
 
         _scriptPanel = new PanelContainer { Visible = false };
         _scriptPanel.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.BottomWide);
@@ -316,6 +324,10 @@ public partial class RegionView : Node2D
             Did = text => AddScriptLine($"> {text}"),
         };
         layer.AddChild(_inventory);
+        _journal = new JournalWindow { Portraits = n => Portrait(n) };
+        layer.AddChild(_journal);
+        _options = new OptionsWindow { Closed = () => _hudPanel.Visible = Settings.DebugHud };
+        layer.AddChild(_options);
         _shop = new ShopWindow
         {
             Money = () => Session.ScriptHost.Money,
@@ -924,6 +936,14 @@ public partial class RegionView : Node2D
         {
             _inventory.Open(_world, _selected);
         }
+        else if (e.IsActionPressed(Controls.ToggleJournal) && !_journal.Visible)
+        {
+            _journal.Open();
+        }
+        else if (e.IsActionPressed(Controls.ToggleOptions) && !_options.Visible)
+        {
+            _options.Open();
+        }
         else if (e.IsActionPressed(Controls.ToggleScriptLog))
         {
             _scriptPanel.Visible = !_scriptPanel.Visible;
@@ -1463,7 +1483,10 @@ public partial class RegionView : Node2D
             }
             if (!Session.Scripts.IsSuspended && _world.PendingRegion is null)
             {
-                Save(AutoSave, "Autosave", quiet: true);
+                if (Settings.Autosave)
+                {
+                    Save(AutoSave, "Autosave", quiet: true);
+                }
             }
         }));
         tween.TweenProperty(_fade, "color:a", 0f, FadeSeconds);
@@ -1529,7 +1552,7 @@ public partial class RegionView : Node2D
             var party = _party.Select((m, i) => new PartyMemberSave(m.Sprite.Ojff, m.Walker.Cell.X, m.Walker.Cell.Y, m.Walker.Facing,
                 i < Session.Party.Count ? Session.Party[i] : null));
             SaveGame save = SaveGame.Capture(name, Session.Scripts, Session.ScriptHost.EngineVariables, _world, Session.Regions,
-                party, _selected, Session.Mods.Mods.Select(m => m.Name), Session.ScriptHost.PartyMembers);
+                party, _selected, Session.Mods.Mods.Select(m => m.Name), Session.ScriptHost.PartyMembers, Session.ScriptHost.Journal);
             save.Write(Session.SavePath(file));
             AddScriptLine($"    saved to {Session.SavePath(file)}");
             if (!quiet)
@@ -1599,6 +1622,7 @@ public partial class RegionView : Node2D
         _fade?.Set("color", new Color(0, 0, 0, 0));
         ShowRegion(index, saved: save);
         save.RestoreParty(Session.ScriptHost.PartyMembers, i => _world.NewItem(i.Rdff, i.Quantity, i.Slot));
+        Session.ScriptHost.Journal.Load(save.Journal);
         _scriptLogSeen = Session.ScriptHost.Log.Count;
         var missing = save.Mods.Except(Session.Mods.Mods.Select(m => m.Name)).ToList();
         Notice($"Loaded {save.Name} ({save.Saved.LocalDateTime:g})." + (missing.Count > 0 ? $" Saved with mods now off: {string.Join(", ", missing)}." : ""));
@@ -1950,6 +1974,87 @@ public partial class RegionView : Node2D
             GD.Print($"  PROBLEM: {p}");
         }
         GD.Print(problems.Count == 0 ? "dialogue: OK" : $"dialogue: {problems.Count} problems");
+        GetTree().Quit(problems.Count == 0 ? 0 : 1);
+    }
+
+    /// <summary>
+    /// <c>--check-journal</c>: talk to someone, then check the journal has the
+    /// conversation (speaker, portrait, replies) and the first region; begin
+    /// the example quest by its flag; save and load the journal; open the
+    /// journal and options windows; rebind a key and put it back (the
+    /// settings file isn't written).
+    /// </summary>
+    private async void CheckJournal()
+    {
+        var problems = new List<string>();
+        void Expect(bool ok, string what)
+        {
+            if (!ok)
+            {
+                problems.Add(what);
+            }
+        }
+        DarkSun.Game.History.Journal journal = Session.ScriptHost.Journal;
+        Expect(journal.Events.Any(e => e.Text.Contains($"region {_region.Number}")), "the first region is in the events");
+        if (_world.Objects.FirstOrDefault(o => Session.Scripts.Triggers.MatchObject(GplTriggerList.TalkTo, o.Id) is not null) is { } talker)
+        {
+            Act(talker, _selected, Verb.Talk);
+            for (int i = 0; i < 30 && Session.Scripts.IsSuspended; i++)
+            {
+                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                if (Session.ScriptHost.Dialogue.Prompt is GplMenuPrompt or GplYesNoPrompt)
+                {
+                    _dialogueWindow.PressMore(); // to the choices
+                    await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                    _dialogueWindow.Pick(_dialogueWindow.Choices.Count - 1);
+                }
+                else
+                {
+                    _dialogueWindow.PressMore();
+                }
+            }
+            var c = journal.Conversations.LastOrDefault();
+            Expect(c is not null && c.Speaker == talker.Name && c.Portrait is not null, $"the conversation is with {talker.Name}, portrait and all ({c?.Speaker})");
+            Expect(c is not null && c.Lines.Any(l => l.Reply) && c.Lines.Any(l => !l.Reply), "it has what was said and a reply");
+        }
+
+        // The example quest begins with its flag.
+        Expect(Session.Quests.Quests.Count > 0, "the quest file was read");
+        int? Read(string name) => int.TryParse(GplVariables.Get(Session.Scripts, name), out int v) ? v : null;
+        int before = Session.Quests.Status(Read).Count;
+        GplVariables.Set(Session.Scripts, "gflag[28] = 1");
+        Expect(Session.Quests.Status(Read).Count == before + 1, "setting gflag[28] begins Semyon's quest");
+
+        // Saved and loaded.
+        int conversations = journal.Conversations.Count, events = journal.Events.Count;
+        string file = "check-" + Guid.NewGuid().ToString("N")[..8];
+        Save(file, "Check");
+        string path = Session.SavePath(file);
+        LoadSaved(SaveGame.Read(path));
+        File.Delete(path);
+        journal = Session.ScriptHost.Journal;
+        Expect(journal.Conversations.Count == conversations && journal.Events.Count == events,
+            $"the journal came back from the save ({journal.Conversations.Count}/{conversations} conversations, {journal.Events.Count}/{events} events)");
+
+        // The windows open; a key rebinds and comes back.
+        _journal.Open();
+        _options.Open();
+        await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        Expect(_journal.Visible && _options.Visible, "the journal and options windows open");
+        _journal.Close();
+        _options.Visible = false; // closing would save the settings
+        Controls.Rebind(Controls.QuickSave, new InputEventKey { PhysicalKeycode = Key.F7 });
+        Expect(KeyHelp.Keys(Controls.QuickSave) == "F7", $"quick save rebinds to F7 ({KeyHelp.Keys(Controls.QuickSave)})");
+        Controls.ResetKeys();
+        Expect(KeyHelp.Keys(Controls.QuickSave) == "F5", "and goes back to F5");
+
+        GD.Print($"journal: {journal.Conversations.Count} conversations, {journal.Events.Count} events, "
+            + $"{Session.Quests.Status(Read).Count} of {Session.Quests.Quests.Count} quests begun");
+        foreach (string p in problems)
+        {
+            GD.Print($"  PROBLEM: {p}");
+        }
+        GD.Print(problems.Count == 0 ? "journal: OK" : $"journal: {problems.Count} problems");
         GetTree().Quit(problems.Count == 0 ? 0 : 1);
     }
 

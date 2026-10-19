@@ -107,6 +107,18 @@ public class DialogueGplHost : LoggingGplHost
 
     public GplDialogue Dialogue { get; } = new();
 
+    /// <summary>The party's journal: what the dialogue window shows goes in it, with the player's replies.</summary>
+    public History.Journal Journal { get; } = new();
+
+    /// <summary>Who is speaking (for the journal): no one here; the world host names the creature talked to.</summary>
+    protected virtual string SpeakerOf(GplMachine machine, int style) => "";
+
+    /// <summary>The region the party is in (<c>gname[4]</c>).</summary>
+    protected int Region(GplMachine machine) => ReadEngineVariable(machine, 0x24);
+
+    private void Journalled(GplMachine machine, string text, int style) =>
+        Journal.Said(Region(machine), SpeakerOf(machine, style), Dialogue.Portrait, text, Dialogue.Clears);
+
     public IGplWorld? World { get; set; }
 
     /// <summary>SOUND requests, for the audio layer to play.</summary>
@@ -118,12 +130,15 @@ public class DialogueGplHost : LoggingGplHost
         {
             case "PRINT_STRING":
                 Dialogue.Append(command.Texts[1] ?? "", command.Values[0] & 0xFF);
+                Journalled(machine, command.Texts[1] ?? "", command.Values[0] & 0xFF);
                 return null;
             case "PRINT_NUMBER":
                 Dialogue.Append(command.Values[1].ToString(), command.Values[0] & 0xFF);
+                Journalled(machine, command.Values[1].ToString(), command.Values[0] & 0xFF);
                 return null;
             case "PRINT_NEWLINE":
                 Dialogue.Append("\n", 0);
+                Journalled(machine, "\n", 0);
                 return null;
             case "CLEAR_PIC":
                 Dialogue.Clear();
@@ -169,6 +184,13 @@ public class DialogueGplHost : LoggingGplHost
     {
         if (machine.TryTakeAnswer(out answer))
         {
+            int a = answer;
+            Journal.Replied(Dialogue.Prompt switch
+            {
+                GplYesNoPrompt => a == 1 ? "Yes" : "No",
+                GplMenuPrompt menu when a >= 0 && a < menu.Options.Count => menu.Options[a].Text,
+                _ => "",
+            });
             Dialogue.Answered();
             return true;
         }

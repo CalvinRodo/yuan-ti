@@ -364,8 +364,24 @@ this milestone brings most of the game's content.
       (plays cinematic 1, then a new game in region 42) and Exit work; S, C,
       L and E and the arrow keys work. Create Characters and Load Saved Game
       say they aren't ported yet.
-- [ ] Options, and a journal or quest log (new; fed by GPL variables and
+- [x] Options, and a journal or quest log (new; fed by GPL variables and
       dialogue history).
+      - Options (O, on the main menu and the map; `OptionsWindow`,
+        `Settings`, `user://settings.cfg`): music and sound volume, full
+        screen, skipping the opening, autosave, the map's information
+        lines, the original's pathfinding, and every key (rebound by
+        pressing the new one; "Default keys" resets them).
+      - Journal (J; `DarkSun.Game.History`, `JournalWindow`): every
+        conversation as the dialogue window showed it, with the speaker's
+        name and portrait and the player's replies; events (items the party
+        is given or gives up, experience, money, regions reached); and a
+        quest log whose quests are JSON (`journal/quests.json`, a mod's
+        replacing the engine's), each stage a condition on the scripts'
+        global variables. The journal is saved with the game.
+        `--check-journal`.
+      - The engine ships one quest, Semyon's in region 42 (GPL 5:
+        `gflag[28]`, `gflag[26]`). Writing the rest means reading each
+        quest's scripts; the format is there for it.
 
 ---
 

@@ -31,6 +31,8 @@ public static class Controls
     public const string DebugStepOver = "debug_step_over";
     public const string DebugStepInto = "debug_step_into";
     public const string DebugStepOut = "debug_step_out";
+    public const string ToggleJournal = "journal";
+    public const string ToggleOptions = "options";
     public const string Back = "ui_cancel";
 
     /// <summary>Every action above (the key help lists them all).</summary>
@@ -38,55 +40,133 @@ public static class Controls
     [
         PanLeft, PanRight, PanUp, PanDown, ZoomIn, ZoomOut, NextRegion, PreviousRegion, ToggleMapFlags, NextCharacter,
         AddCharacter, ChangeSprite, ToggleScriptLog, ToggleGrid, QuickSave, QuickLoad, ToggleObjectNumbers,
-        ToggleInventory, ToggleScriptDebugger, DebugContinue, DebugStepOver, DebugStepInto, DebugStepOut, Back,
+        ToggleInventory, ToggleJournal, ToggleOptions, ToggleScriptDebugger, DebugContinue, DebugStepOver, DebugStepInto,
+        DebugStepOut, Back,
     ];
 
+    /// <summary>The default keys of the actions this game adds (<c>ui_cancel</c>, Esc, is Godot's own).</summary>
+    private static readonly Dictionary<string, InputEventKey[]> Defaults = new()
+    {
+        [PanLeft] = Keys(Key.Left, Key.A),
+        [PanRight] = Keys(Key.Right, Key.D),
+        [PanUp] = Keys(Key.Up, Key.W),
+        [PanDown] = Keys(Key.Down, Key.S),
+        [ZoomIn] = Keys(Key.Equal, Key.KpAdd),
+        [ZoomOut] = Keys(Key.Minus, Key.KpSubtract),
+        [NextRegion] = Keys(Key.Pagedown),
+        [PreviousRegion] = Keys(Key.Pageup),
+        [ToggleMapFlags] = Keys(Key.F1),
+        [NextCharacter] = Keys(Key.Tab),
+        [AddCharacter] = Keys(Key.N),
+        [ChangeSprite] = Keys(Key.C),
+        [ToggleScriptLog] = Keys(Key.F2),
+        [ToggleGrid] = Keys(Key.F3),
+        [QuickSave] = Keys(Key.F5),
+        [QuickLoad] = Keys(Key.F9),
+        [ToggleObjectNumbers] = Keys(Key.F4),
+        [ToggleInventory] = Keys(Key.I),
+        [ToggleJournal] = Keys(Key.J),
+        [ToggleOptions] = Keys(Key.O),
+        [ToggleScriptDebugger] = Keys(Key.F6),
+        [DebugContinue] = Keys(Key.F8),
+        [DebugStepOver] = Keys(Key.F10),
+        [DebugStepInto] = Keys(Key.F11),
+        [DebugStepOut] = [new InputEventKey { PhysicalKeycode = Key.F11, ShiftPressed = true }],
+    };
+
+    private static InputEventKey[] Keys(params Key[] keys) => [.. keys.Select(k => new InputEventKey { PhysicalKeycode = k })];
+
+    /// <summary>The actions the player can rebind (all but Esc, which Godot and every screen use to go back).</summary>
+    public static IEnumerable<string> Rebindable => Defaults.Keys;
+
+    /// <summary>Add the actions with their default keys (once), then the player's own (<see cref="Settings"/>).</summary>
     public static void Register()
     {
-        Add(PanLeft, Key.Left, Key.A);
-        Add(PanRight, Key.Right, Key.D);
-        Add(PanUp, Key.Up, Key.W);
-        Add(PanDown, Key.Down, Key.S);
-        Add(ZoomIn, Key.Equal, Key.KpAdd);
-        Add(ZoomOut, Key.Minus, Key.KpSubtract);
-        Add(NextRegion, Key.Pagedown);
-        Add(PreviousRegion, Key.Pageup);
-        Add(ToggleMapFlags, Key.F1);
-        Add(NextCharacter, Key.Tab);
-        Add(AddCharacter, Key.N);
-        Add(ChangeSprite, Key.C);
-        Add(ToggleScriptLog, Key.F2);
-        Add(ToggleGrid, Key.F3);
-        Add(QuickSave, Key.F5);
-        Add(QuickLoad, Key.F9);
-        Add(ToggleObjectNumbers, Key.F4);
-        Add(ToggleInventory, Key.I);
-        Add(ToggleScriptDebugger, Key.F6);
-        Add(DebugContinue, Key.F8);
-        Add(DebugStepOver, Key.F10);
-        Add(DebugStepInto, Key.F11);
-        Add(DebugStepOut, new InputEventKey { PhysicalKeycode = Key.F11, ShiftPressed = true });
+        foreach (var (action, keys) in Defaults)
+        {
+            if (!InputMap.HasAction(action))
+            {
+                InputMap.AddAction(action);
+                foreach (InputEventKey key in keys)
+                {
+                    InputMap.ActionAddEvent(action, (InputEventKey)key.Duplicate());
+                }
+            }
+        }
+        ApplySavedKeys();
     }
 
-    private static void Add(string action, InputEventKey key)
+    /// <summary>Bind each action to the keys saved for it (<c>[keys]</c>), or its defaults.</summary>
+    public static void ApplySavedKeys()
     {
-        if (!InputMap.HasAction(action))
+        foreach (var (action, defaults) in Defaults)
         {
-            InputMap.AddAction(action);
-            InputMap.ActionAddEvent(action, key);
+            if (!InputMap.HasAction(action))
+            {
+                continue;
+            }
+            IEnumerable<InputEventKey> keys = Settings.KeysFor(action) is { } saved
+                ? saved.Split(" / ", StringSplitOptions.RemoveEmptyEntries).Select(Parse).OfType<InputEventKey>()
+                : defaults;
+            InputMap.ActionEraseEvents(action);
+            foreach (InputEventKey key in keys)
+            {
+                InputMap.ActionAddEvent(action, (InputEventKey)key.Duplicate());
+            }
         }
     }
 
-    private static void Add(string action, params Key[] keys)
+    /// <summary>Make <paramref name="key"/> <paramref name="action"/>'s only key, and keep it in the settings.</summary>
+    public static void Rebind(string action, InputEventKey key)
     {
-        if (InputMap.HasAction(action))
+        var bound = new InputEventKey
         {
-            return;
-        }
-        InputMap.AddAction(action);
-        foreach (Key key in keys)
+            PhysicalKeycode = key.PhysicalKeycode != Key.None ? key.PhysicalKeycode : key.Keycode,
+            ShiftPressed = key.ShiftPressed,
+            CtrlPressed = key.CtrlPressed,
+            AltPressed = key.AltPressed,
+        };
+        Settings.SetKeys(action, Name(bound));
+        ApplySavedKeys();
+    }
+
+    /// <summary>Back to the default keys of every action.</summary>
+    public static void ResetKeys()
+    {
+        foreach (string action in Defaults.Keys)
         {
-            InputMap.ActionAddEvent(action, new InputEventKey { PhysicalKeycode = key });
+            Settings.SetKeys(action, null);
         }
+        ApplySavedKeys();
+    }
+
+    /// <summary>A key as the settings keep it: modifiers, then the key's name on a US keyboard (it is bound by position).</summary>
+    public static string Name(InputEventKey k) =>
+        (k.CtrlPressed ? "Ctrl+" : "") + (k.AltPressed ? "Alt+" : "") + (k.ShiftPressed ? "Shift+" : "")
+        + OS.GetKeycodeString(k.PhysicalKeycode != Key.None ? k.PhysicalKeycode : k.Keycode);
+
+    /// <summary>The key a <see cref="Name"/> names, or null.</summary>
+    public static InputEventKey? Parse(string text)
+    {
+        var key = new InputEventKey();
+        string[] parts = text.Trim().Split('+');
+        // "Ctrl++" style names don't occur: the last part is the key, the others modifiers.
+        foreach (string mod in parts[..^1])
+        {
+            switch (mod.Trim().ToLowerInvariant())
+            {
+                case "ctrl": key.CtrlPressed = true; break;
+                case "alt": key.AltPressed = true; break;
+                case "shift": key.ShiftPressed = true; break;
+                default: return null;
+            }
+        }
+        Key code = OS.FindKeycodeFromString(parts[^1].Trim());
+        if (code == Key.None)
+        {
+            return null;
+        }
+        key.PhysicalKeycode = code;
+        return key;
     }
 }

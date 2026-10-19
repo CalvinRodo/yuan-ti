@@ -68,6 +68,9 @@ public sealed record SaveGame
 
     public List<RegionState> Regions { get; init; } = [];
 
+    /// <summary>The party's journal: conversations, events, regions visited (null in saves from before it).</summary>
+    public History.JournalState? Journal { get; init; }
+
     /// <summary>The mods that were on (shown when loading; a save works without them).</summary>
     public List<string> Mods { get; init; } = [];
 
@@ -75,7 +78,8 @@ public sealed record SaveGame
 
     /// <summary>The game as it is now. <paramref name="world"/> is the current region (saved as it is); <paramref name="memory"/> the others.</summary>
     public static SaveGame Capture(string name, GplMachine machine, int[] engine, GameWorld world, RegionMemory memory,
-        IEnumerable<PartyMemberSave> party, int selected, IEnumerable<string> mods, IEnumerable<PartyMemberState>? states = null)
+        IEnumerable<PartyMemberSave> party, int selected, IEnumerable<string> mods, IEnumerable<PartyMemberState>? states = null,
+        History.Journal? journal = null)
     {
         var (table, heads, free) = machine.Triggers.Save();
         int current = world.Region.Number;
@@ -87,6 +91,7 @@ public sealed record SaveGame
             Selected = selected,
             Party = [.. party],
             PartyStates = [.. (states ?? []).Select(s => s.Save())],
+            Journal = journal?.Save(),
             Globals = GlobalAreas.ToDictionary(a => a, a => machine.Memory.Area(a).ToArray()),
             Engine = [.. engine],
             Triggers = table,

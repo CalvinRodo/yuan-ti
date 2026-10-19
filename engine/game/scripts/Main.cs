@@ -29,6 +29,7 @@ public partial class Main : Control
 
     public override void _Ready()
     {
+        Settings.Apply();
         BuildUi();
         GameInstall? install = Session.Install
             ?? GameInstall.Locate([LoadConfiguredDirectory(), DevelopmentDirectory()]);
@@ -95,7 +96,8 @@ public partial class Main : Control
             return;
         }
         bool regionCheck = args.Contains("--check-regions") || args.Contains("--check-exits") || args.Contains("--check-start") || args.Contains("--check-verbs") || args.Contains("--check-memory") || args.Contains("--check-save")
-            || args.Contains("--check-debugger") || args.Contains("--check-items") || args.Contains("--check-dialogue");
+            || args.Contains("--check-debugger") || args.Contains("--check-items") || args.Contains("--check-dialogue")
+            || args.Contains("--check-journal");
         bool screenCheck = args.Contains("--check-intro") || args.Contains("--check-menu") || args.Contains("--check-mods") || args.Contains("--check-saves")
             || args.Contains("--check-party") || args.Contains("--check-chargen") || args.Contains("--check-windows");
         if (args.Contains("--check-install") || (install is null && (regionCheck || screenCheck)))
@@ -178,7 +180,7 @@ public partial class Main : Control
     /// <summary>The intro (once per run), then the main menu.</summary>
     private void Start(bool skipIntro)
     {
-        bool intro = !skipIntro && !_introPlayed;
+        bool intro = !skipIntro && !Settings.SkipIntro && !_introPlayed;
         _introPlayed = true;
         ChangeScene(intro ? IntroView.ScenePath : MainMenu.ScenePath);
     }

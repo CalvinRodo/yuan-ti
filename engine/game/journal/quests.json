@@ -1,0 +1,14 @@
+{
+  "_about": "The quest log's quests: each shows once a stage's condition holds, with every stage reached; 'done' finishes it. Conditions read the scripts' global variables (gflag[n], gnum[n], gbignum[n], gname[n]). A mod's journal/quests.json replaces this file. These were checked against the scripts (GPL 5 is Semyon's).",
+  "quests": [
+    {
+      "title": "Semyon, the bound prisoner",
+      "region": 42,
+      "stages": [
+        { "when": "gflag[28] == 1", "text": "A bound prisoner, Semyon, begs for water. Bring him some, he says, and he'll tell you anything you want." },
+        { "when": "gflag[26] == 1", "text": "You gave Semyon water. He feels better and would help you if he could: he knows something about a gem." }
+      ],
+      "done": "gflag[26] == 1"
+    }
+  ]
+}

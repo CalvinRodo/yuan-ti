@@ -143,12 +143,27 @@ creatures carry and items left on the ground. `-- --new-game --give=1051,1095` h
 The original screens (main menu, View Character, Character Generation, the text windows) are built
 from their windows' data (`UiWindowView`): each control where its `WIND` puts it, with its own art,
 so a mod's `WIND/n.json` moves them. The engine's own changes to the original layouts are the same
-JSON, in `game/ui/WIND/` (an export has to include `ui/*.json`). `--check-windows` builds every window.
+JSON, in `game/ui/WIND/` (an export has to include `ui/*.json` and `journal/*.json`). `--check-windows` builds every window.
 Text on the 320 × 200 screens and in conversations is in the game's font (`FONT` 100, `GameFonts`),
 letters in the text colour over a dark shadow as the original draws them.
 Conversations use the original's text windows (`WIND` 3007 and 3008): the portrait, the text paged
 with MORE (Space, Enter or a click) and the up arrow, choices on five stone bars (1–9, Y and N);
 `-- --new-game --talk` starts one, `--check-dialogue` reads a conversation through and pages a long text.
+Options (O on the main menu and the map) set the music and sound volume, full screen, skipping the
+opening, autosave, the map's information lines and the original pathfinding, and rebind every key;
+they are kept in `user://settings.cfg`. The journal (J) keeps every conversation (speaker, portrait,
+your replies), events (items, experience, money, new regions) and a quest log. Quests are JSON, in
+`journal/quests.json` (a mod's replaces the engine's, `game/journal/quests.json`):
+
+```
+{ "quests": [ { "title": "Semyon, the bound prisoner", "region": 42,
+    "stages": [ { "when": "gflag[28] == 1", "text": "A bound prisoner, Semyon, begs for water." } ],
+    "done": "gflag[26] == 1" } ] }
+```
+
+A stage shows once its condition holds: global variables (`gflag[n]`, `gnum[n]`, `gbignum[n]`,
+`gname[n]`) compared with numbers, joined by `&&` and `||`; the script debugger (F6) shows which
+variables a script sets. `--check-journal` checks it all with a real conversation.
 On any screen, `?` lists every key and click that screen takes, with the keys as they are bound now
 (`KeyHelp`; `--check-help` fails if a `Controls` action is listed nowhere, `--show-keys` opens it at start). Click: the selected character (green ring) walks there;
 Shift+click: the whole party; Tab: select

@@ -213,7 +213,8 @@ public partial class KeyHelp : CanvasLayer
         new HelpLine("C", "Create characters"),
         new HelpLine("L", "Load a saved game"),
         new HelpLine("E", "Exit"),
-        new HelpLine("M", "Mods: turn them on and off, change their order"));
+        new HelpLine("M", "Mods: turn them on and off, change their order"),
+        HelpLine.For(Controls.ToggleOptions, "Options: volume, screen, keys"));
 
     private static HelpSection PartySection => new("View Character",
         new HelpLine("Click a box", "Select a character (or an empty box)"),
@@ -265,6 +266,8 @@ public partial class KeyHelp : CanvasLayer
         new HelpSection("Game",
             HelpLine.For(Controls.QuickSave, "Quick save"),
             HelpLine.For(Controls.QuickLoad, "Load the quick save"),
+            HelpLine.For(Controls.ToggleJournal, "Journal: quests, conversations, events"),
+            HelpLine.For(Controls.ToggleOptions, "Options: volume, screen, keys"),
             HelpLine.For(Controls.Back, "Back to the main menu", "Esc")),
         new HelpSection("Debugging",
             HelpLine.For(Controls.ToggleMapFlags, "Map flags: blocked, line of sight, occupied, triggers"),
