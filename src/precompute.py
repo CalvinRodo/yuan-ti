@@ -101,9 +101,11 @@ def _find_palette_standalone(game_dir: str, gff: GffFile):
         if gpldata:
             for d in gff.describe_resources():
                 if d.tag == 'GMAP':
+                    # Region 255 (the test map of every item and effect) uses PAL 1.
+                    number = 1 if d.number == 255 else d.number
                     try:
                         return Palette.from_pal_data(
-                            gpldata.get_resource_data('PAL ', d.number))
+                            gpldata.get_resource_data('PAL ', number))
                     except Exception:
                         pass
                     break  # GMAP found but PAL missing — fall through

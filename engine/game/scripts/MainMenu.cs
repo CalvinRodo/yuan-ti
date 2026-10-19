@@ -42,11 +42,11 @@ public partial class MainMenu : RetroScreen
         }
         Music.Instance?.ChangeTo("RESOURCE.GFF", MusicNumber);
         GffFile resources = Session.Open("RESOURCE.GFF");
-        Palette palette = Palette.FromBytes(resources.Read("PAL ", PaletteNumber).Span);
+        Palette palette = Session.Assets.Palette(resources.Read("PAL ", PaletteNumber));
 
         foreach (var (bmp, x, y) in Backdrop)
         {
-            if (resources.TryRead("BMP ", bmp, out var data) && ImageDecoder.ReadFrames(data.Span) is [var frame, ..])
+            if (Session.Assets.Frame(resources, "BMP ", bmp) is { } frame)
             {
                 Canvas.AddChild(new TextureRect
                 {
@@ -116,7 +116,7 @@ public partial class MainMenu : RetroScreen
         {
             return null;
         }
-        IReadOnlyList<ImageFrame> frames = ImageDecoder.ReadFrames(icon.Span);
+        IReadOnlyList<ImageFrame> frames = Session.Assets.Frames(icon);
         Texture2D? Frame(int n) => n < frames.Count && frames[n].Width > 1 ? Textures.ToTexture(frames[n], palette) : null;
         var button = new TextureButton
         {

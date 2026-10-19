@@ -110,7 +110,7 @@ wall edges and placed objects (resolved via OJFF/WALL in SEGOBJEX.GFF and GPLDAT
 
 **Region tile dimensions:** 128 columns × 98 rows = 12 544 tiles, 2 048 × 1 568 pixels fully rendered.
 
-**Palette:** `GPLDATA.GFF` `PAL ` numbered like the region's `GMAP`. Region 255 (`RGNFF.GFF`) has no such palette (`GPLDATA.GFF` has `PAL ` 1–45 only); which one the game uses there is not yet known.
+**Palette:** `GPLDATA.GFF` `PAL ` numbered like the region's `GMAP`. Region 255 (`RGNFF.GFF`) is a test map holding every item and effect; it has no such palette (`GPLDATA.GFF` has `PAL ` 1–45 only) and uses `PAL ` 1.
 
 ---
 

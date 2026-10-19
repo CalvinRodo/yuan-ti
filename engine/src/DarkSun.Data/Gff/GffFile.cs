@@ -6,6 +6,16 @@ namespace DarkSun.Data.Gff;
 /// <summary>One resource in a GFF file: 4-character tag, number, and location.</summary>
 public readonly record struct ResourceDescriptor(string Tag, int Number, int Offset, int Size);
 
+/// <summary>Replacement resources laid over a GFF file (mods: <c>DarkSun.Data.Mods.ModSet</c>).</summary>
+public interface IGffOverrides
+{
+    /// <summary>The replacement for a resource, given a way to read the original (null if the file lacks it).</summary>
+    bool TryRead(string tag, int number, Func<ReadOnlyMemory<byte>?> original, out ReadOnlyMemory<byte> data);
+
+    /// <summary>Resources the overrides can supply even where the file has none (tag padded to 4).</summary>
+    IEnumerable<(string Tag, int Number)> Added { get; }
+}
+
 /// <summary>
 /// A GFF resource container, read whole into memory. Port of <c>src/gff.py</c>
 /// (itself from John Glassmyer's GffFile.java); the format is described in
@@ -23,15 +33,20 @@ public sealed class GffFile : IResourceSource
 {
     private readonly byte[] _data;
     private readonly Dictionary<string, Table> _tables;
+    private readonly IGffOverrides? _overrides;
 
-    private GffFile(byte[] data, Dictionary<string, Table> tables)
+    private GffFile(byte[] data, Dictionary<string, Table> tables, IGffOverrides? overrides = null)
     {
         _data = data;
         _tables = tables;
+        _overrides = overrides;
     }
 
-    /// <summary>Tags in index order (primary tables first, then secondary).</summary>
-    public IEnumerable<string> Tags => _tables.Keys;
+    /// <summary>Tags in index order (primary tables first, then secondary), then tags only overrides add.</summary>
+    public IEnumerable<string> Tags => _tables.Keys.Concat((_overrides?.Added ?? []).Select(a => a.Tag)).Distinct();
+
+    /// <summary>This file with <paramref name="overrides"/> taking priority over its own resources.</summary>
+    public GffFile WithOverrides(IGffOverrides overrides) => new(_data, _tables, overrides);
 
     public static GffFile Open(string path) => FromBytes(File.ReadAllBytes(path));
 
@@ -47,13 +62,30 @@ public sealed class GffFile : IResourceSource
         }
     }
 
-    /// <summary>Every resource, sorted by file offset.</summary>
-    public IReadOnlyList<ResourceDescriptor> DescribeResources() =>
-        _tables.SelectMany(t => t.Value.Entries.Select(e => new ResourceDescriptor(t.Key, e.Number, e.Offset, e.Size)))
+    /// <summary>
+    /// Every resource, sorted by file offset; then resources only overrides
+    /// add (offset −1). Sizes are the file's own.
+    /// </summary>
+    public IReadOnlyList<ResourceDescriptor> DescribeResources()
+    {
+        var own = _tables.SelectMany(t => t.Value.Entries.Select(e => new ResourceDescriptor(t.Key, e.Number, e.Offset, e.Size)))
             .OrderBy(d => d.Offset)
             .ToList();
+        if (_overrides is null)
+        {
+            return own;
+        }
+        foreach (var (tag, number) in _overrides.Added.Where(a => !ContainsOwn(a.Tag, a.Number)).Order())
+        {
+            own.Add(new ResourceDescriptor(tag, number, -1, TryRead(tag, number, out var data) ? data.Length : 0));
+        }
+        return own;
+    }
 
     public bool Contains(string tag, int number) =>
+        ContainsOwn(tag, number) || (_overrides?.Added.Contains((NormalizeTag(tag), number)) ?? false);
+
+    private bool ContainsOwn(string tag, int number) =>
         _tables.TryGetValue(NormalizeTag(tag), out Table? table) && table.ByNumber.ContainsKey(number);
 
     public ReadOnlyMemory<byte> Read(string tag, int number) =>
@@ -62,6 +94,16 @@ public sealed class GffFile : IResourceSource
             : throw new KeyNotFoundException($"no resource {NormalizeTag(tag)}-{number} in GFF file");
 
     public bool TryRead(string tag, int number, out ReadOnlyMemory<byte> data)
+    {
+        if (_overrides is not null
+            && _overrides.TryRead(tag, number, () => TryReadOwn(tag, number, out var own) ? own : null, out data))
+        {
+            return true;
+        }
+        return TryReadOwn(tag, number, out data);
+    }
+
+    private bool TryReadOwn(string tag, int number, out ReadOnlyMemory<byte> data)
     {
         if (_tables.TryGetValue(NormalizeTag(tag), out Table? table)
             && table.ByNumber.TryGetValue(number, out Entry entry))

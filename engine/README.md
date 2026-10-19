@@ -15,6 +15,7 @@ stored in this repository. The plan is in
 | `tests/` | xUnit tests for the two libraries. |
 | `tools/DarkSun.Dump` | Hashes every resource, image frame, palette and region render in the game files, and lists every script, for `make engine-compare`. |
 | `tools/DarkSun.ScriptRun` | Runs the new-game script, every region script and every trigger they register, for `make engine-scripts`. |
+| `tools/DarkSun.ModTool` | Exports a resource into a mod folder (PNG, text or raw bytes) and lists what mods replace, for `make engine-mod-export` / `engine-mod-list`. |
 | `tools/DarkSun.MusicRender` | Renders a piece of the music to a WAV file, for `make engine-music`. |
 | `tools/DarkSun.CineDump` | Plays a cinematic without a screen and saves snapshots (PPM), for `make engine-cine`. |
 | `DarkSun.sln` | All of the above; the Godot project points to it (`dotnet/project/solution_directory`). |
@@ -54,6 +55,8 @@ make engine-run     # run the game
 make engine-edit    # open the Godot editor
 make engine-compare # check the C# file-format and script decoding against the Python tools
 make engine-scripts # run every game script in the C# interpreter (V=-v lists the world commands)
+make engine-mod-export FILE=RESOURCE.GFF TAG=ICON N=2048 MOD=mods/MyMod  # start a mod from a resource
+make engine-mod-list MODS=mods   # what the mods in a folder replace
 make engine-music   # render music to out/music.wav (MUSIC=n, FILE=RESOURCE.GFF or CINE.GFF, SECONDS=60)
 make engine-cine    # play a cinematic headless, snapshots in out/cine (CINE=0 intro, 1 arrival, 100 ending)
 ```
@@ -111,6 +114,35 @@ animate. `--check-regions` also walks the party 20 cells in every region and
 fails if two characters ever overlap; `--check-exits` steps on every move
 trigger and lists the region exits; `--check-start` starts a new game and
 prints where the party stands and what the scripts did.
+
+## Mods
+
+Mods are folders of loose files that replace the game's resources; the
+original files are never changed. The engine reads mods from the
+`DARKSUN_MODS` folder, `mods` in the Godot user data folder
+(`~/.local/share/godot/app_userdata/Dark Sun Engine/mods` on Linux), and
+`mods` in the game folder, and prints the mods it loaded. In a mods folder:
+
+```
+mods/
+  load_order.txt                    optional: mod names, highest priority first
+  MyMod/
+    ICON/2048/0.png                 frame 0 of ICON 2048 (the other frames stay)
+    BMP/20029.png                   a whole image, in its own colours
+    TEXT/12.txt                     text, UTF-8
+    GPL/80.bin                      raw resource bytes: any tag (scripts, PAL, GMAP, GSEQ, …)
+    RGN2A.GFF/ETAB/42.bin           only in that file; a file folder may also add resources
+  _Disabled/                        names starting with _ or . are skipped
+```
+
+`make engine-mod-export` writes a resource in the right form to edit:
+images are drawn in a palette (`--palette FILE:N` for the tool) and come back
+in true colour; in cinematics they are matched to the colours on screen.
+Changes take effect the next time the game starts.
+
+Decoded images and palettes are cached for the session
+(`Session.Assets`), with one texture per frame and palette, so returning to a
+region or screen doesn't decode again.
 
 ## Notes
 

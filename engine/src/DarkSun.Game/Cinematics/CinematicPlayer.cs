@@ -426,6 +426,8 @@ public sealed class CinematicPlayer
     /// <summary>Draw a frame's opaque pixels (<c>1A0A:3180</c>), clipped to the page.</summary>
     private void Draw(byte[] page, ImageFrame frame, int x, int y)
     {
+        // A mod's true-colour image is matched to the colours on screen now.
+        byte[] pixels = frame.Rgba is null ? frame.Pixels : frame.IndexedFor(Data.Images.Palette.FromBytes(_dac, PaletteDepth.SixBit));
         for (int row = 0; row < frame.Height; row++)
         {
             int py = y + row;
@@ -438,7 +440,7 @@ public sealed class CinematicPlayer
                 int px = x + col, at = row * frame.Width + col;
                 if (px is >= 0 and < Width && frame.Opaque[at])
                 {
-                    page[py * Width + px] = frame.Pixels[at];
+                    page[py * Width + px] = pixels[at];
                 }
             }
         }

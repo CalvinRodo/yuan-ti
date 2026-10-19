@@ -10,7 +10,7 @@ public class GffFileTests
     /// A GFF with a primary table (TEXT 7 and 9), a GFFI table, and a
     /// secondary table (TILE) numbered by two segments: 100, then 200–201.
     /// </summary>
-    private static byte[] BuildGff()
+    internal static byte[] BuildGff()
     {
         var b = new Bytes();
         b.Zero(16);

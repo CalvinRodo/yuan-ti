@@ -45,7 +45,6 @@ public partial class RegionView : Node2D
     /// <summary>Region shown when the view opens; kept across visits. −1: not yet chosen, so a new game starts.</summary>
     private static int _regionIndex = -1;
 
-    private readonly Dictionary<ImageFrame, Texture2D> _textures = [];
     private readonly List<AnimatedObject> _animated = [];
     private List<CharacterSprite>? _characters;
     private Region _region = null!;
@@ -185,7 +184,6 @@ public partial class RegionView : Node2D
         {
             child.QueueFree();
         }
-        _textures.Clear();
         _animated.Clear();
         _party.Clear();
         _objectSprites.Clear();
@@ -196,7 +194,7 @@ public partial class RegionView : Node2D
         _worldObjects.Clear();
         _clock = 0;
 
-        _region = Region.Load(Session.Open(file), [Session.Open("SEGOBJEX.GFF"), Session.Open("GPLDATA.GFF")]);
+        _region = Region.Load(Session.Open(file), [Session.Open("SEGOBJEX.GFF"), Session.Open("GPLDATA.GFF")], Session.Assets);
         var objectData = new GffSet([Session.Open("SEGOBJEX.GFF"), Session.Open("GPLDATA.GFF")]);
         _world = new GameWorld(_region, objectData, Session.ScriptHost.EngineVariables);
         _world.Changed += OnWorldChanged;
@@ -206,7 +204,7 @@ public partial class RegionView : Node2D
         {
             _worldObjects[o.Source!] = o;
         }
-        _palette = _region.LoadPalette(Session.Open("GPLDATA.GFF"), Session.Open("RESOURCE.GFF"));
+        _palette = _region.LoadPalette(Session.Open("GPLDATA.GFF"), Session.Open("RESOURCE.GFF"), Session.Assets);
 
         // The region's music (RDAT +0x2F), changed with the original's 5-second fades.
         if (!_checking && RegionInfo.Read(Session.Open("RESOURCE.GFF"), _region.Number) is { Music: > 0 } info)
@@ -270,15 +268,7 @@ public partial class RegionView : Node2D
         return sprite;
     }
 
-    private Texture2D TextureFor(ImageFrame frame)
-    {
-        if (!_textures.TryGetValue(frame, out Texture2D? texture))
-        {
-            texture = Textures.ToTexture(frame, _palette);
-            _textures[frame] = texture;
-        }
-        return texture;
-    }
+    private Texture2D TextureFor(ImageFrame frame) => Textures.ToTexture(frame, _palette);
 
     // -- character ------------------------------------------------------------
 
@@ -311,7 +301,7 @@ public partial class RegionView : Node2D
             if (script is { CanWalk: true } && objects.TryRead("BMP ", def.Bmp, out var image))
             {
                 seenBmps.Add(def.Bmp);
-                _characters.Add(new CharacterSprite(r.Number, script, ImageDecoder.ReadFrames(image.Span)));
+                _characters.Add(new CharacterSprite(r.Number, script, Session.Assets.Frames(image)));
             }
         }
         return _characters;
@@ -579,7 +569,7 @@ public partial class RegionView : Node2D
         if (!_portraits.TryGetValue(number, out ImageTexture? texture))
         {
             texture = Session.Open("GPLDATA.GFF").TryRead("PORT", number, out var data)
-                && ImageDecoder.ReadFrames(data.Span) is [var frame, ..]
+                && Session.Assets.Frames(data) is [var frame, ..]
                 ? Textures.ToTexture(frame, _palette)
                 : null;
             _portraits[number] = texture;

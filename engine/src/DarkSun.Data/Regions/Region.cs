@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using DarkSun.Data.Assets;
 using DarkSun.Data.Gff;
 using DarkSun.Data.Images;
 
@@ -76,10 +77,13 @@ public sealed class Region
     /// <summary>
     /// Load a region. <paramref name="auxiliary"/> files are searched after the
     /// region file for <c>OJFF</c>, <c>BMP </c> and <c>WALL</c> resources:
-    /// <c>SEGOBJEX.GFF</c>, then <c>GPLDATA.GFF</c>.
+    /// <c>SEGOBJEX.GFF</c>, then <c>GPLDATA.GFF</c>. Images are decoded through
+    /// <paramref name="cache"/> if given, so later loads reuse them.
     /// </summary>
-    public static Region Load(GffFile regionFile, IReadOnlyList<GffFile> auxiliary)
+    public static Region Load(GffFile regionFile, IReadOnlyList<GffFile> auxiliary, AssetCache? cache = null)
     {
+        Func<ReadOnlyMemory<byte>, IReadOnlyList<ImageFrame>> decode =
+            cache is null ? d => ImageDecoder.ReadFrames(d.Span) : cache.Frames;
         List<GffFile> files = [regionFile, .. auxiliary];
         var all = new GffSet(files);
 
@@ -98,7 +102,7 @@ public sealed class Region
         int height = (tileMap.Length + width - 1) / width;
 
         return new Region(number, width, height, tileMap, flags,
-            LoadTiles(files), LoadObjects(all, number), LoadWalls(all, number, flags, width, height));
+            LoadTiles(files, decode), LoadObjects(all, number, decode), LoadWalls(all, number, flags, width, height, decode));
     }
 
     public CellFlags FlagsAt(int x, int y) =>
@@ -113,24 +117,31 @@ public sealed class Region
     /// <summary>Whether a cell blocks line of sight; cells off the map don't.</summary>
     public bool BlocksSight(int x, int y) => FlagsAt(x, y).HasFlag(CellFlags.BlocksSight);
 
+    /// <summary>Region 255 (<c>RGNFF.GFF</c>), the test map of every item and effect, has no palette of its own.</summary>
+    public const int TestRegion = 255;
+
+    /// <summary>The palette region <see cref="TestRegion"/> uses: <c>GPLDATA.GFF</c> <c>PAL</c> 1.</summary>
+    public const int TestRegionPalette = 1;
+
     /// <summary>
     /// The region's palette: the <c>GPLDATA.GFF</c> <c>PAL </c> with the
-    /// region's number. Region 255 (<c>RGNFF.GFF</c>) has none; like
-    /// <c>precompute.py</c>, fall back to the first <c>PAL </c> in
-    /// <c>RESOURCE.GFF</c> (*unverified*: which palette the game uses there).
+    /// region's number; the test region uses <c>PAL</c> 1. If neither exists,
+    /// the first <c>PAL </c> in <c>RESOURCE.GFF</c>.
     /// </summary>
-    public Palette LoadPalette(GffFile gplData, GffFile resource)
+    public Palette LoadPalette(GffFile gplData, GffFile resource, AssetCache? cache = null)
     {
-        if (gplData.TryRead("PAL", Number, out var data))
+        int number = Number == TestRegion && !gplData.Contains("PAL ", Number) ? TestRegionPalette : Number;
+        if (gplData.TryRead("PAL ", number, out var data))
         {
-            return Palette.FromBytes(data.Span);
+            return cache?.Palette(data) ?? Palette.FromBytes(data.Span);
         }
         ResourceDescriptor first = resource.DescribeResources().First(r => r.Tag == "PAL ");
-        return Palette.FromBytes(resource.Read(first.Tag, first.Number).Span);
+        data = resource.Read(first.Tag, first.Number);
+        return cache?.Palette(data) ?? Palette.FromBytes(data.Span);
     }
 
     /// <summary>First frame of every <c>TILE</c> in the files, first file wins.</summary>
-    private static Dictionary<int, ImageFrame> LoadTiles(List<GffFile> files)
+    private static Dictionary<int, ImageFrame> LoadTiles(List<GffFile> files, Func<ReadOnlyMemory<byte>, IReadOnlyList<ImageFrame>> decode)
     {
         var tiles = new Dictionary<int, ImageFrame>();
         foreach (GffFile file in files)
@@ -143,7 +154,7 @@ public sealed class Region
                 }
                 try
                 {
-                    var frames = ImageDecoder.ReadFrames(file.Read(r.Tag, r.Number).Span);
+                    var frames = decode(file.Read(r.Tag, r.Number));
                     if (frames.Count > 0)
                     {
                         tiles[r.Number] = frames[0];
@@ -165,7 +176,7 @@ public sealed class Region
     /// number (uint16 at 0x0C) and the <c>SCMD</c> number (int16 at 0x0E);
     /// the position is computed as in <c>object_from_ojff</c> (<c>1DF3:1073</c>).
     /// </summary>
-    private static List<RegionObject> LoadObjects(GffSet all, int number)
+    private static List<RegionObject> LoadObjects(GffSet all, int number, Func<ReadOnlyMemory<byte>, IReadOnlyList<ImageFrame>> decode)
     {
         var objects = new List<RegionObject>();
         if (!all.TryRead("ETAB", number, out var etabMemory))
@@ -184,7 +195,7 @@ public sealed class Region
 
             if (!sprites.TryGetValue(ojff, out var sprite))
             {
-                sprite = LoadObjectSprite(all, ojff);
+                sprite = LoadObjectSprite(all, ojff, decode);
                 sprites[ojff] = sprite;
             }
             if (sprite is { } s)
@@ -198,7 +209,7 @@ public sealed class Region
 
     private sealed record ObjectSprite(ObjectDefinition Definition, IReadOnlyList<ImageFrame> Frames);
 
-    private static ObjectSprite? LoadObjectSprite(GffSet all, int ojff)
+    private static ObjectSprite? LoadObjectSprite(GffSet all, int ojff, Func<ReadOnlyMemory<byte>, IReadOnlyList<ImageFrame>> decode)
     {
         if (!all.TryRead("OJFF", ojff, out var record) || record.Length < ObjectDefinition.Size)
         {
@@ -209,7 +220,7 @@ public sealed class Region
         {
             return null;
         }
-        var frames = ImageDecoder.ReadFrames(image.Span);
+        var frames = decode(image);
         return frames.Count == 0 ? null : new ObjectSprite(definition, frames);
     }
 
@@ -217,7 +228,8 @@ public sealed class Region
     /// A cell with wall index i draws <c>WALL</c> number region × 100 + i − 1,
     /// bottom-centred on the cell.
     /// </summary>
-    private static List<PlacedSprite> LoadWalls(GffSet all, int number, byte[] flags, int width, int height)
+    private static List<PlacedSprite> LoadWalls(GffSet all, int number, byte[] flags, int width, int height,
+        Func<ReadOnlyMemory<byte>, IReadOnlyList<ImageFrame>> decode)
     {
         var walls = new List<PlacedSprite>();
         var frames = new Dictionary<int, ImageFrame?>();
@@ -238,7 +250,7 @@ public sealed class Region
                 int wall = number * 100 + wallIndex - 1;
                 if (!frames.TryGetValue(wall, out ImageFrame? frame))
                 {
-                    frame = all.TryRead("WALL", wall, out var data) && ImageDecoder.ReadFrames(data.Span) is [var first, ..]
+                    frame = all.TryRead("WALL", wall, out var data) && decode(data) is [var first, ..]
                         ? first
                         : null;
                     frames[wall] = frame;

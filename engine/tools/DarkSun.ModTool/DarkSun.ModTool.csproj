@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Exports game resources into a mod folder, and lists what mods replace. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\DarkSun.Game\DarkSun.Game.csproj" />
+  </ItemGroup>
+</Project>

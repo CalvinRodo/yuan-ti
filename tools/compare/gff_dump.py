@@ -70,10 +70,13 @@ def main(game_dir: str, out_path: str):
                 except Exception:
                     out.write(f'{prefix}\terror\n')
             if name.startswith('RGN'):
-                # Region palette: the GPLDATA.GFF PAL numbered like the GMAP,
-                # else the first PAL in RESOURCE.GFF (as precompute.py does).
+                # Region palette: the GPLDATA.GFF PAL numbered like the GMAP;
+                # region 255 (the test map) uses PAL 1; else the first PAL in
+                # RESOURCE.GFF.
                 try:
                     number = next(r.number for r in resources if r.tag == 'GMAP')
+                    if number == 255 and not aux[1].has_resource('PAL ', number):
+                        number = 1
                     if aux[1].has_resource('PAL ', number):
                         palette = Palette.from_pal_data(aux[1].get_resource_data('PAL ', number))
                     else:

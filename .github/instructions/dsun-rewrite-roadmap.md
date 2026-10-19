@@ -62,12 +62,18 @@ compare against by eye.
       run (`GameInstall`; also `DARKSUN_DIR` and the repository's `dark_sun/`).
       No original assets in the repository or in builds.
 - [ ] Find GOG and Steam installs automatically.
-- [ ] **Asset cache**: decode to Godot `Image`/`ImageTexture` at load time
-      instead of converting files on disk, so that the original files stay the
-      single source of truth and mods can replace individual resources.
-- [ ] **Mod overrides**: a folder of loose files (PNG, JSON, recompiled GPL)
-      that takes priority over GFF resources by tag and number. Design the
-      lookup now, even if the mod tools come later.
+- [x] **Asset cache** (`DarkSun.Data.Assets.AssetCache`, `Session.Assets`;
+      `Textures` in Godot): frames and palettes are decoded once per session,
+      keyed by the resource's bytes, and each frame's texture is made once per
+      palette. Nothing is converted on disk.
+- [x] **Mod overrides** (`DarkSun.Data.Mods.ModSet`): mod folders overlay
+      every GFF file (`GffFile.WithOverrides`), by tag and number, for any
+      file or one file. Replacements can be `.bin` (raw bytes: scripts,
+      palettes, maps, music…), `.png` (true-colour images, whole or frame by
+      frame) or `.txt` (text). `load_order.txt` sets priority. The
+      `DarkSun.ModTool` exports resources into a mod and lists what mods replace.
+- [ ] Mod formats beyond raw bytes for structured data (JSON for items,
+      monsters, region info), a GPL assembler, and a mod list in the UI.
 - [x] **Tests**: xUnit tests for `Data` and `Game`, run by `make engine-test`
       without the editor. Borland's RNG (`BorlandRandom`) is the first rule
       ported.
@@ -88,9 +94,9 @@ Goal: every resource the first playable region needs, loaded in C#.
 - [x] Port `RMAP`, `GMAP`, `ETAB`, `OJFF` and `WALL` lookups from
       `region_renderer.py` (`DarkSun.Data.Regions.Region`; `RegionRenderer`
       draws a whole region in software).
-- [ ] Find the palette the game uses for region 255 (`RGNFF.GFF`): there is no
-      `GPLDATA.GFF` `PAL ` 255, so the engine falls back to the first `PAL ` in
-      `RESOURCE.GFF`, as `precompute.py` does.
+- [x] Region 255 (`RGNFF.GFF`) is a test map holding every item and effect;
+      it has no `PAL ` 255 and uses `GPLDATA.GFF` `PAL ` 1 (also in the Python
+      tools).
 - [ ] Port the text parsers and the `NAME` table.
 - [x] **Check against the Python tools**: `make engine-compare` hashes every
       resource, image frame and palette in the game files with both

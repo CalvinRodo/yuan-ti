@@ -23,6 +23,15 @@ public static class ImageDecoder
     /// <exception cref="InvalidDataException">The data is truncated or inconsistent.</exception>
     public static IReadOnlyList<ImageFrame> ReadFrames(ReadOnlySpan<byte> data)
     {
+        if (Png.IsPng(data))
+        {
+            var (width, height, rgba) = Png.Decode(data);
+            return [ImageFrame.FromRgba(width, height, rgba)];
+        }
+        if (data.StartsWith(ModFrames.Magic))
+        {
+            return ModFrames.Read(data);
+        }
         try
         {
             int count = BinaryPrimitives.ReadUInt16LittleEndian(data[4..]);
@@ -281,5 +290,69 @@ public static class ImageDecoder
             }
             return value;
         }
+    }
+}
+
+/// <summary>
+/// A mod's frame-by-frame replacement of an image resource: the original
+/// resource (possibly empty) and PNG files for some frame numbers. Built by
+/// the mod overlay from a folder <c>&lt;number&gt;/&lt;frame&gt;.png</c>;
+/// frames without a PNG keep the original's.
+/// </summary>
+public static class ModFrames
+{
+    public static ReadOnlySpan<byte> Magic => "DSMODIMG"u8;
+
+    public static byte[] Build(ReadOnlySpan<byte> original, IReadOnlyDictionary<int, byte[]> pngs)
+    {
+        using var stream = new MemoryStream();
+        using var writer = new BinaryWriter(stream);
+        writer.Write(Magic);
+        writer.Write(original.Length);
+        writer.Write(original);
+        writer.Write(pngs.Count);
+        foreach (var (frame, png) in pngs.OrderBy(p => p.Key))
+        {
+            writer.Write(frame);
+            writer.Write(png.Length);
+            writer.Write(png);
+        }
+        writer.Flush();
+        return stream.ToArray();
+    }
+
+    /// <exception cref="InvalidDataException">Truncated, or a PNG can't be read.</exception>
+    public static IReadOnlyList<ImageFrame> Read(ReadOnlySpan<byte> data)
+    {
+        int at = Magic.Length;
+        int originalLength = Int(data, ref at);
+        var frames = originalLength > 0
+            ? new List<ImageFrame>(ImageDecoder.ReadFrames(data.Slice(at, originalLength)))
+            : [];
+        at += originalLength;
+        int count = Int(data, ref at);
+        for (int i = 0; i < count; i++)
+        {
+            int frame = Int(data, ref at), length = Int(data, ref at);
+            var (width, height, rgba) = Png.Decode(data.Slice(at, length));
+            at += length;
+            while (frames.Count <= frame)
+            {
+                frames.Add(ImageFrame.FromRgba(1, 1, new byte[4]));
+            }
+            frames[frame] = ImageFrame.FromRgba(width, height, rgba);
+        }
+        return frames;
+    }
+
+    private static int Int(ReadOnlySpan<byte> data, ref int at)
+    {
+        if (at + 4 > data.Length)
+        {
+            throw new InvalidDataException("mod image container is truncated");
+        }
+        int v = BinaryPrimitives.ReadInt32LittleEndian(data[at..]);
+        at += 4;
+        return v;
     }
 }

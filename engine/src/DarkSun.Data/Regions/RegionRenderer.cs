@@ -72,7 +72,7 @@ public static class RegionRenderer
                 {
                     continue;
                 }
-                Rgb c = palette[f.Pixels[source]];
+                Rgb c = f.ColorAt(source, palette);
                 int at = (dy * width + dx) * 3;
                 rgb[at] = c.R;
                 rgb[at + 1] = c.G;
