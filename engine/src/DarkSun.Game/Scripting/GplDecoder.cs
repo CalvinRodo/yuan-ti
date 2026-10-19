@@ -108,57 +108,91 @@ public sealed class GplDecoder
         }
     }
 
-    public static string Render(GplInstruction i)
+    public static string Render(GplInstruction i) => Render(i, GplStyle.Listing);
+
+    /// <summary>
+    /// <paramref name="i"/> as text, in <paramref name="style"/>: the listing's,
+    /// or the assembler's (<see cref="GplStyle.Source"/>: strings escaped,
+    /// addresses as labels, menus in byte order).
+    /// </summary>
+    public static string Render(GplInstruction i, GplStyle style)
     {
         switch (i.Op)
         {
             case GplOpcodes.Menu:
                 GplMenu menu = i.Menu!;
-                var lines = menu.Before.Select(Render).ToList();
-                lines.Add($"MENU(title={Render(menu.Title)})");
+                if (style.IsSource)
+                {
+                    var source = new List<string> { "MENU" };
+                    source.AddRange(menu.Before.Select(b => "  " + Render(b, style)));
+                    source.Add($"  TITLE({Render(menu.Title, style)})");
+                    foreach (GplMenuEntry e in menu.Entries)
+                    {
+                        source.AddRange(e.Before.Select(b => "  " + Render(b, style)));
+                        source.Add($"  ENTRY(text={Render(e.Text, style)}, func={RenderAddress(e.Address, style)}, cond={Render(e.Condition, style, word: true)})");
+                        source.AddRange(e.After.Select(b => "  " + Render(b, style)));
+                    }
+                    source.Add("MENU_END");
+                    return string.Join('\n', source);
+                }
+                var lines = menu.Before.Select(b => Render(b, style)).ToList();
+                lines.Add($"MENU(title={Render(menu.Title, style)})");
                 foreach (GplMenuEntry e in menu.Entries)
                 {
-                    lines.AddRange(e.Before.Select(Render));
-                    lines.Add($"  ENTRY(text={Render(e.Text)}, func={RenderAddress(e.Address)}, cond={Render(e.Condition)})");
-                    lines.AddRange(e.After.Select(Render));
+                    lines.AddRange(e.Before.Select(b => Render(b, style)));
+                    lines.Add($"  ENTRY(text={Render(e.Text, style)}, func={RenderAddress(e.Address, style)}, cond={Render(e.Condition, style)})");
+                    lines.AddRange(e.After.Select(b => Render(b, style)));
                 }
                 lines.Add("MENU_END");
                 return string.Join('\n', lines);
             case GplOpcodes.LoadVar:
-                return $"{Render(i.Target!)} = {Render(i.Value!)}";
+                return $"{Render(i.Target!, style)} = {Render(i.Value!, style)}";
             case GplOpcodes.LoadAccum:
-                return $"ACCUM <= {Render(i.Value!)}";
+                return $"ACCUM <= {Render(i.Value!, style)}";
             case GplOpcodes.Search:
                 GplSearch s = i.Search!;
                 IEnumerable<string> criteria = s.Criteria.Select(c =>
-                    c.Value is null ? $"field[{c.Field}]({c.Mode})" : $"field[{c.Field}]({c.Mode})={Render(c.Value)}");
-                return $"SEARCH({Render(s.Who)}, range=[{s.Low},{s.High}], {string.Join(", ", criteria)})";
+                    c.Value is null ? $"field[{c.Field}]({c.Mode})" : $"field[{c.Field}]({c.Mode})={Render(c.Value, style)}");
+                return $"SEARCH({Render(s.Who, style)}, range=[{s.Low},{s.High}], {string.Join(", ", criteria)})";
             case GplOpcodes.SetRecord:
-                return i.Record is null ? "SETRECORD" : $"SETRECORD {Render(i.Record)} = {Render(i.Value!)}";
+                return i.Record is null ? "SETRECORD" : $"SETRECORD {Render(i.Record)} = {Render(i.Value!, style)}";
         }
         string spec = GplOpcodes.All[i.Op].Operands ?? "";
         if (spec.Length == 0)
         {
             return i.Mnemonic;
         }
-        IEnumerable<string> args = spec.Select((kind, n) => kind == 'A' ? RenderAddress(i.Args[n]) : Render(i.Args[n]));
+        // In source, another file's address is written @hex (no label: it isn't in this file).
+        int other = style.IsSource && GplOpcodes.EntryArguments.TryGetValue(i.Op, out var entry) ? entry.Address : -1;
+        IEnumerable<string> args = spec.Select((kind, n) =>
+            n == other ? RenderAddress(i.Args[n], GplStyle.Source)
+            : kind == 'A' ? RenderAddress(i.Args[n], style)
+            : Render(i.Args[n], style, GplOpcodes.WordArguments.Contains((i.Op, n))));
         return $"{i.Mnemonic}({string.Join(", ", args)})";
     }
 
-    private static string RenderAddress(GplExpression e)
+    private static string RenderAddress(GplExpression e, GplStyle style)
     {
-        string text = Render(e);
-        return text.Length > 0 && text.All(char.IsAsciiDigit) ? $"@{int.Parse(text):x4}" : text;
+        string text = Render(e, style, word: true);
+        if (text.Length == 0 || !text.All(char.IsAsciiDigit))
+        {
+            return text;
+        }
+        int address = int.Parse(text);
+        return style.Label?.Invoke(address) is { } label ? $"@{label}" : $"@{address:x4}";
     }
 
-    public static string Render(GplExpression e)
+    public static string Render(GplExpression e) => Render(e, GplStyle.Listing);
+
+    /// <param name="word">In source, whether a lone number is a 15-bit word unless marked (see <see cref="GplAssembler"/>).</param>
+    public static string Render(GplExpression e, GplStyle style, bool word = false)
     {
         var parts = new List<string>();
         foreach (GplExprItem item in e.Items)
         {
             parts.Add(item switch
             {
-                GplTerm t => Render(t.Operand),
+                GplTerm t => Render(t.Operand, style, word && e.Items.Count == 1),
                 GplOperator o => OperatorSymbols[o.Code],
                 GplOpen => "(",
                 _ => ")",
@@ -167,9 +201,9 @@ public sealed class GplDecoder
         return string.Join(' ', parts).Replace("( ", "(").Replace(" )", ")");
     }
 
-    private static string Render(GplOperand o) => o switch
+    private static string Render(GplOperand o, GplStyle style, bool word) => o switch
     {
-        GplNumber n => n.Value.ToString(),
+        GplNumber n => style.IsSource ? GplAssembler.NumberText(n, word) : n.Value.ToString(),
         GplAccumulator => "accum",
         GplName n => $"name(-{n.Number})",
         GplVariable v => Render(v),
@@ -177,10 +211,10 @@ public sealed class GplDecoder
         {
             GplStringKind.SpeakerName => "<name>",
             GplStringKind.Previous => "<last string>",
-            _ => $"\"{Printable(s.Codes)}\"",
+            _ => style.IsSource ? Quoted(s) : $"\"{Printable(s.Codes)}\"",
         },
         GplObjectRef r => Render(r),
-        GplEmbedded e => $"(({Render(e.Instruction)}))",
+        GplEmbedded e => $"(({Render(e.Instruction, style)}))",
         _ => throw new InvalidOperationException(o.ToString()),
     };
 
@@ -208,10 +242,27 @@ public sealed class GplDecoder
         return name + string.Concat(r.Path.Select(p => $".{p}"));
     }
 
-    private static string Render(GplTarget t) => t.Field is not null ? Render(t.Field) : Render(t.Variable!);
+    private static string Render(GplTarget t, GplStyle style) => t.Field is not null ? Render(t.Field) : Render(t.Variable!);
 
     private static string Printable(byte[] codes) =>
         new([.. codes.Select(c => c is >= 0x20 and <= 0x7E ? (char)c : ' ')]);
+
+    /// <summary>A string as the assembler reads it: <c>\"</c>, <c>\\</c>, <c>\xNN</c> for other codes; raw strings prefixed <c>r</c>.</summary>
+    private static string Quoted(GplString s)
+    {
+        var b = new StringBuilder(s.Kind == GplStringKind.Raw ? "r\"" : "\"");
+        foreach (byte c in s.Codes)
+        {
+            b.Append(c switch
+            {
+                (byte)'"' => "\\\"",
+                (byte)'\\' => "\\\\",
+                >= 0x20 and <= 0x7E => ((char)c).ToString(),
+                _ => $"\\x{c:x2}",
+            });
+        }
+        return b.Append('"').ToString();
+    }
 
     // -- decoding ----------------------------------------------------------------
 
@@ -319,21 +370,21 @@ public sealed class GplDecoder
         byte b = Byte();
         if (b < 0x80)
         {
-            return new GplNumber((b << 8) | Byte());
+            return new GplNumber((b << 8) | Byte()) { Form = GplNumber.Word15 };
         }
         switch (b)
         {
             case 0x80:
                 return new GplAccumulator();
             case 0x8B:
-                return new GplNumber((int)(((uint)Word() << 16) | (uint)Word()));
+                return new GplNumber((int)(((uint)Word() << 16) | (uint)Word())) { Form = GplNumber.Int32 };
             case 0x8C:
                 byte op = Byte();
                 return new GplEmbedded(Instruction(op, _pos - 1));
             case 0x8F:
-                return new GplNumber((sbyte)Byte());
+                return new GplNumber((sbyte)Byte()) { Form = GplNumber.Int8 };
             case 0x90:
-                return new GplNumber(SignedWord());
+                return new GplNumber(SignedWord()) { Form = GplNumber.Int16 };
             case 0x91:
                 return new GplName(Word());
             case 0x92:
@@ -374,19 +425,20 @@ public sealed class GplDecoder
 
     private GplTarget Target()
     {
-        int b = Byte() & 0x7F;
+        byte code = Byte();
+        int b = code & 0x7F;
         bool wide = (b & 0x40) != 0;
         int type = wide ? (b + 0xC0) & 0xFF : b;
         if (type >= 0x10)
         {
-            return new GplTarget(null, ObjectRef());
+            return new GplTarget(null, ObjectRef()) { Code = code };
         }
         int index = wide ? Word() : Byte();
         if (!Enum.IsDefined((GplVarType)type))
         {
             throw new GplDecodeException($"bad assignment type 0x{b:x2}");
         }
-        return new GplTarget(new GplVariable((GplVarType)type, index), null);
+        return new GplTarget(new GplVariable((GplVarType)type, index), null) { Code = code };
     }
 
     private GplString StringOperand()

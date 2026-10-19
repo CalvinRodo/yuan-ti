@@ -59,11 +59,8 @@ public static class Session
         Install = install;
         Files.Clear();
         Assets.Clear();
-        Mods = ModSet.Load([
-            System.Environment.GetEnvironmentVariable(ModSet.FolderVariable),
-            Godot.ProjectSettings.GlobalizePath("user://mods"),
-            Path.Combine(install.Directory, "mods"),
-        ]);
+        Mods = ModSet.Load(ModFolders(install), GplModFormat.Builders);
+        Mods.ProblemFound += p => Godot.GD.PushWarning($"Mod file not used: {p}");
         if (Mods.Mods.Count > 0)
         {
             Godot.GD.Print($"Mods: {string.Join(", ", Mods.Mods.Select(m => m.Name))} ({Mods.Count} resources)");
@@ -72,6 +69,27 @@ public static class Session
         ScriptHost = new WorldGplHost();
         GameStarted = false;
     }
+
+    /// <summary>Where mods are looked for, first first: <c>DARKSUN_MODS</c>, the user data folder's <c>mods</c>, the game folder's <c>mods</c>.</summary>
+    public static IReadOnlyList<string?> ModFolders(GameInstall install) =>
+    [
+        System.Environment.GetEnvironmentVariable(ModSet.FolderVariable),
+        Godot.ProjectSettings.GlobalizePath("user://mods"),
+        Path.Combine(install.Directory, "mods"),
+    ];
+
+    /// <summary>Load the mods again (after the mod list changes them), with fresh files, caches and game.</summary>
+    public static void ReloadMods()
+    {
+        if (Install is not null)
+        {
+            Use(Install);
+        }
+    }
+
+    /// <summary>Build everything the mods change, so <see cref="ModSet.Problems"/> lists every file that can't be used.</summary>
+    public static IReadOnlyList<ModProblem> VerifyMods() =>
+        Install is null ? [] : Mods.Verify(Install.GffFiles.Select(n => (n, GffFile.Open(Install.FindFile(n)!))));
 
     /// <summary>A GFF file from the install, opened on first use.</summary>
     public static GffFile Open(string name)

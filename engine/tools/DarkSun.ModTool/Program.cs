@@ -1,25 +1,35 @@
 // Usage:
-//   DarkSun.ModTool export <game-dir> <file.gff> <tag> <number> <mod-dir> [--palette <file.gff>:<number>] [--this-file]
+//   DarkSun.ModTool export <game-dir> <file.gff> <tag> <number> <mod-dir> [--palette <file.gff>:<number>] [--this-file] [--bin]
 //   DarkSun.ModTool list <game-dir> <mods-dir>
+//   DarkSun.ModTool check <game-dir> <mods-dir>
+//   DarkSun.ModTool gpl-check <game-dir>
 //
 // export writes a resource into a mod folder in the form the engine reads
 // back: images as PNG (one file, or a folder with one PNG per frame), text
-// (TEXT, MERR, SPIN, NAME) as UTF-8 .txt, anything else as .bin. Edit the file
-// and the engine uses it. The path is <mod-dir>/<TAG>/<number>.<ext>, which
-// replaces the resource in whichever file has it; with --this-file it is
-// <mod-dir>/<FILE>.GFF/<TAG>/..., for that file only. Images are drawn in
-// PAL --palette (default: the file's first PAL, else RESOURCE.GFF PAL 1001).
+// (TEXT, MERR, SPIN) as UTF-8 .txt, items, monsters, regions and names
+// (IT1R, RDFF, RDAT, NAME) as .json, scripts (GPL, MAS) as .gpl source,
+// anything else (or anything, with --bin) as .bin. Edit the file and the
+// engine uses it; a .json may be cut down to the fields it changes. The path
+// is <mod-dir>/<TAG>/<number>.<ext>, which replaces the resource in whichever
+// file has it; with --this-file it is <mod-dir>/<FILE>.GFF/<TAG>/..., for that
+// file only. Images are drawn in PAL --palette (default: the file's first
+// PAL, else RESOURCE.GFF PAL 1001).
 //
-// list prints every resource the mods in <mods-dir> replace or add.
+// list prints every resource the mods in <mods-dir> replace or add; check
+// builds them all and prints the files that can't be used (exit code 1 if
+// any). gpl-check exports every script as source and assembles it again,
+// and fails unless every one comes back byte for byte.
 
 using System.Globalization;
 using System.Text;
 using DarkSun.Data.Gff;
 using DarkSun.Data.Images;
 using DarkSun.Data.Mods;
+using DarkSun.Data.Text;
+using DarkSun.Game.Scripting;
 
 string[] imageTags = ["BMP ", "CBMP", "TILE", "ICON", "PORT", "WALL", "FONT"];
-string[] textTags = ["TEXT", "MERR", "SPIN", "NAME"];
+string[] textTags = ["TEXT", "MERR", "SPIN"];
 
 if (args.Length >= 6 && args[0] == "export")
 {
@@ -37,7 +47,24 @@ if (args.Length >= 6 && args[0] == "export")
     string dir = thisFile ? Path.Combine(modDir, fileName, tag.Trim()) : Path.Combine(modDir, tag.Trim());
     Directory.CreateDirectory(dir);
 
-    if (imageTags.Contains(tag))
+    if (args.Contains("--bin"))
+    {
+        Write(Path.Combine(dir, $"{number}.bin"), data.ToArray());
+    }
+    else if (RecordJson.Handles(tag))
+    {
+        var names = NameTable.Read(GffFile.Open(Path.Combine(gameDir, "GPLDATA.GFF")));
+        Write(Path.Combine(dir, $"{number}.json"), Encoding.UTF8.GetBytes(RecordJson.Export(tag, data, i => names[i])));
+    }
+    else if (tag is "GPL " or "MAS ")
+    {
+        GffFile gpl = GffFile.Open(Path.Combine(gameDir, "GPLDATA.GFF"));
+        byte[] fieldTypes = FieldTypes(gpl);
+        var entries = tag == "GPL " ? GplAssembler.EntryPoints(Scripts(gpl), fieldTypes).GetValueOrDefault(number) : null;
+        string source = GplAssembler.Disassemble(data.ToArray(), fieldTypes, entries, $"{tag.Trim()} {number} from {fileName}");
+        Write(Path.Combine(dir, $"{number}{GplModFormat.Extension}"), Encoding.UTF8.GetBytes(source));
+    }
+    else if (imageTags.Contains(tag))
     {
         Palette palette = ChoosePalette(gameDir, gff, args);
         var frames = ImageDecoder.ReadFrames(data.Span);
@@ -67,9 +94,52 @@ if (args.Length >= 6 && args[0] == "export")
     }
     return 0;
 }
+if (args.Length == 3 && args[0] == "check")
+{
+    ModSet mods = ModSet.Load([args[2]], GplModFormat.Builders);
+    var problems = mods.Verify(Directory.EnumerateFiles(args[1], "*.GFF", new EnumerationOptions { MatchCasing = MatchCasing.CaseInsensitive })
+        .Order().Select(p => (Path.GetFileName(p).ToUpperInvariant(), GffFile.Open(p))));
+    Console.WriteLine($"{mods.Mods.Count} mods, {mods.Count} resources, {problems.Count} files can't be used");
+    foreach (ModProblem p in problems)
+    {
+        Console.WriteLine($"  {p}");
+    }
+    return problems.Count > 0 ? 1 : 0;
+}
+if (args.Length == 2 && args[0] == "gpl-check")
+{
+    GffFile gpl = GffFile.Open(Path.Combine(args[1], "GPLDATA.GFF"));
+    byte[] fieldTypes = FieldTypes(gpl);
+    var entries = GplAssembler.EntryPoints(Scripts(gpl), fieldTypes);
+    int same = 0, total = 0, raw = 0, lines = 0;
+    foreach (ResourceDescriptor r in gpl.DescribeResources().Where(r => r.Tag is "GPL " or "MAS "))
+    {
+        total++;
+        byte[] data = gpl.Read(r.Tag, r.Number).ToArray();
+        string source = GplAssembler.Disassemble(data, fieldTypes, r.Tag == "GPL " ? entries.GetValueOrDefault(r.Number) : null);
+        string[] sourceLines = source.Split('\n');
+        lines += sourceLines.Length;
+        raw += sourceLines.Count(l => l.TrimStart().StartsWith(".bytes", StringComparison.Ordinal));
+        try
+        {
+            if (GplAssembler.Assemble(source).AsSpan().SequenceEqual(data))
+            {
+                same++;
+                continue;
+            }
+            Console.WriteLine($"{r.Tag.Trim()} {r.Number}: assembles to different bytes");
+        }
+        catch (GplAssemblyException e)
+        {
+            Console.WriteLine($"{r.Tag.Trim()} {r.Number}: {e.Message}");
+        }
+    }
+    Console.WriteLine($"{same}/{total} scripts assemble back to the same bytes; {lines} lines of source, {raw} kept as .bytes");
+    return same == total ? 0 : 1;
+}
 if (args.Length == 3 && args[0] == "list")
 {
-    ModSet mods = ModSet.Load([args[2]]);
+    ModSet mods = ModSet.Load([args[2]], GplModFormat.Builders);
     Console.WriteLine($"{mods.Mods.Count} mods, highest priority first: {string.Join(", ", mods.Mods.Select(m => m.Name))}");
     foreach (string path in Directory.EnumerateFiles(args[1], "*.GFF").Order())
     {
@@ -85,11 +155,22 @@ if (args.Length == 3 && args[0] == "list")
             }
         }
     }
+    foreach (ModProblem p in mods.Problems)
+    {
+        Console.WriteLine($"can't use {p}");
+    }
     return 0;
 }
-Console.Error.WriteLine("usage: DarkSun.ModTool export <game-dir> <file.gff> <tag> <number> <mod-dir> [--palette <file.gff>:<number>] [--this-file]");
+Console.Error.WriteLine("usage: DarkSun.ModTool export <game-dir> <file.gff> <tag> <number> <mod-dir> [--palette <file.gff>:<number>] [--this-file] [--bin]");
 Console.Error.WriteLine("       DarkSun.ModTool list <game-dir> <mods-dir>");
+Console.Error.WriteLine("       DarkSun.ModTool check <game-dir> <mods-dir>");
+Console.Error.WriteLine("       DarkSun.ModTool gpl-check <game-dir>");
 return 2;
+
+static byte[] FieldTypes(GffFile gpl) => gpl.TryRead("GPLX", 1, out var gplx) ? GplDecoder.FieldTypes(gplx.Span) : [];
+
+static IEnumerable<byte[]> Scripts(GffFile gpl) =>
+    gpl.DescribeResources().Where(r => r.Tag is "GPL " or "MAS ").Select(r => gpl.Read(r.Tag, r.Number).ToArray());
 
 static void Write(string path, byte[] bytes)
 {

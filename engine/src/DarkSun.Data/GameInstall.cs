@@ -28,6 +28,10 @@ public sealed class GameInstall
     public IReadOnlyList<string> RegionFiles =>
         _files.Keys.Where(IsRegionFile).Order(StringComparer.Ordinal).ToList();
 
+    /// <summary>Every GFF file in the install, sorted by name.</summary>
+    public IReadOnlyList<string> GffFiles =>
+        _files.Keys.Where(n => n.EndsWith(".GFF", StringComparison.OrdinalIgnoreCase)).Order(StringComparer.OrdinalIgnoreCase).ToList();
+
     /// <summary>
     /// Open <paramref name="directory"/> as a game install, or return null
     /// with the reason in <paramref name="error"/>.

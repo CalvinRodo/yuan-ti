@@ -25,6 +25,22 @@ public static class GplOpcodes
     public const byte MenuEnd = 0x4A;
     public const byte SearchQualifier = 0x53;
 
+    /// <summary>Commands that take an (address, <c>GPL </c> file) pair, and which arguments they are: triggers and CALL_GLOBAL.</summary>
+    public static readonly IReadOnlyDictionary<byte, (int Address, int File)> EntryArguments = new Dictionary<byte, (int, int)>
+    {
+        [CallGlobal] = (0, 1), [0x1B] = (0, 1), [0x1C] = (0, 1), [0x65] = (0, 1), [0x66] = (0, 1),
+        [0x6C] = (0, 1), [0x6D] = (0, 1), [0x6E] = (0, 1), [0x6F] = (0, 1),
+        [0x68] = (2, 3), [0x69] = (2, 3), [0x6A] = (4, 5), [0x6B] = (4, 5), [0x70] = (2, 3),
+    };
+
+    /// <summary>
+    /// Arguments that the original scripts store as 15-bit words even when the
+    /// value would fit in a byte (file numbers, and PRINT_STRING / PRINT_NUMBER's
+    /// first): (opcode, argument index). Elsewhere small numbers are int8.
+    /// </summary>
+    public static readonly IReadOnlySet<(byte Op, int Arg)> WordArguments =
+        new HashSet<(byte, int)>([(0x4F, 0), (0x50, 0), .. EntryArguments.Select(e => (e.Key, e.Value.File))]);
+
     /// <summary>
     /// Every valid opcode. Others (26 4A 4C–4E 53 55–57 60 71–75, 81 and up)
     /// reach DSUN.EXE's error stub, which ends the script.

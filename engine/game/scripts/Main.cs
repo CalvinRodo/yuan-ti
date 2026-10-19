@@ -7,7 +7,7 @@ namespace DarkSun.Engine;
 /// Start screen: finds the player's game files, then plays the intro and
 /// opens the main menu (<c>-- --no-intro</c>: straight to the menu;
 /// <c>-- --new-game</c>: straight into a new game, with <c>--region=N</c> and
-/// <c>--at=X,Y</c> to start elsewhere). Only
+/// <c>--at=X,Y</c> to start elsewhere; <c>-- --mods</c>: the mod list). Only
 /// shown when the files can't be found, to choose their folder.
 /// For headless checks: <c>-- --check-install</c> prints what was found and
 /// quits (exit code 1 if nothing); <c>-- --check-regions</c>,
@@ -70,7 +70,7 @@ public partial class Main : Control
             return;
         }
         bool regionCheck = args.Contains("--check-regions") || args.Contains("--check-exits") || args.Contains("--check-start");
-        bool screenCheck = args.Contains("--check-intro") || args.Contains("--check-menu");
+        bool screenCheck = args.Contains("--check-intro") || args.Contains("--check-menu") || args.Contains("--check-mods");
         if (args.Contains("--check-install") || (install is null && (regionCheck || screenCheck)))
         {
             GD.Print(install is null ? "No game install found." : Describe(install));
@@ -85,6 +85,10 @@ public partial class Main : Control
         else if (args.Contains("--check-menu"))
         {
             ChangeScene(MainMenu.ScenePath);
+        }
+        else if (install is not null && args.Contains("--mods") || args.Contains("--check-mods"))
+        {
+            ChangeScene(ModsView.ScenePath);
         }
         else if (install is not null && args.Contains("--new-game"))
         {

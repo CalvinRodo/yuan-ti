@@ -16,7 +16,7 @@ stored in this repository. The plan is in
 | `tools/DarkSun.Dump` | Hashes every resource, image frame, palette and region render in the game files, and lists every script, for `make engine-compare`. |
 | `tools/DarkSun.ScriptRun` | Runs the new-game script, every region script and every trigger they register, for `make engine-scripts`. |
 | `tools/DarkSun.MoveCompare` | Compares the engine's A* with the port of DSUN.EXE's pathfinder in every region, and walking speeds with the walk scripts', for `make engine-movement`. |
-| `tools/DarkSun.ModTool` | Exports a resource into a mod folder (PNG, text or raw bytes) and lists what mods replace, for `make engine-mod-export` / `engine-mod-list`. |
+| `tools/DarkSun.ModTool` | Exports a resource into a mod folder (PNG, text, JSON, GPL source or raw bytes), lists and checks what mods replace, and round-trips every script through the GPL assembler, for `make engine-mod-export` / `engine-mod-list` / `engine-mod-check` / `engine-gpl-check`. |
 | `tools/DarkSun.MusicRender` | Renders a piece of the music to a WAV file, for `make engine-music`. |
 | `tools/DarkSun.CineDump` | Plays a cinematic without a screen and saves snapshots (PPM), for `make engine-cine`. |
 | `DarkSun.sln` | All of the above; the Godot project points to it (`dotnet/project/solution_directory`). |
@@ -59,6 +59,8 @@ make engine-scripts # run every game script in the C# interpreter (V=-v lists th
 make engine-mod-export FILE=RESOURCE.GFF TAG=ICON N=2048 MOD=mods/MyMod  # start a mod from a resource
 make engine-movement # pathfinding and walking speed against DSUN.EXE's
 make engine-mod-list MODS=mods   # what the mods in a folder replace
+make engine-mod-check MODS=mods  # build everything they change; list files that can't be used
+make engine-gpl-check            # every script → .gpl source → bytes again, must be identical
 make engine-music   # render music to out/music.wav (MUSIC=n, FILE=RESOURCE.GFF or CINE.GFF, SECONDS=60)
 make engine-cine    # play a cinematic headless, snapshots in out/cine (CINE=0 intro, 1 arrival, 100 ending)
 ```
@@ -76,13 +78,14 @@ $GODOT --headless --path engine/game -- --check-install
 $GODOT --headless --path engine/game -- --check-regions
 $GODOT --headless --path engine/game -- --check-intro
 $GODOT --headless --path engine/game -- --check-menu
+$GODOT --headless --path engine/game -- --check-mods   # mod list and unusable mod files (exit 1 if any)
 ```
 
 Starting the game plays the intro (`CINE.GFF` scripts 1–8: the SSI and AD&D
 logos, the title, the sword falling to Athas, the story scroll) with its
 music. Any key or click skips it; `-- --no-intro` leaves it out. Then comes the original main menu:
 Start Game (or S) plays the arrival cinematic and starts a new game, and
-Exit (E) quits. The music changes as in the original: the menu's
+Exit (E) quits; Mods (M, bottom right; `-- --mods` goes straight there) opens the mod list. The music changes as in the original: the menu's
 theme (17), each region's own track (its `RDAT` record), with 5-second fades
 between them. Create Characters (C) and Load Saved Game (L) aren't ported
 yet. Arrow keys and Enter work too. Esc in the region viewer returns to the
@@ -130,9 +133,15 @@ original files are never changed. The engine reads mods from the
 mods/
   load_order.txt                    optional: mod names, highest priority first
   MyMod/
+    mod.json                        optional: {"title", "version", "author", "description"}
     ICON/2048/0.png                 frame 0 of ICON 2048 (the other frames stay)
     BMP/20029.png                   a whole image, in its own colours
     TEXT/12.txt                     text, UTF-8
+    RDFF/87.json                    a monster's or item's fields: {"combat": {"hp": 99, "name": "Scar"}}
+    IT1R/1.json                     item types: {"2": {"damageDice": 2, "damageSides": 6}}
+    NAME/1.json                     item names: {"2": "Longbow"}
+    RDAT/42.json                    region 42's music and colour cycling: {"music": 5}
+    GPL/12.gpl                      a script, as source; assembled when the game loads it
     GPL/80.bin                      raw resource bytes: any tag (scripts, PAL, GMAP, GSEQ, …)
     RGN2A.GFF/ETAB/42.bin           only in that file; a file folder may also add resources
   _Disabled/                        names starting with _ or . are skipped
@@ -141,7 +150,30 @@ mods/
 `make engine-mod-export` writes a resource in the right form to edit:
 images are drawn in a palette (`--palette FILE:N` for the tool) and come back
 in true colour; in cinematics they are matched to the colours on screen.
-Changes take effect the next time the game starts.
+Items, monsters, regions and names come out as JSON with every known field
+(`--bin` for raw bytes instead); delete the fields you don't change, since a
+JSON file is applied as edits to the original, leaving undecoded bytes alone.
+Fields are listed in `DarkSun.Data.Mods.RecordJson`; `"bytes": {"0x1c": 5}`
+sets bytes no field names yet, and keys starting with `_` (the exporter's
+name hints) are ignored.
+
+Scripts come out as `.gpl` source in the listing's syntax, with labels for
+jumps and branches (`IF(@L0042)`, `L0042:`), `.org` before each address
+other scripts enter the file at (triggers, CALL_GLOBAL), and strings with
+`\"` and `\xNN` escapes; every shipped script assembles back to the same
+bytes (`make engine-gpl-check`). The assembler (`GplAssembler`) also takes
+`;` comments, `.bytes`, menus as `MENU` / `TITLE(…)` / `ENTRY(…)` / `MENU_END`,
+and `:w` `:b` `:s` `:l` suffixes to choose how a number is stored. If an edit
+makes a function too long for the next `.org`, move the extra code to the
+end of the file and `JUMP` to it; the error says by how much.
+
+A mod file that can't be read, parsed or assembled doesn't stop the game:
+the original resource is used, and the problem is logged and shown in the
+mod list. The mod list (M on the main menu) shows every mod with its
+`mod.json` details, how many resources it changes and its problems; it
+turns mods on and off (renaming the folder with a leading `_`) and moves
+them up and down (`load_order.txt`), applying changes at once.
+`make engine-mod-check` reports problems from the command line.
 
 Decoded images and palettes are cached for the session
 (`Session.Assets`), with one texture per frame and palette, so returning to a

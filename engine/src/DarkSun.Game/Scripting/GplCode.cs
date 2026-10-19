@@ -28,7 +28,17 @@ public enum GplStringKind : byte
 public abstract record GplOperand;
 
 /// <summary>A number: 15-bit, int8, int16 or int32 immediate.</summary>
-public sealed record GplNumber(int Value) : GplOperand;
+public sealed record GplNumber(int Value) : GplOperand
+{
+    /// <summary>How it was stored: <see cref="Word15"/>, or byte 0x8F, 0x90 or 0x8B. Not part of equality.</summary>
+    public byte Form { get; init; }
+
+    public const byte Word15 = 0, Int8 = 0x8F, Int16 = 0x90, Int32 = 0x8B;
+
+    public bool Equals(GplNumber? other) => other is not null && Value == other.Value;
+
+    public override int GetHashCode() => Value;
+}
 
 public sealed record GplAccumulator : GplOperand;
 
@@ -71,7 +81,15 @@ public sealed record GplClose : GplExprItem;
 public sealed record GplExpression(IReadOnlyList<GplExprItem> Items);
 
 /// <summary>An assignment target: a numeric or string variable, or an object field.</summary>
-public sealed record GplTarget(GplVariable? Variable, GplObjectRef? Field);
+public sealed record GplTarget(GplVariable? Variable, GplObjectRef? Field)
+{
+    /// <summary>The type byte as stored (DSUN.EXE ignores its top bit, and any type of 0x10 or more means a field). Not part of equality.</summary>
+    public byte Code { get; init; }
+
+    public bool Equals(GplTarget? other) => other is not null && Variable == other.Variable && Field == other.Field;
+
+    public override int GetHashCode() => HashCode.Combine(Variable, Field);
+}
 
 /// <summary>One SEARCH criterion: field, mode, and a value for some field types.</summary>
 public sealed record GplSearchCriterion(byte Field, byte Mode, GplExpression? Value);
@@ -103,4 +121,17 @@ public sealed record GplInstruction(int Address, byte Op, int Length)
 
     /// <summary>SETRECORD: the field (null for id 0x8000, which reads nothing).</summary>
     public GplObjectRef? Record { get; init; }
+}
+
+/// <summary>
+/// How <see cref="GplDecoder"/> renders commands: <see cref="Listing"/> as
+/// <c>gpl_parser.py</c> does, or <see cref="Source"/>, the text
+/// <see cref="GplAssembler"/> reads back (exact strings, menus in byte order,
+/// and addresses named by <paramref name="Label"/> where it gives a name).
+/// </summary>
+public sealed record GplStyle(bool IsSource, Func<int, string?>? Label = null)
+{
+    public static GplStyle Listing { get; } = new(false);
+
+    public static GplStyle Source { get; } = new(true);
 }

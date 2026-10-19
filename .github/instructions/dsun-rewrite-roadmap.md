@@ -73,8 +73,16 @@ compare against by eye.
       palettes, maps, music…), `.png` (true-colour images, whole or frame by
       frame) or `.txt` (text). `load_order.txt` sets priority. The
       `DarkSun.ModTool` exports resources into a mod and lists what mods replace.
-- [ ] Mod formats beyond raw bytes for structured data (JSON for items,
-      monsters, region info), a GPL assembler, and a mod list in the UI.
+- [x] **Structured mod formats** (2026-10-19): `.json` field edits of item
+      types (`IT1R`), objects' item, combat and character records (`RDFF`),
+      region info (`RDAT`) and item names (`NAME`), applied over the
+      original bytes (`RecordJson`); `.gpl` script source, assembled at load
+      (`GplAssembler`; all 250 shipped scripts round-trip byte for byte,
+      `make engine-gpl-check`); `mod.json` metadata; unusable mod files are
+      reported, not fatal. The main menu's Mods screen (`ModsView`) lists
+      mods, their problems, turns them on and off and reorders them.
+- [ ] More JSON forms as formats are decoded (spells `SPIN`, the rest of
+      the character record, `RDAT`'s other 43 bytes, `ETAB` placements).
 - [x] **Tests**: xUnit tests for `Data` and `Game`, run by `make engine-test`
       without the editor. Borland's RNG (`BorlandRandom`) is the first rule
       ported.

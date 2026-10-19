@@ -11,7 +11,8 @@ namespace DarkSun.Engine;
 /// and window 3000's buttons (Start Game, Create Characters, Load Saved
 /// Game, Exit to DOS), each an <c>ICON</c> whose frames are its normal,
 /// highlighted, disabled and pressed looks. The window's accelerator table
-/// gives the keys S, C, L and E. Arrow keys and Enter work too.
+/// gives the keys S, C, L and E. Arrow keys and Enter work too. A small
+/// Mods button (M), not in the original, opens the mod list (<see cref="ModsView"/>).
 /// Run with <c>-- --check-menu</c> to print the menu and quit.
 /// </summary>
 public partial class MainMenu : RetroScreen
@@ -90,6 +91,19 @@ public partial class MainMenu : RetroScreen
         };
         Canvas.AddChild(_status);
 
+        var mods = new LinkButton
+        {
+            Text = Session.Mods.Mods.Count > 0 ? $"Mods ({Session.Mods.Mods.Count})" : "Mods",
+            Underline = LinkButton.UnderlineMode.OnHover,
+            FocusMode = FocusModeEnum.None,
+        };
+        mods.AddThemeFontSizeOverride("font_size", 8);
+        mods.AddThemeColorOverride("font_color", new Color(0.75f, 0.6f, 0.4f));
+        mods.Pressed += OpenMods;
+        Canvas.AddChild(mods);
+        Vector2 size = mods.GetCombinedMinimumSize();
+        mods.Position = new Vector2(Width - size.X - 4, Height - size.Y - 2);
+
         if (OS.GetCmdlineUserArgs().Contains("--check-menu"))
         {
             GD.Print($"main menu: window {window.Number}, {window.Items.Count} items; buttons "
@@ -135,6 +149,12 @@ public partial class MainMenu : RetroScreen
 
     public override void _UnhandledInput(InputEvent e)
     {
+        if (e is InputEventKey { Pressed: true, Echo: false, Keycode: Key.M })
+        {
+            GetViewport().SetInputAsHandled();
+            OpenMods();
+            return;
+        }
         if (e is InputEventKey { Pressed: true, Echo: false } key && key.Unicode != 0
             && _keys.TryGetValue(char.ToUpperInvariant((char)key.Unicode), out int index) && index < _buttons.Count)
         {
@@ -143,6 +163,8 @@ public partial class MainMenu : RetroScreen
             GetViewport().SetInputAsHandled();
         }
     }
+
+    private void OpenMods() => GetTree().CallDeferred(SceneTree.MethodName.ChangeSceneToFile, ModsView.ScenePath);
 
     private void Run(Command command)
     {

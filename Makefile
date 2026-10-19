@@ -15,7 +15,7 @@ DOTNET   ?= $(or $(shell command -v dotnet 2>/dev/null),$(HOME)/.dotnet/dotnet)
 .PHONY: help serve install install-ffmpeg extract list-resource list-gff extract-gff \
         precompute precompute-gff precompute-maps precompute-gamedata \
         precompute-images precompute-audio \
-        gpl unpack-exe decomp engine-build engine-test engine-run engine-edit engine-compare engine-scripts engine-cine engine-music engine-mod-export engine-mod-list engine-movement
+        gpl unpack-exe decomp engine-build engine-test engine-run engine-edit engine-compare engine-scripts engine-cine engine-music engine-mod-export engine-mod-list engine-mod-check engine-gpl-check engine-movement
 
 help: ## Show this help message
 	@echo ""
@@ -106,7 +106,7 @@ decomp: unpack-exe ## Decompile DSUN.EXE with headless Ghidra -> out/decomp/  [G
 # Godot / C# engine (engine/)
 
 # Godot builds and loads C# with the same SDK, found through DOTNET_ROOT and PATH.
-ENGINE_TARGETS := engine-build engine-test engine-run engine-edit engine-compare engine-scripts engine-cine engine-music engine-mod-export engine-mod-list engine-movement
+ENGINE_TARGETS := engine-build engine-test engine-run engine-edit engine-compare engine-scripts engine-cine engine-music engine-mod-export engine-mod-list engine-mod-check engine-gpl-check engine-movement
 $(ENGINE_TARGETS): export DOTNET_ROOT := $(patsubst %/,%,$(dir $(realpath $(DOTNET))))
 $(ENGINE_TARGETS): export PATH := $(DOTNET_ROOT):$(PATH)
 $(ENGINE_TARGETS): export DOTNET_CLI_TELEMETRY_OPTOUT := 1
@@ -144,6 +144,12 @@ engine-mod-export: ## Export a resource into a mod folder  [FILE=RESOURCE.GFF TA
 
 engine-mod-list: ## List what the mods in a folder replace  [MODS=mods]
 	$(DOTNET) run --project engine/tools/DarkSun.ModTool -- list $(GAME_DIR) $(or $(MODS),mods)
+
+engine-mod-check: ## Build everything the mods in a folder change; list files that can't be used  [MODS=mods]
+	$(DOTNET) run --project engine/tools/DarkSun.ModTool -- check $(GAME_DIR) $(or $(MODS),mods)
+
+engine-gpl-check: ## Export every script as .gpl source and assemble it back; fail unless identical
+	$(DOTNET) run --project engine/tools/DarkSun.ModTool -- gpl-check $(GAME_DIR)
 
 engine-movement: ## Compare the engine's pathfinding and walking speed with DSUN.EXE's  [PAIRS=200]
 	$(DOTNET) run --project engine/tools/DarkSun.MoveCompare -- $(GAME_DIR) $(or $(PAIRS),200)
