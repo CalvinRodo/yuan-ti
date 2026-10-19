@@ -1,3 +1,4 @@
+using DarkSun.Data.Ui;
 using System.Text;
 using DarkSun.Data.Assets;
 using DarkSun.Data.Gff;
@@ -137,6 +138,26 @@ public sealed class ModSetTests : IDisposable
         GffFile gff = ModSet.Load([_root]).Apply(Gff(), "TEST.GFF");
 
         Assert.Equal(font, gff.Read("FONT", 100).ToArray());
+    }
+
+    [Fact]
+    public void AWindowsLayoutIsJson()
+    {
+        var header = new Bytes().Text("WIND").Int(0).Int(3000).Zero(UiWindow.HeaderSize - 12).ToArray();
+        header[0xBE] = 64; header[0xC0] = 32; header[0xF3] = 1;
+        byte[] wind = new Bytes().Byte(header).Zero(4).Text("BUTN").Int(2048).Short(94).Short(70).Zero(14).ToArray();
+        string exported = RecordJson.Export("WIND", wind);
+        Assert.Contains("\"BUTN 2048\"", exported);
+
+        byte[] moved = RecordJson.Apply("WIND", wind, """{"width": 80, "items": {"BUTN 2048": {"x": 10}}}""");
+
+        UiWindow w = UiWindow.Parse(moved);
+        Assert.Equal((80, 32, 10, 70), (w.Width, w.Height, w.Items[0].X, w.Items[0].Y));
+        Assert.Throws<InvalidDataException>(() => RecordJson.Apply("WIND", wind, """{"items": {"BUTN 9": {"x": 1}}}"""));
+
+        byte[] button = UiResourceTests.Control("BUTN", 2048, 127, 12, 0, 2048);
+        byte[] wider = RecordJson.Apply("BUTN", button, """{"width": 140, "icon": 2049}""");
+        Assert.Equal((140, 2049), (UiControl.Parse(wider).Width, UiControl.Parse(wider).Icon));
     }
 
     [Fact]

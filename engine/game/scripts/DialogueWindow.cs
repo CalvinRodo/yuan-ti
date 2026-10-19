@@ -36,20 +36,22 @@ public partial class DialogueWindow : Control
     /// <summary>The text box's colour (<c>EBOX</c> 4002 +0x80).</summary>
     private const int TextColour = 199;
 
+    // The windows' controls.
+    private const int TextWindow = 3007, ChoiceWindow = 3008, ClickArea = 12300, PortraitBox = 2090, TextBox = 4002,
+        TextUp = 2093, TextMore = 2094, FirstOption = 2076, ChoiceUp = 2095, ChoiceMore = 2096;
+
     private Control _panel = null!;
-    private TextureRect _backdrop = null!;
-    private Control _textMode = null!, _menuMode = null!;
-    private TextureRect _frame = null!, _portrait = null!;
+    private UiWindowView? _textMode, _menuMode;
+    private TextureRect _portrait = null!;
     private RichTextLabel _text = null!;
-    private TextureButton _up = null!, _more = null!;
+    private TextureButton? _textUp, _textMore, _menuUp, _menuMore;
     private Label _title = null!;
-    private readonly List<(TextureRect Bar, Label Text, Button Hit)> _options = [];
+    private readonly List<(TextureButton Bar, Label Text)> _options = [];
+    private Texture2D? _noPortrait;
 
     private GplDialogue? _dialogue;
     private int _shownVersion = -1;
     private Func<int, ImageTexture?>? _portraits;
-    private Func<string, int, int, Texture2D?>? _art;
-    private Func<int, Color>? _colour;
 
     private int _top;
     private int _lines;
@@ -69,72 +71,19 @@ public partial class DialogueWindow : Control
         SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
         _panel = new Control { Size = new Vector2(Width, Height), MouseFilter = MouseFilterEnum.Stop, ClipContents = true };
         AddChild(_panel);
-        _backdrop = new TextureRect { MouseFilter = MouseFilterEnum.Ignore };
-        _panel.AddChild(_backdrop);
-
-        _textMode = Layer();
-        _frame = Picture(_textMode, new Vector2(6, 4));
-        _portrait = Picture(_textMode, new Vector2(14, 12));
         _text = new RichTextLabel
         {
             BbcodeEnabled = true,
             ScrollActive = false,
-            Position = new Vector2(58, 6),
-            Size = new Vector2(236, 46),
             MouseFilter = MouseFilterEnum.Pass,
             AutowrapMode = TextServer.AutowrapMode.WordSmart,
         };
-        foreach (string font in new[] { "normal_font_size", "italics_font_size", "bold_font_size" })
-        {
-            _text.AddThemeFontSizeOverride(font, FontSize);
-        }
         _text.AddThemeConstantOverride("line_separation", 0);
         _text.GuiInput += TextInput;
-        _textMode.AddChild(_text);
-
-        _menuMode = Layer();
+        _portrait = new TextureRect { Size = new Vector2(32, 32), MouseFilter = MouseFilterEnum.Ignore };
         _title = new Label { Position = new Vector2(6, 1), Size = new Vector2(296, 11), ClipText = true, MouseFilter = MouseFilterEnum.Ignore };
-        _title.AddThemeFontSizeOverride("font_size", FontSize);
-        _menuMode.AddChild(_title);
-        for (int i = 0; i < OptionsShown; i++)
-        {
-            int slot = i;
-            var bar = new TextureRect { Position = new Vector2(3, 13 + 8 * i), Size = new Vector2(300, 10), MouseFilter = MouseFilterEnum.Ignore };
-            _menuMode.AddChild(bar);
-            var text = new Label { Position = new Vector2(8, 12 + 8 * i), Size = new Vector2(292, 10), ClipText = true, MouseFilter = MouseFilterEnum.Ignore };
-            text.AddThemeFontSizeOverride("font_size", FontSize);
-            _menuMode.AddChild(text);
-            var hit = new Button { Flat = true, Position = new Vector2(3, 13 + 8 * i), Size = new Vector2(300, 8), FocusMode = FocusModeEnum.None };
-            hit.AddThemeStyleboxOverride("normal", new StyleBoxEmpty());
-            hit.AddThemeStyleboxOverride("hover", new StyleBoxFlat { BgColor = new Color(1, 1, 1, 0.12f) });
-            hit.AddThemeStyleboxOverride("pressed", new StyleBoxFlat { BgColor = new Color(1, 1, 1, 0.25f) });
-            hit.Pressed += () => Choose(_menuTop + slot);
-            _menuMode.AddChild(hit);
-            _options.Add((bar, text, hit));
-        }
-
-        _up = new TextureButton { Position = new Vector2(305, 4), Size = new Vector2(14, 10), FocusMode = FocusModeEnum.None };
-        _up.Pressed += Back;
-        _panel.AddChild(_up);
-        _more = new TextureButton { Position = new Vector2(305, 18), Size = new Vector2(14, 35), FocusMode = FocusModeEnum.None };
-        _more.Pressed += More;
-        _panel.AddChild(_more);
         Resized += Fit;
         Fit();
-    }
-
-    private Control Layer()
-    {
-        var layer = new Control { Size = new Vector2(Width, Height), MouseFilter = MouseFilterEnum.Ignore };
-        _panel.AddChild(layer);
-        return layer;
-    }
-
-    private static TextureRect Picture(Control parent, Vector2 at)
-    {
-        var picture = new TextureRect { Position = at, MouseFilter = MouseFilterEnum.Ignore };
-        parent.AddChild(picture);
-        return picture;
     }
 
     /// <summary>The 320 × 200 screen's scale, the window at its bottom, centred.</summary>
@@ -146,54 +95,111 @@ public partial class DialogueWindow : Control
     }
 
     /// <param name="portraits">The texture of a <c>PORT</c> number, or null.</param>
-    /// <param name="art">A frame of a <c>RESOURCE.GFF</c> image (<c>BMP</c>, <c>ICON</c>) in the screen's palette, or null.</param>
-    /// <param name="colour">A colour of the screen's palette.</param>
-    public void Attach(GplDialogue dialogue, Func<int, ImageTexture?> portraits, Func<string, int, int, Texture2D?> art, Func<int, Color> colour)
+    /// <param name="palette">The screen's palette, for the windows' art (the region's).</param>
+    public void Attach(GplDialogue dialogue, Func<int, ImageTexture?> portraits, DarkSun.Data.Images.Palette palette)
     {
         _dialogue = dialogue;
         _portraits = portraits;
-        _art = art;
-        _colour = colour;
         _shownVersion = -1;
-        LoadArt();
+        BuildWindows(palette);
         Refresh();
     }
 
-    private void LoadArt()
+    /// <summary>
+    /// The two windows from their data (<see cref="UiWindowView"/>): the text
+    /// window over its stone panel, the choice window over the same panel;
+    /// the screen's text and portrait go into their controls' places.
+    /// </summary>
+    private void BuildWindows(DarkSun.Data.Images.Palette palette)
     {
-        if (_art is null)
+        foreach (Node old in new Node?[] { _textMode, _menuMode }.OfType<Node>())
+        {
+            foreach (Node mine in new Node[] { _text, _portrait, _title })
+            {
+                if (mine.GetParent() == old)
+                {
+                    old.RemoveChild(mine);
+                }
+            }
+            old.QueueFree();
+        }
+        _options.Clear();
+        _textMode = UiWindowView.Build(TextWindow, palette);
+        _menuMode = UiWindowView.Build(ChoiceWindow, palette, backdrop: TextWindow);
+        if (_textMode is null || _menuMode is null)
         {
             return;
         }
-        // The stone panel is the top 58 rows of BMP 3007.
-        _backdrop.Texture = _art("BMP ", 3007, 0) is { } stone
-            ? new AtlasTexture { Atlas = stone, Region = new Rect2(0, 0, Width, Height) }
-            : null;
-        _frame.Texture = _art("ICON", 2090, 0);
-        Skin(_up, 2093);
-        Skin(_more, 12100);
+        _panel.AddChild(_textMode);
+        _panel.AddChild(_menuMode);
+        Color colour = palette[TextColour] is var c ? Color.Color8(c.R, c.G, c.B) : GameFonts.Tan;
+
+        // The text window: the whole window a button, the portrait in its frame, the text in its box.
+        if (_textMode.Button(ClickArea) is { } area)
+        {
+            area.Pressed += More;
+        }
+        if (_textMode.Button(PortraitBox) is { } frame)
+        {
+            frame.StretchMode = TextureButton.StretchModeEnum.KeepCentered;
+            frame.MouseFilter = MouseFilterEnum.Ignore;
+            _portrait.Position = frame.Position + ((frame.Size - _portrait.Size) / 2).Floor();
+            _noPortrait = UiArt(palette, "ICON", PortraitBox, 1); // frame 1: the sun, when there is no portrait
+        }
+        _textMode.AddChild(_portrait);
+        Rect2 box = _textMode.RectOf("EBOX", TextBox);
+        if (_textMode.TextBox(TextBox) is { } label)
+        {
+            label.Visible = false; // the paged text goes here instead
+        }
+        _text.Position = box.Position;
+        _text.Size = box.Size;
+        GameFonts.Use(_text, colour, "normal_font", "italics_font", "bold_font");
+        _textMode.AddChild(_text);
+        _textUp = Wire(_textMode.Button(TextUp), Back);
+        _textMore = Wire(_textMode.Button(TextMore), More);
+
+        // The choice window: the title above its five bars, an option on each.
+        GameFonts.Use(_title, colour);
+        _menuMode.AddChild(_title);
         for (int i = 0; i < OptionsShown; i++)
         {
-            _options[i].Bar.Texture = _art("ICON", 12102 + i, 0);
+            int slot = i;
+            if (_menuMode.Button(FirstOption + i) is not { } bar)
+            {
+                continue;
+            }
+            bar.Pressed += () => Choose(_menuTop + slot);
+            bar.MouseEntered += () => bar.Modulate = new Color(1.25f, 1.25f, 1.25f);
+            bar.MouseExited += () => bar.Modulate = Colors.White;
+            Label text = bar.GetNodeOrNull<Label>("Text") ?? new Label { Name = "Text", MouseFilter = MouseFilterEnum.Ignore };
+            if (text.GetParent() is null)
+            {
+                bar.AddChild(text);
+            }
+            text.Position = new Vector2(5, -1);
+            text.Size = bar.Size;
+            text.ClipText = true;
+            text.LabelSettings = GameFonts.Settings(colour);
+            _options.Add((bar, text));
         }
-        // The game's font, letters in the text box's colour.
-        Color text = _colour?.Invoke(TextColour) ?? GameFonts.Tan;
-        GameFonts.Use(_text, text, "normal_font", "italics_font", "bold_font");
-        GameFonts.Use(_title, text);
-        foreach (var o in _options)
-        {
-            GameFonts.Use(o.Text, text);
-        }
+        _menuUp = Wire(_menuMode.Button(ChoiceUp), Back);
+        _menuMore = Wire(_menuMode.Button(ChoiceMore), More);
     }
 
-    /// <summary>A button's looks from its icon's frames: 0 normal, 1 highlighted, 2 disabled, 3 pressed.</summary>
-    private void Skin(TextureButton button, int icon)
+    private static TextureButton? Wire(TextureButton? button, Action pressed)
     {
-        button.TextureNormal = _art!("ICON", icon, 0);
-        button.TextureHover = _art("ICON", icon, 1);
-        button.TextureDisabled = _art("ICON", icon, 2);
-        button.TexturePressed = _art("ICON", icon, 3);
+        if (button is not null)
+        {
+            button.Pressed += pressed;
+        }
+        return button;
     }
+
+    private static Texture2D? UiArt(DarkSun.Data.Images.Palette palette, string tag, int number, int frame) =>
+        Session.Open("RESOURCE.GFF").TryRead(tag, number, out var data) && Session.Assets.Frames(data) is var frames && frame < frames.Count
+            ? Textures.ToTexture(frames[frame], palette)
+            : null;
 
     /// <summary>Redraw if the dialogue changed; hide when there is nothing to show.</summary>
     public void Refresh()
@@ -224,7 +230,7 @@ public partial class DialogueWindow : Control
         Visible = true;
 
         Texture2D? face = _dialogue.Portrait is int n ? _portraits?.Invoke(n) : null;
-        _portrait.Texture = face ?? _art?.Invoke("ICON", 2090, 1);
+        _portrait.Texture = face ?? _noPortrait;
         _text.Text = string.Concat(_dialogue.Text.Select(Format));
 
         _choices = _dialogue.Prompt switch
@@ -280,27 +286,38 @@ public partial class DialogueWindow : Control
 
     private void ShowPage()
     {
+        if (_textMode is null || _menuMode is null)
+        {
+            return;
+        }
         _textMode.Visible = !_menuShown;
         _menuMode.Visible = _menuShown;
         if (_menuShown)
         {
-            for (int i = 0; i < OptionsShown; i++)
+            for (int i = 0; i < _options.Count; i++)
             {
                 int at = _menuTop + i;
                 bool has = at < _choices.Count;
                 _options[i].Bar.Visible = has;
                 _options[i].Text.Text = has ? $"{at + 1}. {_choices[at].Text}" : "";
-                _options[i].Hit.Visible = has;
             }
-            _up.Disabled = false; // back to the text, or the options before
-            _more.Disabled = _menuTop + OptionsShown >= _choices.Count;
+            Enable(_menuUp, true); // back to the text, or the options before
+            Enable(_menuMore, _menuTop + OptionsShown < _choices.Count);
         }
         else
         {
             _text.ScrollToLine(_top);
-            _up.Disabled = _top == 0;
+            Enable(_textUp, _top > 0);
             // MORE goes on: to the next page, the choices, the script, or away.
-            _more.Disabled = false;
+            Enable(_textMore, true);
+        }
+    }
+
+    private static void Enable(TextureButton? button, bool on)
+    {
+        if (button is not null)
+        {
+            button.Disabled = !on;
         }
     }
 

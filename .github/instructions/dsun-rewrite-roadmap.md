@@ -35,9 +35,9 @@ What already exists, and what the engine can reuse:
 | GPL scripts (217 `GPL `, 33 `MAS `) | Bytecode fully documented, disassembler | `src/gpl_parser.py`, `dsun-exe-reference.md` |
 | Executable | Overlays unpacked; 2 402 functions decompiled; runtime, GPL interpreter and all handlers named | `make decomp` |
 | Cinematics (`ACF `, `BMA `, `CINE.GFF` `BMP`/`PAL`) | Decoded and played | `DarkSun.Data.Cinematics`, `DarkSun.Game.Cinematics`, `dsun-exe-reference.md` §7 |
-| UI windows (`WIND`, `BUTN`, `ACCL`) | Layout decoded (the main menu uses them) | `DarkSun.Data.Ui` |
+| UI windows (`WIND`, `BUTN`, `APFM`, `EBOX`, `ACCL`) | Decoded; screens are built from them; JSON for mods | `DarkSun.Data.Ui`, `UiWindowView` |
 | Font (`FONT` 100) | Decoded, drawn as the game draws it, moddable as a picture | `DarkSun.Data.Text.GameFont`, `FontSheet`; `GameFonts` |
-| Not yet decoded | `APFM`, `EBOX` (beyond its size and colours), `DBOX`, `MENU`; what follows combat records in `RDFF` (type 4 references and the data after them: inventories?) | |
+| Not yet decoded | how `APFM` slots are drawn (bevels, bars), `EBOX` fields beyond size and colours, `MENU`; what follows combat records in `RDFF` (type 4 references and the data after them: inventories?) | |
 
 The GOG install ships DOSBox, so the original game is always available to
 compare against by eye.
@@ -346,10 +346,20 @@ this milestone brings most of the game's content.
       (`FONT` 100: `GameFonts`). Not yet: `WIND` 3500 (text without a
       portrait; every window here has the portrait box). `--check-dialogue`,
       and `--talk` to start a conversation for testing.
-- [ ] Decide the UI approach: rebuild the screens as Godot `Control` scenes
-      using the original art (decoded `WIND`, `BUTN`, `DBOX`, `FONT`), so that
-      layout is resolution-independent and easy to change. The original
-      layouts are a reference, not a constraint.
+- [x] The UI approach: screens are Godot `Control`s built from the original
+      windows' data and art (`UiWindowView`: a `WIND` with its `BUTN`s,
+      `APFM` slots, `EBOX` text boxes, `ACCL` keys and backdrop `BMP`, in the
+      game's `FONT`), scaled by whole numbers with the 320 × 200 screen. The
+      screen's code finds controls by number and fills them in, so a layout
+      is the window's data: a mod's `WIND/n.json` moves controls (`BUTN`,
+      `APFM`, `EBOX` `.json` resize them, change icons and texts), and the
+      engine's own departures from the original are the same JSON, in
+      `game/ui/WIND/` (Character Generation's die). The main menu, View
+      Character, Character Generation and the text windows are built this
+      way; `--check-windows` builds all 27 windows (400 controls, no art
+      missing). There are no `DBOX` resources in this game. Modern screens
+      with no original window (items, shop, saves, mods, debugger, key help)
+      are plain Godot controls.
 - [x] Main menu, from the original's window 3000 (`MainMenu`): Start Game
       (plays cinematic 1, then a new game in region 42) and Exit work; S, C,
       L and E and the arrow keys work. Create Characters and Load Saved Game

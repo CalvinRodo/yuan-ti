@@ -9,8 +9,9 @@ namespace DarkSun.Engine;
 /// The title menu, built as DSUN.EXE builds it (<c>8015:0208</c>): a black
 /// screen, <c>BMP</c> 20028 at (47, 25) and 20029 at (4, 45) in palette 1001,
 /// and window 3000's buttons (Start Game, Create Characters, Load Saved
-/// Game, Exit to DOS), each an <c>ICON</c> whose frames are its normal,
-/// highlighted, disabled and pressed looks. The window's accelerator table
+/// Game, Exit to DOS), built from the window's data (<see cref="UiWindowView"/>),
+/// each an <c>ICON</c> whose frames are its normal, highlighted, disabled and
+/// pressed looks. The window's accelerator table
 /// gives the keys S, C, L and E; Create Characters opens <see cref="PartyView"/>,
 /// Load Saved Game <see cref="SavesView"/>. Arrow keys and Enter work too. A small
 /// Mods button (M), not in the original, opens the mod list (<see cref="ModsView"/>).
@@ -59,23 +60,27 @@ public partial class MainMenu : RetroScreen
             }
         }
 
-        UiWindow window = UiWindow.Parse(resources.Read("WIND", WindowNumber).Span);
-        foreach (WindowItem item in window.Items)
+        // The buttons and keys are window 3000's (UiWindowView), at their places in it.
+        if (UiWindowView.Build(WindowNumber, palette, backdrop: 0) is not { } window)
         {
-            if (item.Tag == "BUTN" && AddButton(resources, palette, item) is { } button)
+            return;
+        }
+        Canvas.AddChild(window);
+        int accl = window.Window.Items.FirstOrDefault(i => i.Tag == "ACCL").Number;
+        foreach (WindowItem item in window.Window.Items.Where(i => i.Tag == "BUTN"))
+        {
+            if (window.Button(item.Number) is { } button)
             {
                 int index = _buttons.Count;
+                button.FocusMode = FocusModeEnum.All;
                 button.Pressed += () => Run((Command)index);
                 _buttons.Add(button);
             }
-            else if (item.Tag == "ACCL" && resources.TryRead("ACCL", item.Number, out var accl))
-            {
-                // Commands come in pairs (upper and lower case) for each button, in order.
-                foreach (Accelerator key in AcceleratorTable.Parse(accl.Span))
-                {
-                    _keys[char.ToUpperInvariant(key.Key)] = (key.Command - item.Number) / 2;
-                }
-            }
+        }
+        foreach (Accelerator key in window.Keys)
+        {
+            // Commands come in pairs (upper and lower case) for each button, in order.
+            _keys[char.ToUpperInvariant(key.Key)] = (key.Command - accl) / 2;
         }
         for (int i = 0; i < _buttons.Count; i++)
         {
@@ -106,7 +111,7 @@ public partial class MainMenu : RetroScreen
 
         if (OS.GetCmdlineUserArgs().Contains("--check-menu"))
         {
-            GD.Print($"main menu: window {window.Number}, {window.Items.Count} items; buttons "
+            GD.Print($"main menu: window {window.Window.Number}, {window.Window.Items.Count} items; buttons "
                 + string.Join(", ", _buttons.Select(b => $"{b.Name} at ({b.Position.X},{b.Position.Y}) {b.Size.X}x{b.Size.Y}"))
                 + "; keys " + string.Join(" ", _keys.Select(k => $"{k.Key}={(Command)k.Value}")));
             GetTree().Quit(_buttons.Count == 4 ? 0 : 1);
@@ -116,35 +121,6 @@ public partial class MainMenu : RetroScreen
         {
             _buttons[0].CallDeferred(Control.MethodName.GrabFocus);
         }
-    }
-
-    /// <summary>A window's button: its <c>BUTN</c>, drawn with the frames of its <c>ICON</c>.</summary>
-    private TextureButton? AddButton(GffFile resources, Palette palette, WindowItem item)
-    {
-        if (!resources.TryRead("BUTN", item.Number, out var butn))
-        {
-            return null;
-        }
-        UiButton def = UiButton.Parse(butn.Span);
-        if (!resources.TryRead("ICON", def.Icon, out var icon))
-        {
-            return null;
-        }
-        IReadOnlyList<ImageFrame> frames = Session.Assets.Frames(icon);
-        Texture2D? Frame(int n) => n < frames.Count && frames[n].Width > 1 ? Textures.ToTexture(frames[n], palette) : null;
-        var button = new TextureButton
-        {
-            Name = $"BUTN{item.Number}",
-            Position = new Vector2(item.X, item.Y),
-            TextureNormal = Frame(UiButton.NormalFrame),
-            TextureHover = Frame(UiButton.HighlightFrame),
-            TextureFocused = Frame(UiButton.HighlightFrame),
-            TexturePressed = Frame(UiButton.PressedFrame),
-            TextureDisabled = Frame(UiButton.DisabledFrame),
-            FocusMode = FocusModeEnum.All,
-        };
-        Canvas.AddChild(button);
-        return button;
     }
 
     public override void _UnhandledInput(InputEvent e)

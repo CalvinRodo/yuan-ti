@@ -67,14 +67,14 @@ current GFF, and spell ICON images are numbered from 21 000 upward.
 |-----|------:|-------------|
 | ACCL | 1 | Accelerator table — keyboard shortcut definitions |
 | ADV | 17 | AIL audio drivers — Miles Sound System `.ADV` driver blobs |
-| APFM | 97 | Application frames — top-level UI window/layout containers |
+| APFM | 97 | A window's frame or slot (116 bytes): +0x08 number, +0x28/+0x2A size, +0x58 alignment; filled or drawn by the code (character boxes, item slots, bars). `DarkSun.Data.Ui.UiControl` |
 | BMP | 105 | Bitmap images — general-purpose sprites and backgrounds |
-| BUTN | 139 | Button resources — clickable UI button definitions |
+| BUTN | 139 | A button (110 bytes; 130/163 with a text at +0x6E): +0x08 number, +0x28/+0x2A size, +0x58 alignment (icon across bits 8–9, down 10–11; text across 4–5, down 6–7: start, inset, centre, end), +0x64 its `ICON` (frames normal, highlighted, disabled, pressed). `UiControl` |
 | BVOC | 111 | Background audio samples — `.VOC`-format ambient/music loops |
 | CMAT | 2 | Color matrix — color transformation data (fade tables, etc.) |
 | CPAL | 2 | Alternate color palette (may be compressed or remapped) |
 | CSEQ | 1 | Cinematic sequence block |
-| EBOX | 6 | Edit-box UI resources |
+| EBOX | 6 | A text box (168 bytes): +0x22/+0x24 size, +0x7E background colour (229, transparent), +0x80 text colour (199). `UiControl` |
 | FONT | 1 | The game's font, `FONT` 100 in `RESOURCE.GFF` (the only one): word glyph count (256), word height (9), 4 zero bytes; 256 bytes colour map (pixel value → palette index, identity); 256 words, each character's glyph as an offset; a glyph is a word width (2–7) then height × width pixel bytes: 0 none, 254 the letter, 20 its shadow. Codes 0x80–0xFF are code page 437. The game sets map[254] to the text colour. `DarkSun.Data.Text.GameFont` |
 | GFFI | 15 | GFF index blocks |
 | GSEQ | 23 | Global audio/sync sequences |

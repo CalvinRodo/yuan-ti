@@ -1,0 +1,6 @@
+{
+  "_about": "The engine's adjustments to Character Generation (WIND 3011). The die's picture is taller than its button, so the button moves down 10 pixels to keep the die off the name below. A mod's WIND/3011 replaces this.",
+  "items": {
+    "BUTN 2010": { "x": 135, "y": 65 }
+  }
+}

@@ -140,6 +140,10 @@ is `gname[10]`. AWARD gives experience to the party's characters, DAMAGE and PHY
 REQUEST 1 and 4 rest the party. Party items and hit points are saved; regions remember what their
 creatures carry and items left on the ground. `-- --new-game --give=1051,1095` hands out items by
 `RDFF` number, `--open-items` opens the items window; `--check-items` checks it all with the game's items.
+The original screens (main menu, View Character, Character Generation, the text windows) are built
+from their windows' data (`UiWindowView`): each control where its `WIND` puts it, with its own art,
+so a mod's `WIND/n.json` moves them. The engine's own changes to the original layouts are the same
+JSON, in `game/ui/WIND/` (an export has to include `ui/*.json`). `--check-windows` builds every window.
 Text on the 320 × 200 screens and in conversations is in the game's font (`FONT` 100, `GameFonts`),
 letters in the text colour over a dark shadow as the original draws them.
 Conversations use the original's text windows (`WIND` 3007 and 3008): the portrait, the text paged
@@ -195,6 +199,9 @@ mods/
     RDAT/42.json                    region 42's music and colour cycling: {"music": 5}
     GPL/12.gpl                      a script, as source; assembled when the game loads it
     GPL/80.bin                      raw resource bytes: any tag (scripts, PAL, GMAP, GSEQ, …)
+    WIND/3000.json                  a window's layout: {"items": {"BUTN 2048": {"x": 10, "y": 150}}} moves
+                                    a control (the screens are built from their windows' data)
+    BUTN/2048.json                  a control's size, alignment, icon and text (also APFM, EBOX)
     FONT/100.png                    the game's font as a picture: 16 × 16 cells of 8 × 10, white the
                                     letters, dark their shadow, a row under each marking its width
     BVOC/4.wav                      a sound effect: PCM WAV, any rate, 8 or 16 bits, mono or stereo;

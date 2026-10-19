@@ -53,10 +53,12 @@ public sealed record UiWindow(int Number, int Width, int Height, IReadOnlyList<W
 }
 
 /// <summary>
-/// A <c>BUTN</c> resource (110 bytes): <c>+0x08</c> number, <c>+0x28</c>,
-/// <c>+0x2A</c> size, <c>+0x5A</c> the <c>ICON</c> it shows. The icon's
-/// frames are the button's looks: 0 normal, 1 highlighted, 2 disabled (1 × 1
-/// when there is none), 3 pressed (from the main menu's art).
+/// A <c>BUTN</c> resource (110 bytes, 130 or 163 with a text): <c>+0x08</c>
+/// number, <c>+0x28</c>, <c>+0x2A</c> size, <c>+0x5A</c> its own number
+/// again, <c>+0x64</c> the <c>ICON</c> it shows (0: none, e.g. the invisible
+/// button over a whole text window). The icon's frames are the button's
+/// looks: 0 normal, 1 highlighted, 2 disabled (1 × 1 when there is none),
+/// 3 pressed (from the main menu's art). See <see cref="UiControl"/>.
 /// </summary>
 public sealed record UiButton(int Number, int Width, int Height, int Icon)
 {
@@ -65,15 +67,64 @@ public sealed record UiButton(int Number, int Width, int Height, int Icon)
     /// <exception cref="InvalidDataException">Not a <c>BUTN</c> resource.</exception>
     public static UiButton Parse(ReadOnlySpan<byte> data)
     {
-        if (data.Length < 0x5C || !data[..4].SequenceEqual("BUTN"u8))
+        UiControl c = UiControl.Parse(data);
+        return c.Tag == "BUTN" ? new UiButton(c.Number, c.Width, c.Height, c.Icon) : throw new InvalidDataException("not a BUTN resource");
+    }
+}
+
+/// <summary>
+/// Where a control puts its icon and its text (the word at <c>+0x58</c>, read
+/// by the layout routine <c>2A1D</c>): bits 8–9 the icon across and 10–11
+/// down, 4–5 the text across and 6–7 down, each 0 at the start, 1 inset (by
+/// the border), 2 centred, 3 at the end; bits 0–3 flags (not traced).
+/// </summary>
+public readonly record struct UiAlignment(int IconX, int IconY, int TextX, int TextY, int Flags)
+{
+    public const int Start = 0, Inset = 1, Centre = 2, End = 3;
+
+    public static UiAlignment Parse(int word) =>
+        new(word >> 8 & 3, word >> 10 & 3, word >> 4 & 3, word >> 6 & 3, word & 0xF);
+
+    public int Word => IconX << 8 | IconY << 10 | TextX << 4 | TextY << 6 | Flags;
+}
+
+/// <summary>
+/// One control of a window, whatever its tag: they share a header (tag,
+/// length, number at <c>+0x08</c>). <c>BUTN</c> and <c>APFM</c> have their size
+/// at <c>+0x28</c>, <c>+0x2A</c>, the alignment at <c>+0x58</c> and an icon at
+/// <c>+0x64</c>; a long <c>BUTN</c> has a text at <c>+0x6E</c> (a placeholder
+/// such as "XXXXX" the game replaces). An <c>APFM</c> (116 bytes, everything
+/// else 0) is a frame or a slot the code draws into or fills at run time:
+/// character boxes, item slots, bars. An <c>EBOX</c> (168 bytes) is a text
+/// box: size at <c>+0x22</c>, <c>+0x24</c>, <c>+0x5A</c> a number (2081, 2099;
+/// not a <c>FONT</c>: there is only one), <c>+0x7E</c> its background colour
+/// (229, the transparent key) and <c>+0x80</c> its text colour (199), 0 for
+/// the defaults.
+/// </summary>
+public sealed record UiControl(string Tag, int Number, int Width, int Height, UiAlignment Align, int Icon, string Text,
+    int TextColour, int Background)
+{
+    /// <exception cref="InvalidDataException">Not a control resource.</exception>
+    public static UiControl Parse(ReadOnlySpan<byte> data)
+    {
+        if (data.Length < 0x2C)
         {
-            throw new InvalidDataException("not a BUTN resource");
+            throw new InvalidDataException("too short for a control");
         }
-        return new UiButton(
-            (int)BinaryPrimitives.ReadUInt32LittleEndian(data[8..]),
-            BinaryPrimitives.ReadInt16LittleEndian(data[0x28..]),
-            BinaryPrimitives.ReadInt16LittleEndian(data[0x2A..]),
-            BinaryPrimitives.ReadUInt16LittleEndian(data[0x5A..]));
+        string tag = Encoding.ASCII.GetString(data[..4]);
+        byte[] bytes = data.ToArray();
+        int Word(int at) => at + 2 <= bytes.Length ? BinaryPrimitives.ReadInt16LittleEndian(bytes.AsSpan(at)) : 0;
+        int number = (int)BinaryPrimitives.ReadUInt32LittleEndian(data[8..]);
+        switch (tag)
+        {
+            case "EBOX":
+                return new UiControl(tag, number, Word(0x22), Word(0x24), default, 0, "", Word(0x80), Word(0x7E));
+            case "BUTN" or "APFM":
+                string text = data.Length > 0x6E ? Encoding.Latin1.GetString(data[0x6E..]).Split('\0')[0] : "";
+                return new UiControl(tag, number, Word(0x28), Word(0x2A), UiAlignment.Parse(Word(0x58)), (ushort)Word(0x64), text, 0, 0);
+            default:
+                throw new InvalidDataException($"not a control resource ({tag})");
+        }
     }
 }
 

@@ -1,6 +1,7 @@
 using DarkSun.Data.Gff;
 using DarkSun.Data.Images;
 using DarkSun.Game.Characters;
+using DarkSun.Game.World;
 using Godot;
 
 namespace DarkSun.Engine;
@@ -21,14 +22,17 @@ public partial class PartyView : RetroScreen
     public const string ScenePath = "res://scenes/party.tscn";
 
     private const int PaletteNumber = 1001;
-    private static readonly Vector2I[] Slots = [new(53, 30), new(104, 30), new(53, 90), new(104, 90)];
+    // WIND 11500's controls.
+    private const int WindowNumber = 11500, FirstBox = 11300, FirstLeader = 11309, FirstComputerControl = 11313,
+        NameBar = 11318, FirstText = 11319, SecondText = 11320, ReturnButton = 10308, ItemArea = 11269;
 
     private Palette _palette = null!;
     private GffFile _resources = null!;
     private readonly List<TextureRect> _slotPictures = [];
     private readonly List<Label> _slotNames = [];
     private Label _name = null!, _details = null!, _status = null!;
-    private Button _first = null!, _second = null!;
+    private UiWindowView _window = null!;
+    private TextureButton _first = null!, _second = null!;
     private PopupMenu _menu = null!;
     private int _selected;
 
@@ -42,44 +46,66 @@ public partial class PartyView : RetroScreen
         }
         _resources = Session.Open("RESOURCE.GFF");
         _palette = Session.Assets.Palette(_resources.Read("PAL ", PaletteNumber));
-        Picture("BMP ", 11000, 0, 0);
+        // Window 11500 over its backdrop, BMP 11000: every control where the window's data puts it.
+        _window = UiWindowView.Build(WindowNumber, _palette, backdrop: 11000)!;
+        Canvas.AddChild(_window);
 
-        for (int i = 0; i < Slots.Length; i++)
+        for (int i = 0; i < GameWorld.PartySize; i++)
         {
             int slot = i;
-            Picture("ICON", 11100, Slots[i].X, Slots[i].Y);
+            TextureButton box = _window.Button(FirstBox + i)!;
             var picture = new TextureRect
             {
-                Position = Slots[i] + new Vector2I(1, 1),
-                Size = new Vector2(32, 32),
+                Position = new Vector2(1, 1),
+                Size = box.Size - new Vector2(2, 2),
                 ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
                 StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
                 ClipContents = true,
-                MouseFilter = MouseFilterEnum.Stop,
+                MouseFilter = MouseFilterEnum.Ignore,
             };
-            picture.GuiInput += e => SlotInput(slot, e);
-            Canvas.AddChild(picture);
+            box.AddChild(picture);
+            box.GuiInput += e => SlotInput(slot, e);
             _slotPictures.Add(picture);
-            Label name = Text(new Vector2(Slots[i].X - 10, Slots[i].Y + 35), 54, "", HorizontalAlignment.Center);
-            _slotNames.Add(name);
-            Picture("ICON", 11106, Slots[i].X - 10, Slots[i].Y);     // leader (not used yet)
-            Picture("ICON", 11111, Slots[i].X - 10, Slots[i].Y + 10); // computer control (not used yet)
+            _slotNames.Add(Text(new Vector2(box.Position.X - 10, box.Position.Y + box.Size.Y + 1), box.Size.X + 20, "", HorizontalAlignment.Center));
+            // Leader and computer control: shown, not working yet.
+            foreach (int n in new[] { FirstLeader + i, FirstComputerControl + i })
+            {
+                if (_window.Button(n) is { } b)
+                {
+                    b.MouseFilter = MouseFilterEnum.Ignore;
+                }
+            }
         }
-        Picture("ICON", 11108, 151, 26);
-        _name = Text(new Vector2(153, 27), 119, "", HorizontalAlignment.Center);
-        _details = Text(new Vector2(150, 41), 128, "");
-        _details.Size = new Vector2(128, 110);
+        Rect2 bar = _window.RectOf("BUTN", NameBar);
+        _name = Text(bar.Position + new Vector2(0, 1), bar.Size.X, "", HorizontalAlignment.Center);
+        // The original shows the items here (its slots, APFM 11213–11247); this shows the character's details.
+        Rect2 area = _window.RectOf("APFM", ItemArea);
+        _details = Text(area.Position + new Vector2(3, 0), area.Size.X - 4, "");
+        _details.Size = area.Size;
         _details.AutowrapMode = TextServer.AutowrapMode.WordSmart;
 
-        // The bottom bar: the character screens' icons (not ported yet), the two text buttons, Return.
-        foreach (var (icon, x) in new[] { (10100, 43), (11102, 67), (11103, 91), (11104, 114) })
+        // The bottom bar: the character screens' icons and the game menu (not ported yet), the two text buttons, Return.
+        foreach (int n in new[] { 10300, 11304, 11305, 11306, 11308 })
         {
-            Picture("ICON", icon, x, 155).Modulate = new Color(1, 1, 1, 0.45f);
+            if (_window.Button(n) is { } b)
+            {
+                b.Modulate = new Color(1, 1, 1, 0.45f);
+                b.MouseFilter = MouseFilterEnum.Ignore;
+            }
         }
-        _first = TextButton(new Vector2(132, 157), new Vector2(42, 12), () => Do(first: true));
-        _second = TextButton(new Vector2(173, 157), new Vector2(48, 12), () => Do(first: false));
-        Picture("ICON", 11101, 223, 155).Modulate = new Color(1, 1, 1, 0.45f);
-        TextureButton back = IconButton(10108, 253, 155, Back);
+        _first = _window.Button(FirstText)!;
+        _first.Pressed += () => Do(first: true);
+        _second = _window.Button(SecondText)!;
+        _second.Pressed += () => Do(first: false);
+        foreach (TextureButton b in new[] { _first, _second })
+        {
+            if (b.GetNodeOrNull<Label>("Text") is { } t)
+            {
+                t.LabelSettings = GameFonts.Settings(new Color(0.95f, 0.9f, 0.75f));
+            }
+        }
+        TextureButton back = _window.Button(ReturnButton)!;
+        back.Pressed += Back;
         back.TooltipText = "Return (Esc)";
         _status = Text(new Vector2(72, 175), 176, "", HorizontalAlignment.Center);
 
@@ -117,7 +143,7 @@ public partial class PartyView : RetroScreen
     private void Refresh()
     {
         var cc = new CharacterCreation(Session.Rules, Session.Names, new Random());
-        for (int i = 0; i < Slots.Length; i++)
+        for (int i = 0; i < GameWorld.PartySize; i++)
         {
             Character? c = i < Session.Party.Count ? Session.Party[i] : null;
             _slotPictures[i].Texture = c is null ? null : Portrait(c);
@@ -142,8 +168,9 @@ public partial class PartyView : RetroScreen
             _details.Text = "An empty character box.\n\nNEW creates a character; ADD brings back one made before.";
         }
         bool full = Selected is not null;
-        _first.Text = full ? (Selected!.Adventured ? "NAME" : "EDIT") : "NEW";
-        _second.Text = full ? "DROP" : "ADD";
+        _window.ButtonText(FirstText)!.Text = full ? (Selected!.Adventured ? "NAME" : "EDIT") : "NEW";
+        _window.ButtonText(SecondText)!.Text = full ? "DROP" : "ADD";
+        _second.Modulate = _second.Disabled ? new Color(1, 1, 1, 0.5f) : Colors.White;
         _second.Disabled = !full && Available().Count == 0;
     }
 
@@ -208,7 +235,7 @@ public partial class PartyView : RetroScreen
                 _menu.AddItem("CANCEL", 0);
                 _menu.Popup(new Rect2I((Vector2I)GetGlobalMousePosition(), Vector2I.Zero));
                 break;
-            case >= 100 when Available() is var list && id - 100 < list.Count && Session.Party.Count < Slots.Length:
+            case >= 100 when Available() is var list && id - 100 < list.Count && Session.Party.Count < GameWorld.PartySize:
                 Session.Party.Add(list[id - 100]);
                 Session.SaveParty();
                 _selected = Session.Party.Count - 1;
@@ -234,52 +261,6 @@ public partial class PartyView : RetroScreen
             Atlas = Textures.ToTexture(frame, _palette),
             Region = new Rect2(Math.Max(0, (frame.Width - 32) / 2), 0, Math.Min(32, frame.Width), Math.Min(32, frame.Height)),
         };
-    }
-
-    private TextureRect Picture(string tag, int number, int x, int y)
-    {
-        var rect = new TextureRect { Position = new Vector2(x, y), MouseFilter = MouseFilterEnum.Ignore };
-        if (_resources.TryRead(tag, number, out var data) && Session.Assets.Frames(data) is [var frame, ..])
-        {
-            rect.Texture = Textures.ToTexture(frame, _palette);
-        }
-        Canvas.AddChild(rect);
-        return rect;
-    }
-
-    private TextureButton IconButton(int icon, int x, int y, Action pressed)
-    {
-        var frames = _resources.TryRead("ICON", icon, out var data) ? Session.Assets.Frames(data) : [];
-        Texture2D? Frame(int n) => n < frames.Count && frames[n].Width > 1 ? Textures.ToTexture(frames[n], _palette) : null;
-        var button = new TextureButton
-        {
-            Position = new Vector2(x, y),
-            TextureNormal = Frame(0),
-            TextureHover = Frame(1),
-            TexturePressed = Frame(3) ?? Frame(1),
-            TextureDisabled = Frame(2),
-        };
-        button.Pressed += pressed;
-        Canvas.AddChild(button);
-        return button;
-    }
-
-    private Button TextButton(Vector2 at, Vector2 size, Action pressed)
-    {
-        var button = new Button { Position = at, Size = size, Flat = false, FocusMode = FocusModeEnum.None, ClipText = true };
-        GameFonts.Use(button, new Color(0.95f, 0.9f, 0.75f));
-        var normal = new StyleBoxFlat { BgColor = new Color(0.28f, 0.29f, 0.38f), BorderColor = new Color(0.12f, 0.12f, 0.18f) };
-        normal.SetBorderWidthAll(1);
-        var hover = (StyleBoxFlat)normal.Duplicate();
-        hover.BgColor = new Color(0.38f, 0.39f, 0.5f);
-        button.AddThemeStyleboxOverride("normal", normal);
-        button.AddThemeStyleboxOverride("hover", hover);
-        button.AddThemeStyleboxOverride("pressed", hover);
-        button.AddThemeStyleboxOverride("disabled", normal);
-        button.AddThemeColorOverride("font_disabled_color", new Color(0.6f, 0.6f, 0.65f));
-        button.Pressed += pressed;
-        Canvas.AddChild(button);
-        return button;
     }
 
     private Label Text(Vector2 at, float width, string text, HorizontalAlignment align = HorizontalAlignment.Left)

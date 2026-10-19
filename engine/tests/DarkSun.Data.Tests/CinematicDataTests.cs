@@ -139,12 +139,44 @@ public class UiResourceTests
     [Fact]
     public void ParsesButtonsAndAccelerators()
     {
+        // +0x5A is the button's own number; the icon it shows is at +0x64.
         byte[] butn = new Bytes().Text("BUTN").Int(110).Int(2048).Zero(0x28 - 12).Short(127).Short(12)
-            .Zero(0x5A - 0x2C).Short(2048).Zero(110 - 0x5C).ToArray();
-        Assert.Equal(new UiButton(2048, 127, 12, 2048), UiButton.Parse(butn));
+            .Zero(0x5A - 0x2C).Short(2048).Zero(0x64 - 0x5C).Short(12100).Zero(110 - 0x66).ToArray();
+        Assert.Equal(new UiButton(2048, 127, 12, 12100), UiButton.Parse(butn));
 
         byte[] accl = new Bytes().Text("ACCL").Int(0x18).Int(8100).Short(2)
             .Byte(0).Short('S').Short(8100).Byte(0).Short('s').Short(8101).ToArray();
         Assert.Equal([new Accelerator(0, 'S', 8100), new Accelerator(0, 's', 8101)], AcceleratorTable.Parse(accl));
+    }
+
+    /// <summary>A <c>BUTN</c> or <c>APFM</c>: size, alignment word, icon, and a text if <paramref name="text"/> isn't null.</summary>
+    internal static byte[] Control(string tag, int number, int w, int h, int align, int icon, string? text = null)
+    {
+        var b = new Bytes().Text(tag).Int(text is null ? 110 : 130).Int(number).Zero(0x28 - 12).Short((short)w).Short((short)h)
+            .Zero(0x58 - 0x2C).Short((short)align).Short((short)number).Zero(0x64 - 0x5C).Short((short)icon).Zero(0x6E - 0x66);
+        if (text is not null)
+        {
+            b.Text(text).Zero(130 - 0x6E - text.Length);
+        }
+        return b.ToArray();
+    }
+
+    [Fact]
+    public void ControlsHaveSizeAlignmentIconAndText()
+    {
+        UiControl b = UiControl.Parse(Control("BUTN", 11319, 42, 12, 0xA0, 11109, "XXXXX"));
+        Assert.Equal(("BUTN", 11319, 42, 12, 11109, "XXXXX"), (b.Tag, b.Number, b.Width, b.Height, b.Icon, b.Text));
+        Assert.Equal(new UiAlignment(0, 0, UiAlignment.Centre, UiAlignment.Centre, 0), b.Align);
+        Assert.Equal(0xA0, b.Align.Word);
+        Assert.Equal(new UiAlignment(UiAlignment.Inset, 0, UiAlignment.Centre, UiAlignment.End, 6), UiAlignment.Parse(0x1E6));
+
+        UiControl slot = UiControl.Parse(Control("APFM", 11213, 18, 18, 0x1E6, 0));
+        Assert.Equal(("APFM", 18, 18, 0, ""), (slot.Tag, slot.Width, slot.Height, slot.Icon, slot.Text));
+
+        byte[] ebox = new Bytes().Text("EBOX").Int(168).Int(4002).Zero(0x22 - 12).Short(236).Short(46)
+            .Zero(0x7E - 0x26).Short(229).Short(199).Zero(168 - 0x82).ToArray();
+        UiControl box = UiControl.Parse(ebox);
+        Assert.Equal((236, 46, 199, 229), (box.Width, box.Height, box.TextColour, box.Background));
+        Assert.Throws<InvalidDataException>(() => UiControl.Parse("ACCL0000000000000000000000000000000000000000000000"u8));
     }
 }

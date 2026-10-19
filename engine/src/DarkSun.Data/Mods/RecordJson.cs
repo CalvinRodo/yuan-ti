@@ -29,6 +29,10 @@ public sealed record RecordField(string Name, int Offset, string Kind, Type? Enu
 /// and colour cycling.</item>
 /// <item><c>NAME/1.json</c> (<c>GPLDATA.GFF</c>): item names by index,
 /// <c>{"45": "Bone Sword"}</c> (at most 24 characters).</item>
+/// <item><c>WIND/&lt;n&gt;.json</c> (<c>RESOURCE.GFF</c>): a window's layout, its
+/// size and where each control is, <c>{"items": {"BUTN 2048": {"x": 100, "y": 70}}}</c>.</item>
+/// <item><c>BUTN</c>, <c>APFM</c>, <c>EBOX</c> <c>/&lt;n&gt;.json</c>: a control's size,
+/// alignment, icon and text (<see cref="Ui.UiControl"/>).</item>
 /// </list>
 /// Enumerations take names (<c>"placement": "Hand"</c>, <c>"weapon": "Melee, Thrown"</c>) or numbers.
 /// </summary>
@@ -77,10 +81,34 @@ public static class RecordJson
         new("music", 0x2F, "u8"),
     ];
 
-    private static readonly JsonSerializerOptions Indented = new() { WriteIndented = true };
+    // Plain characters (×, ', é) in what modders read and edit, not \u escapes.
+    private static readonly JsonSerializerOptions Indented = new()
+    {
+        WriteIndented = true,
+        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+    };
 
     /// <summary>Whether <paramref name="tag"/> can be edited as JSON.</summary>
-    public static bool Handles(string tag) => GffFile.NormalizeTag(tag.Trim().ToUpperInvariant()) is "IT1R" or "RDFF" or "RDAT" or "NAME";
+    public static bool Handles(string tag) =>
+        GffFile.NormalizeTag(tag.Trim().ToUpperInvariant()) is "IT1R" or "RDFF" or "RDAT" or "NAME" or "WIND" or "BUTN" or "APFM" or "EBOX";
+
+    /// <summary>A <c>BUTN</c>'s or <c>APFM</c>'s fields (<see cref="Ui.UiControl"/>); the text runs to the end of the resource.</summary>
+    public static readonly IReadOnlyList<RecordField> ControlFields =
+    [
+        new("width", 0x28, "s16"), new("height", 0x2A, "s16"), new("align", 0x58, "u16"), new("icon", 0x64, "u16"),
+    ];
+
+    public static readonly IReadOnlyList<RecordField> TextBoxFields =
+    [
+        new("width", 0x22, "s16"), new("height", 0x24, "s16"), new("background", 0x7E, "s16"), new("textColour", 0x80, "s16"),
+    ];
+
+    private static IReadOnlyList<RecordField> ControlFieldsOf(string tag, int length) => tag switch
+    {
+        "EBOX" => TextBoxFields,
+        _ when length > 0x6E => [.. ControlFields, new("text", 0x6E, "text", Length: length - 0x6E)],
+        _ => ControlFields,
+    };
 
     /// <summary>Every field of <paramref name="data"/> as JSON, the starting point for an edit.</summary>
     public static string Export(string tag, ReadOnlyMemory<byte> data, Func<int, string?>? itemName = null)
@@ -118,6 +146,22 @@ public static class RecordJson
                     }
                     root[name] = section;
                 }
+                break;
+            case "WIND":
+                var window = Ui.UiWindow.Parse(data.Span);
+                root["_about"] = "Move a control by its x and y (in the window, 320 × 200 screen pixels); delete the ones you don't move.";
+                root["width"] = window.Width;
+                root["height"] = window.Height;
+                var items = new JsonObject();
+                foreach (Ui.WindowItem item in window.Items)
+                {
+                    items.TryAdd($"{item.Tag.Trim()} {item.Number}", new JsonObject { ["x"] = item.X, ["y"] = item.Y });
+                }
+                root["items"] = items;
+                break;
+            case "BUTN" or "APFM" or "EBOX":
+                root = Read(ControlFieldsOf(GffFile.NormalizeTag(tag.Trim().ToUpperInvariant()).Trim(), data.Length), data.Span);
+                root.Insert(0, "_about", "align: icon across << 8 | down << 10, text across << 4 | down << 6 (0 start, 1 inset, 2 centre, 3 end)");
                 break;
             default:
                 throw new ArgumentException($"{tag.Trim()} has no JSON form");
@@ -182,9 +226,59 @@ public static class RecordJson
                     Write(Section(entry)!.Value.Fields, data.AsSpan(body, entry.Length), Object(value, key), key);
                 }
                 return data;
+            case "WIND":
+                return ApplyWindow(data, edits);
+            case "BUTN" or "APFM" or "EBOX":
+                string t = GffFile.NormalizeTag(tag.Trim().ToUpperInvariant()).Trim();
+                Write(ControlFieldsOf(t, data.Length), data, edits, "");
+                return data;
             default:
                 throw new InvalidDataException($"{tag.Trim()} has no JSON form; use .bin");
         }
+    }
+
+    /// <summary>A <c>WIND</c>'s size (<c>+0xBE</c>, <c>+0xC0</c>) and its items' positions (<c>+0x0C</c>, <c>+0x0E</c> of each).</summary>
+    private static byte[] ApplyWindow(byte[] data, JsonObject edits)
+    {
+        Ui.UiWindow window = Ui.UiWindow.Parse(data);
+        foreach (var (key, value) in edits)
+        {
+            switch (key)
+            {
+                case var _ when key.StartsWith('_'):
+                    break;
+                case "width":
+                    BinaryPrimitives.WriteInt16LittleEndian(data.AsSpan(0xBE), (short)Number(value, 0, 640, key, null));
+                    break;
+                case "height":
+                    BinaryPrimitives.WriteInt16LittleEndian(data.AsSpan(0xC0), (short)Number(value, 0, 400, key, null));
+                    break;
+                case "items":
+                    foreach (var (name, place) in Object(value, key))
+                    {
+                        int i = window.Items.ToList().FindIndex(it => $"{it.Tag.Trim()} {it.Number}".Equals(name.Trim(), StringComparison.OrdinalIgnoreCase));
+                        if (i < 0)
+                        {
+                            throw new InvalidDataException($"items.{name}: not in this window (it has: {string.Join(", ", window.Items.Select(it => $"{it.Tag.Trim()} {it.Number}"))})");
+                        }
+                        int at = Ui.UiWindow.HeaderSize + i * Ui.UiWindow.ItemSize;
+                        foreach (var (axis, n) in Object(place, $"items.{name}"))
+                        {
+                            int offset = axis switch
+                            {
+                                "x" => 0x0C,
+                                "y" => 0x0E,
+                                _ => throw new InvalidDataException($"items.{name}.{axis}: a control has x and y"),
+                            };
+                            BinaryPrimitives.WriteInt16LittleEndian(data.AsSpan(at + offset), (short)Number(n, -640, 640, $"items.{name}.{axis}", null));
+                        }
+                    }
+                    break;
+                default:
+                    throw new InvalidDataException($"{key}: a window has width, height and items");
+            }
+        }
+        return data;
     }
 
     private static (string Name, IReadOnlyList<RecordField> Fields)? Section(RdffEntry e) => e switch

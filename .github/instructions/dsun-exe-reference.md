@@ -621,6 +621,12 @@ From the handlers (2026-10-18):
   * `WIND` 3500 holds only `EBOX` 4500 (239 × 46 at (56, 6)): text without
     a portrait.
   * A `BUTN`'s icon is the word at +0x64 (+0x5A is its own number).
+  * Controls share a header (tag, length, number at +0x08). The layout
+    routine `2A1D` reads the alignment word at +0x58: bits 8–9 place the
+    icon across and 10–11 down, bits 4–5 the text across and 6–7 down, each
+    0 at the start, 1 inset by the border (2 or 3 pixels, more with the
+    flags at +0x0E), 2 centred, 3 at the end. An `APFM` has only a number,
+    a size and that word: a slot the code fills (`2AF5` sets them).
 * **The font** (`FONT` 100, loaded at start-up by `2531`, pointer at
   `577D:5EA3`, current font `577D:6108`): see `DarkSun.Data.Text.GameFont`.
   The blitter (`2E86:06C0`) draws a glyph pixel p in colour `font[8 + p]`,

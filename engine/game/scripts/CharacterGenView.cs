@@ -18,8 +18,10 @@ namespace DarkSun.Engine;
 /// abilities, hit points and alignment (left-click raises, right-click
 /// lowers), the name (<c>EBOX</c> 4003), the psionic disciplines or clerical
 /// spheres (<c>WIND</c> 3012 / 3013, <c>ICON</c> 2038–2047), EXIT and DONE. The
-/// rules are <see cref="CharacterCreation"/>'s. The backdrop is drawn here:
-/// the original's frames (<c>APFM</c>) aren't decoded.
+/// rules are <see cref="CharacterCreation"/>'s. Every control is where the
+/// window's data puts it (<see cref="UiWindowView"/>; the engine moves the die,
+/// <c>res://ui/WIND/3011.json</c>); the panels behind them are drawn here, as
+/// the window has no <c>APFM</c> frames.
 /// </summary>
 public partial class CharacterGenView : RetroScreen
 {
@@ -27,6 +29,11 @@ public partial class CharacterGenView : RetroScreen
 
     private const int PaletteNumber = 1001;
     private const int DieFirst = 20048, DieLast = 20058;
+
+    // WIND 3011's controls.
+    private const int WindowNumber = 3011, PortraitButton = 2001, IconButtonNumber = 2027, DieButton = 2010,
+        FirstClassButton = 2002, FirstAbilityButton = 2012, HpButton = 2011, AlignmentButton = 2018,
+        ExitButton = 2058, DoneButton = 2000, NameBox = 4003;
 
     private static Character? _editing;
     private static int _slot;
@@ -36,8 +43,9 @@ public partial class CharacterGenView : RetroScreen
     private CharacterCreation _cc = null!;
     private Palette _palette = null!;
     private GffFile _resources = null!;
+    private UiWindowView _window = null!;
     private TextureRect _portrait = null!, _icon = null!, _die = null!;
-    private readonly List<(TextureRect Label, Label Mark, CharacterClass Class)> _classes = [];
+    private readonly List<(TextureButton Label, Label Mark, CharacterClass Class)> _classes = [];
     private readonly List<Label> _abilities = [];
     private Label _hp = null!, _summary = null!, _alignment = null!, _status = null!;
     private LineEdit _name = null!;
@@ -73,30 +81,29 @@ public partial class CharacterGenView : RetroScreen
             _c.Sprite = DefaultSprite(_c);
         }
         BuildBackdrop();
+        // The controls are window 3011's, where its data (and res://ui/WIND/3011.json) puts them.
+        _window = UiWindowView.Build(WindowNumber, _palette, backdrop: 0)!;
+        Canvas.AddChild(_window);
 
-        _portrait = Picture(0, 0, 100, 116, Changeable);
-        _portrait.GuiInput += e => Click(e, by => { _cc.CycleLooks(_c, by); _c.Sprite = DefaultSprite(_c); });
-        _icon = Picture(135, 20, 45, 35, Changeable);
-        _icon.StretchMode = TextureRect.StretchModeEnum.KeepCentered;
-        _icon.GuiInput += e => Click(e, CycleSprite);
-        _die = Picture(141, 63, 38, 50, Changeable);
-        _die.GuiInput += e => Click(e, _ => Roll());
-        _die.TooltipText = "Roll new abilities";
+        _portrait = Picture(PortraitButton, by => { _cc.CycleLooks(_c, by); _c.Sprite = DefaultSprite(_c); });
+        _icon = Picture(IconButtonNumber, CycleSprite);
+        _die = Picture(DieButton, _ => Roll());
+        _window.Button(DieButton)!.TooltipText = "Roll new abilities";
 
         for (int k = 0; k < 8; k++)
         {
             var cls = (CharacterClass)k;
-            var label = Picture(217, 10 + 8 * k, 94, 7, Changeable);
-            label.StretchMode = TextureRect.StretchModeEnum.Keep;
+            TextureButton label = _window.Button(FirstClassButton + k)!;
             label.GuiInput += e => Click(e, _ => _cc.ToggleClass(_c, cls));
-            var mark = Text(209, 8 + 8 * k, 8, "");
+            var mark = Text((int)label.Position.X - 8, (int)label.Position.Y - 2, 8, "");
             _classes.Add((label, mark, cls));
         }
 
+        Rect2 nameBox = _window.RectOf("EBOX", NameBox);
         _name = new LineEdit
         {
-            Position = new Vector2(32, 113), // it grows to its minimum height, text centred: this lines the text up with NAME:
-            Size = new Vector2(120, 10),
+            Position = nameBox.Position,
+            Size = nameBox.Size,
             MaxLength = 15,
             Editable = true,
             Flat = true,
@@ -108,34 +115,30 @@ public partial class CharacterGenView : RetroScreen
         _name.AddThemeStyleboxOverride("focus", bare);
         _name.TextChanged += t => { _cc.Rename(_c, t); };
         _name.TextSubmitted += _ => _name.ReleaseFocus();
-        Text(4, 124, 36, "NAME:");
         Canvas.AddChild(_name);
+        // It grows to its minimum height with the text centred: once laid out, keep the text on the box.
+        Callable.From(() => _name.Position = nameBox.Position - new Vector2(0, MathF.Floor((_name.Size.Y - GameFonts.Size) / 2))).CallDeferred();
+        Text(4, (int)nameBox.Position.Y, (int)nameBox.Position.X - 4, "NAME:");
 
         for (int i = 0; i < 6; i++)
         {
             var ability = (Ability)i;
-            Label row = Text(4, 136 + 7 * i, 60, "");
-            row.MouseFilter = MouseFilterEnum.Stop;
-            row.TooltipText = "Left-click raises, right-click lowers";
-            row.GuiInput += e => Click(e, by => { if (by > 0) { _cc.Raise(_c, ability); } else { _cc.Lower(_c, ability); } });
-            _abilities.Add(row);
+            _abilities.Add(ButtonLabel(FirstAbilityButton + i, "Left-click raises, right-click lowers",
+                by => { if (by > 0) { _cc.Raise(_c, ability); } else { _cc.Lower(_c, ability); } }));
         }
-        _hp = Text(79, 142, 70, "");
-        _hp.MouseFilter = MouseFilterEnum.Stop;
-        _hp.TooltipText = "Left-click raises, right-click lowers";
-        _hp.GuiInput += e => Click(e, by => _cc.ChangeHp(_c, by));
-        _summary = Text(79, 150, 130, "");
-        _summary.Size = new Vector2(130, 22);
-        _alignment = Text(79, 171, 90, "");
-        _alignment.MouseFilter = MouseFilterEnum.Stop;
-        _alignment.TooltipText = "Click to change";
-        _alignment.GuiInput += e => Click(e, by => _cc.CycleAlignment(_c, by));
+        _hp = ButtonLabel(HpButton, "Left-click raises, right-click lowers", by => _cc.ChangeHp(_c, by));
+        _alignment = ButtonLabel(AlignmentButton, "Click to change", by => _cc.CycleAlignment(_c, by));
+        // Race, gender and level: no control of their own in the window; between hit points and alignment.
+        Rect2 hp = _window.RectOf("BUTN", HpButton);
+        _summary = Text((int)hp.Position.X, (int)hp.End.Y + 1, 130, "");
+        _summary.Size = new Vector2(130, 20);
 
         _powers = new Control { Position = new Vector2(210, 80), Size = new Vector2(110, 64) };
         Canvas.AddChild(_powers);
 
-        IconButton(2058, 258, 154, Exit).TooltipText = "Leave without keeping the changes (Esc)";
-        IconButton(2000, 243, 174, Done);
+        _window.Button(ExitButton)!.Pressed += Exit;
+        _window.Button(ExitButton)!.TooltipText = "Leave without keeping the changes (Esc)";
+        _window.Button(DoneButton)!.Pressed += Done;
         _status = Text(4, 186, 236, "");
         _status.LabelSettings.FontColor = new Color(1f, 0.7f, 0.45f);
 
@@ -197,7 +200,9 @@ public partial class CharacterGenView : RetroScreen
         {
             bool chosen = _c.Classes.Contains(cls);
             bool open = chosen || _cc.CanAdd(_c, cls);
-            label.Texture = Icon(2002 + (int)cls, chosen ? 1 : open ? 0 : 2);
+            // The label's frames are its states, not hover looks: normal, chosen, unavailable.
+            Texture2D? look = Icon(FirstClassButton + (int)cls, chosen ? 1 : open ? 0 : 2);
+            (label.TextureNormal, label.TextureHover, label.TexturePressed, label.TextureDisabled) = (look, look, look, look);
             mark.Text = chosen ? "◆" : "";
         }
         if (!_name.HasFocus())
@@ -220,7 +225,7 @@ public partial class CharacterGenView : RetroScreen
         _status.Text = _c.Adventured ? "Only the name can change now: this character has adventured." : "";
     }
 
-    /// <summary>The discipline or sphere list (<c>WIND</c> 3012 / 3013), with the button that switches between them.</summary>
+    /// <summary>The discipline or sphere list (<c>WIND</c> 3012 / 3013, from their data), with the button that switches between them.</summary>
     private void BuildPowers()
     {
         foreach (Node child in _powers.GetChildren())
@@ -228,13 +233,23 @@ public partial class CharacterGenView : RetroScreen
             child.QueueFree();
         }
         bool spheres = _showSpheres && _cc.NeedsSphere(_c);
+        if (UiWindowView.Build(spheres ? 3013 : 3012, _palette, backdrop: 0) is not { } list)
+        {
+            return;
+        }
+        _powers.AddChild(list);
         _powers.AddChild(Text(0, 3, 110, spheres ? "CLERICAL SPHERE" : "PSI DISCIPLINES", parent: false));
         int[] icons = spheres ? [2042, 2043, 2044, 2045] : [2038, 2039, 2040];
         for (int i = 0; i < icons.Length; i++)
         {
             bool chosen = spheres ? _c.Sphere == (Sphere)i : _c.Disciplines.Contains((Discipline)i);
             int index = i;
-            var label = new TextureRect { Position = new Vector2(7, 15 + 8 * i), Texture = Icon(icons[i], chosen ? 1 : 0), MouseFilter = MouseFilterEnum.Stop };
+            if (list.Button(icons[i]) is not { } label)
+            {
+                continue;
+            }
+            Texture2D? look = Icon(icons[i], chosen ? 1 : 0);
+            (label.TextureNormal, label.TextureHover, label.TexturePressed) = (look, look, look);
             label.GuiInput += e => Click(e, _ =>
             {
                 if (spheres)
@@ -246,24 +261,27 @@ public partial class CharacterGenView : RetroScreen
                     _cc.ChooseDiscipline(_c, (Discipline)index);
                 }
             });
-            _powers.AddChild(label);
             if (chosen)
             {
-                _powers.AddChild(Text(0, 13 + 8 * i, 8, "◆", parent: false));
+                _powers.AddChild(Text((int)label.Position.X - 7, (int)label.Position.Y - 2, 8, "◆", parent: false));
             }
+        }
+        // The fourth discipline (2041, psychoportation) has no picture: not offered.
+        if (list.Button(2041) is { } unused)
+        {
+            unused.Visible = false;
         }
         // VIEW SPHERES / VIEW PSIONICS: only for characters that have a sphere.
         bool can = _cc.NeedsSphere(_c);
-        var toggle = new TextureRect { Position = new Vector2(7, 47), Texture = Icon(spheres ? 2047 : 2046, can ? 0 : 2), MouseFilter = MouseFilterEnum.Stop };
-        toggle.GuiInput += e =>
+        if (list.Button(spheres ? 2047 : 2046) is { } toggle)
         {
-            if (e is InputEventMouseButton { Pressed: true } && can)
+            toggle.Disabled = !can;
+            toggle.Pressed += () =>
             {
                 _showSpheres = !_showSpheres;
                 Refresh();
-            }
-        };
-        _powers.AddChild(toggle);
+            };
+        }
     }
 
     private void Done()
@@ -361,36 +379,32 @@ public partial class CharacterGenView : RetroScreen
         return Textures.ToTexture(f, _palette);
     }
 
-    private TextureRect Picture(int x, int y, int w, int h, bool clickable)
+    /// <summary>A picture filling button <paramref name="number"/> (centred); left- and right-clicks on it go to <paramref name="act"/>.</summary>
+    private TextureRect Picture(int number, Action<int> act)
     {
+        TextureButton button = _window.Button(number)!;
         var rect = new TextureRect
         {
-            Position = new Vector2(x, y),
-            Size = new Vector2(w, h),
+            Size = button.Size,
             ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
             StretchMode = TextureRect.StretchModeEnum.KeepCentered,
-            MouseFilter = clickable ? MouseFilterEnum.Stop : MouseFilterEnum.Ignore,
+            MouseFilter = MouseFilterEnum.Ignore,
         };
-        Canvas.AddChild(rect);
+        button.AddChild(rect);
+        button.GuiInput += e => Click(e, act);
         return rect;
     }
 
-    private TextureButton IconButton(int icon, int x, int y, Action pressed)
+    /// <summary>A line of text on button <paramref name="number"/> (the window's thin click strips), clicked as <paramref name="act"/> says.</summary>
+    private Label ButtonLabel(int number, string tip, Action<int> act)
     {
-        var frames = _resources.TryRead("ICON", icon, out var data) ? Session.Assets.Frames(data) : [];
-        Texture2D? Frame(int n) => n < frames.Count && frames[n].Width > 1 ? Textures.ToTexture(frames[n], _palette) : null;
-        var button = new TextureButton
-        {
-            Position = new Vector2(x, y),
-            TextureNormal = Frame(0),
-            TextureHover = Frame(1),
-            TexturePressed = Frame(3) ?? Frame(1),
-            TextureDisabled = Frame(2),
-            FocusMode = FocusModeEnum.None,
-        };
-        button.Pressed += pressed;
-        Canvas.AddChild(button);
-        return button;
+        TextureButton button = _window.Button(number)!;
+        button.TooltipText = tip;
+        button.GuiInput += e => Click(e, act);
+        // The strip is 5–7 pixels high, the font 9: the text sits on it.
+        var label = Text(0, (int)(button.Size.Y - GameFonts.Size) / 2, 140, "", parent: false);
+        button.AddChild(label);
+        return label;
     }
 
     private Label Text(int x, int y, int width, string text, bool parent = true)

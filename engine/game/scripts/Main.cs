@@ -1,3 +1,4 @@
+using DarkSun.Data.Gff;
 using DarkSun.Data;
 using Godot;
 
@@ -96,7 +97,7 @@ public partial class Main : Control
         bool regionCheck = args.Contains("--check-regions") || args.Contains("--check-exits") || args.Contains("--check-start") || args.Contains("--check-verbs") || args.Contains("--check-memory") || args.Contains("--check-save")
             || args.Contains("--check-debugger") || args.Contains("--check-items") || args.Contains("--check-dialogue");
         bool screenCheck = args.Contains("--check-intro") || args.Contains("--check-menu") || args.Contains("--check-mods") || args.Contains("--check-saves")
-            || args.Contains("--check-party") || args.Contains("--check-chargen");
+            || args.Contains("--check-party") || args.Contains("--check-chargen") || args.Contains("--check-windows");
         if (args.Contains("--check-install") || (install is null && (regionCheck || screenCheck)))
         {
             GD.Print(install is null ? "No game install found." : Describe(install));
@@ -104,6 +105,11 @@ public partial class Main : Control
             return;
         }
         ShowStatus(install, null);
+        if (args.Contains("--check-windows"))
+        {
+            CheckWindows();
+            return;
+        }
         if (regionCheck)
         {
             OpenRegionView();
@@ -230,6 +236,48 @@ public partial class Main : Control
             Session.Use(install);
         }
         _viewRegions.Disabled = install is null;
+    }
+
+    /// <summary>
+    /// <c>--check-windows</c>: build every <c>WIND</c> from its data
+    /// (<see cref="UiWindowView"/>) and say what each holds and any control
+    /// whose art is missing.
+    /// </summary>
+    private void CheckWindows()
+    {
+        GffFile resources = Session.Open("RESOURCE.GFF");
+        var palette = Session.Assets.Palette(resources.Read("PAL ", 1001));
+        int windows = 0, controls = 0;
+        var missing = new List<string>();
+        foreach (var r in resources.DescribeResources().Where(r => r.Tag == "WIND"))
+        {
+            if (UiWindowView.Build(r.Number, palette) is not { } view)
+            {
+                missing.Add($"WIND {r.Number}: not built");
+                continue;
+            }
+            windows++;
+            var items = view.Items.ToList();
+            controls += items.Count;
+            foreach (var (tag, number, control) in items)
+            {
+                if (control is TextureButton { TextureNormal: null } b && resources.TryRead("BUTN", number, out var butn)
+                    && DarkSun.Data.Ui.UiControl.Parse(butn.Span).Icon is int icon and > 0)
+                {
+                    missing.Add($"WIND {r.Number}: BUTN {number} has no ICON {icon}");
+                }
+            }
+            GD.Print($"  WIND {r.Number} {view.Size.X}x{view.Size.Y}: "
+                + string.Join(" ", items.GroupBy(i => i.Tag).Select(g => $"{g.Key}×{g.Count()}"))
+                + (view.GetNodeOrNull("Backdrop") is not null ? " over its BMP" : ""));
+            view.Free();
+        }
+        foreach (string m in missing)
+        {
+            GD.Print($"  missing: {m}");
+        }
+        GD.Print($"windows: {windows} built from their data, {controls} controls, {missing.Count} missing art");
+        GetTree().Quit(windows > 0 ? 0 : 1);
     }
 
     private void OpenRegionView() => ChangeScene(RegionView.ScenePath);

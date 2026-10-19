@@ -107,7 +107,6 @@ public partial class RegionView : Node2D
     private PanelContainer _scriptPanel = null!;
     private DialogueWindow _dialogueWindow = null!;
     private readonly Dictionary<int, ImageTexture?> _portraits = [];
-    private readonly Dictionary<(string, int, int), ImageTexture?> _uiArt = [];
     private readonly HashSet<RegionObject> _hidden = [];
     private readonly Dictionary<RegionObject, Vector2> _moved = [];
     private int _zoomLevel = Array.IndexOf(ZoomLevels, 2f);
@@ -969,28 +968,12 @@ public partial class RegionView : Node2D
         return texture;
     }
 
-    /// <summary>A frame of a <c>RESOURCE.GFF</c> image (the text windows' art) in the region's palette.</summary>
-    private ImageTexture? UiArt(string tag, int number, int frame)
-    {
-        if (!_uiArt.TryGetValue((tag, number, frame), out ImageTexture? texture))
-        {
-            texture = Session.Open("RESOURCE.GFF").TryRead(tag, number, out var data)
-                && Session.Assets.Frames(data) is var frames && frame < frames.Count
-                ? Textures.ToTexture(frames[frame], _palette)
-                : null;
-            _uiArt[(tag, number, frame)] = texture;
-        }
-        return texture;
-    }
-
     /// <summary>The game-start script once per session, then the region's <c>MAS</c> script.</summary>
     /// <summary>Connect the dialogue window and the overlay to this region's scripts.</summary>
     private void AttachScripts()
     {
         _portraits.Clear();
-        _uiArt.Clear();
-        _dialogueWindow.Attach(Session.ScriptHost.Dialogue, Portrait, UiArt,
-            i => _palette[i] is var c ? new Color(c.R / 255f, c.G / 255f, c.B / 255f) : Colors.White);
+        _dialogueWindow.Attach(Session.ScriptHost.Dialogue, Portrait, _palette);
         _overlay.Show(_region, _occupancy, Session.Scripts.Triggers, _world);
     }
 
