@@ -56,16 +56,25 @@ public static class GplAssembler
         [.. GplOpcodes.All.Select(o => (o.Value.Mnemonic, o.Key)).OrderByDescending(m => m.Mnemonic.Length)];
 
     /// <summary>Assemble <paramref name="source"/>; throws <see cref="GplAssemblyException"/> naming the line.</summary>
-    public static byte[] Assemble(string source)
+    public static byte[] Assemble(string source) => Assemble(source, out _);
+
+    /// <summary>
+    /// Assemble <paramref name="source"/>, and say which line (1-based) each
+    /// command starts at: <paramref name="lines"/> maps a command's address
+    /// to its line (a menu's to its <c>MENU</c> line). For the debugger.
+    /// </summary>
+    public static byte[] Assemble(string source, out IReadOnlyDictionary<int, int> lines)
     {
+        var map = new Dictionary<int, int>();
+        lines = map;
         var w = new Writer();
-        string[] lines = source.Split('\n');
+        string[] sourceLines = source.Split('\n');
         bool inMenu = false;
         int menuLine = 0;
-        for (int n = 0; n < lines.Length; n++)
+        for (int n = 0; n < sourceLines.Length; n++)
         {
             w.Line = n + 1;
-            string text = StripComment(lines[n]).Trim();
+            string text = StripComment(sourceLines[n]).Trim();
             if (text.Length == 0)
             {
                 continue;
@@ -76,6 +85,10 @@ public static class GplAssembler
                 if (text.Length == 0)
                 {
                     continue;
+                }
+                if (!inMenu && !text.StartsWith(".org", StringComparison.Ordinal))
+                {
+                    map.TryAdd(w.Address, w.Line);
                 }
                 if (inMenu)
                 {

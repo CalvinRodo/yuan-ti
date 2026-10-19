@@ -132,7 +132,9 @@ save, `-- --saves` opens the list. Creatures (objects with an `RDFF` combat reco
 scripts send them (HUNT, GO, GOXY, FOLLOW, FLEE, FETCH, WAIT), and run their
 no-orders and line-of-sight scripts; RANGE, GETXY, GET_LOS and the other
 queries read the world (`DarkSun.Game.World`). Items, combat and some
-REQUEST codes are still only logged: F2 shows the script log. Click: the selected character (green ring) walks there;
+REQUEST codes are still only logged: F2 shows the script log, F6 the script debugger (see Mods).
+On any screen, `?` lists every key and click that screen takes, with the keys as they are bound now
+(`KeyHelp`; `--check-help` fails if a `Controls` action is listed nowhere, `--show-keys` opens it at start). Click: the selected character (green ring) walks there;
 Shift+click: the whole party; Tab: select
 the next character; N: add a character; C: change the selected character's
 sprite. Characters cover a footprint of cells (estimated from the sprite's
@@ -204,6 +206,39 @@ bytes (`make engine-gpl-check`). The assembler (`GplAssembler`) also takes
 and `:w` `:b` `:s` `:l` suffixes to choose how a number is stored. If an edit
 makes a function too long for the next `.org`, move the extra code to the
 end of the file and `JUMP` to it; the error says by how much.
+
+### Script debugger
+
+F6 in the region view opens the script debugger. It shows a script as source:
+the mod's own `.gpl` file if a mod replaces the script (and the file still
+assembles to what the game loaded), otherwise the source `ModTool export`
+would write, ready to copy into a mod. Type `GPL 12` or `MAS 42` to open a
+script; the region's `MAS` script shows first.
+
+- **Breakpoints:** click left of a line number, or Ctrl+B / Break on the
+  caret's line. The game pauses before running that command, and the
+  debugger opens. Breakpoints are kept between runs in the user data folder's
+  `breakpoints.txt`, one per line (`GPL 12 @0040`); the Breakpoints tab lists
+  them.
+- **Break on next:** pauses at the first command of the next script the game
+  starts (a region, a trigger, a verb), but not creature scripts, which run
+  every half second. `-- --new-game --break-on-start` pauses the game-start
+  script `MAS 99` at its first command.
+- **Paused:** the command about to run is marked, and the game waits as it
+  does for a conversation. F8 continues; F10 steps over (calls, menus and
+  cross-file calls run through); F11 steps into; Shift+F11 steps out of the
+  function; Stop drops the script. The Stack tab lists the call frames, and
+  clicking one shows where that caller goes on. Scripts the game would have
+  started meanwhile (the region's, after the game-start script) run once the
+  paused one ends. Saving waits until then.
+- **Variables:** lists the accumulator, actor, target and other, each local
+  and global variable that isn't 0, and `gname[0–14]`. While paused, values
+  changed since the last pause are yellow. Type `gnum[5] = 3`, `gflag[83] = 1`
+  or `gstr[1] = "Ral"` to set one.
+
+`--check-debugger` pauses the game-start script, steps it, stops the region
+script at a breakpoint set by a gutter click, sets a variable and runs on. It
+then shows every script as source and checks that each command maps to a line.
 
 A mod file that can't be read, parsed or assembled doesn't stop the game:
 the original resource is used, and the problem is logged and shown in the

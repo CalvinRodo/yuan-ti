@@ -5,7 +5,8 @@ namespace DarkSun.Game.Scripting;
 /// <summary>How a run ended, or paused.</summary>
 /// <param name="Error">Why DSUN.EXE would have aborted the script (its <c>7372:17A7</c> path), or null.</param>
 /// <param name="Suspended">The host paused the script for the player (see <see cref="GplMachine.Suspend"/>); <see cref="GplMachine.Resume"/> continues it.</param>
-public sealed record GplRunResult(GplEntry Entry, int Instructions, string? Error, bool Suspended = false)
+/// <param name="Paused">The debugger paused it, at <see cref="GplMachine.Current"/> (a breakpoint or a step; <see cref="GplMachine.Suspended"/> is also true); <see cref="GplMachine.Continue"/> goes on.</param>
+public sealed record GplRunResult(GplEntry Entry, int Instructions, string? Error, bool Suspended = false, bool Paused = false)
 {
     public bool Ok => Error is null;
 }
@@ -64,6 +65,10 @@ public sealed class GplMachine
     private GplEntry _runEntry;
     private int _runCount;
     private int? _answer;
+    private readonly int[] _frameFile = new int[MaxFrames + 1];
+    private bool _skipPause;
+    private int _stepFrame;
+    private bool _creatureRun;
 
     public GplMachine(IGplScripts scripts, IGplHost host, byte[] fieldTypes, BorlandRandom random)
     {
@@ -104,6 +109,97 @@ public sealed class GplMachine
 
     /// <summary>A script is paused waiting for the player; new runs and triggers are refused until it finishes.</summary>
     public bool IsSuspended { get; private set; }
+
+    // -- debugging -----------------------------------------------------------------
+
+    /// <summary>Where runs pause before the command (see <see cref="GplBreakpoints"/>).</summary>
+    public GplBreakpoints Breakpoints { get; set; } = new();
+
+    /// <summary>Where the debugger stops next in this run, besides breakpoints; <see cref="Continue"/> sets it.</summary>
+    public GplStep Step { get; private set; }
+
+    /// <summary>
+    /// Pause at the first command of the next run started by the game (a
+    /// region, a trigger, a click), not by a creature's own script: those
+    /// run every half second, and would always be first.
+    /// </summary>
+    public bool BreakOnNextRun { get; set; }
+
+    /// <summary>
+    /// The debugger paused the run (it is also <see cref="IsSuspended"/>):
+    /// <see cref="Current"/> is the command it will run next. Null when not
+    /// paused; else <c>"breakpoint"</c> or <c>"step"</c>.
+    /// </summary>
+    public string? PausedFor { get; private set; }
+
+    /// <summary>The call frames of the run in progress, innermost first; empty when none is.</summary>
+    public IReadOnlyList<GplFrame> CallStack =>
+        _fileStack.Count == 0
+            ? []
+            : [.. Enumerable.Range(1, _frame).Reverse().Select(f => new GplFrame(_fileStack[Math.Min(_frameFile[f], _fileStack.Count - 1)] with { Address = _pc[f] }, f))];
+
+    /// <summary>The <c>GPLX</c> field types the decoder uses (to list scripts as the machine reads them).</summary>
+    public byte[] FieldTypes => _fieldTypes;
+
+    /// <summary>A script's bytes as the machine runs them (mods applied); null if there is none.</summary>
+    public byte[]? Code(int file, GplFileKind kind) =>
+        _files.TryGetValue((file, kind), out var loaded) ? loaded.Code : _scripts.Load(file, kind);
+
+    /// <summary>Engine variable <c>gname[n]</c>, as scripts read it.</summary>
+    public int ReadEngine(int n) => _host.ReadEngineVariable(this, 0x20 + n);
+
+    public void WriteEngine(int n, int value) => _host.WriteEngineVariable(this, 0x20 + n, value);
+
+    /// <summary>
+    /// Go on after the debugger paused: until the next breakpoint, or as far
+    /// as <paramref name="step"/> says.
+    /// </summary>
+    public GplRunResult Continue(GplStep step = GplStep.None)
+    {
+        if (PausedFor is null)
+        {
+            throw new InvalidOperationException("the debugger hasn't paused a script");
+        }
+        Step = step;
+        _stepFrame = _frame;
+        IsSuspended = false;
+        PausedFor = null;
+        _skipPause = true;
+        return Continue();
+    }
+
+    /// <summary>Drop the paused script, as if it had ended (the debugger's Stop; a new game or region while one waits).</summary>
+    public void Abandon()
+    {
+        _fileStack.Clear();
+        _frame = 0;
+        _done = true;
+        IsSuspended = false;
+        PausedFor = null;
+        _answer = null;
+        _suspendRequested = false;
+        Step = GplStep.None;
+    }
+
+    private string? PauseHere(int pc)
+    {
+        if (_skipPause)
+        {
+            _skipPause = false;
+            return null;
+        }
+        if (Breakpoints.Count > 0 && Breakpoints.Contains(_fileStack[^1] with { Address = pc }))
+        {
+            return "breakpoint";
+        }
+        return Step switch
+        {
+            GplStep.Into => "step",
+            GplStep.Over when _frame <= _stepFrame => "step",
+            GplStep.Out when _frame < _stepFrame => "step",
+            _ => null,
+        };
+    }
 
     /// <summary>
     /// Pause the running script for input the host can't give at once
@@ -199,7 +295,15 @@ public sealed class GplMachine
             return null;
         }
         SetContext(creature, creature, creature);
-        return Run(entry);
+        _creatureRun = true;
+        try
+        {
+            return Run(entry);
+        }
+        finally
+        {
+            _creatureRun = false;
+        }
     }
 
     /// <summary>
@@ -239,6 +343,13 @@ public sealed class GplMachine
         Memory.ClearLocals();
         _runEntry = entry;
         _runCount = 0;
+        _skipPause = false;
+        Step = GplStep.None;
+        if (BreakOnNextRun && !_creatureRun)
+        {
+            BreakOnNextRun = false;
+            Step = GplStep.Into;
+        }
         CallFile(entry);
         return Continue();
     }
@@ -254,8 +365,13 @@ public sealed class GplMachine
         {
             throw new InvalidOperationException("no script is suspended");
         }
+        if (PausedFor is not null)
+        {
+            throw new InvalidOperationException("the debugger paused the script: Continue it");
+        }
         IsSuspended = false;
         _answer = answer;
+        _skipPause = true; // the command that asked runs again: don't stop at it twice
         return Continue();
     }
 
@@ -276,6 +392,13 @@ public sealed class GplMachine
                 // The loader appends EXIT_GPL (0x31) after every file.
                 _done = true;
                 break;
+            }
+            if (PauseHere(pc) is { } reason)
+            {
+                PausedFor = reason;
+                IsSuspended = true;
+                _runCount = count - 1;
+                return new GplRunResult(entry, count - 1, null, Suspended: true, Paused: true);
             }
             GplInstruction instruction;
             try
@@ -309,6 +432,7 @@ public sealed class GplMachine
             _answer = null;
         }
         _suspendRequested = false;
+        Step = GplStep.None; // stepping ends with the run
         return new GplRunResult(entry, count, _error);
     }
 
@@ -401,6 +525,7 @@ public sealed class GplMachine
             return;
         }
         _frame++;
+        _frameFile[_frame] = _fileStack.Count - 1;
         _frameIf[_frame] = _ifDepth;
         _frameCompare[_frame] = _compareDepth;
         _pc[_frame] = address;

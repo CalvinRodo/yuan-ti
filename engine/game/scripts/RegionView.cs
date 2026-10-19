@@ -66,6 +66,10 @@ public partial class RegionView : Node2D
     private Node2D _ground = null!;
     private Node2D _sorted = null!;
     private DebugOverlay _overlay = null!;
+    private ScriptDebugger _debugger = null!;
+
+    /// <summary>Scripts to start once none is paused (the region's after the game-start script, …): see <see cref="WhenScriptsFree"/>.</summary>
+    private readonly Queue<Action> _whenFree = new();
     private PanelContainer _hoverPanel = null!;
     private Label _hoverText = null!;
     private double _hoverRefresh;
@@ -143,6 +147,16 @@ public partial class RegionView : Node2D
             (_overlay.Flags, _overlay.Grid, _overlay.Numbers) = (true, true, true);
         }
 
+        if (OS.GetCmdlineUserArgs().Contains("--break-on-start"))
+        {
+            Session.Scripts.BreakOnNextRun = true;
+        }
+        if (OS.GetCmdlineUserArgs().Contains("--check-debugger"))
+        {
+            _checking = true;
+            CheckDebugger();
+            return;
+        }
         if (OS.GetCmdlineUserArgs().Contains("--check-regions"))
         {
             _checking = true;
@@ -253,6 +267,13 @@ public partial class RegionView : Node2D
         layer.AddChild(_fade);
         _verbMenu = new VerbMenu { Chosen = ChooseVerb };
         layer.AddChild(_verbMenu);
+        _debugger = new ScriptDebugger
+        {
+            Ran = run => ReportScript("debugger", run),
+            Stop = StopScript,
+            Default = () => _region is null ? null : new GplEntry(_region.Number, 0, GplFileKind.Mas),
+        };
+        layer.AddChild(_debugger);
         _prompt = new Label { Visible = false, HorizontalAlignment = HorizontalAlignment.Center };
         _prompt.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.CenterTop);
         _prompt.GrowHorizontal = Control.GrowDirection.Both;
@@ -272,6 +293,14 @@ public partial class RegionView : Node2D
         _pendingUse = null;
         _verbMenu.Close();
         SetUseWith(null);
+        _whenFree.Clear();
+        if (Session.Scripts.IsSuspended)
+        {
+            // Leaving (PgUp/PgDn, or the debugger paused a script mid-way): what it had left to do is dropped.
+            AddScriptLine($"> left a paused script before {GplBreakpoints.Format(Session.Scripts.Current)}");
+            Session.Scripts.Abandon();
+            Session.ScriptHost.Dialogue.Clear();
+        }
         // The party keeps its looks, facing and selection from region to region.
         var carried = _party.Select(m => (m.Sprite, m.Walker.Facing)).ToList();
         int selected = _selected;
@@ -308,8 +337,7 @@ public partial class RegionView : Node2D
             + $"{_region.Objects.Count} objects ({_animated.Count} animated) · {selected}\n"
             + $"Triggers: {t.Count(GplTriggerList.MoveTile)} tile, {t.Count(GplTriggerList.MoveBox)} box, {objectTriggers} object, "
             + $"{Session.Scripts.Creatures.NoOrders.Count + Session.Scripts.Creatures.Sight.Count} creature\n"
-            + "Click: walk · Shift+click: party · Right-click: verbs · Tab: select · N: add · C: sprite · "
-            + "Arrows/WASD or middle-drag: scroll · Wheel or +/-: zoom · PgUp/PgDn: region · F1: map · F2: script log · F3: grid · F4: numbers · Esc: back";
+            + "?: all keys · Click: walk · Shift+click: party · Right-click: verbs · Tab: select · Esc: back";
     }
 
     /// <summary>Replace the map's nodes with <paramref name="file"/>'s region.</summary>
@@ -483,7 +511,7 @@ public partial class RegionView : Node2D
     /// (<c>7155:1487</c>) doesn't: it only runs the region's script, so a
     /// party arriving inside the new region's exit box isn't sent straight back.
     /// </summary>
-    private void FireArrivalTriggers()
+    private void FireArrivalTriggers() => WhenScriptsFree(() =>
     {
         int region = _region.Number;
         for (int i = 0; i < _party.Count && _region.Number == region && _world.PendingRegion is null; i++)
@@ -495,7 +523,7 @@ public partial class RegionView : Node2D
                 ReportScript($"character {i + 1} starts at ({cell.X},{cell.Y})", run);
             }
         }
-    }
+    });
 
     /// <summary>
     /// Add a character with the next walking sprite, on the free cell nearest
@@ -736,7 +764,7 @@ public partial class RegionView : Node2D
         _overlay.Hovered = cell;
         string text = _overlay.Describe(cell);
         _hoverText.Text = (text.Length > 0 ? text + "\n" : "")
-            + $"F1 flags {(_overlay.Flags ? "on" : "off")} · F3 grid {(_overlay.Grid ? "on" : "off")} · F4 numbers {(_overlay.Numbers ? "on" : "off")}";
+            + $"F1 flags {(_overlay.Flags ? "on" : "off")} · F3 grid {(_overlay.Grid ? "on" : "off")} · F4 numbers {(_overlay.Numbers ? "on" : "off")} · F6 scripts";
     }
 
     public override void _UnhandledInput(InputEvent e)
@@ -893,8 +921,15 @@ public partial class RegionView : Node2D
             Session.GameStarted = true;
             ReportScript("new game", scripts.NewGame());
         }
-        ReportScript($"entered region {_region.Number}", scripts.EnterRegion(_region.Number));
-        _overlay.Show(_region, _occupancy, scripts.Triggers, _world);
+        int region = _region.Number;
+        WhenScriptsFree(() =>
+        {
+            if (_region.Number == region)
+            {
+                ReportScript($"entered region {region}", scripts.EnterRegion(region));
+                _overlay.Show(_region, _occupancy, scripts.Triggers, _world);
+            }
+        });
     }
 
     /// <summary>The front-most object whose sprite is under <paramref name="at"/> (map position), if any.</summary>
@@ -1132,7 +1167,8 @@ public partial class RegionView : Node2D
     {
         _scriptRuns++;
         _scriptErrors += run.Error is null || run.Suspended ? 0 : 1;
-        string status = run.Suspended ? ", waiting for the player" : run.Error is null ? "" : $", stopped: {run.Error}";
+        string status = run.Paused ? $", paused by the debugger ({Session.Scripts.PausedFor}) before {GplBreakpoints.Format(Session.Scripts.Current)}"
+            : run.Suspended ? ", waiting for the player" : run.Error is null ? "" : $", stopped: {run.Error}";
         AddScriptLine($"> {what}: {run.Entry.Kind} {run.Entry.File} @{run.Entry.Address:x4}, {run.Instructions} instructions{status}");
         if (_checkingVerbs && run.Error is not null && !run.Suspended)
         {
@@ -1156,12 +1192,57 @@ public partial class RegionView : Node2D
         {
             _world.PendingRegion = null;
         }
-        if (!run.Suspended && _world.PendingRegion is { } go && !_transitioning)
+        _debugger.ScriptsRan();
+        if (!run.Suspended)
+        {
+            RunWhenFree();
+        }
+        if (!run.Suspended && !Session.Scripts.IsSuspended && _world.PendingRegion is { } go && !_transitioning)
         {
             _world.PendingRegion = null;
             AddScriptLine($"    party leaves for region {go.Region} ({go.X},{go.Y})");
             Travel(go.Region, new Cell(go.X, go.Y));
         }
+    }
+
+    /// <summary>
+    /// Run <paramref name="start"/> now, or, while a script is paused (for the
+    /// player or in the debugger), once it has finished: scripts the game
+    /// starts one after another, like the region's after the game-start one,
+    /// would otherwise be refused.
+    /// </summary>
+    private void WhenScriptsFree(Action start)
+    {
+        if (Session.Scripts.IsSuspended)
+        {
+            _whenFree.Enqueue(start);
+        }
+        else
+        {
+            start();
+        }
+    }
+
+    private void RunWhenFree()
+    {
+        while (_whenFree.Count > 0 && !Session.Scripts.IsSuspended)
+        {
+            _whenFree.Dequeue()();
+        }
+    }
+
+    /// <summary>The debugger's Stop: drop the paused script and whatever it was saying.</summary>
+    private void StopScript()
+    {
+        if (!Session.Scripts.IsSuspended)
+        {
+            return;
+        }
+        AddScriptLine($"> stopped by the debugger before {GplBreakpoints.Format(Session.Scripts.Current)}");
+        Session.Scripts.Abandon();
+        Session.ScriptHost.Dialogue.Clear();
+        _debugger.ScriptsRan();
+        RunWhenFree();
     }
 
     // -- the world ---------------------------------------------------------------------
@@ -1357,7 +1438,9 @@ public partial class RegionView : Node2D
         {
             if (!quiet)
             {
-                Notice("Can't save now: finish the conversation first.");
+                Notice(Session.Scripts.PausedFor is not null
+                    ? "Can't save now: a script is paused in the debugger (F8 continues)."
+                    : "Can't save now: finish the conversation first.");
             }
             return;
         }
@@ -1507,6 +1590,102 @@ public partial class RegionView : Node2D
     /// set and the party moved; saved, all of it changed again, loaded back;
     /// prints what didn't come back.
     /// </summary>
+    /// <summary>
+    /// <c>--check-debugger</c>: pause the game-start script at its first
+    /// command, step it, stop the region script at a breakpoint, set a
+    /// variable, run on; then show every script as source and check its line
+    /// map covers each command.
+    /// </summary>
+    private async void CheckDebugger()
+    {
+        var problems = new List<string>();
+        void Expect(bool ok, string what)
+        {
+            if (!ok)
+            {
+                problems.Add(what);
+            }
+        }
+        GplMachine m = Session.Scripts;
+        m.BreakOnNextRun = true;
+        _regionIndex = 0;
+        EnterRegion(NewGameStart.Region, NewGameStart.At);
+        int region = _region.Number;
+        Expect(m.PausedFor == "step" && m.Current == new GplEntry(GplMachine.GameStartFile, 0, GplFileKind.Mas), $"paused at the game start: {m.PausedFor} {GplBreakpoints.Format(m.Current)}");
+        Expect(_debugger.Visible && _debugger.Shown?.Script == new GplEntry(GplMachine.GameStartFile, 0, GplFileKind.Mas), "the debugger shows MAS 99");
+        Expect(_debugger.Shown?.LineAt(0) is int first && _debugger.IsExecuting(first), "the first command is marked");
+        Expect(_whenFree.Count == 1, $"the region script waits for it ({_whenFree.Count} queued)");
+        for (int i = 0; i < 3; i++)
+        {
+            _debugger.Go(GplStep.Over);
+        }
+        Expect(m.PausedFor == "step" && m.Current.Address > 0, $"stepped: {GplBreakpoints.Format(m.Current)}");
+        Expect(_debugger.Shown?.LineAt(m.Current.Address) is int now && _debugger.IsExecuting(now), "the stepped-to command is marked");
+
+        var regionStart = new GplEntry(region, 0, GplFileKind.Mas);
+        Session.Breakpoints.Add(regionStart);
+        _debugger.Go(GplStep.None); // MAS 99 runs out; the region's script starts and stops at once
+        Expect(m.PausedFor == "breakpoint" && m.Current == regionStart, $"stopped at the region script: {m.PausedFor} {GplBreakpoints.Format(m.Current)}");
+        Expect(_debugger.Shown?.Script == regionStart && _debugger.IsBreakpointShown(_debugger.Shown.LineAt(0)!.Value), "the breakpoint shows in the gutter");
+        // A click in the gutter, as the player makes it, once the panel is laid out.
+        for (int i = 0; i < 2; i++)
+        {
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        }
+        int clickLine = _debugger.Shown!.LineAt(_debugger.Shown.LineOf.Keys.Order().Skip(2).First())!.Value;
+        GplEntry clicked = regionStart with { Address = _debugger.Shown.AddressAt(clickLine)!.Value };
+        Vector2 point = _debugger.GutterPoint(clickLine);
+        foreach (bool down in new[] { true, false })
+        {
+            GetViewport().PushInput(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = down, Position = point, GlobalPosition = point });
+        }
+        Expect(Session.Breakpoints.Contains(clicked) && _debugger.IsBreakpointShown(clickLine), $"a gutter click at line {clickLine} sets a breakpoint");
+        Session.Breakpoints.Remove(clicked);
+        Expect(GplVariables.Set(m, "gnum[199] = 1234") is null && GplVariables.Get(m, "gnum[199]") == "1234", "set gnum[199]");
+        Session.Breakpoints.Remove(regionStart);
+        _debugger.Go(GplStep.None);
+        Expect(!m.IsSuspended && _whenFree.Count == 0, "ran on to the end");
+        Expect(_scriptLines.Count(l => l.StartsWith($"> entered region {region}") || l.StartsWith("> debugger")) >= 2, "the region script was reported");
+        Expect(GplVariables.Get(m, "gnum[199]") == "1234", "gnum[199] kept");
+
+        // Every script, as source.
+        GffFile gpl = Session.Open("GPLDATA.GFF");
+        int scripts = 0, commands = 0;
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        foreach (var r in gpl.DescribeResources().Where(r => r.Tag is "GPL " or "MAS "))
+        {
+            var kind = r.Tag == "MAS " ? GplFileKind.Mas : GplFileKind.Gpl;
+            GplSource? source = GplSource.For(m, r.Number, kind, Session.Mods.ReplacementPath("GPLDATA.GFF", r.Tag, r.Number));
+            byte[] code = m.Code(r.Number, kind)!;
+            var decoder = new GplDecoder(code, m.FieldTypes);
+            int count = 0;
+            try
+            {
+                for (int at = 0; at < code.Length; count++)
+                {
+                    at += decoder.DecodeAt(at).Length;
+                }
+            }
+            catch (GplDecodeException)
+            {
+            }
+            scripts++;
+            commands += count;
+            if (source is null || source.Origin == "listing" || source.LineOf.Count < count)
+            {
+                problems.Add($"{r.Tag.Trim()} {r.Number}: {source?.Origin ?? "no source"}, {source?.LineOf.Count ?? 0} of {count} commands mapped");
+            }
+        }
+        GD.Print($"debugger: paused at MAS 99, stepped, stopped at MAS {region} @0000 and ran on; "
+            + $"{scripts} scripts shown as source in {watch.Elapsed.TotalSeconds:F1} s, {commands} commands mapped to lines");
+        foreach (string p in problems)
+        {
+            GD.Print($"  PROBLEM: {p}");
+        }
+        GD.Print(problems.Count == 0 ? "debugger: OK" : $"debugger: {problems.Count} problems");
+        GetTree().Quit(problems.Count == 0 ? 0 : 1);
+    }
+
     private void CheckSave()
     {
         AnswerForThePlayer();

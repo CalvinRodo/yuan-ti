@@ -237,6 +237,10 @@ public sealed class ModSet
     public Mod? Replacing(string fileName, string tag, int number) =>
         Find(fileName.ToUpperInvariant(), tag, number)?.Mod;
 
+    /// <summary>The mod file or frames folder that replaces a resource, if any (the debugger shows a modded script's own source).</summary>
+    public string? ReplacementPath(string fileName, string tag, int number) =>
+        Find(fileName.ToUpperInvariant(), tag, number)?.Path;
+
     private Replacement? Find(string file, string tag, int number)
     {
         string t = tag.Trim().ToUpperInvariant();

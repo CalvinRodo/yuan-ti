@@ -39,13 +39,61 @@ public static class Session
             {
                 GffFile gpl = Open("GPLDATA.GFF");
                 byte[] fieldTypes = gpl.TryRead("GPLX", 1, out var gplx) ? GplDecoder.FieldTypes(gplx.Span) : [];
-                _scripts = new GplMachine(new GffScripts(gpl), ScriptHost, fieldTypes, BorlandRandom.FromTime(DateTimeOffset.Now));
+                _scripts = new GplMachine(new GffScripts(gpl), ScriptHost, fieldTypes, BorlandRandom.FromTime(DateTimeOffset.Now))
+                {
+                    Breakpoints = Breakpoints,
+                };
             }
             return _scripts;
         }
     }
 
     public static bool GameStarted { get; set; }
+
+    /// <summary>A headless check is running (<c>--check-…</c>).</summary>
+    public static bool Checking { get; } = Godot.OS.GetCmdlineUserArgs().Any(a => a.StartsWith("--check", StringComparison.Ordinal));
+
+    private const string BreakpointsFile = "user://breakpoints.txt";
+
+    private static GplBreakpoints? _breakpoints;
+
+    /// <summary>
+    /// The script debugger's breakpoints (<c>ScriptDebugger</c>): every
+    /// machine this session makes gets them, and they are kept in the user
+    /// data folder's <c>breakpoints.txt</c>, one per line (<c>GPL 12 @0040</c>).
+    /// </summary>
+    public static GplBreakpoints Breakpoints
+    {
+        get
+        {
+            if (_breakpoints is null && Checking)
+            {
+                // The headless checks run the scripts through: the player's breakpoints would stop them.
+                _breakpoints = new GplBreakpoints();
+            }
+            if (_breakpoints is null)
+            {
+                _breakpoints = new GplBreakpoints();
+                string path = Godot.ProjectSettings.GlobalizePath(BreakpointsFile);
+                if (File.Exists(path))
+                {
+                    _breakpoints.Read(File.ReadAllText(path));
+                }
+                _breakpoints.Changed += () =>
+                {
+                    try
+                    {
+                        File.WriteAllText(path, _breakpoints.Write());
+                    }
+                    catch (IOException e)
+                    {
+                        Godot.GD.PushWarning($"Couldn't keep the breakpoints: {e.Message}");
+                    }
+                };
+            }
+            return _breakpoints;
+        }
+    }
 
     private static List<CharacterSprite>? _sprites;
 

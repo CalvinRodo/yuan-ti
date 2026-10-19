@@ -9,7 +9,9 @@ namespace DarkSun.Engine;
 /// <c>-- --new-game</c>: straight into a new game, with <c>--region=N</c> and
 /// <c>--at=X,Y</c> to start elsewhere; <c>-- --mods</c>: the mod list;
 /// <c>-- --saves</c>: the saved games; <c>-- --load=quick</c>: load a save;
-/// <c>-- --party</c> / <c>-- --chargen</c>: the character screens). Only
+/// <c>-- --party</c> / <c>-- --chargen</c>: the character screens;
+/// <c>-- --break-on-start</c> with a new game: the script debugger pauses at
+/// the game-start script's first command). Only
 /// shown when the files can't be found, to choose their folder.
 /// For headless checks: <c>-- --check-install</c> prints what was found and
 /// quits (exit code 1 if nothing); <c>-- --check-regions</c>,
@@ -30,6 +32,26 @@ public partial class Main : Control
         GameInstall? install = Session.Install
             ?? GameInstall.Locate([LoadConfiguredDirectory(), DevelopmentDirectory()]);
         string[] args = OS.GetCmdlineUserArgs();
+
+        if (args.Contains("--check-help"))
+        {
+            // Every screen's key help, and any action no screen lists.
+            Node?[] screens = [new RegionView(), new MainMenu(), new PartyView(), new CharacterGenView(), new SavesView(), new ModsView(), new IntroView(), null];
+            foreach (Node? screen in screens)
+            {
+                var (title, sections) = KeyHelp.For(screen);
+                GD.Print($"{title}: " + string.Join("; ", sections.Select(h => $"{h.Title} ({h.Lines.Length})")));
+                screen?.Free();
+            }
+            foreach (HelpLine line in KeyHelp.AllSections.SelectMany(h => h.Lines).Where(l => l.Action is not null))
+            {
+                GD.Print($"  {line.Keys,-16} {line.What}");
+            }
+            var unlisted = KeyHelp.Unlisted().ToList();
+            GD.Print(unlisted.Count == 0 ? "key help: every action listed" : $"key help: not listed: {string.Join(", ", unlisted)}");
+            GetTree().Quit(unlisted.Count == 0 ? 0 : 1);
+            return;
+        }
 
         if (args.Contains("--check-display"))
         {
@@ -71,7 +93,8 @@ public partial class Main : Control
             GetTree().Quit(ok > 0 ? 0 : 1);
             return;
         }
-        bool regionCheck = args.Contains("--check-regions") || args.Contains("--check-exits") || args.Contains("--check-start") || args.Contains("--check-verbs") || args.Contains("--check-memory") || args.Contains("--check-save");
+        bool regionCheck = args.Contains("--check-regions") || args.Contains("--check-exits") || args.Contains("--check-start") || args.Contains("--check-verbs") || args.Contains("--check-memory") || args.Contains("--check-save")
+            || args.Contains("--check-debugger");
         bool screenCheck = args.Contains("--check-intro") || args.Contains("--check-menu") || args.Contains("--check-mods") || args.Contains("--check-saves")
             || args.Contains("--check-party") || args.Contains("--check-chargen");
         if (args.Contains("--check-install") || (install is null && (regionCheck || screenCheck)))

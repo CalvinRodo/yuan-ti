@@ -35,3 +35,4 @@ textures/canvas_textures/default_texture_filter=0
 PixelScaler="*res://scripts/PixelScaler.cs"
 Music="*res://scripts/Music.cs"
 Sounds="*res://scripts/Sounds.cs"
+KeyHelp="*res://scripts/KeyHelp.cs"

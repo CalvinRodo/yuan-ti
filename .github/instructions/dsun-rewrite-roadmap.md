@@ -295,9 +295,15 @@ this milestone brings most of the game's content.
       (`GplMachine.RunFor`). The original's timing is not traced.
 - [x] **Golden tests**: `make engine-compare` checks that the C# decoder lists
       every script exactly as `gpl_parser.py` does (69 741 lines).
-- [ ] Script debugger in the engine: current script, program counter,
-      variables, breakpoints. Cheap to build here, and very useful for
-      modders.
+- [x] Script debugger in the engine (F6, `ScriptDebugger`): the script as
+      `.gpl` source (a mod's own file, or as exported), breakpoints kept
+      between runs, break on the next script, step over / into / out, the
+      call stack, variables (changes since the last pause, set by typing
+      `gnum[5] = 3`). The machine pauses through its existing suspend
+      (`GplMachine.Step`, `Continue`, `Abandon`), so the game waits as it
+      does for a conversation. `--check-debugger`. Not yet: watch
+      expressions, conditional breakpoints, breaking on a variable change,
+      object fields.
 
 ---
 

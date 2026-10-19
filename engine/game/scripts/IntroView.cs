@@ -85,7 +85,8 @@ public partial class IntroView : RetroScreen
 
     public override void _Input(InputEvent e)
     {
-        if (_player is not null && e is InputEventKey { Pressed: true, Echo: false } or InputEventMouseButton { Pressed: true })
+        // Any key skips, but ? (the key help).
+        if (_player is not null && e is InputEventKey { Pressed: true, Echo: false, Unicode: not '?' } or InputEventMouseButton { Pressed: true })
         {
             _player.Skip();
             GetViewport().SetInputAsHandled();
