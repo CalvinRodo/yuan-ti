@@ -329,6 +329,7 @@ public sealed class ModSet
                 ".txt" => Text(File.ReadAllText(Path, Encoding.UTF8)),
                 ".json" => RecordJson.Apply(tag, original() is { } o ? o.Span : [], File.ReadAllText(Path, Encoding.UTF8)),
                 ".wav" => Audio.Voc.Encode(Audio.Wav.Decode(File.ReadAllBytes(Path))),
+                ".png" when tag.Trim().Equals("FONT", StringComparison.OrdinalIgnoreCase) => DarkSun.Data.Text.FontSheet.Import(File.ReadAllBytes(Path)),
                 _ => File.ReadAllBytes(Path),
             };
         }

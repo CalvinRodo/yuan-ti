@@ -267,7 +267,7 @@ public partial class PartyView : RetroScreen
     private Button TextButton(Vector2 at, Vector2 size, Action pressed)
     {
         var button = new Button { Position = at, Size = size, Flat = false, FocusMode = FocusModeEnum.None, ClipText = true };
-        button.AddThemeFontSizeOverride("font_size", 7);
+        GameFonts.Use(button, new Color(0.95f, 0.9f, 0.75f));
         var normal = new StyleBoxFlat { BgColor = new Color(0.28f, 0.29f, 0.38f), BorderColor = new Color(0.12f, 0.12f, 0.18f) };
         normal.SetBorderWidthAll(1);
         var hover = (StyleBoxFlat)normal.Duplicate();
@@ -276,8 +276,7 @@ public partial class PartyView : RetroScreen
         button.AddThemeStyleboxOverride("hover", hover);
         button.AddThemeStyleboxOverride("pressed", hover);
         button.AddThemeStyleboxOverride("disabled", normal);
-        button.AddThemeColorOverride("font_color", new Color(0.95f, 0.9f, 0.75f));
-        button.AddThemeColorOverride("font_disabled_color", new Color(0.55f, 0.55f, 0.6f));
+        button.AddThemeColorOverride("font_disabled_color", new Color(0.6f, 0.6f, 0.65f));
         button.Pressed += pressed;
         Canvas.AddChild(button);
         return button;
@@ -292,7 +291,7 @@ public partial class PartyView : RetroScreen
             Text = text,
             HorizontalAlignment = align,
             MouseFilter = MouseFilterEnum.Ignore,
-            LabelSettings = new LabelSettings { FontSize = 7, LineSpacing = -2, FontColor = new Color(0.95f, 0.9f, 0.75f), OutlineSize = 2, OutlineColor = new Color(0.1f, 0.1f, 0.15f) },
+            LabelSettings = GameFonts.Settings(new Color(0.95f, 0.9f, 0.75f), lineSpacing: -1),
         };
         Canvas.AddChild(label);
         return label;

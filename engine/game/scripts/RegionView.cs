@@ -1930,6 +1930,14 @@ public partial class RegionView : Node2D
             Expect(!Session.Scripts.IsSuspended, "the conversation ended");
         }
 
+        // The game's font: decoded, and the same again through its picture form.
+        Expect(GameFonts.Font is { Height: 9 } f && f.Glyphs['A'].Width == 6, "FONT 100 decodes (9 high, 'A' 6 wide)");
+        if (Session.Open("RESOURCE.GFF").TryRead("FONT", 100, out var fontData))
+        {
+            byte[] again = DarkSun.Data.Text.FontSheet.Import(DarkSun.Data.Text.FontSheet.Export(DarkSun.Data.Text.GameFont.Parse(fontData.Span)));
+            Expect(again.AsSpan().SequenceEqual(fontData.Span), "FONT 100 comes back byte for byte from its picture");
+        }
+
         // A long text, paged.
         dialogue.Clear();
         for (int i = 1; i <= 12; i++)

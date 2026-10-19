@@ -22,16 +22,14 @@ namespace DarkSun.Engine;
 /// "Answer Yes or No", as DSUN.EXE words it.</item>
 /// </list>
 /// Keys: Space or Enter for MORE, 1–9 for a choice, Y and N for Yes and No,
-/// the mouse wheel to scroll. The game's font (<c>FONT</c> 2081) isn't
-/// decoded: text is drawn in Godot's. DSUN.EXE draws PRINT_STRING's style
-/// byte the same whatever it is (<c>84C9:0253</c> ignores it for window 2);
-/// here narration (98, by the scripts' use) is set in italics.
+/// the mouse wheel to scroll. Text is in the game's font (<see cref="GameFonts"/>),
+/// all alike: DSUN.EXE ignores PRINT_STRING's style byte for window 2
+/// (<c>84C9:0253</c>).
 /// </summary>
 public partial class DialogueWindow : Control
 {
     public const int Width = 320, Height = 58;
 
-    private const int NarrationStyle = 98;
     private const int FontSize = 7;
     private const int OptionsShown = 5;
 
@@ -90,7 +88,7 @@ public partial class DialogueWindow : Control
         {
             _text.AddThemeFontSizeOverride(font, FontSize);
         }
-        _text.AddThemeConstantOverride("line_separation", -2);
+        _text.AddThemeConstantOverride("line_separation", 0);
         _text.GuiInput += TextInput;
         _textMode.AddChild(_text);
 
@@ -178,11 +176,13 @@ public partial class DialogueWindow : Control
         {
             _options[i].Bar.Texture = _art("ICON", 12102 + i, 0);
         }
-        Color text = _colour?.Invoke(TextColour) ?? Colors.White;
-        _title.AddThemeColorOverride("font_color", text);
+        // The game's font, letters in the text box's colour.
+        Color text = _colour?.Invoke(TextColour) ?? GameFonts.Tan;
+        GameFonts.Use(_text, text, "normal_font", "italics_font", "bold_font");
+        GameFonts.Use(_title, text);
         foreach (var o in _options)
         {
-            o.Text.AddThemeColorOverride("font_color", text);
+            GameFonts.Use(o.Text, text);
         }
     }
 
@@ -438,16 +438,8 @@ public partial class DialogueWindow : Control
         GetViewport().SetInputAsHandled();
     }
 
-    private string Format(GplText t)
-    {
-        string escaped = t.Text.Replace("[", "[lb]");
-        string colour = (_colour?.Invoke(TextColour) ?? Colors.White).ToHtml(false);
-        return t.Style switch
-        {
-            NarrationStyle => $"[i][color=#{colour}]{escaped}[/color][/i]",
-            _ => $"[color=#{colour}]{escaped}[/color]",
-        };
-    }
+    /// <summary>All text alike, as DSUN.EXE draws it whatever the style.</summary>
+    private static string Format(GplText t) => t.Text.Replace("[", "[lb]");
 
     public override void _Process(double delta) => Refresh();
 }

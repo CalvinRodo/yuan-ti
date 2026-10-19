@@ -8,7 +8,7 @@
 // back: images as PNG (one file, or a folder with one PNG per frame), text
 // (TEXT, MERR, SPIN) as UTF-8 .txt, items, monsters, regions and names
 // (IT1R, RDFF, RDAT, NAME) as .json, scripts (GPL, MAS) as .gpl source,
-// sound effects (BVOC) as .wav,
+// sound effects (BVOC) as .wav, the font (FONT) as a .png sheet (FontSheet),
 // anything else (or anything, with --bin) as .bin. Edit the file and the
 // engine uses it; a .json may be cut down to the fields it changes. The path
 // is <mod-dir>/<TAG>/<number>.<ext>, which replaces the resource in whichever
@@ -29,7 +29,7 @@ using DarkSun.Data.Mods;
 using DarkSun.Data.Text;
 using DarkSun.Game.Scripting;
 
-string[] imageTags = ["BMP ", "CBMP", "TILE", "ICON", "PORT", "WALL", "FONT"];
+string[] imageTags = ["BMP ", "CBMP", "TILE", "ICON", "PORT", "WALL"];
 string[] textTags = ["TEXT", "MERR", "SPIN"];
 
 if (args.Length >= 6 && args[0] == "export")
@@ -83,6 +83,11 @@ if (args.Length >= 6 && args[0] == "export")
             }
             Console.WriteLine($"  {frames.Count} frames; delete the ones you don't change, the rest keep the original's");
         }
+    }
+    else if (tag == "FONT")
+    {
+        Write(Path.Combine(dir, $"{number}.png"), FontSheet.Export(GameFont.Parse(data.Span)));
+        Console.WriteLine("  16 × 16 cells of 8 × 10: white the letters, dark their shadow, the red row under each its width");
     }
     else if (tag == "BVOC")
     {

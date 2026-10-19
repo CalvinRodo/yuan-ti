@@ -75,7 +75,7 @@ current GFF, and spell ICON images are numbered from 21 000 upward.
 | CPAL | 2 | Alternate color palette (may be compressed or remapped) |
 | CSEQ | 1 | Cinematic sequence block |
 | EBOX | 6 | Edit-box UI resources |
-| FONT | 1 | Font resource |
+| FONT | 1 | The game's font, `FONT` 100 in `RESOURCE.GFF` (the only one): word glyph count (256), word height (9), 4 zero bytes; 256 bytes colour map (pixel value → palette index, identity); 256 words, each character's glyph as an offset; a glyph is a word width (2–7) then height × width pixel bytes: 0 none, 254 the letter, 20 its shadow. Codes 0x80–0xFF are code page 437. The game sets map[254] to the text colour. `DarkSun.Data.Text.GameFont` |
 | GFFI | 15 | GFF index blocks |
 | GSEQ | 23 | Global audio/sync sequences |
 | ICON | 292 | Icon images — spell and item icons. Spell icons are at number `21 000 + SPIN_number`. |

@@ -102,11 +102,10 @@ public partial class CharacterGenView : RetroScreen
             Flat = true,
             CaretBlink = true,
         };
-        _name.AddThemeFontSizeOverride("font_size", 7);
+        GameFonts.Use(_name, new Color(1f, 0.92f, 0.7f));
         var bare = new StyleBoxEmpty();
         _name.AddThemeStyleboxOverride("normal", bare);
         _name.AddThemeStyleboxOverride("focus", bare);
-        _name.AddThemeColorOverride("font_color", new Color(1f, 0.92f, 0.7f));
         _name.TextChanged += t => { _cc.Rename(_c, t); };
         _name.TextSubmitted += _ => _name.ReleaseFocus();
         Text(4, 124, 36, "NAME:");
@@ -402,7 +401,7 @@ public partial class CharacterGenView : RetroScreen
             Size = new Vector2(width, 9),
             Text = text,
             MouseFilter = MouseFilterEnum.Ignore,
-            LabelSettings = new LabelSettings { FontSize = 7, FontColor = new Color(0.95f, 0.9f, 0.75f), OutlineSize = 2, OutlineColor = new Color(0.08f, 0.08f, 0.12f) },
+            LabelSettings = GameFonts.Settings(new Color(0.95f, 0.9f, 0.75f)),
         };
         if (parent)
         {

@@ -621,6 +621,14 @@ From the handlers (2026-10-18):
   * `WIND` 3500 holds only `EBOX` 4500 (239 × 46 at (56, 6)): text without
     a portrait.
   * A `BUTN`'s icon is the word at +0x64 (+0x5A is its own number).
+* **The font** (`FONT` 100, loaded at start-up by `2531`, pointer at
+  `577D:5EA3`, current font `577D:6108`): see `DarkSun.Data.Text.GameFont`.
+  The blitter (`2E86:06C0`) draws a glyph pixel p in colour `font[8 + p]`,
+  skipping 0; widths add up for a string (`2E86:07E0`); the height is the
+  word at +2 (`2E86:082C`). Before drawing a text box `2BF9:055D` sets
+  `map[0] = 0` and `map[DS:3C02]` (set to 0xFE) to `DS:A1C9`, the colour:
+  the letters take the text colour and their shadow (pixel 20) stays
+  palette colour 20 (56, 56, 84 in every palette).
 * `NAMETONUM` and `NUMTONAME` only negate: acc = −expr.
 * **TELEPORT** `(who, region, x, y, flag)` (`043D:1EAE`), cells:
   * who 32766 (0x7FFE) is the party (`7372:0857`): in the current region each

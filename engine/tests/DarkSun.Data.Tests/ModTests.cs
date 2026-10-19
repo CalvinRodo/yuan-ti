@@ -128,6 +128,18 @@ public sealed class ModSetTests : IDisposable
     }
 
     [Fact]
+    public void TheFontCanBeAPicture()
+    {
+        var glyphs = Enumerable.Range(0, 256).Select(c => new DarkSun.Data.Text.Glyph(c == 'x' ? 1 : 0, c == 'x' ? [0xFE, 0x14] : [])).ToList();
+        byte[] font = DarkSun.Data.Text.GameFont.Build(2, glyphs);
+        Write("A/TEST.GFF/FONT/100.png", DarkSun.Data.Text.FontSheet.Export(DarkSun.Data.Text.GameFont.Parse(font)));
+
+        GffFile gff = ModSet.Load([_root]).Apply(Gff(), "TEST.GFF");
+
+        Assert.Equal(font, gff.Read("FONT", 100).ToArray());
+    }
+
+    [Fact]
     public void WithoutModsTheFileIsUnchanged()
     {
         GffFile gff = Gff();

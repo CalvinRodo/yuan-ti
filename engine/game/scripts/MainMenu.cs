@@ -88,7 +88,7 @@ public partial class MainMenu : RetroScreen
             Position = new Vector2(0, 168),
             Size = new Vector2(Width, 24),
             HorizontalAlignment = HorizontalAlignment.Center,
-            LabelSettings = new LabelSettings { FontSize = 8, FontColor = new Color(0.9f, 0.75f, 0.5f) },
+            LabelSettings = GameFonts.Settings(new Color(0.9f, 0.75f, 0.5f)),
         };
         Canvas.AddChild(_status);
 
@@ -98,8 +98,7 @@ public partial class MainMenu : RetroScreen
             Underline = LinkButton.UnderlineMode.OnHover,
             FocusMode = FocusModeEnum.None,
         };
-        mods.AddThemeFontSizeOverride("font_size", 8);
-        mods.AddThemeColorOverride("font_color", new Color(0.75f, 0.6f, 0.4f));
+        GameFonts.Use(mods, new Color(0.75f, 0.6f, 0.4f));
         mods.Pressed += OpenMods;
         Canvas.AddChild(mods);
         Vector2 size = mods.GetCombinedMinimumSize();

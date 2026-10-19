@@ -36,7 +36,8 @@ What already exists, and what the engine can reuse:
 | Executable | Overlays unpacked; 2 402 functions decompiled; runtime, GPL interpreter and all handlers named | `make decomp` |
 | Cinematics (`ACF `, `BMA `, `CINE.GFF` `BMP`/`PAL`) | Decoded and played | `DarkSun.Data.Cinematics`, `DarkSun.Game.Cinematics`, `dsun-exe-reference.md` §7 |
 | UI windows (`WIND`, `BUTN`, `ACCL`) | Layout decoded (the main menu uses them) | `DarkSun.Data.Ui` |
-| Not yet decoded | `FONT`, `APFM`, `EBOX`, `DBOX`, `MENU`; what follows combat records in `RDFF` (type 4 references and the data after them: inventories?) | |
+| Font (`FONT` 100) | Decoded, drawn as the game draws it, moddable as a picture | `DarkSun.Data.Text.GameFont`, `FontSheet`; `GameFonts` |
+| Not yet decoded | `APFM`, `EBOX` (beyond its size and colours), `DBOX`, `MENU`; what follows combat records in `RDFF` (type 4 references and the data after them: inventories?) | |
 
 The GOG install ships DOSBox, so the original game is always available to
 compare against by eye.
@@ -341,8 +342,8 @@ this milestone brings most of the game's content.
       ASK_YES_NO in `WIND` 3008's five stone bars, scrolled the same way.
       MORE (Space, Enter, a click on the text) reads on, answers CONTINUE,
       opens the choices or puts the window away; 1–9 and Y / N choose.
-      Scaled with the screen like the 320 × 200 screens. Not yet: the
-      game's `FONT` (Godot's font is used), `WIND` 3500 (text without a
+      Scaled with the screen like the 320 × 200 screens, in the game's font
+      (`FONT` 100: `GameFonts`). Not yet: `WIND` 3500 (text without a
       portrait; every window here has the portrait box). `--check-dialogue`,
       and `--talk` to start a conversation for testing.
 - [ ] Decide the UI approach: rebuild the screens as Godot `Control` scenes
@@ -383,8 +384,8 @@ this milestone brings most of the game's content.
       Character Generation (`WIND` 3011) screens; the party starts new games
       and is kept in saves; a roster for ADD and DROP.
 - [ ] A pre-made party option; dual-classing for humans; party leader and
-      computer-control buttons; decode `APFM` and `FONT` to draw the screens
-      exactly as the original.
+      computer-control buttons; decode `APFM` to draw the screens exactly as
+      the original (the font is done).
 
 ---
 
@@ -460,7 +461,7 @@ name the functions in `tools/ghidra/symbols.tsv`.
 | ~~M3~~ | ~~Script triggers~~ | Done 2026-10-18: `dsun-exe-reference.md` §4 |
 | M3 | Which player actions call each trigger check (look, talk, use, pickup, attack menus); the per-step movement check | the callers listed in `dsun-exe-reference.md` §4 |
 | M3 | What each world-affecting GPL command does | the 114 named `gpl_op_*` handlers and their callees |
-| M4 | `FONT`, `APFM`, `EBOX` formats; what each `WIND` is | text-drawing and window code (`2531`, `25EC`); `WIND`/`BUTN`/`ACCL` done (§7) |
+| M4 | `APFM`, `EBOX` formats; what each `WIND` is (`FONT` done) | text-drawing and window code (`2531`, `25EC`); `WIND`/`BUTN`/`ACCL` done (§7) |
 | M5 | Character rules and level tables | character sheet and creation code; `GPLX` tables (`DS:4D7A`, `DS:537A`) |
 | M6 | Combat rules and AI | functions that call `rand` (18 in 9 segments; 6 in `612E`, 3 in `6466`; *unverified* that these are combat) |
 | M7 | Music and sound selection | callers of the sound driver; segment `0980` has the most port I/O (*unverified*: sound or video driver) |

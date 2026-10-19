@@ -263,6 +263,7 @@ public static class Session
         Files.Clear();
         Assets.Clear();
         (_sprites, _rules, _names) = (null, null, null);
+        GameFonts.Reset();
         LoadParty();
         Mods = ModSet.Load(ModFolders(install), GplModFormat.Builders);
         Mods.ProblemFound += p => Godot.GD.PushWarning($"Mod file not used: {p}");
