@@ -984,6 +984,49 @@ A `BUTN` whose +0x5A is its own number shows the `ICON` named at +0x64
 use, grasping hand = get; 15108/15109 INFO, text "INFO" at +0x6E). The
 frame is `APFM` 15200.
 
+### Character creation
+
+The rules are tables in segment `38D4` (ability order Str, Dex, Con, Int,
+Wis, Cha; races 1–8 and classes 1–8 in the string table's order), used by
+`6CCA` and `6ECD`:
+
+* **Racial adjustments**, `38D4:014D` + 6 × race: dwarf Str +1, Dex −1,
+  Con +2, Cha −2; elf Dex +2, Con −2, Int +1, Wis −1; half-elf Dex +1,
+  Con −1; half-giant Str +4, Dex −5, Con +2, Int −5, Wis −3, Cha −3;
+  halfling Str −2, Dex +2, Con −1, Wis +2, Cha −1; mul Str +2, Con +1,
+  Int −1, Cha −2; thri-kreen Dex +2, Int −1, Wis +1, Cha −2. All match the
+  manual but the half-giant's (it has Str +4, Con +2, Int, Wis, Cha −2).
+* **An ability** (`6CCA:16BD`): rolled as the best of four `6CCA:1671(4, 4)`
+  (4d4) + 4 + the adjustment; at most 20 + the adjustment; at least
+  `6ECD:1F19`'s minimum. A click changes it within the same limits.
+* **The minimum** (`6ECD:1F19`), over the character's classes (record
+  +0x21–0x23): 17 if the ability is the class's key one, else the class's
+  number, from 3-byte entries at `38D4:0180` + 3 × class (word ability, byte
+  number): cleric Wis 9, druid Wis 12, fighter Str 9, gladiator Str 13,
+  preserver Int 9, psionicist Wis 12, ranger Wis 14, thief Dex 9. The
+  numbers are the manual's key minimums (but the psionicist's, 15 there).
+* **Hit points** (`6ECD:0156`): for each class, a die from `38D4:014A` +
+  class (8, 8, 10, 10, 4, 6, 10, 6) per level (record +0x24–0x26): the range
+  is levels to levels × die, doubled for half-giants, divided by the number
+  of classes, plus Constitution's bonus once (`8E77:032C`).
+* **A new character** starts as the template at `38D4:0048` (character
+  record, 0x47 bytes: +0 experience 3000, +4 the most experience 3000, +0x10
+  an id, +0x18 race, +0x1B the abilities) and `38D4:008F` (combat record,
+  0x3A bytes: +0x22–0x27 the abilities). Finishing copies both into the
+  tables (`6ECD:1644`, `DS:1661` + 0x47 × slot, `DS:1665` + 0x3A × slot),
+  gives the record an unused id from −32767 up, sets the base armour class
+  (+0x27: 10, thri-kreen 5) and the attacks (`8E77:038F`). Experience is
+  per class (AWARD divides by the number of classes), so a new character
+  has 3000 in each.
+* **The map icon**: the party is put on the map (`6CCA:1046`) as `OJFF`
+  combat record +0x18 + 300. `OJFF` 300–313 are the 14 race and gender
+  figures, in the portraits' order (human male, human female, dwarf male …
+  thri-kreen female), all walking with `SCMD` 174; half-elves (306, 307)
+  share the humans' pictures (`BMP` 2095, 2099).
+* **Humans** count as one class (`8E77:02E5`).
+* `9106` is the View Character screen, `8F23` the character sheet, `91F7`
+  the item window (`VIEWITEM`).
+
 ### Character screens
 
 * Create Characters (`8015:00F9`) calls `9106:0622` with the character

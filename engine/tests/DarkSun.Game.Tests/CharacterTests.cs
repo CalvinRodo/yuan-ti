@@ -35,9 +35,11 @@ public class CharacterTests
         cc.SetLooks(c, Race.HalfGiant, Gender.Female);
 
         Assert.Equal(4, cc.Adjustment(c, Ability.Str));
+        Assert.Equal(-5, cc.Adjustment(c, Ability.Dex)); // DSUN.EXE's table, not the manual's
         Assert.Equal(24, cc.Range(c, Ability.Str).High);
-        Assert.Equal(str + 4, cc.Adjusted(c, Ability.Str));
-        Assert.Equal(7, cc.Range(c, Ability.Wis).Low);
+        Assert.Equal(15, cc.Range(c, Ability.Dex).High); // 20 − 5
+        Assert.Equal(Math.Max(str + 4, 17), cc.Adjusted(c, Ability.Str)); // a fighter's Strength is at least 17
+        Assert.Equal(9, cc.Range(c, Ability.Wis).Low); // the fighter's floor for the other abilities
         while (cc.Raise(c, Ability.Str))
         {
         }
@@ -110,9 +112,10 @@ public class CharacterTests
 
         cc.ToggleClass(c, CharacterClass.Psionicist);
 
-        Assert.True(cc.Adjusted(c, Ability.Wis) >= 15);
-        Assert.True(cc.Adjusted(c, Ability.Int) >= 12);
-        Assert.Equal(15, cc.Range(c, Ability.Wis).Low);
+        // DSUN.EXE (6ECD:1F19): 17 in the class's key ability (Wisdom), its floor (12) in every other.
+        Assert.True(cc.Adjusted(c, Ability.Wis) >= 17);
+        Assert.All(new[] { Ability.Str, Ability.Dex, Ability.Con, Ability.Int, Ability.Cha }, a => Assert.True(cc.Adjusted(c, a) >= 12));
+        Assert.Equal(17, cc.Range(c, Ability.Wis).Low);
         Assert.Equal(Enum.GetValues<Discipline>(), c.Disciplines);
         cc.ChooseDiscipline(c, Discipline.Telepathy);
         Assert.Equal(3, c.Disciplines.Count); // psionicists keep all three
@@ -120,25 +123,83 @@ public class CharacterTests
     }
 
     [Fact]
-    public void HitPointsFollowTheHitDiceAndConstitution()
+    public void HitPointsFollowTheHitDiceLevelsAndConstitution()
     {
         var cc = Creation();
-        Character c = cc.New();
+        Character c = cc.New(); // a fighter with 3000 experience: level 2
+        Assert.Equal([2], cc.Levels(c));
         while (cc.Lower(c, Ability.Con))
         {
         }
-        Assert.Equal((1, 10), cc.HpRange(c));
+        Assert.Equal((2, 20), cc.HpRange(c)); // a d10 for each level
         while (cc.Raise(c, Ability.Con))
         {
         }
         Assert.Equal(20, cc.Adjusted(c, Ability.Con));
-        Assert.Equal((6, 15), cc.HpRange(c)); // +5 at 19 and above
+        Assert.Equal((7, 25), cc.HpRange(c)); // +5 at 19 and above, once
         Assert.Equal(4, CharacterRules.ConstitutionBonus(18, warrior: true));
         Assert.Equal(2, CharacterRules.ConstitutionBonus(18, warrior: false));
 
         cc.ToggleClass(c, CharacterClass.Fighter);
         cc.ToggleClass(c, CharacterClass.Preserver);
-        Assert.Equal((6, 9), cc.HpRange(c)); // d4 + 5
+        Assert.Equal((7, 13), cc.HpRange(c)); // level 2 at 2500: two d4, + 5
+
+        Character giant = cc.New();
+        cc.SetLooks(giant, Race.HalfGiant, Gender.Male);
+        while (cc.Lower(giant, Ability.Con))
+        {
+        }
+        var (low, high) = cc.HpRange(giant);
+        int bonus = CharacterRules.ConstitutionBonus(cc.Adjusted(giant, Ability.Con), true);
+        Assert.Equal((4 + bonus, 40 + bonus), (low, high)); // half-giants' hit points are doubled (6ECD:0156)
+    }
+
+    [Fact]
+    public void NewCharactersStartWithExperienceInEachClass()
+    {
+        var cc = Creation();
+        Character c = cc.New();
+        Assert.Equal(3000, c.Experience);
+
+        cc.SetLooks(c, Race.HalfElf, Gender.Female);
+        cc.ToggleClass(c, CharacterClass.Thief);
+        cc.ToggleClass(c, CharacterClass.Cleric);
+
+        Assert.Equal(9000, c.Experience); // 3000 in each of three classes
+        Assert.Equal([3, 2, 3], cc.Levels(c)); // cleric 3000, fighter 2000, thief 2500
+        c.Adventured = true;
+        cc.ToggleClass(c, CharacterClass.Thief);
+        Assert.Equal(9000, c.Experience); // an adventured character keeps what it earned
+    }
+
+    [Fact]
+    public void AbilitiesAreTheBestOfFourRolls()
+    {
+        var rolls = new List<int>();
+        for (int seed = 0; seed < 200; seed++)
+        {
+            var cc = Creation(seed);
+            Character c = cc.New();
+            cc.ToggleClass(c, CharacterClass.Fighter); // no class: no minimums
+            cc.Roll(c);
+            rolls.AddRange(c.Rolled);
+        }
+        Assert.All(rolls, r => Assert.InRange(r, 8, 20));
+        // One 4d4+4 averages 14; the best of four, about 16.6.
+        Assert.InRange(rolls.Average(), 16, 17.3);
+    }
+
+    [Fact]
+    public void EachLookHasItsOwnMapIcon()
+    {
+        var cc = Creation();
+        Character c = cc.New();
+        Assert.Equal(300, c.Sprite);
+        cc.SetLooks(c, Race.HalfElf, Gender.Female);
+        Assert.Equal(307, c.Sprite);
+        cc.SetLooks(c, Race.ThriKreen, Gender.Female);
+        Assert.Equal(313, cc.Icon(c));
+        Assert.Equal(313, c.Sprite);
     }
 
     [Fact]
@@ -166,7 +227,9 @@ public class CharacterTests
             CharacterRules rules = CharacterRules.Read(path);
             Assert.Equal(CharacterRules.Default.Races.Count, rules.Races.Count);
             Assert.Equal(4, rules.Race(Race.HalfGiant).Adjustments[Ability.Str]);
-            Assert.Equal(15, rules.Class(CharacterClass.Psionicist).Requirements[Ability.Wis]);
+            Assert.Equal(17, rules.Class(CharacterClass.Psionicist).Requirements[Ability.Wis]);
+            Assert.Equal(2, rules.Race(Race.HalfGiant).HitPointFactor);
+            Assert.Equal((3000, 300, 4), (rules.StartingExperience, rules.IconBase, rules.RollTries));
         }
         finally
         {

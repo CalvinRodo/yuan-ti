@@ -11,8 +11,9 @@ namespace DarkSun.Engine;
 /// The Character Generation screen (<c>WIND</c> 3011; the manual, pages 9–11),
 /// with its parts where the window puts them and the original's art: the body
 /// portrait (<c>BMP</c> 20000–20013, <see cref="CharacterCreation.Portrait"/>; left-click for the next race
-/// and gender, right-click for the previous), the map icon (click to change
-/// it; the original's choice isn't traced), the die (<c>BMP</c> 20048–20058;
+/// and gender, right-click for the previous), the map icon (DSUN.EXE's for the
+/// look, <see cref="CharacterCreation.Icon"/>; clicking it picks another, which the
+/// original may not offer), the die (<c>BMP</c> 20048–20058;
 /// rolls new abilities and hit points), the class list (<c>ICON</c> 2002–2009:
 /// normal, chosen, unavailable; a diamond marks the chosen ones), the six
 /// abilities, hit points and alignment (left-click raises, right-click
@@ -78,14 +79,14 @@ public partial class CharacterGenView : RetroScreen
         _c = _editing is { } e ? CharacterRoster.FromJson(CharacterRoster.ToJson(e)) : _cc.New();
         if (_isNew)
         {
-            _c.Sprite = DefaultSprite(_c);
+            _c.Sprite = _cc.Icon(_c);
         }
         BuildBackdrop();
         // The controls are window 3011's, where its data (and res://ui/WIND/3011.json) puts them.
         _window = UiWindowView.Build(WindowNumber, _palette, backdrop: 0)!;
         Canvas.AddChild(_window);
 
-        _portrait = Picture(PortraitButton, by => { _cc.CycleLooks(_c, by); _c.Sprite = DefaultSprite(_c); });
+        _portrait = Picture(PortraitButton, by => _cc.CycleLooks(_c, by)); // the look's own map icon comes with it
         _icon = Picture(IconButtonNumber, CycleSprite);
         _die = Picture(DieButton, _ => Roll());
         _window.Button(DieButton)!.TooltipText = "Roll new abilities";
@@ -318,12 +319,6 @@ public partial class CharacterGenView : RetroScreen
 
     // -- sprites ------------------------------------------------------------------------
 
-    /// <summary>A walking sprite for a new character's look (a placeholder: DSUN.EXE's per-race icons aren't traced).</summary>
-    private static int DefaultSprite(Character c)
-    {
-        var sprites = Session.CharacterSprites;
-        return sprites.Count == 0 ? 0 : sprites[((int)c.Race * 2 + (int)c.Gender) % sprites.Count].Ojff;
-    }
 
     private void CycleSprite(int by)
     {
@@ -355,7 +350,7 @@ public partial class CharacterGenView : RetroScreen
         {
             Canvas.AddChild(new TextureRect { Texture = stone, MouseFilter = MouseFilterEnum.Ignore });
         }
-        foreach (var (x, y, w, h) in new[] { (0, 0, 100, 116), (132, 17, 51, 41), (132, 59, 56, 57), (205, 6, 113, 72), (205, 80, 113, 66), (0, 119, 164, 64), (72, 140, 92, 42) })
+        foreach (var (x, y, w, h) in new[] { (0, 0, 100, 116), (132, 17, 51, 41), (132, 59, 56, 57), (205, 6, 113, 72), (205, 80, 113, 66), (0, 119, 164, 64), (72, 140, 132, 42) })
         {
             var panel = new Panel { Position = new Vector2(x, y), Size = new Vector2(w, h), MouseFilter = MouseFilterEnum.Ignore };
             var box = new StyleBoxFlat { BgColor = new Color(0.12f, 0.12f, 0.17f, 0.55f), BorderColor = new Color(0.62f, 0.62f, 0.72f) };

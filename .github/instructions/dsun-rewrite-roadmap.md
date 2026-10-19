@@ -392,10 +392,20 @@ this milestone brings most of the game's content.
       limits, abilities and racial adjustments, class requirements, hit
       dice, levels by experience, alignments, disciplines and spheres.
       Moddable as JSON.
-- [ ] DSUN.EXE's own creation tables (`9106`, `8F23`, `91F7`), to check the
-      manual's rules against: ability roll and limits, starting experience
-      (the manual says characters start with some), the map icon per race
-      and gender, and how a character becomes a combat and character record.
+- [x] DSUN.EXE's own creation tables, checked against the manual's rules
+      (`dsun-exe-reference.md`, "Character creation"). They are in segment
+      `38D4`, read by `6CCA` and `6ECD` (not `9106`, `8F23`, `91F7`: those
+      are the View Character screen, the character sheet and the item
+      window). Now the engine's: the best of four 4d4+4 rolls, the limits
+      (20 + adjustment; 17 in each class's key ability, the class's floor
+      in the others), the racial adjustments (the half-giant's differ),
+      hit points per level (half-giants double), 3000 experience in each
+      class, and the map icon per race and gender (`OJFF` 300–313). A
+      character becomes its records by copying the templates at
+      `38D4:0048` (character, 0x47 bytes) and `008F` (combat, 0x3A) into
+      the tables (`6ECD:1644`). Not traced: which classes each race may
+      take (still the manual's), the psionic point tables (`38D4:011C`…)
+      and the attack counts (`8E77:038F`).
 - [x] Items from `IT1R` and `NAME` (`DarkSun.Data.Items`): `ItemType`
       (115 types: weapon kind, slot, damage, AC, weight, classes),
       `ItemRecord` (the 21-byte record of each item `RDFF`, 755 in

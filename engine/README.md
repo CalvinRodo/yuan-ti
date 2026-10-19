@@ -305,20 +305,24 @@ right-click for the previous), the class list (`ICON` 2002–2009), the die
 (`BMP` 20048–20058, new abilities and hit points), the psionic disciplines
 and clerical spheres (`ICON` 2038–2047), EXIT and DONE. Left-click an
 ability, the hit points or the alignment to raise it, right-click to lower
-it; click the map icon to change it (the original's icon per race isn't
-traced); new characters get a random name from `TEXT` 0–32 (male), 100–118
+it; the map icon is the original's for the race and gender (`OJFF` 300–313),
+and clicking it picks another; new characters get a random name from `TEXT` 0–32 (male), 100–118
 (female) or 200–207 (thri-kreen). The screen's backdrop is drawn by the
 engine: the original's frames (`APFM`) aren't decoded.
 
-The rules (`DarkSun.Game.Characters.CharacterRules`) are the manual's:
-racial adjustments, the classes each race may take (humans one; the others
-up to three, never cleric with druid), class requirements (choosing a class
-raises the abilities it needs), hit dice with Constitution's bonus, good or
-neutral alignments, one psionic discipline (psionicists all three) and a
-sphere for clerics, druids and rangers. Abilities are rolled 4d4+4 (at least
-9) before adjustments, up to 20 plus the adjustment (24 at most). Where the
-manual contradicts itself, half-giants can't be rangers and muls and
-thri-kreen can't be druids. A mod can replace the rules with
+The rules (`DarkSun.Game.Characters.CharacterRules`) are DSUN.EXE's own where
+traced (its tables in segment `38D4`; `dsun-exe-reference.md`, "Character
+creation"): racial adjustments (the half-giant's differ from the manual's: Dex
+and Int −5, Wis and Cha −3), each ability the best of four rolls of 4d4+4 plus
+the adjustment, up to 20 plus the adjustment, and at least 17 in each class's
+key ability and the class's floor (9–14) in the others; hit points a die per
+level of each class (half-giants double), averaged over the classes, with
+Constitution's bonus; 3000 experience in each class to start (a fighter starts
+at level 2); and the map icon. The rest is the manual's: the classes each race
+may take (humans one; the others up to three, never cleric with druid), good
+or neutral alignments, one psionic discipline (psionicists all three) and a
+sphere for clerics, druids and rangers. Where the manual contradicts itself,
+half-giants can't be rangers and muls and thri-kreen can't be druids. A mod can replace the rules with
 `rules/characters.json` in its folder (the same JSON `CharacterRules` reads).
 
 The party is kept in `party.json` in the Godot user data folder and starts

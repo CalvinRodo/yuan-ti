@@ -129,8 +129,10 @@ public static class Session
 
     /// <summary>
     /// Object definitions that can walk: an <c>SCMD</c> with a moving walk
-    /// sequence in every direction, one per <c>BMP </c>, in <c>OJFF</c> order.
-    /// Party members walk as one of these (DSUN.EXE's choice per race isn't traced).
+    /// sequence in every direction, one per <c>BMP </c>, in <c>OJFF</c> order,
+    /// after the party's own map icons (<c>OJFF</c> 300–313, one per race and
+    /// gender, <see cref="CharacterCreation.Icon"/>; all of them, though
+    /// half-elves share the humans' pictures). Party members walk as one of these.
     /// </summary>
     public static List<CharacterSprite> CharacterSprites => _sprites ??= LoadSprites();
 
@@ -140,10 +142,13 @@ public static class Session
         var scripts = new Dictionary<int, DarkSun.Data.Animation.Scmd?>();
         var seenBmps = new HashSet<int>();
         var list = new List<CharacterSprite>();
-        foreach (ResourceDescriptor r in objects.DescribeResources().Where(r => r.Tag == "OJFF").OrderBy(r => r.Number))
+        int icons = Rules.IconBase, iconsEnd = Rules.IconBase + Rules.Races.Sum(r => r.Genders.Count);
+        bool IsIcon(int n) => n >= icons && n < iconsEnd;
+        foreach (ResourceDescriptor r in objects.DescribeResources().Where(r => r.Tag == "OJFF")
+            .OrderBy(r => IsIcon(r.Number) ? 0 : 1).ThenBy(r => r.Number))
         {
             var def = DarkSun.Data.Regions.ObjectDefinition.Parse(objects.Read(r.Tag, r.Number).Span);
-            if (def.Scmd <= 0 || seenBmps.Contains(def.Bmp))
+            if (def.Scmd <= 0 || (seenBmps.Contains(def.Bmp) && !IsIcon(r.Number)))
             {
                 continue;
             }

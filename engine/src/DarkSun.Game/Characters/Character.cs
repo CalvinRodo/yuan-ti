@@ -82,13 +82,31 @@ public sealed class CharacterCreation(CharacterRules rules, CharacterNames names
 {
     public CharacterRules Rules { get; } = rules;
 
-    /// <summary>A new character: a human male fighter (the manual: "the fighter class has been pre-selected"), rolled, with a random name.</summary>
+    /// <summary>A new character: a human male fighter (the manual: "the fighter class has been pre-selected"), rolled, with a random name, its map icon and its starting experience.</summary>
     public Character New()
     {
         var c = new Character { Race = Race.Human, Gender = Gender.Male, Classes = [CharacterClass.Fighter], Disciplines = [Discipline.Psychokinesis] };
         c.Name = names.Pick(c.Race, c.Gender, random);
+        c.Sprite = Icon(c);
+        GiveStartingExperience(c);
         Roll(c);
         return c;
+    }
+
+    /// <summary>
+    /// The map icon DSUN.EXE gives a look: <c>OJFF</c> <see cref="CharacterRules.IconBase"/>
+    /// + its place in <see cref="Looks"/> (300 human male … 313 thri-kreen; half-elves
+    /// share the humans' pictures). The party is put on the map with these (<c>6CCA:1046</c>).
+    /// </summary>
+    public int Icon(Character c) => Rules.IconBase + Math.Max(0, Looks.ToList().IndexOf((c.Race, c.Gender)));
+
+    /// <summary>A character not yet adventured has <see cref="CharacterRules.StartingExperience"/> in each class.</summary>
+    private void GiveStartingExperience(Character c)
+    {
+        if (!c.Adventured)
+        {
+            c.Experience = Rules.StartingExperience * Math.Max(1, c.Classes.Count);
+        }
     }
 
     // -- abilities --------------------------------------------------------------------
@@ -97,22 +115,30 @@ public sealed class CharacterCreation(CharacterRules rules, CharacterNames names
 
     public int Adjusted(Character c, Ability a) => c.Rolled[(int)a] + Adjustment(c, a);
 
-    /// <summary>How low and high ability <paramref name="a"/> may be (adjusted): the rolled range plus the race's adjustment, not below what the classes require.</summary>
+    /// <summary>
+    /// How low and high ability <paramref name="a"/> may be (adjusted): up to
+    /// 20 + the race's adjustment, down to the classes' minimum
+    /// (<c>6CCA:16BD</c> clamps a change to these).
+    /// </summary>
     public (int Low, int High) Range(Character c, Ability a)
     {
         int adjust = Adjustment(c, a);
-        int low = Math.Clamp(Rules.RollFloor + adjust, Rules.AbilityMin, Rules.AbilityMax);
+        int low = Math.Clamp(Rules.RollFloor > 0 ? Rules.RollFloor + adjust : Rules.AbilityMin, Rules.AbilityMin, Rules.AbilityMax);
         int high = Math.Clamp(Rules.UnadjustedMax + adjust, Rules.AbilityMin, Rules.AbilityMax);
         int required = c.Classes.Select(k => Rules.Class(k).Requirements.GetValueOrDefault(a)).DefaultIfEmpty(0).Max();
         return (Math.Min(Math.Max(low, required), high), high);
     }
 
-    /// <summary>The die: new abilities (raised to what the classes need) and hit points.</summary>
+    /// <summary>
+    /// The die (<c>6CCA:16BD</c>): each ability the best of <see cref="CharacterRules.RollTries"/>
+    /// rolls of 4d4+4, raised to what the classes need; then hit points.
+    /// </summary>
     public void Roll(Character c)
     {
         foreach (Ability a in Enum.GetValues<Ability>())
         {
-            int roll = Rules.RollBonus + Enumerable.Range(0, Rules.RollDice).Sum(_ => random.Next(1, Rules.RollSides + 1));
+            int roll = Enumerable.Range(0, Math.Max(1, Rules.RollTries))
+                .Max(_ => Rules.RollBonus + Enumerable.Range(0, Rules.RollDice).Sum(_ => random.Next(1, Rules.RollSides + 1)));
             c.Rolled[(int)a] = Math.Max(Rules.RollFloor, roll);
         }
         Fit(c);
@@ -152,16 +178,24 @@ public sealed class CharacterCreation(CharacterRules rules, CharacterNames names
 
     private bool Warrior(Character c) => c.Classes.Any(k => Rules.Class(k).Warrior);
 
-    /// <summary>First-level hit points: each class's hit die, averaged over the classes (multi-class characters divide them), plus Constitution's bonus; at least 1.</summary>
+    /// <summary>
+    /// Hit points as DSUN.EXE ranges them (<c>6ECD:0156</c>): a hit die for
+    /// each level of each class (from 1 to the die), times the race's factor
+    /// (half-giants 2), divided by the number of classes, plus Constitution's
+    /// bonus (once); at least 1.
+    /// </summary>
     public (int Low, int High) HpRange(Character c)
     {
         if (c.Classes.Count == 0)
         {
             return (1, 1);
         }
+        var levels = Levels(c);
+        int factor = Math.Max(1, Rules.Race(c.Race).HitPointFactor);
         int bonus = CharacterRules.ConstitutionBonus(Adjusted(c, Ability.Con), Warrior(c));
-        int high = c.Classes.Sum(k => Rules.Class(k).HitDie) / c.Classes.Count + bonus;
-        return (Math.Max(1, 1 + bonus), Math.Max(1, high));
+        int low = levels.Sum(l => Math.Max(1, l)) * factor / c.Classes.Count + bonus;
+        int high = c.Classes.Select((k, i) => Math.Max(1, levels[i]) * Rules.Class(k).HitDie).Sum() * factor / c.Classes.Count + bonus;
+        return (Math.Max(1, low), Math.Max(1, high));
     }
 
     public int RollHp(Character c)
@@ -170,7 +204,10 @@ public sealed class CharacterCreation(CharacterRules rules, CharacterNames names
         {
             return 1;
         }
-        int rolled = c.Classes.Sum(k => random.Next(1, Rules.Class(k).HitDie + 1)) / c.Classes.Count;
+        var levels = Levels(c);
+        int factor = Math.Max(1, Rules.Race(c.Race).HitPointFactor);
+        int rolled = c.Classes.Select((k, i) => Enumerable.Range(0, Math.Max(1, levels[i])).Sum(_ => random.Next(1, Rules.Class(k).HitDie + 1))).Sum()
+            * factor / c.Classes.Count;
         var (low, high) = HpRange(c);
         return Math.Clamp(rolled + CharacterRules.ConstitutionBonus(Adjusted(c, Ability.Con), Warrior(c)), low, high);
     }
@@ -224,6 +261,8 @@ public sealed class CharacterCreation(CharacterRules rules, CharacterNames names
         {
             c.Name = names.Pick(race, gender, random);
         }
+        c.Sprite = Icon(c);
+        GiveStartingExperience(c);
         FixPowers(c);
         Fit(c);
     }
@@ -263,6 +302,7 @@ public sealed class CharacterCreation(CharacterRules rules, CharacterNames names
     {
         if (c.Classes.Remove(k))
         {
+            GiveStartingExperience(c);
             FixPowers(c);
             Fit(c);
             return true;
@@ -273,6 +313,7 @@ public sealed class CharacterCreation(CharacterRules rules, CharacterNames names
         }
         c.Classes.Add(k);
         c.Classes.Sort();
+        GiveStartingExperience(c);
         FixPowers(c);
         Fit(c);
         c.Hp = RollHp(c);

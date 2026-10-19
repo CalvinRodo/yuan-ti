@@ -22,9 +22,10 @@ public enum Discipline { Psychokinesis, Psychometabolism, Telepathy }
 /// <summary>The elemental spheres (<c>ICON</c> 2042–2045).</summary>
 public enum Sphere { Air, Earth, Fire, Water }
 
+/// <param name="HitPointFactor">Hit points are multiplied by this (DSUN.EXE doubles half-giants', <c>6ECD:0156</c>).</param>
 public sealed record RaceRules(
     Race Race, string Name, IReadOnlyList<Gender> Genders, IReadOnlyDictionary<Ability, int> Adjustments,
-    IReadOnlyList<CharacterClass> Classes, bool MultiClass);
+    IReadOnlyList<CharacterClass> Classes, bool MultiClass, int HitPointFactor = 1);
 
 /// <param name="Levels">Experience needed for levels 1, 2, 3…</param>
 public sealed record ClassRules(
@@ -33,15 +34,25 @@ public sealed record ClassRules(
 
 /// <summary>
 /// The rules character creation follows. <see cref="Default"/> is the
-/// original's, from its manual (pages 19–26 and the tables on 89–92): races
-/// and the classes each may take, racial ability adjustments, class
-/// requirements, prime requisites, hit dice and experience tables, the
-/// alignments a party may have, and the classes that can't be combined. The
-/// manual contradicts itself in two places; the stricter reading is taken:
-/// half-giants can't be rangers (the ranger's "Races Allowed" leaves them
-/// out) and muls and thri-kreen can't be druids (their race descriptions
-/// leave it out). DSUN.EXE's own tables aren't traced yet. A mod can replace
-/// the rules with a JSON file (<see cref="Read"/>).
+/// original's: DSUN.EXE's own tables where they are traced (segment
+/// <c>38D4</c>, read by the creation code in <c>6CCA</c> and <c>6ECD</c>;
+/// <c>dsun-exe-reference.md</c>, "Character creation"), the manual (pages
+/// 19–26, 89–92) for the rest:
+/// <list type="bullet">
+/// <item>from DSUN.EXE: the racial adjustments (<c>38D4:014D</c>; they match the
+/// manual but for the half-giant's), the ability roll (best of four 4d4+4,
+/// <c>6CCA:16BD</c>) and limits (20 + the adjustment; at least 17 in each
+/// class's key ability and the class's floor in the others, <c>6ECD:1F19</c>
+/// with <c>38D4:0180</c>), the hit dice (<c>38D4:014A</c>) and hit points
+/// (<c>6ECD:0156</c>), the starting experience (3000 in each class, the new
+/// character template at <c>38D4:0048</c>) and the map icons (<c>OJFF</c> 300–313);</item>
+/// <item>from the manual: the classes each race may take, prime requisites,
+/// the experience tables, the alignments a party may have, and that cleric
+/// and druid don't combine. Where it contradicts itself the stricter reading
+/// is taken: half-giants can't be rangers and muls and thri-kreen can't be
+/// druids.</item>
+/// </list>
+/// A mod can replace the rules with a JSON file (<see cref="Read"/>).
 /// </summary>
 public sealed record CharacterRules
 {
@@ -60,15 +71,26 @@ public sealed record CharacterRules
 
     public int AbilityMax { get; init; } = 24;
 
-    /// <summary>Rolled before adjustments: <see cref="RollDice"/> d <see cref="RollSides"/> + <see cref="RollBonus"/> (Dark Sun's 4d4+4), at least <see cref="RollFloor"/>.</summary>
+    /// <summary>
+    /// Rolled: <see cref="RollDice"/> d <see cref="RollSides"/> + <see cref="RollBonus"/>
+    /// (4d4+4) <see cref="RollTries"/> times, the best kept (<c>6CCA:16BD</c>), at least
+    /// <see cref="RollFloor"/> (DSUN.EXE has none of its own: the class minimums do it).
+    /// </summary>
     public int RollDice { get; init; } = 4;
 
     public int RollSides { get; init; } = 4;
 
     public int RollBonus { get; init; } = 4;
 
-    /// <summary>The manual: "The possible values range from 9 (low) to 24 (high)".</summary>
-    public int RollFloor { get; init; } = 9;
+    public int RollTries { get; init; } = 4;
+
+    public int RollFloor { get; init; }
+
+    /// <summary>Experience a new character has in each of its classes (DSUN.EXE's template, <c>38D4:0048</c>: 3000).</summary>
+    public int StartingExperience { get; init; } = 3000;
+
+    /// <summary>The map icons: <c>OJFF</c> this + the look's place in the portrait order (300–313, all walking with <c>SCMD</c> 174).</summary>
+    public int IconBase { get; init; } = 300;
 
     /// <summary>The highest an ability may be raised before adjustments (adjusted, it is this plus the race's adjustment).</summary>
     public int UnadjustedMax { get; init; } = 20;
@@ -117,6 +139,18 @@ public sealed record CharacterRules
 
     private static readonly CharacterClass[] All = Enum.GetValues<CharacterClass>();
 
+    /// <summary>
+    /// A class's ability minimums as DSUN.EXE has them (<c>6ECD:1F19</c>, table
+    /// <c>38D4:0180</c>: a key ability and a number per class): 17 in the key
+    /// ability, the class's number in every other. (The manual lists fewer and
+    /// lower requirements; the number is its minimum for the key ability.)
+    /// </summary>
+    private static Dictionary<Ability, int> Minimums(Ability key, int floor) =>
+        Enum.GetValues<Ability>().ToDictionary(a => a, a => a == key ? KeyAbilityMinimum : floor);
+
+    /// <summary>The least a class's key ability may be (<c>6ECD:1F19</c>).</summary>
+    public const int KeyAbilityMinimum = 17;
+
     public static CharacterRules Default { get; } = new()
     {
         Races =
@@ -132,8 +166,9 @@ public sealed record CharacterRules
                 A((Ability.Dex, 1), (Ability.Con, -1)),
                 All, true),
             new(Characters.Race.HalfGiant, "Half-giant", [Gender.Male, Gender.Female],
-                A((Ability.Str, 4), (Ability.Con, 2), (Ability.Int, -2), (Ability.Wis, -2), (Ability.Cha, -2)),
-                [CharacterClass.Cleric, CharacterClass.Fighter, CharacterClass.Gladiator, CharacterClass.Psionicist], true),
+                // DSUN.EXE's (38D4:016B); the manual has Str +4, Con +2, Int −2, Wis −2, Cha −2.
+                A((Ability.Str, 4), (Ability.Dex, -5), (Ability.Con, 2), (Ability.Int, -5), (Ability.Wis, -3), (Ability.Cha, -3)),
+                [CharacterClass.Cleric, CharacterClass.Fighter, CharacterClass.Gladiator, CharacterClass.Psionicist], true, HitPointFactor: 2),
             new(Characters.Race.Halfling, "Halfling", [Gender.Male, Gender.Female],
                 A((Ability.Dex, 2), (Ability.Wis, 2), (Ability.Con, -1), (Ability.Cha, -1), (Ability.Str, -2)),
                 [CharacterClass.Cleric, CharacterClass.Druid, CharacterClass.Fighter, CharacterClass.Gladiator, CharacterClass.Psionicist, CharacterClass.Ranger, CharacterClass.Thief], true),
@@ -146,21 +181,21 @@ public sealed record CharacterRules
         ],
         Classes =
         [
-            new(CharacterClass.Cleric, "Cleric", A((Ability.Wis, 9)), [Ability.Wis], 8, false, true,
+            new(CharacterClass.Cleric, "Cleric", Minimums(Ability.Wis, 9), [Ability.Wis], 8, false, true,
                 [0, 1500, 3000, 6000, 13000, 27500, 55000, 110000, 225000]),
-            new(CharacterClass.Druid, "Druid", A((Ability.Wis, 12), (Ability.Cha, 15)), [Ability.Wis, Ability.Cha], 8, false, true,
+            new(CharacterClass.Druid, "Druid", Minimums(Ability.Wis, 12), [Ability.Wis, Ability.Cha], 8, false, true,
                 [0, 1500, 3000, 6000, 13000, 27500, 55000, 110000, 225000]),
-            new(CharacterClass.Fighter, "Fighter", A((Ability.Str, 9)), [Ability.Str], 10, true, false,
+            new(CharacterClass.Fighter, "Fighter", Minimums(Ability.Str, 9), [Ability.Str], 10, true, false,
                 [0, 2000, 4000, 8000, 16000, 32000, 64000, 125000, 250000]),
-            new(CharacterClass.Gladiator, "Gladiator", A((Ability.Dex, 12), (Ability.Str, 13), (Ability.Con, 15)), [Ability.Str], 10, true, false,
+            new(CharacterClass.Gladiator, "Gladiator", Minimums(Ability.Str, 13), [Ability.Str], 10, true, false,
                 [0, 2250, 4500, 9000, 18000, 36000, 75000, 150000, 300000]),
-            new(CharacterClass.Preserver, "Preserver", A((Ability.Int, 9)), [Ability.Int], 4, false, false,
+            new(CharacterClass.Preserver, "Preserver", Minimums(Ability.Int, 9), [Ability.Int], 4, false, false,
                 [0, 2500, 5000, 10000, 20000, 40000, 60000, 90000, 135000]),
-            new(CharacterClass.Psionicist, "Psionicist", A((Ability.Con, 11), (Ability.Int, 12), (Ability.Wis, 15)), [Ability.Con, Ability.Wis], 6, false, false,
+            new(CharacterClass.Psionicist, "Psionicist", Minimums(Ability.Wis, 12), [Ability.Con, Ability.Wis], 6, false, false,
                 [0, 2200, 4400, 8800, 16500, 30000, 55000, 100000, 200000]),
-            new(CharacterClass.Ranger, "Ranger", A((Ability.Str, 13), (Ability.Dex, 13), (Ability.Wis, 14), (Ability.Con, 14)), [Ability.Str, Ability.Dex, Ability.Wis], 10, true, true,
+            new(CharacterClass.Ranger, "Ranger", Minimums(Ability.Wis, 14), [Ability.Str, Ability.Dex, Ability.Wis], 10, true, true,
                 [0, 2250, 4500, 9000, 18000, 36000, 75000, 150000, 300000]),
-            new(CharacterClass.Thief, "Thief", A((Ability.Dex, 9)), [Ability.Dex], 6, false, false,
+            new(CharacterClass.Thief, "Thief", Minimums(Ability.Dex, 9), [Ability.Dex], 6, false, false,
                 [0, 1250, 2500, 5000, 10000, 20000, 40000, 70000, 110000]),
         ],
     };
