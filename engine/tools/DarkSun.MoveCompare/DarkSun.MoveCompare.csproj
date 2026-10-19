@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Compares the engine's pathfinding and walking with DSUN.EXE's. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\DarkSun.Game\DarkSun.Game.csproj" />
+  </ItemGroup>
+</Project>

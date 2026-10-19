@@ -122,6 +122,17 @@ public sealed class ScmdAnimator
         return true;
     }
 
+    /// <summary>
+    /// Start the sequence at <paramref name="startIndex"/> again, keeping the
+    /// distance moved and the current record's delay (the next record follows
+    /// it in time): a walk cycle that moves less than a cell is repeated.
+    /// </summary>
+    public void Continue(int startIndex)
+    {
+        Index = startIndex;
+        Animating = true;
+    }
+
     private void Apply(ScmdRecord record, long now)
     {
         if (record.Frame != ScmdRecord.KeepFrame)

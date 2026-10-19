@@ -94,6 +94,10 @@ public partial class RegionView : Node2D
     public override void _Ready()
     {
         Controls.Register();
+        // [game] original_pathfinding=true in user://settings.cfg: walk as DSUN.EXE plans.
+        var settings = new ConfigFile();
+        settings.Load("user://settings.cfg");
+        Walker.UseOriginalPathfinding = settings.GetValue("game", "original_pathfinding", false).AsBool();
         _ground = new Node2D();
         AddChild(_ground);
         _marker = new SelectionMarker();

@@ -15,6 +15,7 @@ stored in this repository. The plan is in
 | `tests/` | xUnit tests for the two libraries. |
 | `tools/DarkSun.Dump` | Hashes every resource, image frame, palette and region render in the game files, and lists every script, for `make engine-compare`. |
 | `tools/DarkSun.ScriptRun` | Runs the new-game script, every region script and every trigger they register, for `make engine-scripts`. |
+| `tools/DarkSun.MoveCompare` | Compares the engine's A* with the port of DSUN.EXE's pathfinder in every region, and walking speeds with the walk scripts', for `make engine-movement`. |
 | `tools/DarkSun.ModTool` | Exports a resource into a mod folder (PNG, text or raw bytes) and lists what mods replace, for `make engine-mod-export` / `engine-mod-list`. |
 | `tools/DarkSun.MusicRender` | Renders a piece of the music to a WAV file, for `make engine-music`. |
 | `tools/DarkSun.CineDump` | Plays a cinematic without a screen and saves snapshots (PPM), for `make engine-cine`. |
@@ -56,6 +57,7 @@ make engine-edit    # open the Godot editor
 make engine-compare # check the C# file-format and script decoding against the Python tools
 make engine-scripts # run every game script in the C# interpreter (V=-v lists the world commands)
 make engine-mod-export FILE=RESOURCE.GFF TAG=ICON N=2048 MOD=mods/MyMod  # start a mod from a resource
+make engine-movement # pathfinding and walking speed against DSUN.EXE's
 make engine-mod-list MODS=mods   # what the mods in a folder replace
 make engine-music   # render music to out/music.wav (MUSIC=n, FILE=RESOURCE.GFF or CINE.GFF, SECONDS=60)
 make engine-cine    # play a cinematic headless, snapshots in out/cine (CINE=0 intro, 1 arrival, 100 ending)

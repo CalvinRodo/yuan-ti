@@ -417,6 +417,50 @@ that line. The walls are drawn at (x × 16 + 8 − `DS:574C`[w], y × 16 + 16 �
 `DS:574D`[w]). `region_renderer.py` draws all objects and then all walls; the
 engine's region view sorts by these rules.
 
+**Pathfinding.** `1A0A:0B0F` plans a move with `08BB:07F3(nodes[30],
+x, y, goal x, goal y, path[80], 30, 1, 80, object+0x1A)`. It first sets
+`DS:01FA` = 1, which makes the wall-follower probe 45° back towards the wall,
+and repeats with 0 if that fails. Creatures (index ≥ 4) more than 24 cells
+from their goal that planned less than 32 ticks ago give up instead.
+Blocked means `footprint_blocked` (`1A0A:11DB`): `GMAP` 0x40 anywhere under
+the mover's footprint, other creatures not counted. The algorithm is a "bug"
+pathfinder:
+
+1. **Line** (`08BB:0000`): step from the start by the signs of (goal − here)
+   (`096C:009B`: in mode 1 an 8-way table at `3779:0000`; otherwise 4-way),
+   with directions 0 = N clockwise and steps at `096C:0002`/`0012`, for at
+   most 80 points. Points are 6 bytes: x, y, direction on. If the end of the
+   line is blocked, the target moves back to its last free point.
+2. **Nodes** (`08BB:00B9`), 18 bytes each: x, y, dir, turn, straight link,
+   two side links, parent, next. Links are node number + 1; 0 means none yet
+   and −1 dead. The nodes are the start, then the free cells before and after
+   each blocked stretch of the line, then the target. Overflowing 30 nodes
+   fails.
+3. **Search** (`08BB:02D2`):
+   * Where a node's next line cell is free, it links straight to the next node.
+   * Otherwise two followers (`01D5`, turns −2 and +2 from `DS:01FE`/`0200`)
+     step round the obstacle. Each tries its heading, turns by its turn when
+     blocked, and turns back after each step. It fails after 4 turns.
+   * A follower that lands on a node further on wins: that node's parent is
+     set, and it becomes current. One that returns to its own node fails.
+   * Landing on an earlier node is remembered. If that follower later wins,
+     the detour starts from the earlier node instead.
+   * If both followers fail, the search falls back to the parent node. It
+     gives up after 500 rounds.
+4. **Replay** (`08BB:05C1`): walk the linked nodes, straight or by
+   wall-following, writing every cell, at most 79.
+
+Ported as `DarkSun.Game.Movement.OriginalPathfinder`. One flaw shows in the
+port: the remembered earlier node can be one the route skipped, and the
+replay only moves forward. In 40 of 6 600 random long paths, the path then
+runs straight into a wall. The mover would stop at that step.
+
+**Walking speed.** A walk step lasts as long as its walk records take: SCMD 2
+and 109 take 4 × 7 ticks for 16 px (3.43 cells/s), and 6 others 32 ticks
+(3.0 cells/s). SCMD 239's cycle covers only 8 px, so it runs twice per cell.
+Nine walk scripts have delay 0 and moved once per pass of the main loop, at a
+speed that depended on the PC.
+
 ## 4. What runs the scripts
 
 Derived statically (2026-10-18); names in `tools/ghidra/symbols.tsv`. All

@@ -147,8 +147,17 @@ Goal: a party sprite walking around a region at the original scale.
 - [ ] Creature sizes from the game data: byte 0x3D of the 0x47-byte creature
       records (table `DS:1661`), whose source file is not yet traced; until
       then sizes are estimated from sprite width.
-- [ ] Compare with DSUN.EXE's own pathfinding (not yet located) and walking
-      speed in play (walk records move 4 px per 7 ticks: about 3.4 cells/s).
+- [x] Compare with DSUN.EXE's own pathfinding and walking speed
+      (`make engine-movement`). The original's pathfinder (`08BB`, a "bug"
+      algorithm: straight line, then wall-following round each obstacle) is
+      ported as `OriginalPathfinder`. For goals within one screen it reaches
+      94.0% of goals to A*'s 95.7%, with paths 4% longer on average; across a
+      whole map 43.7% to 82.2% (79-cell paths, 30 obstacle nodes). The engine
+      keeps A*; `[game] original_pathfinding=true` in `user://settings.cfg`
+      switches. Walking speed matches the walk scripts (28 or 32 ticks a
+      cell: 3.43 or 3.0 cells/s), now also for SCMD 239, whose cycle moves only
+      half a cell; walks with delay 0 ran as fast as the PC in the original
+      and get 6 ticks a record (4 cells/s).
 - [x] Decode `SCMD` animation scripts (`DarkSun.Data.Animation.Scmd`,
       `DarkSun.Game.Animation.ScmdAnimator`, 96 Hz ticks); objects in the
       region view animate.

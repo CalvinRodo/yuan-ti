@@ -445,3 +445,12 @@
 6BB8:0A41	func	region_load_rdat	RDAT n (49 bytes) to 4931:025D: colour cycles, music at +0x2F
 78A9:2A9F	func	item_describe	item name ("%+d %Fs" with a bonus), to-hit and damage for the item screen
 7155:0482	func	object_load_record	copy an object's RDFF record into the item table (DS:165D) or combat table (DS:1665)
+08BB:07F3	func	pathfind	nodes, x, y, gx, gy, path, maxNodes, mode, pathLength, skip: line, nodes, wall-following, replay
+08BB:0000	func	pathfind_line	straight line by the signs of (goal - here), 6-byte points
+08BB:00B9	func	pathfind_nodes	start, the free cells around each blocked stretch, target (18-byte nodes)
+08BB:01D5	func	pathfind_wall_step	one wall-follower step turning by +-2; returns the node reached (+1), 0, or -1
+08BB:02D2	func	pathfind_search	link nodes with two wall-followers per obstacle; 0 or -1
+08BB:05C1	func	pathfind_replay	write the cells of the linked route
+096C:009B	func	direction_towards	by signs; 8-way table at 3779:0000 when DS:01F8 = 1, else 4-way
+096C:006B	func	step_direction	add the direction's step (CS:0002/0012); returns footprint_blocked
+096C:011C	func	rotate_direction	(by, dir) mod 8

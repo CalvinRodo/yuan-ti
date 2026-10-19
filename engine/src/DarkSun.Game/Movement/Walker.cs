@@ -158,6 +158,13 @@ public sealed class Walker
     {
         // Check a step's end before animating, so a looping walk can't run on
         // past the cell.
+        if (_target is not null && !Animator.Animating && now >= Animator.NextStepAt && Moved is > 0 and < CellSize)
+        {
+            // A walk cycle that moves less than a cell (SCMD 239 moves 8 px)
+            // runs again until the cell is crossed, so the speed is the
+            // script's: 16 px at its pixels per tick.
+            Animator.Continue(_script.WalkStart(Facing));
+        }
         if (_target is not null && !StepDone(now))
         {
             return Animator.Update(now);
@@ -188,9 +195,11 @@ public sealed class Walker
         return changed;
     }
 
+    private int Moved => Math.Max(Math.Abs(Animator.OffsetX), Math.Abs(Animator.OffsetY));
+
+    /// <summary>A step ends when its walk has crossed the cell, or has stopped without moving at all.</summary>
     private bool StepDone(long now) =>
-        now >= Animator.NextStepAt
-        && (!Animator.Animating || Math.Max(Math.Abs(Animator.OffsetX), Math.Abs(Animator.OffsetY)) >= CellSize);
+        now >= Animator.NextStepAt && (Moved >= CellSize || (!Animator.Animating && Moved == 0));
 
     private bool TryStep(Cell next, long now, Func<int, int, bool> blocked)
     {
@@ -241,13 +250,28 @@ public sealed class Walker
         return _path.Count > 0;
     }
 
-    private List<Cell> PathTo(Func<int, int, bool> blocked, bool avoidCreatures) =>
-        Pathfinder.FindPath(
-            avoidCreatures
-                ? (x, y) => !CanStand(new Cell(x, y), blocked)
-                : (x, y) => Footprint.Cells(new Cell(x, y)).Any(c => blocked(c.X, c.Y)),
+    /// <summary>
+    /// Plan with DSUN.EXE's own pathfinder (<see cref="OriginalPathfinder"/>)
+    /// instead of A* where it finds a path; detours round other creatures
+    /// still use A*. Off by default: within a screen the two agree 94% of
+    /// the time, but the original reaches fewer goals and takes longer ways
+    /// (<c>make engine-movement</c>).
+    /// </summary>
+    public static bool UseOriginalPathfinding { get; set; }
+
+    private List<Cell> PathTo(Func<int, int, bool> blocked, bool avoidCreatures)
+    {
+        Func<int, int, bool> footprintBlocked = (x, y) => Footprint.Cells(new Cell(x, y)).Any(c => blocked(c.X, c.Y));
+        if (UseOriginalPathfinding && !avoidCreatures
+            && OriginalPathfinder.FindPath(footprintBlocked, Cell, _goal!.Value) is { Count: > 0 } original)
+        {
+            return original;
+        }
+        return Pathfinder.FindPath(
+            avoidCreatures ? (x, y) => !CanStand(new Cell(x, y), blocked) : footprintBlocked,
             Cell,
             _goal!.Value);
+    }
 
     private void SetPath(IEnumerable<Cell> path)
     {
