@@ -28,7 +28,9 @@ namespace DarkSun.Engine;
 /// Right-click: verb menu; Tab: select the next character; N: add one; C:
 /// change its sprite; arrows, WASD or middle-drag scroll; wheel or +/- zoom;
 /// PgUp/PgDn change region; Esc returns to the main menu; F1 shows the <c>GMAP</c> flags, occupied cells and
-/// triggers. Run with <c>-- --check-regions</c> to load every region, run its
+/// triggers, F3 a grid, F4 object numbers, and with any of them on the
+/// hovered cell is described (<see cref="DebugOverlay"/>; <c>-- --debug-overlay</c>
+/// starts with all three). Run with <c>-- --check-regions</c> to load every region, run its
 /// scripts, animate it and walk the party in it, then quit.
 /// </summary>
 public partial class RegionView : Node2D
@@ -63,7 +65,10 @@ public partial class RegionView : Node2D
     private double _clock;
     private Node2D _ground = null!;
     private Node2D _sorted = null!;
-    private MapFlagsOverlay _overlay = null!;
+    private DebugOverlay _overlay = null!;
+    private PanelContainer _hoverPanel = null!;
+    private Label _hoverText = null!;
+    private double _hoverRefresh;
     private Camera2D _camera = null!;
     private Label _hud = null!;
     private readonly List<PartyMember> _party = [];
@@ -120,7 +125,7 @@ public partial class RegionView : Node2D
         AddChild(_marker);
         _sorted = new Node2D { YSortEnabled = true };
         AddChild(_sorted);
-        _overlay = new MapFlagsOverlay { Visible = false };
+        _overlay = new DebugOverlay { Visible = false };
         AddChild(_overlay);
         _camera = new Camera2D
         {
@@ -130,6 +135,10 @@ public partial class RegionView : Node2D
         };
         AddChild(_camera);
         AddChild(BuildHud());
+        if (OS.GetCmdlineUserArgs().Contains("--debug-overlay"))
+        {
+            (_overlay.Flags, _overlay.Grid, _overlay.Numbers) = (true, true, true);
+        }
 
         if (OS.GetCmdlineUserArgs().Contains("--check-regions"))
         {
@@ -188,6 +197,13 @@ public partial class RegionView : Node2D
         };
         layer.AddChild(_dialogueWindow);
 
+        _hoverPanel = new PanelContainer { Visible = false, MouseFilter = Control.MouseFilterEnum.Ignore };
+        _hoverPanel.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.BottomRight);
+        _hoverPanel.GrowHorizontal = Control.GrowDirection.Begin;
+        _hoverPanel.GrowVertical = Control.GrowDirection.Begin;
+        _hoverText = new Label { LabelSettings = new LabelSettings { FontSize = 9 }, MouseFilter = Control.MouseFilterEnum.Ignore };
+        _hoverPanel.AddChild(_hoverText);
+        layer.AddChild(_hoverPanel);
         _fade = new ColorRect { Color = new Color(0, 0, 0, 0), MouseFilter = Control.MouseFilterEnum.Ignore };
         _fade.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
         layer.AddChild(_fade);
@@ -236,7 +252,7 @@ public partial class RegionView : Node2D
             + $"Triggers: {t.Count(GplTriggerList.MoveTile)} tile, {t.Count(GplTriggerList.MoveBox)} box, {objectTriggers} object, "
             + $"{Session.Scripts.Creatures.NoOrders.Count + Session.Scripts.Creatures.Sight.Count} creature\n"
             + "Click: walk · Shift+click: party · Right-click: verbs · Tab: select · N: add · C: sprite · "
-            + "Arrows/WASD or middle-drag: scroll · Wheel or +/-: zoom · PgUp/PgDn: region · F1: map · F2: script log · Esc: back";
+            + "Arrows/WASD or middle-drag: scroll · Wheel or +/-: zoom · PgUp/PgDn: region · F1: map · F2: script log · F3: grid · F4: numbers · Esc: back";
     }
 
     /// <summary>Replace the map's nodes with <paramref name="file"/>'s region.</summary>
@@ -315,7 +331,7 @@ public partial class RegionView : Node2D
             var sortPoint = new Vector2(wall.X + wall.Frame.Width / 2, wall.Y + wall.Frame.Height - 0.5f);
             AddSprite(wall.Frame, sortPoint, new Vector2(wall.X, wall.Y), wall.Mirrored);
         }
-        _overlay.Show(_region, _occupancy, Session.Scripts.Triggers);
+        _overlay.Show(_region, _occupancy, Session.Scripts.Triggers, _world);
         Animate();
     }
 
@@ -645,6 +661,34 @@ public partial class RegionView : Node2D
             _camera.Position += direction * PanSpeed * (float)delta / _camera.Zoom.X;
         }
         FollowCharacter();
+        UpdateHover(force: false);
+    }
+
+    /// <summary>
+    /// While a debug layer is on: outline the cell under the pointer and
+    /// describe it in the panel (refreshed as the pointer moves, and a few
+    /// times a second, since things move).
+    /// </summary>
+    private void UpdateHover(bool force)
+    {
+        _hoverPanel.Visible = _overlay.Active;
+        if (!_overlay.Active)
+        {
+            _overlay.Hovered = null;
+            return;
+        }
+        Vector2 at = GetGlobalMousePosition();
+        var cell = new Cell((int)Math.Floor(at.X / Region.TileSize), (int)Math.Floor(at.Y / Region.TileSize));
+        _hoverRefresh -= GetProcessDeltaTime();
+        if (!force && _overlay.Hovered == cell && _hoverRefresh > 0)
+        {
+            return;
+        }
+        _hoverRefresh = 0.25;
+        _overlay.Hovered = cell;
+        string text = _overlay.Describe(cell);
+        _hoverText.Text = (text.Length > 0 ? text + "\n" : "")
+            + $"F1 flags {(_overlay.Flags ? "on" : "off")} · F3 grid {(_overlay.Grid ? "on" : "off")} · F4 numbers {(_overlay.Numbers ? "on" : "off")}";
     }
 
     public override void _UnhandledInput(InputEvent e)
@@ -669,7 +713,18 @@ public partial class RegionView : Node2D
         }
         else if (e.IsActionPressed(Controls.ToggleMapFlags))
         {
-            _overlay.Visible = !_overlay.Visible;
+            _overlay.Flags = !_overlay.Flags;
+            UpdateHover(force: true);
+        }
+        else if (e.IsActionPressed(Controls.ToggleGrid))
+        {
+            _overlay.Grid = !_overlay.Grid;
+            UpdateHover(force: true);
+        }
+        else if (e.IsActionPressed(Controls.ToggleObjectNumbers))
+        {
+            _overlay.Numbers = !_overlay.Numbers;
+            UpdateHover(force: true);
         }
         else if (e.IsActionPressed(Controls.NextRegion))
         {
@@ -776,7 +831,7 @@ public partial class RegionView : Node2D
             ReportScript("new game", scripts.NewGame());
         }
         ReportScript($"entered region {_region.Number}", scripts.EnterRegion(_region.Number));
-        _overlay.Show(_region, _occupancy, scripts.Triggers);
+        _overlay.Show(_region, _occupancy, scripts.Triggers, _world);
     }
 
     /// <summary>The front-most object whose sprite is under <paramref name="at"/> (map position), if any.</summary>

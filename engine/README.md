@@ -127,7 +127,11 @@ Arrows, WASD or middle-drag scroll (the camera eases after the selected
 character, and follows it again after the next click); mouse wheel or +/-
 zoom (½, 1–4; 2, the default, shows what the original showed); PgUp/PgDn change region;
 F1 shows blocked cells (red), cells that block line of sight (blue outline),
-occupied cells (yellow) and move triggers (magenta); Esc goes back. Objects with an `SCMD` script
+occupied cells (yellow) and move triggers (magenta); F3 a cell grid (coordinates every 8 cells); F4 each object's index
+and `OJFF` number (party green, creatures yellow, doors cyan); with any of
+these on, the cell under the pointer is outlined and a panel shows its
+coordinates, `GMAP` flags, occupant, objects (with their verbs) and move
+triggers (with the script they run); `-- --debug-overlay` starts with all on; Esc goes back. Objects with an `SCMD` script
 animate. `--check-regions` also walks the party 20 cells in every region and
 fails if two characters ever overlap; `--check-exits` walks the active member into
 every move trigger from each side and uses every object with a use trigger,

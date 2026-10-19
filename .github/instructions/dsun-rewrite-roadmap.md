@@ -216,7 +216,10 @@ Goal: a party sprite walking around a region at the original scale.
       starts with the actor's cell in `gname[1..3]` (`1A0A:0256`), which
       scripts rely on. `--check-exits` walks into every move trigger from
       each side and walks up to and uses every object with a use trigger.
-- [ ] Debug overlay: grid, passability, object numbers, hovered tile.
+- [x] Debug overlay (`DebugOverlay`): F1 passability, line of sight,
+      occupancy and move triggers; F3 grid; F4 object index and `OJFF`
+      numbers; the hovered cell outlined and described (flags, occupant,
+      objects and their verbs, triggers and their scripts).
 
 ---
 
