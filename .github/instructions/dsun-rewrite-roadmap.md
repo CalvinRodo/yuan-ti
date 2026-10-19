@@ -171,7 +171,15 @@ Goal: a party sprite walking around a region at the original scale.
 - [x] Depth-sort objects, walls and characters (Godot y-sort on each
       sprite's `ETAB` point or bottom edge; DSUN.EXE draws row by row,
       `draw_objects_and_walls`, `1DBD:0002`).
-- [ ] Play `SCMD` sound effects (record byte 7).
+- [x] Play `SCMD` sound effects (record byte 7), and GPL SOUND (`Sounds`
+      autoload): sound n plays `BVOC` n (`DarkSun.Data.Audio.SoundEffects`,
+      from the game's sound table), decoded from Creative VOC
+      (`Voc`). Objects, creatures and party members sound when on screen;
+      `[audio] sound_volume` in `user://settings.cfg`. Most `SCMD` sounds are
+      in state changes (doors opening and closing, levers: `SCMD` slots 2 and
+      3, or the `REQUEST(5)` start), so they are heard when those run.
+- [ ] Open and close doors (door triggers, "use"): `SCMD` slots 2 and 3 of
+      door objects, with their sounds.
 - [ ] Region transitions: map edges and doors to other `RGNxx` files.
 - [ ] Debug overlay: grid, passability, object numbers, hovered tile.
 
@@ -307,9 +315,9 @@ executable, not in the data.
       systems without one; a volume setting.
 - [ ] An OPL (AdLib) emulation option for the original sound (`ADV` drivers,
       `TIMB` timbres), and MT-32 (`LSEQ`).
-- [ ] Sound effects: decode `BVOC` (Creative `.VOC`, as `precompute.py`
-      already extracts) and any other sample resources to Godot
-      `AudioStreamWAV`.
+- [x] Sound effects: `BVOC` (Creative `.VOC`) decoded by `Voc` to Godot
+      `AudioStreamWAV` (`Sounds`). Sounds 131–180 (MIDI notes for the music
+      driver) are not played yet.
 - [x] Which music plays where: the menu plays 17; a region plays the track
       in its `RDAT` record (`+0x2F`); cinematics play 26–29 (`CINE.GFF`).
       GPL's `MUSIC` command exists but no script uses it.

@@ -147,6 +147,14 @@ Decoded images and palettes are cached for the session
 (`Session.Assets`), with one texture per frame and palette, so returning to a
 region or screen doesn't decode again.
 
+## Sound
+
+Music: see the SoundFont notes above. Sound effects come from the game
+(`BVOC` in `RESOURCE.GFF`): what animations play (`SCMD`) when the object is
+on screen, and what scripts play (SOUND). `[audio] sound_volume` (0–1, 0
+for none) in `user://settings.cfg` sets their loudness.
+`-- --check-sounds` decodes every effect.
+
 ## Display
 
 The game is drawn for a 640 × 400 viewport (twice the original's 320 × 200)

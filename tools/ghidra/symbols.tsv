@@ -455,3 +455,5 @@
 096C:006B	func	step_direction	add the direction's step (CS:0002/0012); returns footprint_blocked
 096C:011C	func	rotate_direction	(by, dir) mod 8
 1A0A:2AB4	func	creature_footprint	footprint from the character record's size byte (+0x3D): half-width size & 7, height size / 8; 0 without one
+3172:04F1	func	sound_play	n: sound table entry (3A98:08A2, 6 bytes: byte, type 4 MIDI / 5 sample, far descriptor; +7 BVOC number)
+1A0A:0663	func	gpl_sound	GPL SOUND: play_sound_effect(n)

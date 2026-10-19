@@ -829,3 +829,23 @@ each record are not read.
   * Every item `RDFF` that references an `IT1R` or `NAME` entry (745 and
     706 of 755) references the record's own type and name.
 
+### Sound effects
+
+* `play_sound_effect(n)` (`191F:0A6F`) does nothing when sound is off
+  (`DS:1162`, `DS:11A8`) or n is −1. Otherwise it calls `3172:04F1(n, …)`.
+* Callers: `SCMD` record byte 7 (`object_apply_scmd_record`, `1DF3:1BEF`),
+  GPL SOUND (op 0x5D, `1A0A:0663`), and cinematic op 0x67.
+* **The sound table** is 182 entries of 6 bytes at `3A98:08A2`: a byte, a
+  type byte, and a far pointer to a descriptor.
+  * Type 5 (0–130) is a digitised sample. The descriptor's word +7 is the
+    `BVOC` number, which equals n (0 → 1). Byte +5 is an alias that FM
+    devices use for `FVOC` sounds (`3348:02D2`).
+  * Type 4 (131–180) are MIDI note effects for the music driver.
+* 19 sample numbers have no `BVOC` in the data (15, 16, 19, 24, 27, 28, 30,
+  41, 55, 61, 64, 65, 66, 87, 89, 105, 123, 127, 128).
+* `BVOC` files are Creative VOC, all 8000 Hz unsigned 8-bit. BVOC 58 and 70
+  repeat a 3.0 s and a 2.2 s sound 100 and 200 times.
+* `SCMD` sounds in the data: 1, 2, 6, 8, 42, 45, 57 and 60. Almost all are on
+  the records of door and lever sequences: slot 2 opening, slot 3 closing, or
+  the header word 0x44 start that `REQUEST(5)` plays.
+

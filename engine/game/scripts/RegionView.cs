@@ -91,6 +91,10 @@ public partial class RegionView : Node2D
     /// <summary>Make the next opening of the view start a new game (region 42).</summary>
     public static void StartNewGame() => _regionIndex = -1;
 
+    /// <summary>Where a new game starts: region 42 at the party's start, unless changed (development: <c>--region</c>, <c>--at</c>).</summary>
+    public static (int Region, Cell At) NewGameStart { get; set; } =
+        (GplMachine.StartRegion, new Cell(GplMachine.StartX / Region.TileSize, GplMachine.StartY / Region.TileSize));
+
     public override void _Ready()
     {
         Controls.Register();
@@ -130,8 +134,7 @@ public partial class RegionView : Node2D
         {
             // A new game begins where DSUN.EXE's does: region 42, the party at pixel (488, 152).
             _regionIndex = 0;
-            EnterRegion(GplMachine.StartRegion,
-                new Cell(GplMachine.StartX / Region.TileSize, GplMachine.StartY / Region.TileSize));
+            EnterRegion(NewGameStart.Region, NewGameStart.At);
             if (OS.GetCmdlineUserArgs().Contains("--check-start"))
             {
                 GD.Print($"new game: {Session.Install!.RegionFiles[_regionIndex]} (region {_region.Number}); party at "
@@ -443,7 +446,7 @@ public partial class RegionView : Node2D
             sprite.FlipH = animator.Mirrored;
             Vector2 at = _moved.TryGetValue(obj, out Vector2 m) ? m : new Vector2(obj.EtabX, obj.EtabY);
             sprite.Position = at + new Vector2(animator.OffsetX, animator.OffsetY);
-            _ = animator.TakeSounds().Count(); // sound effects are not played yet
+            PlaySounds(animator.TakeSounds(), sprite.Position);
         }
         for (int i = 0; i < _party.Count; i++)
         {
@@ -452,6 +455,7 @@ public partial class RegionView : Node2D
             {
                 DrawMember(member);
             }
+            PlaySounds(member.Walker.TakeSounds(), member.Node.Position);
             // Move triggers fire when a character reaches a new cell (trigger_on_move).
             Cell cell = member.Walker.Cell;
             if (_lastCells.TryGetValue(member.Walker, out Cell last) && last != cell
@@ -468,6 +472,18 @@ public partial class RegionView : Node2D
         {
             DrawCreature(creature);
         }
+        foreach (var (creature, node) in _creatureNodes)
+        {
+            if (creature.Walker is { } walker)
+            {
+                PlaySounds(walker.TakeSounds(), node.Position);
+            }
+        }
+        // GPL SOUND (play_sound_effect, as for SCMD sounds).
+        while (Session.ScriptHost.Sounds.TryDequeue(out int sound))
+        {
+            Sounds.Instance?.Play(sound);
+        }
         RunCreatureScripts();
         if (_overlay.Visible)
         {
@@ -482,6 +498,30 @@ public partial class RegionView : Node2D
     /// rather than jumping a cell at a time. Scrolling by hand stops following
     /// until the next click.
     /// </summary>
+    /// <summary>
+    /// Play an animation's sound effects (<c>SCMD</c> record byte 7) if it is
+    /// on screen; DSUN.EXE animates, and so sounds, the objects it draws.
+    /// Off-screen sounds are dropped.
+    /// </summary>
+    private void PlaySounds(IEnumerable<int> sounds, Vector2 at)
+    {
+        if (_checking || Sounds.Instance is null)
+        {
+            _ = sounds.Count();
+            return;
+        }
+        Vector2 half = GetViewportRect().Size / _camera.Zoom / 2 + new Vector2(Region.TileSize * 2, Region.TileSize * 2);
+        Vector2 centre = _camera.GetScreenCenterPosition();
+        bool seen = Math.Abs(at.X - centre.X) <= half.X && Math.Abs(at.Y - centre.Y) <= half.Y;
+        foreach (int sound in sounds)
+        {
+            if (seen)
+            {
+                Sounds.Instance.Play(sound);
+            }
+        }
+    }
+
     private void FollowCharacter()
     {
         if (_follow && Selected is { } member)

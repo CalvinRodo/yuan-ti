@@ -74,7 +74,38 @@ public sealed class Walker
 
     public Direction Facing { get; private set; }
 
-    public ScmdAnimator Animator { get; private set; }
+    public ScmdAnimator Animator
+    {
+        get => _animator;
+        private set
+        {
+            // Keep the sounds the old animation played but nobody has taken yet.
+            if (_animator is not null)
+            {
+                foreach (int sound in _animator.TakeSounds())
+                {
+                    _sounds.Enqueue(sound);
+                }
+            }
+            _animator = value;
+        }
+    }
+
+    private ScmdAnimator _animator = null!;
+    private readonly Queue<int> _sounds = new();
+
+    /// <summary>The sound effects (<c>SCMD</c> record byte 7) its animations have played since last asked, in order.</summary>
+    public IEnumerable<int> TakeSounds()
+    {
+        while (_sounds.TryDequeue(out int sound))
+        {
+            yield return sound;
+        }
+        foreach (int sound in _animator.TakeSounds())
+        {
+            yield return sound;
+        }
+    }
 
     public bool IsWalking => _target is not null || _path.Count > 0;
 

@@ -101,3 +101,33 @@ public class ShortWalkCycleTests
         Assert.InRange(now, 2 * 32, 2 * 32 + 2); // 16 px at 4 px per 8 ticks, per cell
     }
 }
+
+public class WalkerSoundTests
+{
+    [Fact]
+    public void SoundsOfAFinishedStepAreKept()
+    {
+        // A walk cycle of one record (16 px) with sound 45, then standing.
+        var data = new byte[Scmd.HeaderSize + 2 * 8];
+        for (int slot = 0; slot < Scmd.SlotCount; slot++)
+        {
+            data[slot * 2] = (byte)(slot % 8 == 0 ? 0 : 1);
+        }
+        byte[][] records = [[0, 0, (byte)ScmdFlags.Stop, 0, 0, 0, 0, 0], [1, 6, (byte)ScmdFlags.Stop, 16, 0, 0, 0, 45]];
+        for (int i = 0; i < records.Length; i++)
+        {
+            records[i].CopyTo(data, Scmd.HeaderSize + i * 8);
+        }
+        var walker = new Walker(1, Scmd.Parse(data), [(10, 20), (10, 20)], new Cell(0, 0), Footprint.OneCell, new Occupancy());
+        static bool Open(int x, int y) => x < 0 || y < 0;
+        walker.Follow([new Cell(1, 0)]);
+        for (long now = 0; now < 40; now++)
+        {
+            walker.Update(now, Open); // the step ends and the walker stands: its animation is replaced
+        }
+
+        Assert.Equal([45], walker.TakeSounds());
+        Assert.Empty(walker.TakeSounds());
+    }
+}
+

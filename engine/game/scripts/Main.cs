@@ -6,7 +6,8 @@ namespace DarkSun.Engine;
 /// <summary>
 /// Start screen: finds the player's game files, then plays the intro and
 /// opens the main menu (<c>-- --no-intro</c>: straight to the menu;
-/// <c>-- --new-game</c>: straight into a new game). Only
+/// <c>-- --new-game</c>: straight into a new game, with <c>--region=N</c> and
+/// <c>--at=X,Y</c> to start elsewhere). Only
 /// shown when the files can't be found, to choose their folder.
 /// For headless checks: <c>-- --check-install</c> prints what was found and
 /// quits (exit code 1 if nothing); <c>-- --check-regions</c>,
@@ -38,6 +39,36 @@ public partial class Main : Control
             GetTree().Quit();
             return;
         }
+        if (args.Contains("--check-sounds") && install is not null)
+        {
+            // Decode every sample a sound number can play.
+            Session.Use(install);
+            int ok = 0, missing = 0;
+            double seconds = 0;
+            var loops = new List<string>();
+            for (int id = 1; id <= DarkSun.Data.Audio.SoundEffects.LastSample; id++)
+            {
+                int number = DarkSun.Data.Audio.SoundEffects.Bvoc(id)!.Value;
+                if (!Session.Open("RESOURCE.GFF").TryRead("BVOC", number, out var data))
+                {
+                    missing++;
+                    continue;
+                }
+                var sound = DarkSun.Data.Audio.Voc.Decode(data.Span);
+                ok++;
+                if (sound.Loops)
+                {
+                    loops.Add($"{id} ({sound.Samples.Length / (double)sound.SampleRate:F1} s, repeated {sound.LoopCount} times)");
+                }
+                else
+                {
+                    seconds += sound.Seconds;
+                }
+            }
+            GD.Print($"sounds: {ok} decoded, {missing} numbers without a BVOC, {seconds:F1} s in all; repeating: {string.Join(", ", loops)}");
+            GetTree().Quit(ok > 0 ? 0 : 1);
+            return;
+        }
         bool regionCheck = args.Contains("--check-regions") || args.Contains("--check-exits") || args.Contains("--check-start");
         bool screenCheck = args.Contains("--check-intro") || args.Contains("--check-menu");
         if (args.Contains("--check-install") || (install is null && (regionCheck || screenCheck)))
@@ -57,9 +88,22 @@ public partial class Main : Control
         }
         else if (install is not null && args.Contains("--new-game"))
         {
-            // Straight into a new game, for development.
+            // Straight into a new game, for development; --region=N and --at=X,Y choose where.
             Session.NewGame();
             RegionView.StartNewGame();
+            var start = RegionView.NewGameStart;
+            foreach (string arg in args)
+            {
+                if (arg.StartsWith("--region=") && int.TryParse(arg[9..], out int region))
+                {
+                    start = (region, new DarkSun.Game.Movement.Cell(64, 49));
+                }
+                else if (arg.StartsWith("--at=") && arg[5..].Split(',') is [var x, var y] && int.TryParse(x, out int cx) && int.TryParse(y, out int cy))
+                {
+                    start = (start.Region, new DarkSun.Game.Movement.Cell(cx, cy));
+                }
+            }
+            RegionView.NewGameStart = start;
             ChangeScene(RegionView.ScenePath);
         }
         else if (install is not null)
