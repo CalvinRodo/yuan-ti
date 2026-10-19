@@ -190,7 +190,11 @@ mods/
     RDAT/42.json                    region 42's music and colour cycling: {"music": 5}
     GPL/12.gpl                      a script, as source; assembled when the game loads it
     GPL/80.bin                      raw resource bytes: any tag (scripts, PAL, GMAP, GSEQ, …)
+    BVOC/4.wav                      a sound effect: PCM WAV, any rate, 8 or 16 bits, mono or stereo;
+                                    a smpl loop repeats (stored as VOC; .voc files are taken as they are)
     RGN2A.GFF/ETAB/42.bin           only in that file; a file folder may also add resources
+    RESOURCE.GFF/BVOC/19.wav        so a new sound goes here: sounds 19, 30, 87 and 127, which
+                                    scripts play, have no BVOC in the game
   _Disabled/                        names starting with _ or . are skipped
 ```
 

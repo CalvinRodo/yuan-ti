@@ -284,7 +284,13 @@ this milestone brings most of the game's content.
       of a rest, class restrictions on wearing items. FLEE and the orders'
       arrival distances are approximations; the original order handlers
       (`1A0A`) are not ported line by line.
-- [ ] SOUND (251 uses): queued by the host; needs the audio layer (M7).
+- [x] SOUND (251 uses): the host queues it and the region view plays it
+      through `Sounds`, like `SCMD` sounds (`play_sound_effect`, sound n is
+      `BVOC` n). Every script uses a sample number (1–127, none of the MIDI
+      note effects 131–180). Sounds 19, 30, 87 and 127 (10 uses) have no
+      `BVOC` in the game's files, so they are silent, as in DSUN.EXE with a
+      digital card. A mod can supply them, or replace any sound, as a WAV
+      (`RESOURCE.GFF/BVOC/19.wav`; `ModTool export` writes sounds as WAV).
 - [x] Remember each region's changes between visits (`RegionMemory`,
       `GameWorld.Snapshot` / `Restore`), as DSUN.EXE saves the region it
       leaves (`7155:0C64`): `GMAP` flags, and each object's place, hidden

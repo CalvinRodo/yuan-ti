@@ -8,6 +8,7 @@
 // back: images as PNG (one file, or a folder with one PNG per frame), text
 // (TEXT, MERR, SPIN) as UTF-8 .txt, items, monsters, regions and names
 // (IT1R, RDFF, RDAT, NAME) as .json, scripts (GPL, MAS) as .gpl source,
+// sound effects (BVOC) as .wav,
 // anything else (or anything, with --bin) as .bin. Edit the file and the
 // engine uses it; a .json may be cut down to the fields it changes. The path
 // is <mod-dir>/<TAG>/<number>.<ext>, which replaces the resource in whichever
@@ -82,6 +83,10 @@ if (args.Length >= 6 && args[0] == "export")
             }
             Console.WriteLine($"  {frames.Count} frames; delete the ones you don't change, the rest keep the original's");
         }
+    }
+    else if (tag == "BVOC")
+    {
+        Write(Path.Combine(dir, $"{number}.wav"), DarkSun.Data.Audio.Wav.Encode(DarkSun.Data.Audio.Voc.Decode(data.Span)));
     }
     else if (textTags.Contains(tag))
     {

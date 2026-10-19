@@ -99,7 +99,7 @@ public sealed class ModSet
 
     public const string LoadOrderFile = "load_order.txt";
 
-    private static readonly string[] BuiltInExtensions = [".bin", ".png", ".txt", ".json"];
+    private static readonly string[] BuiltInExtensions = [".bin", ".png", ".txt", ".json", ".wav", ".voc"];
 
     // (file or "" for any file, tag, number) → where its replacement is.
     private readonly Dictionary<(string File, string Tag, int Number), Replacement> _replacements = [];
@@ -328,6 +328,7 @@ public sealed class ModSet
             {
                 ".txt" => Text(File.ReadAllText(Path, Encoding.UTF8)),
                 ".json" => RecordJson.Apply(tag, original() is { } o ? o.Span : [], File.ReadAllText(Path, Encoding.UTF8)),
+                ".wav" => Audio.Voc.Encode(Audio.Wav.Decode(File.ReadAllBytes(Path))),
                 _ => File.ReadAllBytes(Path),
             };
         }

@@ -56,6 +56,44 @@ public class VocTests
     }
 
     [Fact]
+    public void EncodedSoundsDecodeTheSameLoopsIncluded()
+    {
+        var sound = new VocSound(11025, [1, -2, 300, -400, 5, 6, 7], LoopStart: 2, LoopEnd: 5, LoopCount: 3);
+
+        VocSound back = Voc.Decode(Voc.Encode(sound));
+
+        Assert.Equal(sound.Samples, back.Samples);
+        Assert.Equal((11025, 2, 5, 3), (back.SampleRate, back.LoopStart, back.LoopEnd, back.LoopCount));
+        Assert.Equal(-1, Voc.Decode(Voc.Encode(sound with { LoopCount = -1 })).LoopCount);
+        Assert.False(Voc.Decode(Voc.Encode(new VocSound(8000, [9, 8]))).Loops);
+    }
+
+    [Fact]
+    public void WavFilesKeepTheSamplesAndTheLoop()
+    {
+        var sound = new VocSound(8000, [100, -100, 2000, -32768, 32767], LoopStart: 1, LoopEnd: 4, LoopCount: -1);
+
+        VocSound back = Wav.Decode(Wav.Encode(sound));
+
+        Assert.Equal(sound.Samples, back.Samples);
+        Assert.Equal((8000, 1, 4, -1), (back.SampleRate, back.LoopStart, back.LoopEnd, back.LoopCount));
+    }
+
+    [Fact]
+    public void StereoAnd8BitWavFilesAreMixedToMono()
+    {
+        // 8-bit stereo: (0x80, 0xFF) and (0x00, 0x80).
+        byte[] wav = [.. "RIFF"u8, 0, 0, 0, 0, .. "WAVEfmt "u8, 16, 0, 0, 0, 1, 0, 2, 0, 0x40, 0x1F, 0, 0, 0x80, 0x3E, 0, 0, 2, 0, 8, 0,
+            .. "data"u8, 4, 0, 0, 0, 0x80, 0xFF, 0x00, 0x80];
+
+        VocSound s = Wav.Decode(wav);
+
+        Assert.Equal(8000, s.SampleRate);
+        Assert.Equal([(127 << 8) / 2, (-128 << 8) / 2], s.Samples.Select(v => (int)v));
+        Assert.Throws<InvalidDataException>(() => Wav.Decode("RIFF0000WAVEfmt "u8));
+    }
+
+    [Fact]
     public void NotAVocFile() => Assert.Throws<InvalidDataException>(() => Voc.Decode("RIFF...."u8));
 
     [Theory]

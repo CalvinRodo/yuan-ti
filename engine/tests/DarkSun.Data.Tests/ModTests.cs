@@ -117,6 +117,17 @@ public sealed class ModSetTests : IDisposable
     }
 
     [Fact]
+    public void ASoundEffectCanBeAWavFile()
+    {
+        var sound = new Audio.VocSound(8000, [10, 20, 30]);
+        Write("A/TEST.GFF/BVOC/19.wav", Audio.Wav.Encode(sound));
+
+        GffFile gff = ModSet.Load([_root]).Apply(Gff(), "TEST.GFF");
+
+        Assert.Equal(sound.Samples, Audio.Voc.Decode(gff.Read("BVOC", 19).Span).Samples);
+    }
+
+    [Fact]
     public void WithoutModsTheFileIsUnchanged()
     {
         GffFile gff = Gff();

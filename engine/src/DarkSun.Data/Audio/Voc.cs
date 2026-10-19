@@ -92,6 +92,64 @@ public static class Voc
         return new VocSound(rate == 0 ? 8000 : rate, [.. samples], loopStart, loopEnd, loopCount);
     }
 
+    /// <summary>
+    /// <paramref name="sound"/> as a VOC file (for a mod's WAV): 16-bit PCM in
+    /// block 9, its repeated part between blocks 6 and 7, as the game's own
+    /// repeating samples are laid out; <see cref="Decode"/> reads it back the same.
+    /// </summary>
+    public static byte[] Encode(VocSound sound)
+    {
+        using var o = new MemoryStream();
+        using var w = new BinaryWriter(o);
+        w.Write(Signature);
+        w.Write((ushort)26);
+        w.Write((ushort)0x0114); // version 1.20, which has block 9
+        w.Write((ushort)(~0x0114 + 0x1234));
+        short[] s = sound.Samples;
+        int start = sound.Loops ? sound.LoopStart : s.Length;
+        int end = sound.Loops ? sound.LoopEnd : s.Length;
+        // Block 9: rate, bits, channels, codec 4 (16-bit PCM), 4 reserved bytes, then the samples before any loop.
+        Block(w, 9, 12 + start * 2);
+        w.Write(sound.SampleRate);
+        w.Write((byte)16);
+        w.Write((byte)1);
+        w.Write((ushort)4);
+        w.Write(0);
+        Pcm(w, s.AsSpan(0, start));
+        if (sound.Loops)
+        {
+            Block(w, 6, 2);
+            w.Write((ushort)(sound.LoopCount < 0 ? 0xFFFF : sound.LoopCount));
+            Block(w, 2, (end - start) * 2);
+            Pcm(w, s.AsSpan(start, end - start));
+            Block(w, 7, 0);
+            if (end < s.Length)
+            {
+                Block(w, 2, (s.Length - end) * 2);
+                Pcm(w, s.AsSpan(end));
+            }
+        }
+        w.Write((byte)0);
+        w.Flush();
+        return o.ToArray();
+    }
+
+    private static void Block(BinaryWriter w, byte type, int size)
+    {
+        w.Write(type);
+        w.Write((byte)size);
+        w.Write((byte)(size >> 8));
+        w.Write((byte)(size >> 16));
+    }
+
+    private static void Pcm(BinaryWriter w, ReadOnlySpan<short> samples)
+    {
+        foreach (short sample in samples)
+        {
+            w.Write(sample);
+        }
+    }
+
     private static void AddPcm(List<short> samples, ReadOnlySpan<byte> pcm, int bits)
     {
         if (bits == 16)
