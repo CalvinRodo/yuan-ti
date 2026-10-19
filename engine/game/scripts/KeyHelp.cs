@@ -47,7 +47,8 @@ public partial class KeyHelp : CanvasLayer
         _root.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
         _root.GuiInput += e =>
         {
-            if (e is InputEventMouseButton { Pressed: true })
+            // A click closes it; the wheel scrolls, and at the top or bottom it comes here too.
+            if (e is InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left or MouseButton.Right or MouseButton.Middle })
             {
                 Close();
             }
