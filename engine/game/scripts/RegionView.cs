@@ -107,6 +107,7 @@ public partial class RegionView : Node2D
     private PanelContainer _scriptPanel = null!;
     private DialogueWindow _dialogueWindow = null!;
     private readonly Dictionary<int, ImageTexture?> _portraits = [];
+    private readonly Dictionary<(string, int, int), ImageTexture?> _uiArt = [];
     private readonly HashSet<RegionObject> _hidden = [];
     private readonly Dictionary<RegionObject, Vector2> _moved = [];
     private int _zoomLevel = Array.IndexOf(ZoomLevels, 2f);
@@ -221,10 +222,21 @@ public partial class RegionView : Node2D
                     }
                 }
             }
+            if (OS.GetCmdlineUserArgs().Contains("--talk")
+                && _world.Objects.FirstOrDefault(o => Session.Scripts.Triggers.MatchObject(GplTriggerList.TalkTo, o.Id) is not null) is { } talker)
+            {
+                // Development: talk to the first object that has a talk trigger (to see dialogue).
+                WhenScriptsFree(() => Act(talker, _selected, Verb.Talk));
+            }
             if (OS.GetCmdlineUserArgs().Contains("--open-items"))
             {
                 _inventory.World = _world;
                 _inventory.CallDeferred(InventoryWindow.MethodName.Open, _selected);
+            }
+            if (OS.GetCmdlineUserArgs().Contains("--check-dialogue"))
+            {
+                CheckDialogue();
+                return;
             }
             if (OS.GetCmdlineUserArgs().Contains("--check-items"))
             {
@@ -957,12 +969,28 @@ public partial class RegionView : Node2D
         return texture;
     }
 
+    /// <summary>A frame of a <c>RESOURCE.GFF</c> image (the text windows' art) in the region's palette.</summary>
+    private ImageTexture? UiArt(string tag, int number, int frame)
+    {
+        if (!_uiArt.TryGetValue((tag, number, frame), out ImageTexture? texture))
+        {
+            texture = Session.Open("RESOURCE.GFF").TryRead(tag, number, out var data)
+                && Session.Assets.Frames(data) is var frames && frame < frames.Count
+                ? Textures.ToTexture(frames[frame], _palette)
+                : null;
+            _uiArt[(tag, number, frame)] = texture;
+        }
+        return texture;
+    }
+
     /// <summary>The game-start script once per session, then the region's <c>MAS</c> script.</summary>
     /// <summary>Connect the dialogue window and the overlay to this region's scripts.</summary>
     private void AttachScripts()
     {
         _portraits.Clear();
-        _dialogueWindow.Attach(Session.ScriptHost.Dialogue, Portrait);
+        _uiArt.Clear();
+        _dialogueWindow.Attach(Session.ScriptHost.Dialogue, Portrait, UiArt,
+            i => _palette[i] is var c ? new Color(c.R / 255f, c.G / 255f, c.B / 255f) : Colors.White);
         _overlay.Show(_region, _occupancy, Session.Scripts.Triggers, _world);
     }
 
@@ -1833,6 +1861,105 @@ public partial class RegionView : Node2D
             ? $"items: made, dropped, picked up, worn, searched, left and found, transformed, hurt, rested, saved and loaded ({carried[0]}; {carried[1]})"
             : "items: " + string.Join("; ", problems));
         GetTree().Quit(problems.Count > 0 ? 1 : 0);
+    }
+
+    /// <summary>
+    /// <c>--check-dialogue</c>: talk to the first creature with a talk trigger,
+    /// read its text, go on to the choices and say goodbye; then page through a
+    /// text longer than the window.
+    /// </summary>
+    private async void CheckDialogue()
+    {
+        var problems = new List<string>();
+        void Expect(bool ok, string what)
+        {
+            if (!ok)
+            {
+                problems.Add(what);
+            }
+        }
+        async Task Frames(int n)
+        {
+            for (int i = 0; i < n; i++)
+            {
+                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            }
+        }
+        GplDialogue dialogue = Session.ScriptHost.Dialogue;
+        WorldObject? talker = _world.Objects.FirstOrDefault(o => Session.Scripts.Triggers.MatchObject(GplTriggerList.TalkTo, o.Id) is not null);
+        Expect(talker is not null, "something to talk to");
+        string said = "", chose = "";
+        if (talker is not null)
+        {
+            Act(talker, _selected, Verb.Talk);
+            await Frames(3);
+            Expect(_dialogueWindow.Visible && !_dialogueWindow.ShowingChoices && dialogue.Text.Count > 0, "the text window shows the text first");
+            Expect(dialogue.Portrait is not null, "with a portrait");
+            said = string.Concat(dialogue.Text.Select(t => t.Text)).Trim();
+            for (int i = 0; i < 10 && !_dialogueWindow.ShowingChoices && dialogue.Prompt is not GplMenuPrompt; i++)
+            {
+                _dialogueWindow.PressMore(); // read on (CONTINUE, pages)
+                await Frames(3);
+            }
+            if (dialogue.Prompt is GplMenuPrompt)
+            {
+                for (int i = 0; i < 5 && !_dialogueWindow.ShowingChoices; i++)
+                {
+                    _dialogueWindow.PressMore();
+                    await Frames(3);
+                }
+                Expect(_dialogueWindow.ShowingChoices && _dialogueWindow.Choices.Count > 0, "MORE goes on to the choices");
+                int bye = _dialogueWindow.Choices.ToList().FindIndex(c => c.StartsWith("Goodbye", StringComparison.OrdinalIgnoreCase) || c.StartsWith("Bye", StringComparison.OrdinalIgnoreCase));
+                chose = bye >= 0 ? _dialogueWindow.Choices[bye] : _dialogueWindow.Choices.LastOrDefault() ?? "";
+                _dialogueWindow.Pick(bye >= 0 ? bye : _dialogueWindow.Choices.Count - 1);
+                await Frames(3);
+                Expect(dialogue.Prompt is not GplMenuPrompt || !_dialogueWindow.ShowingChoices || Session.Scripts.IsSuspended, "the choice was taken");
+            }
+            for (int i = 0; i < 20 && (dialogue.Prompt is not null || Session.Scripts.IsSuspended); i++)
+            {
+                if (dialogue.Prompt is GplMenuPrompt or GplYesNoPrompt)
+                {
+                    _dialogueWindow.Pick(_dialogueWindow.Choices.Count - 1);
+                }
+                else
+                {
+                    _dialogueWindow.PressMore();
+                }
+                await Frames(3);
+            }
+            Expect(!Session.Scripts.IsSuspended, "the conversation ended");
+        }
+
+        // A long text, paged.
+        dialogue.Clear();
+        for (int i = 1; i <= 12; i++)
+        {
+            dialogue.Append($"Line {i} of a long story that goes on and on across the window. ", 115);
+        }
+        await Frames(3);
+        var (top, lines, page) = _dialogueWindow.Paging;
+        Expect(lines > page && top == 0, $"long text: {lines} lines, {page} a page");
+        _dialogueWindow.PressMore();
+        await Frames(2);
+        Expect(_dialogueWindow.Paging.Top == page, $"MORE shows the next page (top {_dialogueWindow.Paging.Top})");
+        _dialogueWindow.PressUp();
+        await Frames(2);
+        Expect(_dialogueWindow.Paging.Top == 0, "the arrow goes back");
+        for (int i = 0; i < 20 && _dialogueWindow.Visible; i++)
+        {
+            _dialogueWindow.PressMore();
+            await Frames(2);
+        }
+        Expect(!_dialogueWindow.Visible && dialogue.IsEmpty, "read to the end, MORE puts the window away");
+
+        GD.Print($"dialogue: {(talker is null ? "-" : Describe(talker))} said \"{(said.Length > 60 ? said[..60] + "…" : said)}\"; chose \"{chose}\"; "
+            + $"a {lines}-line text in pages of {page}");
+        foreach (string p in problems)
+        {
+            GD.Print($"  PROBLEM: {p}");
+        }
+        GD.Print(problems.Count == 0 ? "dialogue: OK" : $"dialogue: {problems.Count} problems");
+        GetTree().Quit(problems.Count == 0 ? 0 : 1);
     }
 
     private void CheckSave()

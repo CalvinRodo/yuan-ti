@@ -594,12 +594,33 @@ From the handlers (2026-10-18):
   `84C9:0CD9` returns the button pressed).
   * `PRINT_STRING(style, text)` (`7372:15D9`) prints in window 2; only the
     style's low byte is passed. The scripts use 115 (10 849 times, speech) and
-    98 (2 868 times, narration); what the byte selects is not traced.
+    98 (2 868 times, narration), but window 2 (`84C9:0253`, jump table at
+    `84C9:09E6`: 0 `027B`, 1 `0318`, 2 and 4 `0323`, 3 `0745`) never reads
+    it: all text looks the same.
   * `PRINT_NUMBER(style, n)` prints n in decimal; `PRINT_NEWLINE` prints `"\n"`.
   * `SHOW_PIC(n)` shows `PORT` n (1–120, 32 × 32) in window 1; `CLEAR_PIC`
     clears window 1.
   * `CONTINUE` shows "Press continue" and a Continue button; `ASK_YES_NO`
     "Answer Yes or No", Yes and No, and sets acc to 1 for Yes.
+* **The windows** (`RESOURCE.GFF`, all 318 × 58 at the bottom of the screen,
+  over the stone panel in the top 58 rows of `BMP` 3007): `8BEB` opens
+  `WIND` 3007 (`6BB8:0152(0xBBF)`, kept at `4E5F:0004`) and `WIND` 3500
+  (`4E5F:0008`).
+  * `WIND` 3007, the text window: `BUTN` 12300 (300 × 58, no icon: the
+    whole window is a button), `BUTN` 2090 (44 × 44 at (8, 6): `ICON` 2090,
+    frame 0 the 48 × 47 portrait frame, frame 1 the 32 × 32 sun shown with
+    no portrait), `EBOX` 4002 (236 × 46 at (58, 6); +0x5A font 2081, +0x7E
+    229, the magenta transparent key, +0x80 199 the text colour, a tan),
+    `BUTN` 2093 (14 × 14 at (305, 4), `ICON` 2093: the up arrow) and `BUTN`
+    2094 (14 × 35 at (305, 18), `ICON` 12100: MORE over a down arrow). Their
+    frames are normal, highlighted, disabled, pressed. `84C9:0020` enables
+    2093 when the text box isn't at its top and 2094 when there is more below.
+  * `WIND` 3008, the choices: five `BUTN` 2076–2080 (300 × 10 at (3, 13),
+    (3, 21) … (3, 45), `ICON` 12102–12106: stone bars, text drawn on them),
+    `BUTN` 2095 (`ICON` 2093) and 2096 (`ICON` 12100) to scroll.
+  * `WIND` 3500 holds only `EBOX` 4500 (239 × 46 at (56, 6)): text without
+    a portrait.
+  * A `BUTN`'s icon is the word at +0x64 (+0x5A is its own number).
 * `NAMETONUM` and `NUMTONAME` only negate: acc = −expr.
 * **TELEPORT** `(who, region, x, y, flag)` (`043D:1EAE`), cells:
   * who 32766 (0x7FFE) is the party (`7372:0857`): in the current region each

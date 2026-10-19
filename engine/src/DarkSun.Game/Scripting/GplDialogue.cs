@@ -51,11 +51,15 @@ public sealed class GplDialogue
         Version++;
     }
 
+    /// <summary>How many times the window was cleared, so a view can tell new text from more text.</summary>
+    public int Clears { get; private set; }
+
     /// <summary>CLEAR_PIC (window 1): the portrait and the text go.</summary>
     public void Clear()
     {
         Portrait = null;
         _text.Clear();
+        Clears++;
         Version++;
     }
 

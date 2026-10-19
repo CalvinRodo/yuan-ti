@@ -333,7 +333,18 @@ this milestone brings most of the game's content.
 
 ## 5. Milestone 4: user interface and dialogue
 
-- [ ] Text windows, dialogue with portraits (`PORT`), and GPL `MENU` choices.
+- [x] Text windows, dialogue with portraits (`PORT`), and GPL `MENU`
+      choices (`DialogueWindow`), in the original's windows and art
+      (`dsun-exe-reference.md`, "The windows"): `WIND` 3007 over `BMP` 3007
+      with the portrait in its frame (the sun when there is none), text in
+      the text box's colour, paged with MORE and the up arrow; MENU and
+      ASK_YES_NO in `WIND` 3008's five stone bars, scrolled the same way.
+      MORE (Space, Enter, a click on the text) reads on, answers CONTINUE,
+      opens the choices or puts the window away; 1–9 and Y / N choose.
+      Scaled with the screen like the 320 × 200 screens. Not yet: the
+      game's `FONT` (Godot's font is used), `WIND` 3500 (text without a
+      portrait; every window here has the portrait box). `--check-dialogue`,
+      and `--talk` to start a conversation for testing.
 - [ ] Decide the UI approach: rebuild the screens as Godot `Control` scenes
       using the original art (decoded `WIND`, `BUTN`, `DBOX`, `FONT`), so that
       layout is resolution-independent and easy to change. The original

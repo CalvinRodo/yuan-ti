@@ -140,6 +140,9 @@ is `gname[10]`. AWARD gives experience to the party's characters, DAMAGE and PHY
 REQUEST 1 and 4 rest the party. Party items and hit points are saved; regions remember what their
 creatures carry and items left on the ground. `-- --new-game --give=1051,1095` hands out items by
 `RDFF` number, `--open-items` opens the items window; `--check-items` checks it all with the game's items.
+Conversations use the original's text windows (`WIND` 3007 and 3008): the portrait, the text paged
+with MORE (Space, Enter or a click) and the up arrow, choices on five stone bars (1–9, Y and N);
+`-- --new-game --talk` starts one, `--check-dialogue` reads a conversation through and pages a long text.
 On any screen, `?` lists every key and click that screen takes, with the keys as they are bound now
 (`KeyHelp`; `--check-help` fails if a `Controls` action is listed nowhere, `--show-keys` opens it at start). Click: the selected character (green ring) walks there;
 Shift+click: the whole party; Tab: select
