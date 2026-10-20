@@ -157,6 +157,12 @@ the pack to buy (at the item's value), put things in the six slots by SELL to se
 Esc on the map, or the wide button, opens the original GAME MENU: the character screens, exit, save
 and load, preferences (music and sound, GAME DIFFICULTY scaling creatures' hit points, animations),
 the overhead map, centre on the leader, the move, look and attack cursors, and collapse party.
+START GAME without a party made plays the pre-made party (`game/party/premade.json`, editable:
+the roster's JSON); Create Characters' right-click menu has PRE-MADE PARTY on an empty box and DUAL for
+humans of third level or more (a new class; the old one returns once the new passes its level). The
+leader button picks who leads (selected when the game starts), computer control is kept for combat.
+View Character and the inventory draw what DSUN.EXE draws in their frames: the hit point, psionic and
+status bars, hit points and status under the inventory's boxes, and the status line's texts.
 `--open-sheet`, `--open-items`, `--open-spells`, `--open-psionics`, `--open-store`, `--open-menu`,
 `--open-preferences` and `--open-body` (kills the first creature and opens its body) open them for
 testing; `--check-character` clicks through them.

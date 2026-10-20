@@ -1,0 +1,168 @@
+[
+{
+  "Id": "b5f3d6ab-7f7a-4328-b048-f12bc686082b",
+  "Name": "Barek",
+  "RandomName": false,
+  "Race": "Human",
+  "Gender": "Male",
+  "Classes": [
+    "Gladiator"
+  ],
+  "Rolled": [
+    18,
+    15,
+    16,
+    13,
+    13,
+    13
+  ],
+  "Hp": 22,
+  "Alignment": "ChaoticGood",
+  "Disciplines": [
+    "Psychometabolism"
+  ],
+  "Sphere": null,
+  "Sprite": 300,
+  "Experience": 3000,
+  "Adventured": false,
+  "Spellbook": [],
+  "Memorized": [],
+  "Cast": [],
+  "Powers": [
+    154
+  ],
+  "PspSpent": 0,
+  "ComputerControl": false,
+  "Leader": true,
+  "Former": []
+},
+{
+  "Id": "4b83f44d-29ba-4ac6-988a-0ac1199f860c",
+  "Name": "Seril",
+  "RandomName": false,
+  "Race": "Elf",
+  "Gender": "Female",
+  "Classes": [
+    "Fighter",
+    "Preserver"
+  ],
+  "Rolled": [
+    17,
+    16,
+    13,
+    17,
+    12,
+    13
+  ],
+  "Hp": 14,
+  "Alignment": "NeutralGood",
+  "Disciplines": [
+    "Telepathy"
+  ],
+  "Sphere": null,
+  "Sprite": 305,
+  "Experience": 6000,
+  "Adventured": false,
+  "Spellbook": [
+    9,
+    1,
+    2,
+    10
+  ],
+  "Memorized": [
+    9
+  ],
+  "Cast": [],
+  "Powers": [
+    168
+  ],
+  "PspSpent": 0,
+  "ComputerControl": false,
+  "Leader": false,
+  "Former": []
+},
+{
+  "Id": "52cb9c89-dd59-4c7e-9a8a-9f643f99dd9f",
+  "Name": "Durgan",
+  "RandomName": false,
+  "Race": "Dwarf",
+  "Gender": "Male",
+  "Classes": [
+    "Cleric",
+    "Fighter"
+  ],
+  "Rolled": [
+    17,
+    12,
+    15,
+    11,
+    17,
+    11
+  ],
+  "Hp": 25,
+  "Alignment": "LawfulGood",
+  "Disciplines": [
+    "Psychokinesis"
+  ],
+  "Sphere": "Earth",
+  "Sprite": 302,
+  "Experience": 6000,
+  "Adventured": false,
+  "Spellbook": [],
+  "Memorized": [
+    72,
+    72,
+    77
+  ],
+  "Cast": [],
+  "Powers": [
+    144
+  ],
+  "PspSpent": 0,
+  "ComputerControl": false,
+  "Leader": false,
+  "Former": []
+},
+{
+  "Id": "b8fd51ff-14d3-4f91-b82c-de5be5e1d35f",
+  "Name": "K\u0027tikka",
+  "RandomName": false,
+  "Race": "ThriKreen",
+  "Gender": "Female",
+  "Classes": [
+    "Psionicist",
+    "Ranger"
+  ],
+  "Rolled": [
+    16,
+    15,
+    15,
+    15,
+    17,
+    16
+  ],
+  "Hp": 17,
+  "Alignment": "TrueNeutral",
+  "Disciplines": [
+    "Psychokinesis",
+    "Psychometabolism",
+    "Telepathy"
+  ],
+  "Sphere": "Air",
+  "Sprite": 313,
+  "Experience": 6000,
+  "Adventured": false,
+  "Spellbook": [],
+  "Memorized": [],
+  "Cast": [],
+  "Powers": [
+    152,
+    164,
+    139
+  ],
+  "PspSpent": 0,
+  "ComputerControl": false,
+  "Leader": false,
+  "Former": []
+}
+]

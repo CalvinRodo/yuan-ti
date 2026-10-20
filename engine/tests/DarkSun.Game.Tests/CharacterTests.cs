@@ -20,6 +20,35 @@ public class CharacterTests
     }
 
     [Fact]
+    public void AHumanDualClassesFromThirdLevel()
+    {
+        var cc = Creation();
+        // Fighter with Strength 17 (prime 15+) and Intelligence 17 (a preserver's 17).
+        var c = new Character { Race = Race.Human, Classes = [CharacterClass.Fighter], Rolled = [17, 12, 12, 17, 12, 12], Experience = 1000 };
+        Assert.Contains("LEVEL 3", cc.DualChoices(c).Why);
+        c.Experience = 10000;
+        var (classes, why) = cc.DualChoices(c);
+        Assert.Null(why);
+        Assert.Equal([CharacterClass.Preserver], classes);
+
+        int level = cc.Levels(c)[0];
+        Assert.True(cc.Dual(c, CharacterClass.Preserver));
+        Assert.Equal([CharacterClass.Preserver], c.Classes);
+        Assert.Equal([new FormerClass(CharacterClass.Fighter, level)], c.Former);
+        Assert.Equal(0, c.Experience);
+        Assert.Equal([(CharacterClass.Preserver, 1)], cc.ActiveLevels(c)); // the fighter's level unused for now
+        Assert.Equal(ItemClasses.Preserver | ItemClasses.Fighter, c.ItemClasses);
+
+        c.Experience = 1_000_000; // far past the fighter's level
+        Assert.Contains((CharacterClass.Fighter, level), cc.ActiveLevels(c));
+        Assert.Equal(CharacterSheet.Thac0(CharacterClass.Fighter, level), CharacterSheet.Thac0(cc.ActiveLevels(c)));
+
+        Assert.False(cc.Dual(c, CharacterClass.Fighter)); // never back to a class it had
+        var elf = new Character { Race = Race.Elf, Classes = [CharacterClass.Fighter], Rolled = [17, 12, 12, 17, 12, 12], Experience = 10000 };
+        Assert.Equal("ONLY HUMANS CAN DUAL-CLASS", cc.DualChoices(elf).Why);
+    }
+
+    [Fact]
     public void ANewCharacterIsAHumanFighterWithRolledAbilities()
     {
         var cc = Creation();

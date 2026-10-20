@@ -16,6 +16,11 @@ namespace DarkSun.Engine;
 /// one: EDIT (EDIT NAME once the character has adventured) or DROP (back to
 /// the roster). Right-clicking a box opens the same choices as a menu. The
 /// party is kept for the next new game; Return (or Esc) goes back to the menu.
+/// The menu also has DUAL for a human (a new class, the old one kept at its
+/// level: <c>WIND</c> 17502, the eight classes, over <c>BMP</c> 17002) and, on
+/// an empty box, PRE-MADE PARTY (fills the empty boxes from
+/// <see cref="Session.Premade"/>). Under the boxes are DSUN.EXE's bars and the
+/// leader and computer-control buttons work (<see cref="PartyFrames"/>).
 /// </summary>
 public partial class PartyView : RetroScreen
 {
@@ -29,7 +34,10 @@ public partial class PartyView : RetroScreen
     private Palette _palette = null!;
     private GffFile _resources = null!;
     private readonly List<TextureRect> _slotPictures = [];
-    private readonly List<Label> _slotNames = [];
+    private PartyFrames _frames = null!;
+    private UiWindowView _dual = null!;
+    private Label _dualTitle = null!;
+    private const int DualWindow = 17502, DualBackdrop = 17002, FirstDualClass = 17303, DualExit = 17302;
     private Label _name = null!, _details = null!, _status = null!;
     private UiWindowView _window = null!;
     private TextureButton _first = null!, _second = null!;
@@ -66,14 +74,13 @@ public partial class PartyView : RetroScreen
             box.AddChild(picture);
             box.GuiInput += e => SlotInput(slot, e);
             _slotPictures.Add(picture);
-            _slotNames.Add(Text(new Vector2(box.Position.X - 10, box.Position.Y + box.Size.Y + 1), box.Size.X + 20, "", HorizontalAlignment.Center));
-            // Leader and computer control: shown, not working yet.
-            foreach (int n in new[] { FirstLeader + i, FirstComputerControl + i })
+            if (_window.Button(FirstLeader + i) is { } leader)
             {
-                if (_window.Button(n) is { } b)
-                {
-                    b.MouseFilter = MouseFilterEnum.Ignore;
-                }
+                leader.Pressed += () => LeaderPressed(slot);
+            }
+            if (_window.Button(FirstComputerControl + i) is { } computer)
+            {
+                computer.Pressed += () => ComputerPressed(slot);
             }
         }
         Rect2 bar = _window.RectOf("BUTN", NameBar);
@@ -108,6 +115,9 @@ public partial class PartyView : RetroScreen
         back.Pressed += Back;
         back.TooltipText = "Return (Esc)";
         _status = Text(new Vector2(72, 175), 176, "", HorizontalAlignment.Center);
+        _status.ClipText = true;
+        _frames = new PartyFrames(_window, _status, MemberView, () => Session.LeaderIndex);
+        BuildDual();
 
         _menu = new PopupMenu();
         _menu.AddThemeFontSizeOverride("font_size", 8);
@@ -117,7 +127,7 @@ public partial class PartyView : RetroScreen
         if (OS.GetCmdlineUserArgs().Contains("--check-party"))
         {
             GD.Print($"party: {Session.Party.Count} characters ({string.Join(", ", Session.Party.Select(c => c.Name))}); roster {Session.Roster.All().Count}");
-            GetTree().Quit();
+            GetTree().Quit(CheckParty() ? 0 : 1);
             return;
         }
         Refresh();
@@ -128,7 +138,14 @@ public partial class PartyView : RetroScreen
         if (e.IsActionPressed(Controls.Back))
         {
             GetViewport().SetInputAsHandled();
-            Back();
+            if (_dual.Visible)
+            {
+                _dual.Visible = false;
+            }
+            else
+            {
+                Back();
+            }
         }
     }
 
@@ -147,16 +164,17 @@ public partial class PartyView : RetroScreen
         {
             Character? c = i < Session.Party.Count ? Session.Party[i] : null;
             _slotPictures[i].Texture = c is null ? null : Portrait(c);
-            _slotNames[i].Text = c?.Name ?? "";
-            _slotNames[i].Modulate = i == _selected ? new Color(1f, 0.9f, 0.5f) : Colors.White;
+            _slotPictures[i].Modulate = i == _selected || c is null ? Colors.White : new Color(0.75f, 0.75f, 0.75f);
         }
+        _frames.Refresh();
         if (Selected is { } s)
         {
             _name.Text = s.Name;
             string Abil(Ability a) => $"{a.ToString().ToUpperInvariant()} {cc.Adjusted(s, a),2}";
             var levels = cc.Levels(s);
             _details.Text = $"{Session.Rules.Race(s.Race).Name.ToUpperInvariant()} {s.Gender.ToString().ToUpperInvariant()}\n"
-                + string.Join(" / ", s.Classes.Select((k, n) => $"{Session.Rules.Class(k).Name.ToUpperInvariant()} {levels[n]}")) + "\n"
+                + string.Join(" / ", s.Former.Select(f => $"({Session.Rules.Class(f.Class).Name.ToUpperInvariant()} {f.Level})")
+                    .Concat(s.Classes.Select((k, n) => $"{Session.Rules.Class(k).Name.ToUpperInvariant()} {levels[n]}"))) + "\n"
                 + $"{Abil(Ability.Str)}  {Abil(Ability.Int)}\n{Abil(Ability.Dex)}  {Abil(Ability.Wis)}\n{Abil(Ability.Con)}  {Abil(Ability.Cha)}\n"
                 + $"HP {s.Hp}   EXP {s.Experience}\n{Spaced(s.Alignment.ToString())}\n"
                 + $"PSI: {string.Join(", ", s.Disciplines.Select(d => d.ToString().ToUpperInvariant()))}"
@@ -192,12 +210,17 @@ public partial class PartyView : RetroScreen
             {
                 _menu.AddItem(Selected.Adventured ? "EDIT NAME" : "EDIT", 1);
                 _menu.AddItem("DROP", 2);
+                if (Selected.Race == Race.Human)
+                {
+                    _menu.AddItem("DUAL", 5); // only humans dual-class (the manual)
+                }
             }
             else
             {
                 _menu.AddItem("NEW", 3);
                 _menu.AddItem("ADD", 4);
                 _menu.SetItemDisabled(1, Available().Count == 0);
+                _menu.AddItem("PRE-MADE PARTY", 6);
             }
             _menu.AddItem("CANCEL", 0);
             _menu.Position = (Vector2I)GetGlobalMousePosition();
@@ -219,7 +242,7 @@ public partial class PartyView : RetroScreen
                 Session.Roster.Save(c);
                 Session.Party.RemoveAt(_selected);
                 Session.SaveParty();
-                _status.Text = $"{c.Name} is on disk; ADD brings them back.";
+                _frames.Resting = $"{c.Name.ToUpperInvariant()} IS ON DISK";
                 Refresh();
                 break;
             case 3:
@@ -235,6 +258,12 @@ public partial class PartyView : RetroScreen
                 _menu.AddItem("CANCEL", 0);
                 _menu.Popup(new Rect2I((Vector2I)GetGlobalMousePosition(), Vector2I.Zero));
                 break;
+            case 5 when Selected is { } c:
+                OpenDual(c);
+                break;
+            case 6:
+                AddPremade();
+                break;
             case >= 100 when Available() is var list && id - 100 < list.Count && Session.Party.Count < GameWorld.PartySize:
                 Session.Party.Add(list[id - 100]);
                 Session.SaveParty();
@@ -242,6 +271,171 @@ public partial class PartyView : RetroScreen
                 Refresh();
                 break;
         }
+    }
+
+    private PartyMemberView? MemberView(int slot)
+    {
+        if (slot >= Session.Party.Count)
+        {
+            return null;
+        }
+        Character c = Session.Party[slot];
+        int psp = new DarkSun.Game.Magic.Spellcasting(Session.Rules).MaxPsp(c);
+        return new PartyMemberView(c.Name, c.Hp, c.Hp, psp - c.PspSpent, psp, 1, c.ComputerControl);
+    }
+
+    private void LeaderPressed(int slot)
+    {
+        if (slot < Session.Party.Count)
+        {
+            Session.SetLeader(slot);
+            Session.SaveParty();
+            _frames.Resting = $"{Session.Party[slot].Name.ToUpperInvariant()} IS LEADER";
+        }
+        Refresh();
+    }
+
+    private void ComputerPressed(int slot)
+    {
+        if (slot < Session.Party.Count)
+        {
+            Character c = Session.Party[slot];
+            c.ComputerControl = !c.ComputerControl;
+            Session.SaveParty();
+            _frames.Resting = $"COMPUTER CONTROL IS {(c.ComputerControl ? "ON" : "OFF")}";
+        }
+        Refresh();
+    }
+
+    /// <summary>Fill the empty boxes from the pre-made party (those not in the party already, by name).</summary>
+    private void AddPremade()
+    {
+        int added = 0;
+        foreach (Character c in Session.Premade().Where(p => Session.Party.All(m => m.Name != p.Name)))
+        {
+            if (Session.Party.Count >= GameWorld.PartySize)
+            {
+                break;
+            }
+            c.Leader &= Session.Party.Count == 0;
+            Session.Party.Add(c);
+            added++;
+        }
+        Session.SaveParty();
+        _frames.Resting = added > 0 ? "THE PRE-MADE PARTY JOINS" : "NO ROOM";
+        Refresh();
+    }
+
+    // -- DUAL: WIND 17502, the eight classes --------------------------------------------------
+
+    private void BuildDual()
+    {
+        _dual = UiWindowView.Build(DualWindow, _palette, DualBackdrop)!;
+        _dual.Position = ((new Vector2(RetroScreen.Width, RetroScreen.Height) - _dual.Size) / 2).Floor();
+        _dual.Visible = false;
+        Canvas.AddChild(_dual);
+        // BMP 17002 has its own DUAL title; the message goes left of the class list.
+        _dualTitle = new Label
+        {
+            Position = new Vector2(10, 30),
+            Size = new Vector2(_dual.RectOf("BUTN", FirstDualClass).Position.X - 16, 60),
+            AutowrapMode = TextServer.AutowrapMode.WordSmart,
+            LabelSettings = GameFonts.Settings(new Color(0.95f, 0.9f, 0.75f)),
+            MouseFilter = MouseFilterEnum.Ignore,
+        };
+        _dual.AddChild(_dualTitle);
+        // The class buttons, in CharacterClass order: cleric, druid, fighter, gladiator, preserver, psionicist, ranger, thief.
+        foreach (CharacterClass k in Enum.GetValues<CharacterClass>())
+        {
+            CharacterClass choice = k;
+            _dual.Button(FirstDualClass + (int)k)!.Pressed += () => ChooseDual(choice);
+        }
+        _dual.Button(DualExit)!.Pressed += () => _dual.Visible = false;
+        if (_dual.ButtonText(DualExit) is { } t)
+        {
+            t.LabelSettings = GameFonts.Settings(new Color(0.95f, 0.9f, 0.75f));
+        }
+    }
+
+    private void OpenDual(Character c)
+    {
+        var cc = new CharacterCreation(Session.Rules, Session.Names, new Random());
+        var (classes, why) = cc.DualChoices(c);
+        foreach (CharacterClass k in Enum.GetValues<CharacterClass>())
+        {
+            TextureButton b = _dual.Button(FirstDualClass + (int)k)!;
+            b.Disabled = !classes.Contains(k);
+            b.Modulate = b.Disabled ? new Color(1, 1, 1, 0.35f) : Colors.White;
+        }
+        _dualTitle.Text = why ?? $"CHOOSE {c.Name.ToUpperInvariant()}'S NEW CLASS";
+        _dual.Visible = true;
+    }
+
+    private void ChooseDual(CharacterClass k)
+    {
+        if (Selected is not { } c)
+        {
+            return;
+        }
+        var cc = new CharacterCreation(Session.Rules, Session.Names, new Random());
+        if (cc.Dual(c, k))
+        {
+            Session.Roster.Save(c);
+            Session.SaveParty();
+            _dual.Visible = false;
+            _frames.Resting = $"{c.Name.ToUpperInvariant()} IS NOW A {Session.Rules.Class(k).Name.ToUpperInvariant()}";
+            Refresh();
+        }
+    }
+
+    /// <summary>
+    /// <c>--check-party</c>: the pre-made party is four finished characters
+    /// with a leader; DUAL on a third-level human fighter offers preserver
+    /// and makes it one; the leader button moves the leader. The party is put back.
+    /// </summary>
+    private bool CheckParty()
+    {
+        var problems = new List<string>();
+        var cc = new CharacterCreation(Session.Rules, Session.Names, new Random());
+        List<Character> premade = Session.Premade();
+        if (premade.Count != GameWorld.PartySize || premade.Count(c => c.Leader) != 1)
+        {
+            problems.Add($"the pre-made party: {premade.Count} characters, {premade.Count(c => c.Leader)} leaders");
+        }
+        foreach (Character c in premade)
+        {
+            if (cc.Problems(c) is { Count: > 0 } p)
+            {
+                problems.Add($"{c.Name}: {string.Join(" ", p)}");
+            }
+        }
+        var keep = Session.Party.ToList();
+        var fighter = new Character { Name = "Dual check", Race = Race.Human, Classes = [CharacterClass.Fighter], Rolled = [17, 12, 12, 17, 12, 12], Experience = 10000, Hp = 20 };
+        Session.Party.Clear();
+        Session.Party.AddRange([fighter, premade[0]]);
+        _selected = 0;
+        Command(5);
+        TextureButton preserver = _dual.Button(FirstDualClass + (int)CharacterClass.Preserver)!;
+        if (!_dual.Visible || preserver.Disabled || !_dual.Button(FirstDualClass + (int)CharacterClass.Cleric)!.Disabled)
+        {
+            problems.Add($"DUAL shows the classes ({_dualTitle.Text})");
+        }
+        preserver.EmitSignal(BaseButton.SignalName.Pressed);
+        if (fighter.Classes is not [CharacterClass.Preserver] || fighter.Former is not [{ Class: CharacterClass.Fighter }] || _dual.Visible)
+        {
+            problems.Add($"DUAL made a preserver ({string.Join("/", fighter.Classes)}, former {string.Join("/", fighter.Former)})");
+        }
+        _window.Button(FirstLeader + 1)!.EmitSignal(BaseButton.SignalName.Pressed);
+        if (Session.LeaderIndex != 1 || fighter.Leader)
+        {
+            problems.Add("the leader button");
+        }
+        Session.Roster.Delete(fighter);
+        Session.Party.Clear();
+        Session.Party.AddRange(keep);
+        Session.SaveParty();
+        GD.Print(problems.Count == 0 ? "party: pre-made party, DUAL and the leader button: OK" : "party: " + string.Join("; ", problems));
+        return problems.Count == 0;
     }
 
     /// <summary>Roster characters not in the party.</summary>

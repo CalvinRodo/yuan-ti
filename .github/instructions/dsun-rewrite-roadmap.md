@@ -448,9 +448,22 @@ this milestone brings most of the game's content.
 - [x] Party creation: Create Characters (View Character, `WIND` 11500) and
       Character Generation (`WIND` 3011) screens; the party starts new games
       and is kept in saves; a roster for ADD and DROP.
-- [ ] A pre-made party option; dual-classing for humans; party leader and
-      computer-control buttons; decode `APFM` to draw the screens exactly as
-      the original (the font is done).
+- [x] A pre-made party (`game/party/premade.json`: a human gladiator, an
+      elf fighter/preserver, a dwarf cleric/fighter, a thri-kreen
+      psionicist/ranger, all legal by the rules; START GAME without a party
+      uses it, and PRE-MADE PARTY on an empty box adds it). Dual-classing for
+      humans (DUAL, `WIND` 17502; `CharacterCreation.DualChoices`: third
+      level, prime requisites 15 and 17; the former class at its level comes
+      back once the new one passes it). The leader and computer-control
+      buttons on Create Characters' screen too; the leader is kept and
+      selected when a game starts. `APFM` decoded (`dsun-exe-reference.md`,
+      "Character screens"): View Character's bars and hover texts, the
+      inventory's bars, hit points and status words, as DSUN.EXE draws them
+      (`PartyFrames`).
+- [ ] The remaining `APFM`s' drawing: the quick weapons (`9106:0B64`,
+      `WIND` 14002), the status word's current effect for Okay members, and
+      only the leader on the map (the manual: the others show in combat or
+      with COLLAPSE PARTY).
 
 ---
 

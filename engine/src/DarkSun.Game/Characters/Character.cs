@@ -65,12 +65,22 @@ public sealed record Character
     /// <summary>Computer control (DSUN.EXE's button under the leader's): the character fights on its own. Kept for combat, which isn't in yet.</summary>
     public bool ComputerControl { get; set; }
 
+    /// <summary>The party's leader (the leader button; one character of the party): the one selected when a game starts.</summary>
+    public bool Leader { get; set; }
+
+    /// <summary>
+    /// A dual-classed human's earlier classes, at the level each reached when
+    /// it was left (<see cref="CharacterCreation.Dual"/>): never to advance
+    /// again, and of no use until the current class's level exceeds it.
+    /// </summary>
+    public List<FormerClass> Former { get; set; } = [];
+
     /// <summary>
     /// The item classes it counts as (DSUN.EXE's character record +0x12,
     /// <c>6868:0000</c>): a cleric by its sphere (all four without one).
     /// </summary>
     [JsonIgnore]
-    public ItemClasses ItemClasses => Classes.Aggregate(ItemClasses.None, (all, k) => all | k switch
+    public ItemClasses ItemClasses => Classes.Concat(Former.Select(f => f.Class)).Aggregate(ItemClasses.None, (all, k) => all | k switch
     {
         CharacterClass.Cleric => Sphere is { } s ? (ItemClasses)(1 << (int)s) : ItemClasses.Clerics,
         CharacterClass.Druid => ItemClasses.Druid,
@@ -82,6 +92,9 @@ public sealed record Character
         _ => ItemClasses.Thief,
     });
 }
+
+/// <summary>A class a dual-classed character has left, at the level it had then.</summary>
+public sealed record FormerClass(CharacterClass Class, int Level);
 
 /// <summary>The random names new characters get: <c>TEXT</c> 0–99 male, 100–199 female, 200–299 thri-kreen (<c>RESOURCE.GFF</c>).</summary>
 public sealed class CharacterNames(IReadOnlyList<string> male, IReadOnlyList<string> female, IReadOnlyList<string> thriKreen)
@@ -387,6 +400,70 @@ public sealed class CharacterCreation(CharacterRules rules, CharacterNames names
     }
 
     // -- done ----------------------------------------------------------------------------
+
+    // -- dual-classing (humans; the manual, pages 12 and 21) ---------------------------------
+
+    /// <summary>
+    /// The classes a character could dual-class into now, or why none
+    /// ("NO OTHER CLASSES AVAILABLE" in DSUN.EXE). A human (a race that
+    /// can't multi-class) with one class at <see cref="CharacterRules.DualLevel"/>
+    /// or more, its prime requisites at <see cref="CharacterRules.DualFromPrime"/>
+    /// or more, and fewer than <see cref="CharacterRules.MaxClasses"/> classes
+    /// in all, may take a class the race allows, it hasn't had and nothing
+    /// excludes, whose prime requisites are at <see cref="CharacterRules.DualToPrime"/>
+    /// and whose requirements it meets. (The prime requisite scores are AD&amp;D
+    /// 2nd edition's; DSUN.EXE's checks aren't traced.)
+    /// </summary>
+    public (IReadOnlyList<CharacterClass> Classes, string? Why) DualChoices(Character c)
+    {
+        RaceRules r = Rules.Race(c.Race);
+        if (r.MultiClass)
+        {
+            return ([], "ONLY HUMANS CAN DUAL-CLASS");
+        }
+        if (c.Classes.Count != 1 || c.Former.Count + 1 >= Rules.MaxClasses)
+        {
+            return ([], "NO OTHER CLASSES AVAILABLE");
+        }
+        CharacterClass now = c.Classes[0];
+        if (Levels(c)[0] < Rules.DualLevel)
+        {
+            return ([], $"YOU MUST BE LEVEL {Rules.DualLevel} FIRST");
+        }
+        if (Rules.Class(now).PrimeRequisites.Any(a => Adjusted(c, a) < Rules.DualFromPrime))
+        {
+            return ([], $"NEEDS {Rules.DualFromPrime} IN {string.Join(", ", Rules.Class(now).PrimeRequisites).ToUpperInvariant()}");
+        }
+        var had = c.Former.Select(f => f.Class).Append(now).ToList();
+        var choices = r.Classes.Where(k => !had.Contains(k)
+            && !Rules.Exclusive.Any(set => set.Contains(k) && had.Any(set.Contains))
+            && Rules.Class(k).PrimeRequisites.All(a => Adjusted(c, a) >= Rules.DualToPrime)
+            && Rules.Class(k).Requirements.All(q => Adjusted(c, q.Key) >= q.Value)).ToList();
+        return (choices, choices.Count == 0 ? "NO OTHER CLASSES AVAILABLE" : null);
+    }
+
+    /// <summary>Dual-class into <paramref name="k"/>: the current class is kept at its level, the new one starts at level 1 (no experience). False if it isn't one of <see cref="DualChoices"/>.</summary>
+    public bool Dual(Character c, CharacterClass k)
+    {
+        if (!DualChoices(c).Classes.Contains(k))
+        {
+            return false;
+        }
+        c.Former.Add(new FormerClass(c.Classes[0], Levels(c)[0]));
+        c.Classes = [k];
+        c.Experience = 0;
+        c.Memorized.Clear();
+        c.Cast.Clear();
+        FixPowers(c);
+        return true;
+    }
+
+    /// <summary>Is the former class in use again: the current class's level exceeds it?</summary>
+    public bool Active(Character c, FormerClass f) => Levels(c).DefaultIfEmpty(0).Max() > f.Level;
+
+    /// <summary>Every class the character can use now with its level: the current ones, and the former ones in use again.</summary>
+    public IReadOnlyList<(CharacterClass Class, int Level)> ActiveLevels(Character c) =>
+        [.. c.Classes.Zip(Levels(c)), .. c.Former.Where(f => Active(c, f)).Select(f => (f.Class, f.Level))];
 
     /// <summary>What still stops <paramref name="c"/> being finished (empty when it can be).</summary>
     public IReadOnlyList<string> Problems(Character c)

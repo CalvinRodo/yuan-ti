@@ -622,6 +622,7 @@ public partial class RegionView : Node2D
         {
             return;
         }
+        Session.SetLeader(slot);
         _selected = slot;
         _world.ActiveMember = slot;
         _follow = true;
@@ -704,7 +705,8 @@ public partial class RegionView : Node2D
         _nextSprite = 0;
         Cell centre = start ?? new(_region.Width / 2, _region.Height / 2);
         // A new game's party: the characters made on Create Characters, else four placeholders.
-        if (carried.Count == 0 && Session.Party.Count > 0)
+        bool newParty = carried.Count == 0 && Session.Party.Count > 0;
+        if (newParty)
         {
             carried = [.. Session.Party.Take(PartySize).Select((c, i) =>
                 (Session.CharacterSprites.FirstOrDefault(s => s.Ojff == c.Sprite) ?? Characters()[i % Characters().Count], Direction.South))];
@@ -722,7 +724,8 @@ public partial class RegionView : Node2D
             }
         }
         _nextSprite = _party.Count;
-        _selected = Math.Clamp(selected, 0, Math.Max(0, _party.Count - 1));
+        // A new party starts with its leader selected (the leader button).
+        _selected = Math.Clamp(carried.Count == 0 || newParty ? Session.LeaderIndex : selected, 0, Math.Max(0, _party.Count - 1));
         _world.ActiveMember = _selected;
     }
 

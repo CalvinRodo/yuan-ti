@@ -75,19 +75,16 @@ public sealed class Spellcasting(CharacterRules rules)
 
     private CharacterCreation Creation => new(Rules, CharacterNames.Empty, new Random(0));
 
-    /// <summary>The character's level in <paramref name="k"/> (0 without the class).</summary>
-    public int Level(Character c, CharacterClass k)
-    {
-        int i = c.Classes.IndexOf(k);
-        return i < 0 ? 0 : Creation.Levels(c)[i];
-    }
+    /// <summary>The character's level in <paramref name="k"/> (0 without the class, or a dual-class's former class not in use yet).</summary>
+    public int Level(Character c, CharacterClass k) =>
+        Creation.ActiveLevels(c).Where(a => a.Class == k).Select(a => a.Level).DefaultIfEmpty(0).Max();
 
     /// <summary>The caster bits of the character's classes (bit <c>code + 1</c>).</summary>
     public static uint CasterBits(Character c)
     {
         uint bits = 0;
         int sphere = (int)(c.Sphere ?? Sphere.Air);
-        foreach (CharacterClass k in c.Classes)
+        foreach (CharacterClass k in c.Classes.Concat(c.Former.Select(f => f.Class)))
         {
             int code = k switch
             {

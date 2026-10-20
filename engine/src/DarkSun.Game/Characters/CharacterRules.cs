@@ -108,6 +108,15 @@ public sealed record CharacterRules
 
     public int MaxClasses { get; init; } = 3;
 
+    /// <summary>A human may dual-class from this level in the current class ("at least third level", the manual).</summary>
+    public int DualLevel { get; init; } = 3;
+
+    /// <summary>The current class's prime requisites must be this or more to dual-class (AD&amp;D 2nd edition).</summary>
+    public int DualFromPrime { get; init; } = 15;
+
+    /// <summary>The new class's prime requisites must be this or more (AD&amp;D 2nd edition).</summary>
+    public int DualToPrime { get; init; } = 17;
+
     // -- spells and psionics (Magic.Spellcasting): AD&D 2nd edition's, where DSUN.EXE's aren't traced --
 
     /// <summary>Wizard spells per day: row n is preserver level n + 1, column m spell level m + 1.</summary>

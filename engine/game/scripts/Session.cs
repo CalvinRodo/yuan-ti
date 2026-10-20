@@ -189,6 +189,58 @@ public static class Session
         }
     }
 
+    /// <summary>
+    /// The pre-made party (<c>res://party/premade.json</c>, the same JSON as a
+    /// roster character, four of them): what START GAME plays with when no
+    /// party has been made, as the manual's "Pregenerated Party" (shipped as a
+    /// saved game, which this install hasn't). Each comes with a new id, so it
+    /// can sit in the roster beside earlier copies.
+    /// </summary>
+    public static List<Character> Premade()
+    {
+        const string path = "res://party/premade.json";
+        if (!Godot.FileAccess.FileExists(path))
+        {
+            return [];
+        }
+        try
+        {
+            var list = System.Text.Json.JsonSerializer.Deserialize<List<System.Text.Json.JsonElement>>(Godot.FileAccess.GetFileAsString(path)) ?? [];
+            return [.. list.Select(e => CharacterRoster.FromJson(e.GetRawText()) with { Id = Guid.NewGuid() }).Take(GameWorld.PartySize)];
+        }
+        catch (Exception e) when (e is System.Text.Json.JsonException or InvalidOperationException)
+        {
+            Godot.GD.PushWarning($"{path}: {e.Message}");
+            return [];
+        }
+    }
+
+    /// <summary>Start with the pre-made party (when no party has been made); false if there is none.</summary>
+    public static bool UsePremadeParty()
+    {
+        List<Character> premade = Premade();
+        if (premade.Count == 0)
+        {
+            return false;
+        }
+        Party.Clear();
+        Party.AddRange(premade);
+        SaveParty();
+        return true;
+    }
+
+    /// <summary>The leader's place in <see cref="Party"/> (the leader button), or 0.</summary>
+    public static int LeaderIndex => Math.Max(0, Party.FindIndex(c => c.Leader));
+
+    /// <summary>Make <paramref name="index"/> the party's leader.</summary>
+    public static void SetLeader(int index)
+    {
+        for (int i = 0; i < Party.Count; i++)
+        {
+            Party[i].Leader = i == index;
+        }
+    }
+
     private static void LoadParty()
     {
         Party.Clear();

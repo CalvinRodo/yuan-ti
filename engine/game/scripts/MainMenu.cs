@@ -170,6 +170,11 @@ public partial class MainMenu : RetroScreen
         {
             case Command.StartGame:
                 // A new game: the party arrives in region 42 after cinematic 1 (1587:1F83).
+                // No party made yet: the pre-made one (the manual's "Pregenerated Party").
+                if (Session.Party.Count == 0)
+                {
+                    Session.UsePremadeParty();
+                }
                 Session.NewGame();
                 RegionView.StartNewGame();
                 IntroView.Cinematic = 1;

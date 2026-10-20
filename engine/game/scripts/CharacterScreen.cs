@@ -54,7 +54,7 @@ public partial class CharacterScreen : RetroScreen
     private const int FirstWorn = 11216, FirstPackSlot = 11230, PackSlots = 12, ContainerArea = 13200, FirstInside = 11248, InsideSlots = 12;
     private const int FirstSellSlot = 11242, SellSlots = 6;
     private const int SlotArt = 13007, EmptyFrame = 0, SelectedFrame = 4, CantFrame = 6, FirstSilhouette = 9;
-    private const int Body = 13004, ChestArt = 13002, BagArt = 13003, ParchmentArt = 13005;
+    private const int Body = 13004, ChestArt = 13002, BagArt = 13003, ParchmentArt = 13005, Bars = 13000;
 
     private static readonly Color Ink = new(0.95f, 0.9f, 0.75f);
     private static readonly Color Gold = new(1f, 0.9f, 0.5f);
@@ -80,14 +80,17 @@ public partial class CharacterScreen : RetroScreen
         public required UiWindowView Window { get; init; }
         public required Control Root { get; init; }
         public List<TextureRect> Pictures { get; } = [];
-        public List<Label> Names { get; } = [];
+        /// <summary>The items page's hit points and status words under the boxes (<c>74F1:0000</c>).</summary>
+        public List<Label> Hp { get; } = [];
+        public List<Label> States { get; } = [];
+        public PartyFrames Frames { get; set; } = null!;
         public required Label Name { get; init; }
     }
 
     private GffFile _resources = null!;
     private Palette _palette = null!;
     private PageView _sheetPage = null!, _itemsPage = null!;
-    private Label _sheet = null!, _sheetMore = null!, _info = null!, _status = null!;
+    private Label _sheet = null!, _sheetMore = null!, _info = null!, _status = null!, _itemsStatus = null!;
     private TextureRect _body = null!, _containerArt = null!;
     private readonly List<ItemSlot> _slots = [];
     private readonly Dictionary<int, Texture2D?> _slotArt = [];
@@ -165,10 +168,23 @@ public partial class CharacterScreen : RetroScreen
         Rect2 inside = items.RectOf("APFM", ContainerArea);
         _body = new TextureRect { Texture = Art("BMP ", Body, 0), Position = new Vector2(inside.Position.X + 2, 12), MouseFilter = MouseFilterEnum.Ignore };
         _containerArt = new TextureRect { Position = inside.Position, Size = inside.Size, MouseFilter = MouseFilterEnum.Ignore, Visible = false };
+        // 74F1:0000 draws BMP 13000's bars: frame 1 behind the name at (53, 3), frame 3, the
+        // status line, at (46, 161); the status text starts at APFM 11270.
+        var nameBar = new TextureRect { Texture = Art("BMP ", Bars, 1), Position = new Vector2(53, 3), MouseFilter = MouseFilterEnum.Ignore };
+        var statusBar = new TextureRect { Texture = Art("BMP ", Bars, 3), Position = new Vector2(46, 161), MouseFilter = MouseFilterEnum.Ignore };
         items.AddChild(_body);
         items.AddChild(_containerArt);
+        items.AddChild(nameBar);
+        items.AddChild(statusBar);
         items.MoveChild(_body, 1);
         items.MoveChild(_containerArt, 2);
+        items.MoveChild(statusBar, 3);
+        items.MoveChild(nameBar, 4);
+        Rect2 statusAt = items.RectOf("APFM", 11270);
+        _itemsStatus = Text(items, statusAt.Position - new Vector2(0, 1), 176, "", HorizontalAlignment.Center);
+        _itemsStatus.ClipText = true;
+        _sheetPage.Frames = new PartyFrames(sheet, _status, MemberView, Leader);
+        _itemsPage.Frames = new PartyFrames(items, _itemsStatus, MemberView, Leader);
         for (int n = 0; n < Equipment.Slots; n++)
         {
             AddSlot(items, Where.Worn, n, FirstWorn + n);
@@ -252,13 +268,13 @@ public partial class CharacterScreen : RetroScreen
                 }
             };
             page.Pictures.Add(picture);
-            // As wide as the gap to the next box allows (the sheet's boxes stand two abreast).
-            float room = Enumerable.Range(0, GameWorld.PartySize).Select(n => window.RectOf("BUTN", FirstBox + n))
-                .Where(r => r.Position.Y == box.Position.Y && r.Position.X > box.Position.X).Select(r => r.Position.X - box.Position.X - 2).DefaultIfEmpty(box.Size.X + 20).Min();
-            float width = Math.Min(box.Size.X + 20, room);
-            Label name = Text(window, new Vector2(box.Position.X + (box.Size.X - width) / 2, box.Position.Y + box.Size.Y + 1), width, "", HorizontalAlignment.Center);
-            name.ClipText = true;
-            page.Names.Add(name);
+            if (number == ItemsWindow)
+            {
+                // 74F1:0000 under each box: its hit points, "%d/%d" centred on x 27 at the box's
+                // top + 33 (6CCA:1A1B), and its status word centred in x 1–51 at + 39 (78A9:1FBB).
+                page.Hp.Add(Text(window, new Vector2(2, box.Position.Y + 33), 50, "", HorizontalAlignment.Center));
+                page.States.Add(Text(window, new Vector2(1, box.Position.Y + 39), 50, "", HorizontalAlignment.Center));
+            }
             if (window.Button(FirstLeader + i) is { } leader)
             {
                 leader.ToggleMode = true;
@@ -455,8 +471,14 @@ public partial class CharacterScreen : RetroScreen
         {
             bool there = _world[i] is { Kind: ObjectKind.Party };
             page.Pictures[i].Texture = there && CharacterOf(i) is { } c ? Portrait(c) : null;
-            page.Names[i].Text = there ? MemberName(i) : "";
-            page.Names[i].Modulate = i == _member ? Gold : Colors.White;
+            if (i < page.Hp.Count)
+            {
+                // The active member in palette colour 47, the others in 52 (DS:326E).
+                var colour = GameFonts.Settings(PaletteColour(i == _member ? 47 : 52));
+                page.Hp[i].LabelSettings = page.States[i].LabelSettings = colour;
+                page.Hp[i].Text = there ? $"{_world[i]!.Vitals.Hp}/{_world[i]!.Vitals.MaxHp}" : "";
+                page.States[i].Text = there ? PartyFrames.StatusName(_world[i]!.Vitals.Status) : "";
+            }
             if (page.Window.Button(FirstLeader + i) is { } l)
             {
                 l.Visible = there;
@@ -471,6 +493,7 @@ public partial class CharacterScreen : RetroScreen
             }
         }
         page.Name.Text = MemberName(_member);
+        page.Frames.Refresh();
         switch (_page)
         {
             case Page.Character:
@@ -509,9 +532,10 @@ public partial class CharacterScreen : RetroScreen
         string Abil(Ability a) => $"{a.ToString().ToUpperInvariant()} {cc.Adjusted(c, a),2}";
         int ac = CharacterSheet.ArmorClass(cc.Adjusted(c, Ability.Dex), member.Items, _world!.Items);
         string who = $"{Session.Rules.Race(c.Race).Name.ToUpperInvariant()} {c.Gender.ToString().ToUpperInvariant()}\n"
-            + string.Join(" / ", c.Classes.Select((k, n) => $"{Session.Rules.Class(k).Name.ToUpperInvariant()} {levels[n]}")) + "\n"
+            + string.Join(" / ", c.Former.Select(f => cc.Active(c, f) ? $"{Session.Rules.Class(f.Class).Name.ToUpperInvariant()} {f.Level}" : $"({Session.Rules.Class(f.Class).Name.ToUpperInvariant()} {f.Level})")
+                .Concat(c.Classes.Select((k, n) => $"{Session.Rules.Class(k).Name.ToUpperInvariant()} {levels[n]}"))) + "\n"
             + $"{Abil(Ability.Str)}   {Abil(Ability.Int)}\n{Abil(Ability.Dex)}   {Abil(Ability.Wis)}\n{Abil(Ability.Con)}   {Abil(Ability.Cha)}";
-        string more = $"HP {v.Hp}/{v.MaxHp}  AC {ac}  THAC0 {CharacterSheet.Thac0(c, levels)}\n"
+        string more = $"HP {v.Hp}/{v.MaxHp}  AC {ac}  THAC0 {CharacterSheet.Thac0(cc.ActiveLevels(c))}\n"
             + $"EXP {c.Experience}   {Spaced(c.Alignment.ToString())}\n"
             + $"PSI {_magic.Psp(c)}/{_magic.MaxPsp(c)}: {string.Join(", ", c.Disciplines.Select(d => d.ToString().ToUpperInvariant()))}"
             + (c.Sphere is { } sphere ? $"\nSPHERE: {sphere.ToString().ToUpperInvariant()}" : "")
@@ -698,6 +722,21 @@ public partial class CharacterScreen : RetroScreen
 
     private WorldObject? HolderOf(ItemSlot slot) => slot.Where == Where.Inside ? _container : Member;
 
+    private Color PaletteColour(int index) => _palette[index] is var c ? Color.Color8(c.R, c.G, c.B) : Colors.White;
+
+    /// <summary>A member as View Character's frames show them.</summary>
+    private PartyMemberView? MemberView(int slot)
+    {
+        if (_world?[slot] is not { Kind: ObjectKind.Party } m)
+        {
+            return null;
+        }
+        Character? c = CharacterOf(slot);
+        int psp = c is null ? 0 : _magic.MaxPsp(c);
+        return new PartyMemberView(MemberName(slot), m.Vitals.Hp, m.Vitals.MaxHp, c is null ? 0 : _magic.Psp(c), psp, m.Vitals.Status,
+            c?.ComputerControl == true, Locked: c is null);
+    }
+
     // -- leader and computer control --------------------------------------------------------
 
     private void LeaderPressed(int slot)
@@ -726,7 +765,7 @@ public partial class CharacterScreen : RetroScreen
     /// <summary>A message: the status line, and on the items page the right-hand panel.</summary>
     private void Say(string message)
     {
-        _status.Text = message;
+        Current.Frames.Resting = message;
         if (_page == Page.Items)
         {
             ShowInfo(null, null, message);

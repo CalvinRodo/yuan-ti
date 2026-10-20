@@ -1092,6 +1092,40 @@ Wis, Cha; races 1–8 and classes 1–8 in the string table's order), used by
 * A `BUTN` whose `+0x5A` is its own number shows the `ICON` at `+0x64`; text
   buttons keep a placeholder at `+0x6E` ("XXXXX"). `APFM` is a frame: `+0x08`
   number, `+0x28`/`+0x2A` size, `+0x58` a style word; it holds no image.
+* **APFM at run time** (`2AF5`, looked up by tag `0x4D465041`): placing one
+  (`2AF5:0006`) sets its rectangle (+0x10–0x16, from the size) and its draw
+  callback (+0x54). `2AF5:02F3` sets (1), clears (2) or zeroes (3) bits of
+  the flag word +0x58. +0x5A, +0x5E and +0x62 are far pointers the screen
+  sets (+0x62 a picture, `2AF5:02A6` / `036C`); +0x68/+0x6A an offset. So
+  what a frame shows is the screen's code:
+  * View Character (`WIND` 11500): 11201–11204 the portraits, 11205–11212 the
+    leader and computer-control buttons' places, 11261–11266 three bars under
+    each row of boxes (row r: 11261 + r hit points, 11263 + r psionic
+    points, 11265 + r status), 11269 the panel, 11270 where the status line
+    starts. The hover texts (`78A9:0400`): a box its member, or PRESS RIGHT
+    MOUSE BUTTON when empty; the leader's and computer control's places
+    INACTIVE CHARACTER for an empty box, else the leader and "COMPUTER
+    CONTROL IS " texts; the bars from `DS:328E` (HIT POINTS: CURRENT/MAX,
+    PSIONIC POINTS: CURRENT/MAX, CURRENT STATUS).
+  * The inventory (`74F1:0000`): `BMP` 13000 frame 1 behind the name at
+    (53, 3), frame 3, the status line's bar, at (46, 161). Under each box,
+    the member's hit points "%d/%d" (`DS:0E5A`) centred on x 27 at the box's
+    top + 33 (`6CCA:1A1B`), and its status word centred in x 1–51 at + 39
+    (`78A9:1FBB`). Status words are at `DS:11DC`: New, Okay, Stunned, Out
+    Cold, Dying, Dead, Animated, Petrified, Gone; for Okay, a current
+    effect's name if there is one. The active member's text is palette
+    colour 47, the others' 52, shadow 17 (`DS:326E`).
+  * The container art is `BMP` 13003 (a bag) for a leather item and 13002
+    (a chest) otherwise (`6527:12BD`: `IT1R` +8 & 0x0F == 5).
+* DUAL (Create Characters' and View Character's box menu) is `WIND` 17502
+  over `BMP` 17002: the eight class names (`BUTN` 17303–17310 in the class
+  order cleric, druid, fighter, gladiator, preserver, psionicist, ranger,
+  thief; `ICON` 17101–17108), EXIT 17302, and NO OTHER CLASSES AVAILABLE
+  (`DS:3075`). The manual: humans only, third level at least, twice at most.
+* The manual's pregenerated party is a saved game that came with the game
+  ("A saved game containing a pre-built party"). The GOG install has none:
+  `DARKRUN.GFF` is an empty template. So the engine's pre-made party is its
+  own (`engine/game/party/premade.json`).
 * The names of genders, races, classes, abilities and alignments are one
   string block at linear `0x52062`, with a far-pointer table to them at
   `0x51F5A`. The roster file is `CHARSAVE.GFF`.

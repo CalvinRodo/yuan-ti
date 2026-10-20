@@ -154,6 +154,10 @@ public partial class Main : Control
         else if (install is not null && args.Contains("--new-game"))
         {
             // Straight into a new game, for development; --region=N and --at=X,Y choose where.
+            if (Session.Party.Count == 0)
+            {
+                Session.UsePremadeParty();
+            }
             Session.NewGame();
             RegionView.StartNewGame();
             var start = RegionView.NewGameStart;

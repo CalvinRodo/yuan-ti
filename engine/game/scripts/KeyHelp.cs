@@ -223,6 +223,9 @@ public partial class KeyHelp : CanvasLayer
         new HelpLine("Right-click a box", "NEW / ADD, or EDIT / DROP, as a menu"),
         new HelpLine("Click NEW, EDIT", "Make a character, or change one"),
         new HelpLine("Click ADD, DROP", "Bring back a character made before, or take one out"),
+        new HelpLine("Right-click, DUAL", "A human of third level or more takes a new class (the old one kept at its level)"),
+        new HelpLine("Right-click an empty box", "PRE-MADE PARTY: fill the empty boxes with the ready-made characters"),
+        new HelpLine("Small buttons by a box", "Make that character leader; computer control on or off"),
         HelpLine.For(Controls.Back, "Keep the party and go back (also RETURN)", "Esc"));
 
     private static HelpSection CharacterScreenSection => new("Character and items",

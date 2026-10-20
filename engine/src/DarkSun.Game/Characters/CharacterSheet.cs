@@ -67,4 +67,8 @@ public static class CharacterSheet
     /// <summary>The best THAC0 of <paramref name="c"/>'s classes at <paramref name="levels"/> (one per class); 20 with none.</summary>
     public static int Thac0(Character c, IReadOnlyList<int> levels) =>
         c.Classes.Select((k, i) => Thac0(k, i < levels.Count ? levels[i] : 1)).DefaultIfEmpty(20).Min();
+
+    /// <summary>The best THAC0 of the classes in use (<see cref="CharacterCreation.ActiveLevels"/>: a dual-class's former class counts once the new one passes it).</summary>
+    public static int Thac0(IEnumerable<(CharacterClass Class, int Level)> active) =>
+        active.Select(a => Thac0(a.Class, a.Level)).DefaultIfEmpty(20).Min();
 }
