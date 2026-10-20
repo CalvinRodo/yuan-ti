@@ -52,7 +52,7 @@ From the repository root:
 ```
 make engine-build   # build everything
 make engine-test    # unit tests
-make engine-run     # run the game
+make engine-run     # run the game (ARGS="--new-game --fight" passes flags to it)
 make engine-edit    # open the Godot editor
 make engine-compare # check the C# file-format and script decoding against the Python tools
 make engine-scripts # run every game script in the C# interpreter (V=-v lists the world commands)

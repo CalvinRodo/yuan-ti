@@ -117,8 +117,8 @@ engine-build: ## Build the engine libraries, tests and Godot project  [DOTNET=]
 engine-test: ## Run the engine unit tests
 	$(DOTNET) test engine/DarkSun.sln
 
-engine-run: engine-build ## Run the engine                            [GODOT=]
-	$(GODOT) --path engine/game
+engine-run: engine-build ## Run the engine  [GODOT=, ARGS="--new-game --fight"]
+	$(GODOT) --path engine/game $(if $(ARGS),-- $(ARGS))
 
 engine-edit: ## Open the engine in the Godot editor
 	$(GODOT) --editor --path engine/game
