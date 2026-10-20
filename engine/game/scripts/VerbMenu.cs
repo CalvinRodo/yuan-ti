@@ -25,6 +25,7 @@ public partial class VerbMenu : PanelContainer
         [Verb.UseWith] = ("Use with…", Key.None),
         [Verb.Attack] = ("Attack", Key.None),
         [Verb.Look] = ("Look", Key.L),
+        [Verb.Open] = ("Open", Key.O),
     };
 
     private readonly Dictionary<(Verb, bool), Texture2D?> _icons = [];

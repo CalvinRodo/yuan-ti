@@ -245,7 +245,7 @@ public partial class DebugOverlay : Node2D
             foreach (WorldObject obj in world.Objects.Where(o => !o.Hidden && world.CellsOf(o).Contains(c)))
             {
                 string verbs = obj.Kind == ObjectKind.Party || _triggers is null ? ""
-                    : " · " + string.Join("/", ObjectVerbs.For(obj, world.Items, _triggers));
+                    : " · " + string.Join("/", ObjectVerbs.For(obj, world.Items, _triggers, world.IsContainer(obj)));
                 b.Append($"Object {Label(obj)}{verbs}\n");
             }
         }

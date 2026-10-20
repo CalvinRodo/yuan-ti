@@ -1,6 +1,7 @@
 using DarkSun.Data.Animation;
 using DarkSun.Data.Gff;
 using DarkSun.Data.Images;
+using DarkSun.Data.Items;
 using DarkSun.Data.Regions;
 using DarkSun.Game.Animation;
 using DarkSun.Game.Movement;
@@ -72,6 +73,7 @@ public partial class RegionView : Node2D
     private OptionsWindow _options = null!;
     private Control _hudPanel = null!;
     private ShopWindow _shop = null!;
+    private ContainerWindow _container = null!;
 
     /// <summary>Scripts to start once none is paused (the region's after the game-start script, …): see <see cref="WhenScriptsFree"/>.</summary>
     private readonly Queue<Action> _whenFree = new();
@@ -233,6 +235,17 @@ public partial class RegionView : Node2D
                 _inventory.World = _world;
                 _inventory.CallDeferred(InventoryWindow.MethodName.Open, _selected);
             }
+            if (OS.GetCmdlineUserArgs().Contains("--open-body") && _world.Objects.FirstOrDefault(o => o.Kind == ObjectKind.Creature && !o.Hidden) is { } victim)
+            {
+                // Testing: the first creature dies carrying water and boots; its body is opened.
+                _world.Give(2, -1095, victim.Index, GameWorld.None);
+                _world.Give(1, -1051, victim.Index, GameWorld.None);
+                _world.Hurt(victim, victim.Vitals.Hp + 1);
+                if (_world.First(-GameWorld.DeadBody) is { } body)
+                {
+                    Callable.From(() => _container.Open(_world, body, _selected)).CallDeferred();
+                }
+            }
             if (OS.GetCmdlineUserArgs().Contains("--check-journal"))
             {
                 _instantTravel = true;
@@ -321,9 +334,16 @@ public partial class RegionView : Node2D
         {
             MemberName = slot => _world?[slot]?.Name ?? $"Character {slot + 1}",
             Money = () => Session.ScriptHost.Money,
+            SpellName = Session.SpellName,
             Did = text => AddScriptLine($"> {text}"),
         };
         layer.AddChild(_inventory);
+        _container = new ContainerWindow
+        {
+            MemberName = slot => _world?[slot]?.Name ?? $"Character {slot + 1}",
+            Did = text => AddScriptLine($"> {text}"),
+        };
+        layer.AddChild(_container);
         _journal = new JournalWindow { Portraits = n => Portrait(n) };
         layer.AddChild(_journal);
         _options = new OptionsWindow { Closed = () => _hudPanel.Visible = Settings.DebugHud };
@@ -428,7 +448,10 @@ public partial class RegionView : Node2D
 
         _region = Region.Load(Session.Open(file), [Session.Open("SEGOBJEX.GFF"), Session.Open("GPLDATA.GFF")], Session.Assets);
         var objectData = new GffSet([Session.Open("SEGOBJEX.GFF"), Session.Open("GPLDATA.GFF")]);
-        _world = new GameWorld(_region, objectData, Session.ScriptHost.EngineVariables, Session.ScriptHost.PartyMembers);
+        _world = new GameWorld(_region, objectData, Session.ScriptHost.EngineVariables, Session.ScriptHost.PartyMembers)
+        {
+            PartyClasses = slot => slot < Session.Party.Count ? Session.Party[slot].ItemClasses : null,
+        };
         // Back in a region visited before: as the party left it (before its script runs, as in DSUN.EXE).
         IReadOnlyList<WorldObject>? restored = _checking ? null : Session.Regions.Recall(_world);
         _world.Changed += OnWorldChanged;
@@ -1029,7 +1052,7 @@ public partial class RegionView : Node2D
             .FirstOrDefault();
 
     /// <summary>The verbs <paramref name="obj"/> offers (<see cref="ObjectVerbs"/>).</summary>
-    private IReadOnlyList<Verb> VerbsOf(WorldObject obj) => ObjectVerbs.For(obj, _world.Items, Session.Scripts.Triggers);
+    private IReadOnlyList<Verb> VerbsOf(WorldObject obj) => ObjectVerbs.For(obj, _world.Items, Session.Scripts.Triggers, _world.IsContainer(obj));
 
     /// <summary>Right-click: the verb menu of the object under the pointer (<paramref name="screen"/>: where to show it), or its only verb done at once.</summary>
     private void OpenVerbMenu(Vector2 at, Vector2 screen)
@@ -1168,12 +1191,21 @@ public partial class RegionView : Node2D
             }
             return;
         }
+        if (verb == Verb.Open && _world[actor] is { } opener)
+        {
+            AddScriptLine($"> {opener.Name} opens {Describe(target)}");
+            if (!_checking)
+            {
+                _container.Open(_world, target, actor);
+            }
+            return;
+        }
         if (verb == Verb.Get && target.Item is not null && _world[actor] is { } taker)
         {
             // 7BEB:0A60: the item goes into the pack first, then its pickup trigger runs.
             if (!_world.PickUp(taker, target))
             {
-                Say(what, $"{taker.Name} can't carry any more.");
+                Say(what, target.Items.Count > 0 ? $"{Called(target)} has something in it: open it and take that first." : $"{taker.Name} can't carry any more.");
                 return;
             }
             AddScriptLine($"> {taker.Name} picks up {Describe(target)}");
@@ -1222,6 +1254,7 @@ public partial class RegionView : Node2D
         Verb.Use => "use",
         Verb.UseWith => "use with",
         Verb.Attack => "attack",
+        Verb.Open => "open",
         _ => "look at",
     };
 
@@ -1795,7 +1828,8 @@ public partial class RegionView : Node2D
     /// <c>--check-items</c>, with the game's own items: make some for the
     /// active member, drop one on the map and pick it up, wear boots and
     /// SEARCH for them, leave an item on the ground and come back to it, turn
-    /// a creature into an item (<c>REQUEST(9)</c>), hurt and rest, and save
+    /// a creature into an item (<c>REQUEST(9)</c>), refuse an item to a class,
+    /// loot a dead creature's body, hurt and rest, and save
     /// and load what the party carries.
     /// </summary>
     private void CheckItems()
@@ -1824,7 +1858,7 @@ public partial class RegionView : Node2D
         Expect(party[0].Items.Count(i => i.Rdff == Water) == 2, "two pots again");
 
         Item boots = party[0].Items.First(i => i.Rdff == Boots);
-        Expect(_world.Equip(me, boots) && boots.Slot == 13, $"boots worn on the feet (slot {boots.Slot})");
+        Expect(_world.Equip(me, boots) == EquipResult.Worn && boots.Slot == 13, $"boots worn on the feet (slot {boots.Slot})");
         Expect(_world.Search(GameWorld.WholeParty, [new(72, 4, -Boots), new(85, 4, 13)]) == 1, "SEARCH finds the boots worn");
         Expect(_world.Search(GameWorld.WholeParty, [new(72, 4, -Water), new(72, 3, 0)]) == 2, "SEARCH counts two pots");
 
@@ -1837,6 +1871,22 @@ public partial class RegionView : Node2D
         ShowRegion(home);
         AnswerForThePlayer();
         Expect(_world[leftAt] is { Item: not null } back && back.Id == -Water && _cloneSprites.ContainsKey(back), "the dropped pot is still there after leaving");
+
+        // A creature killed with something on it leaves a body to open.
+        if (_world.Objects.FirstOrDefault(o => o.Kind == ObjectKind.Creature && !o.Hidden) is { } victim)
+        {
+            _world.Give(1, -Water, victim.Index, GameWorld.None);
+            _world.Hurt(victim, victim.Vitals.Hp + 1);
+            WorldObject? body = _world.First(-GameWorld.DeadBody);
+            Expect(body is not null && _world.IsContainer(body) && body.Items.Any(i => i.Rdff == Water), "the dead creature left a body holding its pot of water");
+            Expect(body is not null && ObjectVerbs.For(body, _world.Items, Session.Scripts.Triggers, _world.IsContainer(body)).Contains(Verb.Open), "the body offers Open");
+            Expect(body is not null && !_world.PickUp(me, body), "a body with something in it isn't picked up");
+            Expect(body is not null && _world.MoveItem(body, me, body.Items[0]) && body.Items.Count == 0, "took the pot out of the body");
+        }
+        else
+        {
+            problems.Add("no creature to leave a body");
+        }
 
         // A creature turned into an item, then the party hurt and rested.
         if (_world.Objects.FirstOrDefault(o => o.Kind == ObjectKind.Creature && !o.Hidden) is { } creature)
@@ -1852,6 +1902,19 @@ public partial class RegionView : Node2D
         _world.Rest(raiseDead: false);
         Expect(party[0].Vitals.Hp == 12, "REQUEST(4) healed");
 
+        // A class that can't use it: the Helm of Might isn't for thieves.
+        const int Helm = 1519;
+        Func<int, ItemClasses?> classes = _world.PartyClasses;
+        _world.PartyClasses = _ => ItemClasses.Thief;
+        Expect(_world.Give(1, -Helm, 0, GameWorld.None) == 1, "GIVE made the Helm of Might");
+        Item helm = party[0].Items.First(i => i.Rdff == Helm);
+        Expect(_world.Equip(me, helm) == EquipResult.WrongClass && !helm.Equipped, "a thief can't wear the Helm of Might");
+        _world.PartyClasses = _ => ItemClasses.Fighter;
+        Expect(_world.Equip(me, helm) == EquipResult.Worn, "a fighter can");
+        _world.PartyClasses = classes;
+        helm.Slot = Equipment.Pack;
+        _world.Give(1, -Helm, GameWorld.None, 0);
+
         // Saved and loaded.
         var carried = party.Select(p => string.Join(",", p.Items.Select(i => $"{i.Rdff}x{i.Quantity}@{i.Slot}"))).ToList();
         string file = "check-" + Guid.NewGuid().ToString("N")[..8];
@@ -1865,7 +1928,7 @@ public partial class RegionView : Node2D
         Expect(Session.ScriptHost.PartyMembers[0].Vitals.Hp == 12, "hit points came back");
 
         GD.Print(problems.Count == 0
-            ? $"items: made, dropped, picked up, worn, searched, left and found, transformed, hurt, rested, saved and loaded ({carried[0]}; {carried[1]})"
+            ? $"items: made, dropped, picked up, worn, refused by class, searched, left and found, transformed, hurt, looted from a body, rested, saved and loaded ({carried[0]}; {carried[1]})"
             : "items: " + string.Join("; ", problems));
         GetTree().Quit(problems.Count > 0 ? 1 : 0);
     }

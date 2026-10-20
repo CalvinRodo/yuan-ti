@@ -46,6 +46,9 @@ public sealed class Item
     public ItemState Save() => new(Rdff, Quantity, Slot);
 }
 
+/// <summary>What came of <see cref="GameWorld.Equip"/>.</summary>
+public enum EquipResult { Worn, NotWearable, WrongClass, NoFreeSlot }
+
 /// <summary>An item as saved: its <c>RDFF</c> number, quantity and slot.</summary>
 public sealed record ItemState(int Rdff, int Quantity, int Slot);
 

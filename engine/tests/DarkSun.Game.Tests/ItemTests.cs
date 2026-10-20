@@ -65,14 +65,21 @@ public class ItemTests
         r.Data[("RDFF", Torch)] = ItemRdff(Torch, 0, 1, 2);
         r.Data[("RDFF", Arrows)] = ItemRdff(Arrows, 1, 2, 1);
         r.Data[("RDFF", Boots)] = ItemRdff(Boots, 2, 3, 300);
-        // IT1R: type 0 nothing special; 1 stacks (flags +15 bit 2), ammunition (+9 = 11); 2 worn on the feet (4).
-        var types = new byte[3 * 20];
+        r.Data[("RDFF", GameWorld.DeadBody)] = ItemRdff(GameWorld.DeadBody, 3, 4, 0);
+        r.Data[("OJFF", GameWorld.DeadBody)] = [0, 0, 8, 0, 15, 0, 0, 0, 0, 0, 0, 0, 7, 0, 0, 0]; // anchor (8, 15), BMP 7
+        r.Data[("BMP ", 7)] = CinematicPlayerTests.Screen(3);
+        // IT1R: type 0 nothing special; 1 stacks (flags +15 bit 2), ammunition (+9 = 11); 2 worn on the
+        // feet (4) by fighters and thieves only (classes +16); 3 a container (flags bit 8).
+        var types = new byte[4 * 20];
         types[20 + 15] = 0x02;
         types[20 + 9] = 11;
         types[40 + 9] = 4;
+        types[40 + 16] = 0x20;
+        types[40 + 17] = 0x04;
+        types[60 + 15] = 0x08;
         r.Data[("IT1R", 1)] = types;
-        var names = new byte[4 * 25];
-        foreach (var (n, text) in new[] { (1, "Torch"), (2, "Arrow"), (3, "Boots") })
+        var names = new byte[5 * 25];
+        foreach (var (n, text) in new[] { (1, "Torch"), (2, "Arrow"), (3, "Boots"), (4, "Dead Body") })
         {
             System.Text.Encoding.Latin1.GetBytes(text).CopyTo(names, n * 25);
         }
@@ -144,7 +151,7 @@ public class ItemTests
         Assert.Equal(0, w.Search(0, [Is(72, -Boots)]));
         Assert.Equal(0, w.Search(1, [Is(72, -Boots), Is(85, 13)])); // not worn yet
 
-        Assert.True(w.Equip(w[1]!, party[1].Items.Single(i => i.Rdff == Boots)));
+        Assert.Equal(EquipResult.Worn, w.Equip(w[1]!, party[1].Items.Single(i => i.Rdff == Boots)));
 
         Assert.Equal(13, party[1].Items.Single(i => i.Rdff == Boots).Slot); // the feet
         Assert.Equal(1, w.Search(1, [Is(72, -Boots), Is(85, 13)]));
@@ -190,6 +197,56 @@ public class ItemTests
         Assert.Equal(Vitals.Dead, party[1].Vitals.Status);
         w.Rest(raiseDead: true);
         Assert.Equal((Vitals.Well, 10), (party[1].Vitals.Status, party[1].Vitals.Hp));
+    }
+
+    [Fact]
+    public void OnlyTheItemsClassesMayWearIt()
+    {
+        var (w, party) = World();
+        w.Give(1, -Boots, 0, GameWorld.None);
+        Item boots = party[0].Items.Single();
+        var classes = new Dictionary<int, Data.Items.ItemClasses> { [0] = Data.Items.ItemClasses.Preserver };
+        w.PartyClasses = slot => classes.TryGetValue(slot, out var c) ? c : null;
+
+        Assert.False(w.CanUse(w[0]!, boots));
+        Assert.Equal(EquipResult.WrongClass, w.Equip(w[0]!, boots));
+        classes[0] = Data.Items.ItemClasses.Preserver | Data.Items.ItemClasses.Thief; // a multi-class preserver/thief
+        Assert.Equal(EquipResult.Worn, w.Equip(w[0]!, boots));
+        w.Give(1, -Torch, 0, GameWorld.None);
+        Assert.Equal(EquipResult.NotWearable, w.Equip(w[0]!, party[0].Items.Single(i => i.Rdff == Torch)));
+        Assert.True(w.CanUse(TemplarOf(w), boots)); // creatures aren't asked
+    }
+
+    [Fact]
+    public void ADeadCreatureLeavesABodyWithWhatItCarried()
+    {
+        var (w, party) = World();
+        WorldObject templar = TemplarOf(w);
+        w.Give(1, -Boots, templar.Index, GameWorld.None);
+        w.Give(5, -Arrows, templar.Index, GameWorld.None);
+        Cell at = templar.Cell;
+
+        w.Hurt(templar, 25);
+
+        WorldObject body = w.First(-GameWorld.DeadBody)!;
+        Assert.Equal(at, body.Cell);
+        Assert.True(w.IsContainer(body));
+        Assert.Equal([Boots, Arrows], body.Items.Select(i => i.Rdff));
+        Assert.Contains(Verb.Open, ObjectVerbs.For(body, w.Items, new GplTriggers(), w.IsContainer(body)));
+        Assert.False(w.PickUp(w[0]!, body)); // not while something is in it
+
+        Assert.True(w.MoveItem(body, w[0]!, body.Items[1]));
+        w.Give(3, -Arrows, 1, GameWorld.None);
+        Assert.True(w.MoveItem(w[1]!, w[0]!, party[1].Items.Single())); // arrows join the arrows
+        Assert.Equal(8, party[0].Items.Single().Quantity);
+        Assert.True(w.MoveItem(body, w[0]!, body.Items[0]));
+        Assert.True(w.PickUp(w[0]!, body)); // empty now
+
+        var (w2, _) = World();
+        WorldObject poor = TemplarOf(w2);
+        w2.Hurt(poor, 25);
+        Assert.Null(w2.First(-GameWorld.DeadBody)); // nothing carried, no body
+        Assert.False(w2.IsContainer(w2.First(-Torch)!));
     }
 
     [Fact]

@@ -412,9 +412,17 @@ this milestone brings most of the game's content.
       `SEGOBJEX.GFF`), `ItemCatalog.NameOf` (the game's `"%+d name"`).
       Region items get their names in the world. Checked against the Python
       port by `make engine-compare`.
-- [ ] Inventory, equipping, containers, shops. Still to decode: item-record
-      `special`, `charges`, `flags` bits, `IT1R` `material` and the bits of the
-      class mask; containers' contents.
+- [x] Inventory, equipping, containers, shops. The item fields are
+      decoded (`dsun-exe-reference.md`, "Items"): material, the type flags,
+      the class mask, magic items' power and charges, and `special`
+      (breakage). Equipping checks the member's classes
+      (`Character.ItemClasses`); a dead creature leaves a "Dead Body" with
+      what it carried; Open on a container (chest, bag, body) shows a
+      take/put window; the items window shows material, the spell an item
+      casts, its charges and who may use it.
+- [ ] Items still to do: casting from items (charges used up; needs
+      spells), breakage in combat (`80F5:1F4B`), bags' contents in a pack,
+      and the type flags 4 and 0x10.
 - [ ] Character sheet and inventory screens.
 - [x] Party creation: Create Characters (View Character, `WIND` 11500) and
       Character Generation (`WIND` 3011) screens; the party starts new games

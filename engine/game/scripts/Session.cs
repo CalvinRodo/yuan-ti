@@ -2,6 +2,7 @@ using DarkSun.Data;
 using DarkSun.Data.Assets;
 using DarkSun.Data.Mods;
 using DarkSun.Data.Gff;
+using DarkSun.Data.Text;
 using DarkSun.Game.Characters;
 using DarkSun.Game.Rules;
 using DarkSun.Game.Scripting;
@@ -334,6 +335,16 @@ public static class Session
         Install is null ? [] : Mods.Verify(Install.GffFiles.Select(n => (n, GffFile.Open(Install.FindFile(n)!))));
 
     /// <summary>A GFF file from the install, opened on first use.</summary>
+    private static Dictionary<int, string>? _spellNames;
+
+    /// <summary>A spell's or psionic power's name (<c>SPIN</c> n in <c>RESOURCE.GFF</c>, as "Magic Missile"), or null.</summary>
+    public static string? SpellName(int number)
+    {
+        _spellNames ??= SpellInfo.ReadAll(Open("RESOURCE.GFF"))
+            .ToDictionary(s => s.Number, s => System.Globalization.CultureInfo.InvariantCulture.TextInfo.ToTitleCase(s.Name.ToLowerInvariant()));
+        return _spellNames.GetValueOrDefault(number);
+    }
+
     public static GffFile Open(string name)
     {
         if (Install is null)

@@ -140,6 +140,9 @@ is `gname[10]`. AWARD gives experience to the party's characters, DAMAGE and PHY
 REQUEST 1 and 4 rest the party. Party items and hit points are saved; regions remember what their
 creatures carry and items left on the ground. `-- --new-game --give=1051,1095` hands out items by
 `RDFF` number, `--open-items` opens the items window; `--check-items` checks it all with the game's items.
+Items can only be worn by the classes their type allows. A creature that dies leaves a dead body
+holding what it carried. Open on a chest, a bag or a body shows what is in it, to take or put in
+(`--open-body` kills the first creature and opens its body, for testing).
 The original screens (main menu, View Character, Character Generation, the text windows) are built
 from their windows' data (`UiWindowView`): each control where its `WIND` puts it, with its own art,
 so a mod's `WIND/n.json` moves them. The engine's own changes to the original layouts are the same

@@ -654,7 +654,7 @@ public sealed partial class GameWorld
     {
         if (!obj.IsDoor)
         {
-            if (obj.Item is { } item && Items.TypeOf(item) is { } type && (type.Flags & 1) != 0)
+            if (obj.Item is { } item && Items.TypeOf(item) is { } type && (type.Kind & ItemTypeFlags.Usable) != 0)
             {
                 ToggleState(obj);
                 return new DoorUse(obj, false, Toggled: true);

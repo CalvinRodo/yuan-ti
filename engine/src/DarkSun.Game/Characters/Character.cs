@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using DarkSun.Data.Gff;
+using DarkSun.Data.Items;
 using DarkSun.Data.Text;
 
 namespace DarkSun.Game.Characters;
@@ -45,6 +46,23 @@ public sealed record Character
 
     /// <summary>Has been in a game: only the name can be changed then (the manual's EDIT NAME).</summary>
     public bool Adventured { get; set; }
+
+    /// <summary>
+    /// The item classes it counts as (DSUN.EXE's character record +0x12,
+    /// <c>6868:0000</c>): a cleric by its sphere (all four without one).
+    /// </summary>
+    [JsonIgnore]
+    public ItemClasses ItemClasses => Classes.Aggregate(ItemClasses.None, (all, k) => all | k switch
+    {
+        CharacterClass.Cleric => Sphere is { } s ? (ItemClasses)(1 << (int)s) : ItemClasses.Clerics,
+        CharacterClass.Druid => ItemClasses.Druid,
+        CharacterClass.Fighter => ItemClasses.Fighter,
+        CharacterClass.Gladiator => ItemClasses.Gladiator,
+        CharacterClass.Preserver => ItemClasses.Preserver,
+        CharacterClass.Psionicist => ItemClasses.Psionicist,
+        CharacterClass.Ranger => ItemClasses.Ranger,
+        _ => ItemClasses.Thief,
+    });
 }
 
 /// <summary>The random names new characters get: <c>TEXT</c> 0–99 male, 100–199 female, 200–299 thri-kreen (<c>RESOURCE.GFF</c>).</summary>

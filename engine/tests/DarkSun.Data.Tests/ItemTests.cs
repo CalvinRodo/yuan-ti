@@ -54,6 +54,37 @@ public class ItemTests
     }
 
     [Fact]
+    public void DecodesMaterialFlagsAndClasses()
+    {
+        // A leather bag (0x45: ordinary, leather), a container; and a stone door (0x62: fixed); and helm-like classes 0x126F.
+        byte[] it1r = [.. new byte[8], 0x45, 0, 0, 0, 0, 0, 0, 0x09, 0x6F, 0x12, 0, 0,
+                       .. new byte[8], 0x62, 0, 0, 0, 0, 0, 0, 0x02, 0xFF, 0x1F, 0, 0];
+
+        var (bag, door) = (ItemType.ParseAll(it1r)[0], ItemType.ParseAll(it1r)[1]);
+
+        Assert.Equal((ItemMaterial.Leather, true, false, false), (bag.MadeOf, bag.IsContainer, bag.Fixed, bag.Stacks));
+        Assert.Equal(ItemTypeFlags.Usable | ItemTypeFlags.Container, bag.Kind);
+        Assert.Equal((ItemMaterial.Stone, true, true), (door.MadeOf, door.Fixed, door.Stacks));
+        Assert.True(bag.UsableBy(ItemClasses.Fighter));
+        Assert.True(bag.UsableBy(ItemClasses.Ranger | ItemClasses.Thief)); // any class in common
+        Assert.False(bag.UsableBy(ItemClasses.Preserver | ItemClasses.Psionicist | ItemClasses.Thief | ItemClasses.Druid));
+        Assert.Equal(ItemClasses.All, door.Classes);
+    }
+
+    [Fact]
+    public void AMagicItemsPowerIsItsQuantityAndAStacksItsCharges()
+    {
+        // Wand of Missiles: quantity 9 (MAGIC MISSILE), 50 charges, +0x0F the copy (9). A stack: count 5, charges 66.
+        ItemRecord wand = new(-31007, 9, 0, 300, 0, 70, 0, 50, 9, 6, 255, 1, 0);
+        ItemRecord scrolls = new(-1, 5, 0, 30, 0, 1, 0, 66, 66, 4, 255, 1, 0);
+        ItemRecord sword = new(-2, 1, 0, 30, 0, 0, 0, 0, 0, 4, 255, 1, 0);
+        ItemType plain = ItemType.Parse(0, new byte[20]), stacking = ItemType.Parse(1, [.. new byte[15], 0x02, 0, 0, 0, 0]);
+
+        Assert.Equal((9, 66, 0), (wand.PowerFor(plain), scrolls.PowerFor(stacking), sword.PowerFor(plain)));
+        Assert.Equal((false, true), (wand.Breakable, sword.Breakable));
+    }
+
+    [Fact]
     public void NamesItemsAsTheGameDoes()
     {
         var names = new List<byte>();

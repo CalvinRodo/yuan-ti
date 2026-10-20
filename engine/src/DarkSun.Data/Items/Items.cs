@@ -37,6 +37,62 @@ public enum WeaponKind : byte
     Thrown = 0x10,
 }
 
+/// <summary>What an item is made of: the low nibble of <c>IT1R</c> +8, named from DSUN.EXE's table at <c>3B68:0000</c> (<c>74F1:23AA</c>).</summary>
+public enum ItemMaterial : byte { Wooden, Bone, Stone, Obsidian, Metal, Leather }
+
+/// <summary>
+/// <c>IT1R</c> +0x0F. 1, 2, 8 and 0x80 are read by DSUN.EXE: Use is offered
+/// for 1 (<c>68BD:0C6D</c>); 2 stacks (<c>7372:0FEE</c>) and moves the
+/// item's power from its quantity to its charges (<c>78A9:2324</c>); 8 is a
+/// container (VIEW INVENTORY, <c>6527:12BD</c>); 0x80 marks armour (the verb
+/// window's flag 8). 0x40 is on two-handed weapons only (staves, the great
+/// axe, polearms, bows; inferred). 4 (doors, chests, nests, obelisks) and
+/// 0x10 are not traced.
+/// </summary>
+[Flags]
+public enum ItemTypeFlags : byte
+{
+    None = 0,
+    Usable = 0x01,
+    Stacks = 0x02,
+    Unknown04 = 0x04,
+    Container = 0x08,
+    Unknown10 = 0x10,
+    TwoHanded = 0x40,
+    Armor = 0x80,
+}
+
+/// <summary>
+/// Who can use an item (<c>IT1R</c> +0x10). DSUN.EXE ORs the word at
+/// <c>DS:0718</c> + 2 × code over a character's class codes into its
+/// character record's +0x12 (<c>6868:0000</c>) and lets it wear an item when
+/// the two share a bit (<c>6466:0854</c>). The codes come from
+/// <c>38D4:00ED</c>: 1–4 cleric of air, earth, fire, water; 5–8 druid; 9
+/// fighter; 10 gladiator; 11 preserver; 12 psionicist; 13–16 ranger; 17
+/// thief. 0x800 and 0x1000 belong to no class the player can be (by the
+/// items that have them, likely the defiler and the templar).
+/// </summary>
+[Flags]
+public enum ItemClasses : ushort
+{
+    None = 0,
+    AirCleric = 0x0001,
+    EarthCleric = 0x0002,
+    FireCleric = 0x0004,
+    WaterCleric = 0x0008,
+    Druid = 0x0010,
+    Fighter = 0x0020,
+    Gladiator = 0x0040,
+    Preserver = 0x0080,
+    Psionicist = 0x0100,
+    Ranger = 0x0200,
+    Thief = 0x0400,
+    Defiler = 0x0800,
+    Templar = 0x1000,
+    Clerics = AirCleric | EarthCleric | FireCleric | WaterCleric,
+    All = 0x1FFF,
+}
+
 /// <summary>
 /// An item type: a 20-byte <c>IT1R</c> record (<c>GPLDATA.GFF</c> <c>IT1R</c> 1,
 /// 115 types). DSUN.EXE loads the table to <c>DS:1669</c> and indexes it
@@ -53,6 +109,31 @@ public sealed record ItemType(
     public const int Size = 20;
 
     public bool IsWeapon => (Weapon & (WeaponKind.Melee | WeaponKind.Missile)) != 0;
+
+    /// <summary><see cref="Flags"/> by name.</summary>
+    public ItemTypeFlags Kind => (ItemTypeFlags)Flags;
+
+    public bool Stacks => (Kind & ItemTypeFlags.Stacks) != 0;
+
+    public bool IsContainer => (Kind & ItemTypeFlags.Container) != 0;
+
+    /// <summary>The material (<see cref="Material"/> &amp; 0x0F), or null for a code past the table (none in the data).</summary>
+    public ItemMaterial? MadeOf => (Material & 0x0F) <= (int)ItemMaterial.Leather ? (ItemMaterial)(Material & 0x0F) : null;
+
+    /// <summary>
+    /// <see cref="Material"/> bit 0x20: a fixture, which can't be picked up
+    /// (<c>68BD:0C6D</c>; doors, geysers, nests). Bit 0x40 is set on ordinary
+    /// items, 0x80 on named magic ones and with a material below 4 picks
+    /// DSUN.EXE's magic-item cases (<c>612E:2501</c>), and 0x04 adds 10 to a
+    /// value DSUN.EXE works out (<c>612E:0190</c>); none of these three is traced further.
+    /// </summary>
+    public bool Fixed => (Material & 0x20) != 0;
+
+    /// <summary>The classes that may use it (<see cref="LegalClasses"/>).</summary>
+    public ItemClasses Classes => (ItemClasses)LegalClasses;
+
+    /// <summary>May a character of <paramref name="classes"/> use it (DSUN.EXE: any bit in common)?</summary>
+    public bool UsableBy(ItemClasses classes) => (Classes & classes) != 0;
 
     /// <summary>Damage as dice, e.g. "1d8+1"; empty for items that do none.</summary>
     public string Damage => DamageDice == 0 || DamageSides == 0 ? ""
@@ -86,6 +167,22 @@ public sealed record ItemType(
 /// <see cref="PackIndex"/> to 9999 (none) when it loads an item.
 /// The shipped data agrees: every <c>RDFF</c> that references an <c>IT1R</c>
 /// or <c>NAME</c> entry references the record's own type and name.
+/// <para>
+/// Magic: a magic item's <see cref="Quantity"/> is the spell or power it
+/// casts (<c>SPIN</c> n; the psionic disciplines' items 145–171) and
+/// <see cref="Charges"/> (+0x0E) its uses left: each use takes one, and at 0
+/// the item is gone (<c>78A9:2324</c>). For a type that stacks the two swap:
+/// the quantity is the count, the charges the spell. +0x0F keeps a copy of
+/// the spell to restore (<c>78A9</c>, the shipped items agree; doors use it
+/// for their state: the door flags).
+/// </para>
+/// <para>
+/// <see cref="Special"/> (+0x10, 1–6) is how easily the item breaks: 6
+/// never; DSUN.EXE picks a carried item with the lowest value below 6 and
+/// breaks it when 1d20 is under 15 − its <see cref="Bonus"/>
+/// (<c>80F5:1F4B</c>), making it a "Broken Weapon" (type 107, <c>NAME</c>
+/// 203, special 1; <c>612E:2700</c>). Its callers (combat) aren't traced.
+/// </para>
 /// </summary>
 public sealed record ItemRecord(
     int Id, ushort Quantity, short Next, ushort Value, short PackIndex, short Type, short Icon,
@@ -95,6 +192,22 @@ public sealed record ItemRecord(
 
     /// <summary>"No item" in the item table's links (0x270F).</summary>
     public const int None = 9999;
+
+    /// <summary><see cref="Special"/> 6: never breaks.</summary>
+    public const int Unbreakable = 6;
+
+    public bool Breakable => Special < Unbreakable;
+
+    /// <summary>
+    /// The spell or power a magic item casts (<see cref="Quantity"/>, or
+    /// <see cref="Charges"/> for a type that stacks), when +0x0F holds the same
+    /// number as its copy; 0 for an item without one.
+    /// </summary>
+    public int PowerFor(ItemType? type)
+    {
+        int power = type is { Stacks: true } ? Charges : Quantity;
+        return power > 0 && power == Flags ? power : 0;
+    }
 
     public static ItemRecord Parse(ReadOnlySpan<byte> r) => new(
         BinaryPrimitives.ReadInt16LittleEndian(r), BinaryPrimitives.ReadUInt16LittleEndian(r[2..]),

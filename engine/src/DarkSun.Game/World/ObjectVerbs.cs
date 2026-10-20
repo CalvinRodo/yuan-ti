@@ -4,7 +4,7 @@ using DarkSun.Game.Scripting;
 namespace DarkSun.Game.World;
 
 /// <summary>What the player can do to an object from its right-click menu.</summary>
-public enum Verb { Talk, Get, Use, UseWith, Attack, Look }
+public enum Verb { Talk, Get, Use, UseWith, Attack, Look, Open }
 
 /// <summary>
 /// The verbs an object offers. Talk, Get and Use follow DSUN.EXE's verb
@@ -15,11 +15,12 @@ public enum Verb { Talk, Get, Use, UseWith, Attack, Look }
 /// right-click and has an INFO button; here that is Look, always offered.
 /// Attack (creatures outside the party, or an attack trigger) and Use with
 /// (a use-with trigger naming the object) are reached elsewhere in the
-/// original (combat, the inventory) and added here.
+/// original (combat, the inventory) and added here, as is Open for a
+/// container (<see cref="GameWorld.IsContainer"/>; DSUN.EXE's VIEW INVENTORY).
 /// </summary>
 public static class ObjectVerbs
 {
-    public static IReadOnlyList<Verb> For(WorldObject obj, ItemCatalog items, GplTriggers triggers)
+    public static IReadOnlyList<Verb> For(WorldObject obj, ItemCatalog items, GplTriggers triggers, bool container = false)
     {
         bool Has(GplTriggerList list) => triggers.MatchObject(list, obj.Id) is not null;
         ItemType? type = obj.Item is { } item ? items.TypeOf(item) : null;
@@ -29,11 +30,15 @@ public static class ObjectVerbs
         {
             verbs.Add(Verb.Talk);
         }
-        if ((obj.Item is not null && !door && (type is null || (type.Material & 0x20) == 0)) || Has(GplTriggerList.Pickup))
+        if (container)
+        {
+            verbs.Add(Verb.Open);
+        }
+        if ((obj.Item is not null && !door && type is not { Fixed: true }) || Has(GplTriggerList.Pickup))
         {
             verbs.Add(Verb.Get);
         }
-        if (door || (type is not null && (type.Flags & 1) != 0) || Has(GplTriggerList.Use))
+        if (door || type is { Kind: var kind } && (kind & ItemTypeFlags.Usable) != 0 || Has(GplTriggerList.Use))
         {
             verbs.Add(Verb.Use);
         }

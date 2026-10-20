@@ -26,7 +26,16 @@ public sealed partial class GameWorld
             : null;
 
     /// <summary>Do items of this record stack (one entry with a quantity)? <c>IT1R</c> flags bit 2 (<c>7372:0FEE</c>).</summary>
-    public bool Stacks(ItemRecord record) => Items.TypeOf(record) is { } type && (type.Flags & 0x02) != 0;
+    public bool Stacks(ItemRecord record) => Items.TypeOf(record) is { Stacks: true };
+
+    /// <summary>
+    /// The "Dead Body" <c>OJFF</c> (an item, special 5) DSUN.EXE puts where a
+    /// creature dies, holding what it carried (<c>612E</c>).
+    /// </summary>
+    public const int DeadBody = 1101;
+
+    /// <summary>A party member's item classes (by slot; the session's characters), or null to let it use anything.</summary>
+    public Func<int, ItemClasses?> PartyClasses { get; set; } = _ => null;
 
     /// <summary>Can <paramref name="obj"/> hold items: a creature, a party member, or an item (a container)?</summary>
     private static bool Holds(WorldObject? obj) => obj is { Kind: ObjectKind.Party or ObjectKind.Creature } or { Item: not null };
@@ -211,13 +220,14 @@ public sealed partial class GameWorld
 
     /// <summary>
     /// Get: <paramref name="taker"/> picks up the item <paramref name="ground"/>
-    /// lying on the map; it leaves the map. False if it isn't an item or the
-    /// pack is full.
+    /// lying on the map; it leaves the map. False if it isn't an item, the
+    /// pack is full, or it still holds something (a container is emptied first,
+    /// so nothing in it is lost).
     /// </summary>
     public bool PickUp(WorldObject taker, WorldObject ground)
     {
         if (ground.Item is null || ground.Source is not { } source || taker.Items.Count >= Equipment.Capacity
-            || NewItem(source.Ojff) is not { } item)
+            || ground.Items.Count > 0 || NewItem(source.Ojff) is not { } item)
         {
             return false;
         }
@@ -232,15 +242,90 @@ public sealed partial class GameWorld
         return true;
     }
 
-    /// <summary>Wear <paramref name="item"/> in a free slot of its placement; false if it has none free.</summary>
-    public bool Equip(WorldObject holder, Item item)
+    /// <summary>
+    /// May <paramref name="holder"/> use <paramref name="item"/>: its type's
+    /// classes share a bit with a party member's (<c>6466:0854</c>)? Others
+    /// (creatures, members without a character) may use anything.
+    /// </summary>
+    public bool CanUse(WorldObject holder, Item item) =>
+        Items.TypeOf(item.Record) is not { } type || holder.Kind != ObjectKind.Party
+        || PartyClasses(holder.Index) is not { } classes || type.UsableBy(classes);
+
+    /// <summary>Wear <paramref name="item"/> in a free slot of its placement, if <paramref name="holder"/>'s class may (<see cref="CanUse"/>).</summary>
+    public EquipResult Equip(WorldObject holder, Item item)
     {
-        if (Items.TypeOf(item.Record) is not { } type || Equipment.FreeSlot(type.Placement, holder.Items) is not int slot)
+        if (Items.TypeOf(item.Record) is not { Placement: not ItemPlacement.None } type)
+        {
+            return EquipResult.NotWearable;
+        }
+        if (!CanUse(holder, item))
+        {
+            return EquipResult.WrongClass;
+        }
+        if (Equipment.FreeSlot(type.Placement, holder.Items) is not int slot)
+        {
+            return EquipResult.NoFreeSlot;
+        }
+        item.Slot = slot;
+        return EquipResult.Worn;
+    }
+
+    // -- containers -----------------------------------------------------------------------
+
+    /// <summary>
+    /// Is <paramref name="obj"/> a container on the map: an item whose type
+    /// has flag 8 (chests, bags, skeletons; <c>6527:12BD</c>), a dead body, or
+    /// any item that holds something?
+    /// </summary>
+    public bool IsContainer(WorldObject obj) =>
+        obj.Item is { } item && obj.Kind == ObjectKind.Thing
+        && (Items.TypeOf(item) is { IsContainer: true } || obj.Id == -DeadBody || obj.Items.Count > 0);
+
+    /// <summary>
+    /// Move <paramref name="item"/> (a whole entry) from <paramref name="from"/>
+    /// to <paramref name="to"/>, into the pack; a stack joins one of the same
+    /// item. False if <paramref name="to"/> is full.
+    /// </summary>
+    public bool MoveItem(WorldObject from, WorldObject to, Item item)
+    {
+        if (!from.Items.Contains(item))
         {
             return false;
         }
-        item.Slot = slot;
+        if (Stacks(item.Record) && to.Items.FirstOrDefault(i => i.Rdff == item.Rdff && !i.Equipped) is { } same)
+        {
+            same.Quantity += item.Quantity;
+            from.Items.Remove(item);
+            return true;
+        }
+        if (to.Items.Count >= Equipment.Capacity)
+        {
+            return false;
+        }
+        from.Items.Remove(item);
+        item.Slot = Equipment.Pack;
+        to.Items.Add(item);
         return true;
+    }
+
+    /// <summary>
+    /// <paramref name="creature"/> has died: a dead body (<see cref="DeadBody"/>)
+    /// where it lay takes everything it carried (<c>612E</c>). Null if it
+    /// carried nothing or there is no room for the body.
+    /// </summary>
+    public WorldObject? LeaveBody(WorldObject creature)
+    {
+        if (creature.Items.Count == 0 || Spawn(DeadBody, creature.Cell) is not { } body)
+        {
+            return null;
+        }
+        foreach (Item item in creature.Items)
+        {
+            item.Slot = Equipment.Pack;
+        }
+        body.Items = [.. creature.Items];
+        creature.Items = [];
+        return body;
     }
 
     // -- making and removing objects ------------------------------------------------------
@@ -326,8 +411,8 @@ public sealed partial class GameWorld
     /// <c>612E:18DA</c>: less than the hit points takes that many; up to 9
     /// more leaves the creature down (status 3, 0 hit points); more kills it
     /// (5), 10 000 or more destroys it (8). A creature that is no longer
-    /// alive leaves the map (DSUN.EXE's <c>612E:1AAF</c>, not traced: no body
-    /// is drawn); a party member stays where it fell.
+    /// alive leaves the map, leaving a dead body with what it carried unless
+    /// destroyed (<see cref="LeaveBody"/>); a party member stays where it fell.
     /// </summary>
     public void Hurt(WorldObject target, int damage)
     {
@@ -345,6 +430,10 @@ public sealed partial class GameWorld
         v.Hp = 0;
         if (target.Kind != ObjectKind.Party && v.Status >= Vitals.Down)
         {
+            if (v.Status < Vitals.Destroyed)
+            {
+                LeaveBody(target);
+            }
             Remove(target);
         }
         else

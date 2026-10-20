@@ -34,6 +34,9 @@ public partial class InventoryWindow : PanelContainer
     /// <summary>The party's money (<c>gname[10]</c>).</summary>
     public Func<int> Money { get; set; } = () => 0;
 
+    /// <summary>A spell's or power's name (<c>SPIN</c> n), for what magic items cast.</summary>
+    public Func<int, string?> SpellName { get; set; } = _ => null;
+
     /// <summary>Something happened worth logging (an item dropped, given, …).</summary>
     public Action<string>? Did { get; set; }
 
@@ -164,15 +167,70 @@ public partial class InventoryWindow : PanelContainer
     {
         Item? item = Selected;
         ItemType? type = item is null ? null : _world!.Items.TypeOf(item.Record);
-        _details.Text = item is null ? "Double-click an item to wear it or take it off."
-            : $"{ItemName(item)}: worth {item.Record.Value}"
-              + (type is { IsWeapon: true } ? $", damage {type.Damage}" : "")
-              + (type is { Placement: not ItemPlacement.None } ? $", worn: {type.Placement}" : "")
-              + (item.Equipped ? $" (worn: {Equipment.Names[item.Slot]})" : "");
+        _details.Text = item is null ? "Double-click an item to wear it or take it off." : Describe(item, type);
         _wear.Disabled = item is null || (!item.Equipped && type is null or { Placement: ItemPlacement.None });
         _wear.Text = item is { Equipped: true } ? "Take off" : "Wear";
         _give.Disabled = item is null || _world!.Party.Count() < 2;
         _drop.Disabled = item is null;
+    }
+
+    private string Describe(Item item, ItemType? type)
+    {
+        var parts = new List<string> { $"worth {item.Record.Value}" };
+        if (type?.MadeOf is { } material && type.Placement != ItemPlacement.None)
+        {
+            parts.Add(material.ToString().ToLowerInvariant());
+        }
+        if (type is { IsWeapon: true })
+        {
+            parts.Add($"damage {type.Damage}" + ((type.Kind & ItemTypeFlags.TwoHanded) != 0 ? ", two-handed" : ""));
+        }
+        if (type is { Placement: not ItemPlacement.None })
+        {
+            parts.Add($"worn: {type.Placement}");
+        }
+        if (item.Record.PowerFor(type) is > 0 and int power)
+        {
+            parts.Add($"casts {SpellName(power) ?? $"spell {power}"}" + (item.Record.Charges > 0 && type is { Stacks: false } ? $" ({item.Record.Charges} charges)" : ""));
+        }
+        if (!item.Record.Breakable)
+        {
+            parts.Add("unbreakable");
+        }
+        string text = $"{ItemName(item)}: {string.Join(", ", parts)}" + (item.Equipped ? $" (worn: {Equipment.Names[item.Slot]})" : "");
+        if (type is not null && type.Classes != ItemClasses.All)
+        {
+            text += $". For: {ClassNames(type.Classes)}";
+            if (Holder is { } holder && !_world!.CanUse(holder, item))
+            {
+                text += $" (not {MemberName(_member)})";
+            }
+        }
+        return text;
+    }
+
+    /// <summary>The classes in <paramref name="classes"/>, clerics by sphere unless all four.</summary>
+    internal static string ClassNames(ItemClasses classes)
+    {
+        var names = new List<string>();
+        if ((classes & ItemClasses.Clerics) == ItemClasses.Clerics)
+        {
+            names.Add("clerics");
+            classes &= ~ItemClasses.Clerics;
+        }
+        foreach (ItemClasses c in Enum.GetValues<ItemClasses>().Where(c => c is not (ItemClasses.None or ItemClasses.Clerics or ItemClasses.All) && (classes & c) != 0))
+        {
+            names.Add(c switch
+            {
+                ItemClasses.AirCleric => "air clerics",
+                ItemClasses.EarthCleric => "earth clerics",
+                ItemClasses.FireCleric => "fire clerics",
+                ItemClasses.WaterCleric => "water clerics",
+                ItemClasses.Thief => "thieves",
+                _ => c.ToString().ToLowerInvariant() + "s",
+            });
+        }
+        return names.Count > 0 ? string.Join(", ", names) : "no one";
     }
 
     private void WearOrTakeOff()
@@ -185,9 +243,14 @@ public partial class InventoryWindow : PanelContainer
         {
             item.Slot = Equipment.Pack;
         }
-        else if (!_world!.Equip(holder, item))
+        else if (_world!.Equip(holder, item) is var result and not EquipResult.Worn)
         {
-            _details.Text = $"No free place to wear {ItemName(item)}.";
+            _details.Text = result switch
+            {
+                EquipResult.WrongClass => $"{MemberName(_member)}'s class can't use {ItemName(item)}.",
+                EquipResult.NotWearable => $"{ItemName(item)} isn't worn.",
+                _ => $"No free place to wear {ItemName(item)}.",
+            };
             return;
         }
         Refresh();

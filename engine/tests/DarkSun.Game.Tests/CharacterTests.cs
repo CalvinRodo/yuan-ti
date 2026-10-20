@@ -1,3 +1,4 @@
+using DarkSun.Data.Items;
 using DarkSun.Game.Characters;
 
 namespace DarkSun.Game.Tests;
@@ -6,6 +7,17 @@ public class CharacterTests
 {
     private static CharacterCreation Creation(int seed = 1) =>
         new(CharacterRules.Default, new CharacterNames(["Garn"], ["Shandra"], ["T'kir'taap"]), new Random(seed));
+
+    [Fact]
+    public void ACharactersClassesAreTheItemClassesItCanUse()
+    {
+        var c = new Character { Classes = [CharacterClass.Cleric, CharacterClass.Ranger], Sphere = Sphere.Fire };
+        Assert.Equal(ItemClasses.FireCleric | ItemClasses.Ranger, c.ItemClasses);
+        c.Sphere = null;
+        Assert.Equal(ItemClasses.Clerics | ItemClasses.Ranger, c.ItemClasses);
+        Assert.Equal(ItemClasses.Psionicist | ItemClasses.Thief, new Character { Classes = [CharacterClass.Psionicist, CharacterClass.Thief] }.ItemClasses);
+        Assert.Equal(ItemClasses.None, new Character().ItemClasses);
+    }
 
     [Fact]
     public void ANewCharacterIsAHumanFighterWithRolledAbilities()

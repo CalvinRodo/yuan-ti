@@ -883,6 +883,48 @@ each record are not read.
     next string, `"%d%s*%dD%d%+d"`, formats damage.
   * Every item `RDFF` that references an `IT1R` or `NAME` entry (745 and
     706 of 755) references the record's own type and name.
+* **`IT1R` +8, material:** the low nibble indexes the material names at
+  `3B68:0000` (`74F1:23AA`): 0 wooden, 1 bone, 2 stone, 3 obsidian, 4 metal,
+  5 leather. Bit 0x20 is a fixture that can't be picked up (`68BD:0C6D`;
+  doors, geysers, nests). 0x40 is on ordinary items and 0x80 on named magic
+  ones; 0x80 with a material below 4 selects magic-item cases (`612E:2501`,
+  `6868:0337`), and 0x04 adds 10 to a value (`612E:0190`). Those three are
+  not traced further.
+* **`IT1R` +0x0F, flags:** 1 offers Use (`68BD:0C6D`); 2 stacks
+  (`7372:0FEE`) and swaps where the power is kept (below); 8 is a container
+  (the inventory's VIEW INVENTORY, `6527:12BD`; chests, bags, skeletons);
+  0x80 armour (verb-window flag 8). 0x40 is on two-handed weapons only
+  (staves, the great axe, polearms, bows; inferred). 4 (doors, chests,
+  nests, obelisks) and 0x10 are not traced.
+* **`IT1R` +0x10, classes:** a word with one bit per class code. A
+  character record's +0x12 is the OR of `DS:0718`[code] over its class
+  codes (`6868:0000`). The codes come from `38D4:00ED` + class × 4 +
+  sphere: 1–4 cleric of air, earth, fire, water; 5–8 druid; 9 fighter; 10
+  gladiator; 11 preserver; 12 psionicist; 13–16 ranger; 17 thief. The bits
+  are 1, 2, 4, 8 the four clerics, 0x10 druid, 0x20 fighter, 0x40 gladiator,
+  0x80 preserver, 0x100 psionicist, 0x200 ranger, 0x400 thief. 0x800 and
+  0x1000 belong to no player class; wands and scrolls carry 0x880, so likely
+  the defiler and the templar. Wearing an item needs a bit in common
+  (`6466:0854`). 44 of 115 types are 0x1FFF (anyone).
+* **Magic: quantity, charges and +0x0F.** A magic item's quantity (+2) is
+  the spell or power it casts (`SPIN` n). The Wand of Missiles is 9, MAGIC
+  MISSILE; the psionicist's discipline items are 145–171. Its charges
+  (+0x0E) are the uses left: a use takes one, and at 0 the item goes
+  (`78A9:2324` → `7BEB:0A06`). For a type that stacks the two swap: the
+  quantity counts and the charges hold the spell. +0x0F keeps a copy of the
+  spell, put back by `78A9:6488`. The shipped items agree (fruit casts
+  NEUTRALIZE POISON with one charge). Doors keep their state in +0x0F
+  instead (bits 1/2/4/8).
+* **Item record +0x10, special:** 1–6, how easily it breaks; 6 never (480
+  items). `80F5:1F4B` picks the carried item with the lowest value below 6
+  and breaks it when 1d20 < 15 − its bonus (`612E:20A1`). `612E:2700` turns
+  it into a "Broken Weapon": type 107, `NAME` 203, id −1210, special 1. Its
+  callers (combat) aren't traced.
+* **Containers' contents:** the shipped data has none. Item `RDFF`s hold
+  only the record and the `IT1R` and `NAME` references, and no record links
+  to another. Contents come at run time: GIVE to the object, and death.
+  When a creature dies, `612E` makes `OJFF` 1101 ("Dead Body", special 5)
+  beside it and moves its items into the body.
 
 ### Items in scripts
 

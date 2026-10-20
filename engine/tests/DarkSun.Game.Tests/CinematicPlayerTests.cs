@@ -37,7 +37,7 @@ public class CinematicPlayerTests
     }
 
     /// <summary>A full-screen image of one colour: per row, two runs of 160 (repeat codes 128 + 32).</summary>
-    private static byte[] Screen(byte color)
+    internal static byte[] Screen(byte color)
     {
         var frame = new List<byte> { 0x40, 0x01, 0xC8, 0x00 };
         for (int row = 0; row < 200; row++)
