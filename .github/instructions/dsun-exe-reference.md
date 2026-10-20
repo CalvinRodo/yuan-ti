@@ -920,11 +920,36 @@ each record are not read.
   and breaks it when 1d20 < 15 − its bonus (`612E:20A1`). `612E:2700` turns
   it into a "Broken Weapon": type 107, `NAME` 203, id −1210, special 1. Its
   callers (combat) aren't traced.
-* **Containers' contents:** the shipped data has none. Item `RDFF`s hold
-  only the record and the `IT1R` and `NAME` references, and no record links
-  to another. Contents come at run time: GIVE to the object, and death.
-  When a creature dies, `612E` makes `OJFF` 1101 ("Dead Body", special 5)
-  beside it and moves its items into the body.
+* **Containers' contents:** the shipped item `RDFF`s have none: they hold
+  only the record and the `IT1R` and `NAME` references. Contents come at run
+  time: GIVE to the object, and death. Creatures do carry items in their
+  `RDFF` (98 of 291, 479 items; see "Creature `RDFF`s"). When a creature
+  dies, `612E` makes `OJFF` 1101 ("Dead Body", special 5) beside it and
+  moves its items into the body.
+* **Creature `RDFF`s** (`7155:0000`, the object loader): entries are read
+  in order, each numbered as a block (the object is block 0), and the load
+  action (switch at `7155:038F`) says what an entry does:
+  * 1 (`7155:0397`): the object's own record (`7155:0732` by type).
+  * 2 (`7155:03D7`): a new object (`7155:04E6`) loaded from the entry and
+    stored in field `from` of block `blocknum` (`0826:012A`, the object
+    field setter GPL uses too). A creature's first carried item: from 0x4F.
+  * 3 (`7155:0416`): a reference. Type 4 loads the character record into
+    the current object; otherwise field `from` of block `blocknum` is set to
+    `index`: an item's `IT1R` type (field 4, record +0x0A) and `NAME`
+    (field 2, +0x12).
+  * 4 (`7155:0484`): a new object linked after block `blocknum`'s item
+    (item record +4, the next link): the other carried items.
+  * The list ends at a header whose action is 0xFF (the 10 bytes after the
+    last entry). The shipped creatures are combat record (1), character
+    record (3), then per item: item record (2, then 4), `IT1R` and `NAME`
+    references (3). Every carried item's record names its own `RDFF` (−id)
+    and matches that `RDFF`'s type and name; one (of 479) is worn, the rest
+    are in the pack (slot 255).
+  * For a creature (index 4 and up) the loader then sets the combat
+    record's hit points to the character record's +8, after the difficulty
+    scaling: 85 creatures have a different number at combat record +0.
+    `DarkSun.Data.Regions.CreatureDefinition`, `src/ds1_parsers.py`
+    (`carried_items`).
 
 ### Items in scripts
 
@@ -1242,18 +1267,35 @@ Records: a combatant is an object of kind 2 (`DS:0C36 + 3·index`) with a
 0x3A-byte combat record (`DS:1665`) and a 0x47-byte character record
 (`DS:1661`, from combat record +4). The fields used here:
 
-* **Combat record:** +0 hit points, +2 psionic strength points, +4 the
-  character record, +0x1B Move, +0x1C status, +0x1D allegiance (& 3:
-  fighting), +0x1F THAC0, +0x21 flags (0x20 computer control, 0x40 locked),
-  +0x22 the six abilities (Str, Dex, Con, Int, Wis, Cha; `6868:04FC(object,
-  n)`, 9 for a non-creature), +0x38 facing (0–7).
+* **Combat record:** +0 hit points (from the character record's +8 when
+  loaded), +2 psionic strength points, +4 the character record, +6 the id
+  (−`RDFF`; for |id| 1–50 the status is copied to `DS:0333 + |id|` when it
+  changes), +0x16 special abilities (see "The AI"), +0x1B Move, +0x1C
+  status, +0x1D allegiance (& 3: fighting), +0x1E mind (see "The AI"),
+  +0x1F THAC0, +0x21 flags (0x20 computer control, 0x40 locked), +0x22 the
+  six abilities (Str, Dex, Con, Int, Wis, Cha; `6868:04FC(object, n)`, 9
+  for a non-creature), +0x28 the name (18 bytes), +0x38 facing (0–7, at run
+  time).
 * **Character record:** +0x12 class bits (as items', `6868:0000`), +0x18 race
   (1 human, 2 dwarf, 3 elf, 4 half-elf, 5 half-giant, 6 halfling, 7 mul,
   8 thri-kreen), +0x21–0x23 class codes and +0x24–0x26 their levels
   (`6868:00AF(object, code)` is the level in a code), +0x27 base armour
   class, +0x2A attacks per round in halves, +0x2B–0x2D, +0x2E–0x30,
-  +0x31–0x33, +0x34–0x36 up to three natural attacks (count, dice, sides,
-  bonus; `80F5:2ACC`), +0x37–0x3B the five saving throws.
+  +0x31–0x33, +0x34–0x36 up to three natural attacks (attacks in halves,
+  dice, sides, bonus, attack i at + i; `80F5:2ACC`; Body Weaponry makes
+  the first 2d4, Animal Affinity at least 1d10), +0x37–0x3B the five
+  saving throws. Also +0 experience (int32; creatures mostly 1000), +4 the
+  experience a kill is worth (int32, AD&D's by hit dice: 35, 65, 120, 175,
+  270, 420, 650, 975, 1400 …), +8 hit points, +0x3D size, +0x3E a creature's
+  spell set (`3FB9:0110 + 14·set`, 7 words, spell − 1, −1 none;
+  `6798:032B`): 1 Magic Missile, Fireball, Acid Arrow, Ice Storm, Cone of
+  Cold; 2 Cause Light Wounds, Hold Person, Poison, Slay Living, Cause
+  Disease; 3 Cause Light Wounds, Hold Person; 4 those, Dehydrate, Cause
+  Disease, Flame Strike; 5 Magic Missile, Stinking Cloud, Lightning Bolt,
+  Turn Pebble to Boulder; 6 Cause Fear, Hold Person, Cause Blindness; 7 and
+  8 those and Blood Flow or Dehydrate. +0x46 its psionic set (see "The
+  AI"; 1–9 are filled: 2 Ballistic Attack, Disintegrate, Psionic Blast,
+  Detonate, Psychic Crush; 4 the attack modes; 9 Psychic Crush only; …).
 
 ### Rounds, initiative and turn order
 

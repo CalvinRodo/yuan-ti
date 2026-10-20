@@ -139,26 +139,36 @@ def item_name(names: bytes, name_idx: int, bonus: int) -> str:
     return f'{bonus:+d} {name}' if bonus else name
 
 
-def rdff_entries(raw: bytes) -> list[tuple]:
+def rdff_entries(raw: bytes, with_from: bool = False) -> list[tuple]:
     """An RDFF's entries: (load_action, type, index, data), up to the 0xFF end byte.
 
-    Both load actions (1 and 3) are followed by 'len' bytes of data: an item's
-    references to its IT1R and NAME entries have none, a creature's character
-    record (type 4) 71. Same as DarkSun.Data.Gff.Rdff.
+    Every load action is followed by 'len' bytes of data (0 for references).
+    DSUN.EXE's loader (7155:0000): 1 the object's own record; 2 a new object
+    stored in field 'from' of block 'blocknum' (a creature's first carried
+    item); 3 a reference (a character record, type 4, or field 'from' set to
+    'index': an item's IT1R type is field 4, its NAME field 2); 4 a new object
+    linked after block 'blocknum' (the next carried item). With *with_from*,
+    entries are (load_action, type, index, from, data). Same as
+    DarkSun.Data.Gff.Rdff.
     """
     entries, pos = [], 0
     while pos + _RDFF_HDR_SIZE <= len(raw) and raw[pos] != 0xFF:
-        load_action, _bnum, rtype, idx, _from, rlen = struct.unpack_from(_RDFF_HDR_FMT, raw, pos)
-        if load_action not in (1, 3) or rlen < 0 or pos + _RDFF_HDR_SIZE + rlen > len(raw):
+        load_action, _bnum, rtype, idx, frm, rlen = struct.unpack_from(_RDFF_HDR_FMT, raw, pos)
+        if not 1 <= load_action <= 4 or rlen < 0 or pos + _RDFF_HDR_SIZE + rlen > len(raw):
             break
-        entries.append((load_action, rtype, idx, raw[pos + _RDFF_HDR_SIZE:pos + _RDFF_HDR_SIZE + rlen]))
+        data = raw[pos + _RDFF_HDR_SIZE:pos + _RDFF_HDR_SIZE + rlen]
+        entries.append((load_action, rtype, idx, frm, data) if with_from else (load_action, rtype, idx, data))
         pos += _RDFF_HDR_SIZE + rlen
     return entries
 
 
-# Character record (RDFF type 4, 0x47 bytes): +0x3D size byte, the footprint
-# (half-width size & 7, height size // 8); +8 a word DSUN.EXE scales by
-# difficulty for creatures outside the party.
+# Character record (RDFF type 4, 0x47 bytes; dsun-exe-reference.md §8): +4
+# int32 experience for killing it; +8 hit points (scaled by difficulty, and
+# made the combat record's when loaded); +0x18 race; +0x21-0x23 class codes,
+# +0x24-0x26 levels; +0x27 base AC; +0x2A attacks a round in halves;
+# +0x2B/+0x2E/+0x31/+0x34 + i natural attack i (halves, dice, sides, bonus);
+# +0x37-0x3B saves; +0x3D size (footprint: half-width size & 7, height
+# size // 8); +0x3E spell set (3FB9:0110); +0x46 psionic set (37F0:001C).
 CHARACTER_RECORD_SIZE = 0x47
 
 
@@ -257,6 +267,21 @@ def parse_items(gff, objex=None) -> list[dict]:
 # Monsters  (RDFF combat objects in SEGOBJEX.GFF / OBJEX.GFF)
 # ---------------------------------------------------------------------------
 
+def carried_items(raw: bytes) -> list[dict]:
+    """The items a creature RDFF carries: each item record (load action 2 or 4)
+    with the IT1R type and NAME its references set; slot 255 is the pack."""
+    items = []
+    for action, rtype, idx, frm, data in rdff_entries(raw, with_from=True):
+        if action in (2, 4) and rtype == GFF_ITEM_OBJECT and len(data) >= struct.calcsize(_ITEM_FMT):
+            rec = dict(zip(_ITEM_FIELDS, struct.unpack_from(_ITEM_FMT, data)))
+            items.append({'rdff_id': -rec['id'], 'type': rec['item_index'], 'name_idx': rec['name_idx'], 'slot': rec['slot']})
+        elif action == 3 and items and rtype == 5 and frm == 4:
+            items[-1]['type'] = idx
+        elif action == 3 and items and rtype == 3 and frm == 2:
+            items[-1]['name_idx'] = idx
+    return items
+
+
 def parse_monsters(gff) -> list[dict]:
     """Return a list of combat-entity dicts from RDFF type-2 resources.
 
@@ -325,7 +350,20 @@ def parse_monsters(gff) -> list[dict]:
             'name':          name,
             'size':          size,
             'footprint':     f'{(size & 7) * 2 + 1}x{size // 8 + 1}',
-            'hp':            hp,
+            # DSUN.EXE uses the character record's hit points (7155:0000).
+            'hp':            struct.unpack_from('<H', character, 8)[0] if character else hp,
+            'combat_hp':     hp,
+            'xp_value':      struct.unpack_from('<i', character, 4)[0] if character else 0,
+            'mind':          _data,
+            'allegiance':    allegiance,
+            'spell_set':     character[0x3E] if character else 0,
+            'psionic_set':   character[0x46] if character else 0,
+            'natural_attacks': [
+                {'halves': character[0x2B + i], 'dice': character[0x2E + i],
+                 'sides': character[0x31 + i], 'bonus': struct.unpack_from('<b', character, 0x34 + i)[0]}
+                for i in range(3) if character and character[0x2B + i]
+            ],
+            'carried':       carried_items(raw),
             'psp':           psp,
             'ac':            ac,
             'thac0':         thac0,

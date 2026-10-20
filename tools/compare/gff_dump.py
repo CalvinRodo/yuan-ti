@@ -15,7 +15,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'src'))
 from gff import GffFile  # noqa: E402
 from image import ImageReading, Palette  # noqa: E402
 from region_renderer import render_region  # noqa: E402
-from ds1_parsers import character_record, parse_item_records  # noqa: E402
+from ds1_parsers import carried_items, character_record, parse_item_records  # noqa: E402
 import struct  # noqa: E402
 from text_parsers import decode_text, parse_name_resource, parse_spell  # noqa: E402
 
@@ -97,6 +97,12 @@ def main(game_dir: str, out_path: str):
                         if rec is not None:
                             word = struct.unpack_from('<H', rec, 8)[0]
                             out.write(f'C\t{name}\t{r.number}\t{rec[0x3D]}\t{word}\t{sha1(rec)}\n')
+                for r in resources:
+                    if r.tag == 'RDFF':
+                        raw = gff.get_resource_data('RDFF', r.number)
+                        if len(raw) >= 4 and raw[0] == 1 and struct.unpack_from('<h', raw, 2)[0] == 2:
+                            for it in carried_items(raw):
+                                out.write(f'K\t{name}\t{r.number}\t{it["rdff_id"]}\t{it["type"]}\t{it["name_idx"]}\t{it["slot"]}\n')
                 for it in parse_item_records(gff, aux[1]):
                     out.write(f'Q\t{name}\t{it["rdff"]}\t{it["id"]}\t{it["item_index"]}\t{it["name_idx"]}\t{it["bonus"]}\t{it["name"]}\n')
             if name.startswith('RGN'):

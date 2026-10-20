@@ -505,6 +505,7 @@ public partial class RegionView : Node2D
         // Back in a region visited before: as the party left it (before its script runs, as in DSUN.EXE).
         IReadOnlyList<WorldObject>? restored = _checking ? null : Session.Regions.Recall(_world);
         _world.Changed += OnWorldChanged;
+        _world.Defeated += creature => Session.ScriptHost.AwardKill(_world, creature);
         Session.ScriptHost.Map = _world;
         _occupancy = _world.Occupancy;
         foreach (WorldObject o in _world.Objects.Where(o => o.Source is not null && !o.IsClone))

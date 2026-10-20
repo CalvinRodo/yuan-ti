@@ -178,11 +178,36 @@ public sealed class WorldGplHost : DialogueGplHost
         }
         foreach (int slot in slots)
         {
-            if (world[slot] is { Vitals.Alive: true } && PartyCharacter(slot) is { } c)
-            {
-                int classes = Math.Max(1, c.Classes.Count);
-                c.Experience = (int)Math.Min(2_000_000_000L, c.Experience + (long)(xp / classes) * classes);
-            }
+            GiveExperience(world, slot, xp);
+        }
+    }
+
+    /// <summary><c>7372:1467</c>: a living member gains <paramref name="xp"/> ÷ their classes in each, up to 2 000 000 000 in all.</summary>
+    private void GiveExperience(GameWorld world, int slot, int xp)
+    {
+        if (world[slot] is { Vitals.Alive: true } && PartyCharacter(slot) is { } c)
+        {
+            int classes = Math.Max(1, c.Classes.Count);
+            c.Experience = (int)Math.Min(2_000_000_000L, c.Experience + (long)(xp / classes) * classes);
+        }
+    }
+
+    /// <summary>
+    /// <paramref name="creature"/> fell (<see cref="GameWorld.Defeated"/>): each
+    /// party member gets <see cref="GameWorld.KillExperience"/> as from AWARD
+    /// (<c>612E:25F2</c> → <c>7372:1467</c>), at the kill rather than when the fight ends.
+    /// </summary>
+    public void AwardKill(GameWorld world, WorldObject creature)
+    {
+        int xp = world.KillExperience(creature);
+        if (xp <= 0)
+        {
+            return;
+        }
+        Journal.Event(world.Region.Number, $"{creature.Name} is defeated: {xp} experience each.");
+        foreach (WorldObject member in world.Party.ToList())
+        {
+            GiveExperience(world, member.Index, xp);
         }
     }
 

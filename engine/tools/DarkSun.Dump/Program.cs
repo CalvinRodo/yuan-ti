@@ -12,6 +12,7 @@
 //   Y  file  type  weapon,weight,placement,range,attacks,dice,sides,bonus,AC,classes,material   IT1R
 //   Q  file  rdff  id  type  name number  bonus  name  item records (RDFF type 1)
 //   C  file  rdff  size  word at +8  sha1(record)    character records (RDFF type 4)
+//   K  file  rdff  item rdff  type  name number  slot   items creatures carry (RDFF load actions 2 and 4)
 
 using System.Security.Cryptography;
 using System.Text;
@@ -131,6 +132,16 @@ foreach (string name in files!)
             if (CharacterRecord.FromRdff(gff.Read(r.Tag, r.Number)) is { } character)
             {
                 output.WriteLine($"C\t{name}\t{r.Number}\t{character.Size}\t{character.DifficultyScaled}\t{Sha1(character.Bytes)}");
+            }
+        }
+        foreach (var r in resources.Where(r => r.Tag == "RDFF"))
+        {
+            if (CreatureDefinition.FromRdff(gff.Read(r.Tag, r.Number)) is { } creature)
+            {
+                foreach (ItemRecord carried in creature.Carried)
+                {
+                    output.WriteLine($"K\t{name}\t{r.Number}\t{-carried.Id}\t{carried.Type}\t{carried.NameIndex}\t{carried.Slot}");
+                }
             }
         }
         var catalog = ItemCatalog.Load(gplData);

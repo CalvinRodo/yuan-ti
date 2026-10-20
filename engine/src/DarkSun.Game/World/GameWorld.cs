@@ -241,10 +241,13 @@ public sealed partial class GameWorld
     private WorldObject MakeObject(int index, RegionObject source)
     {
         ReadOnlyMemory<byte> rdff = _objectData.TryRead("RDFF", source.Ojff, out var data) ? data : default;
-        CombatRecord? record = rdff.IsEmpty ? null : CombatRecord.Parse(rdff.Span);
+        CreatureDefinition? definition = rdff.IsEmpty ? null : CreatureDefinition.FromRdff(rdff);
+        CombatRecord? record = definition?.Combat;
         ItemRecord? item = record is null && !rdff.IsEmpty ? ItemRecord.FromRdff(rdff) : null;
-        CharacterRecord? character = record is not null ? CharacterRecord.FromRdff(rdff) : null;
+        CharacterRecord? character = definition?.Character;
         bool creature = record is not null;
+        // DSUN.EXE gives a creature its character record's hit points, scaled by difficulty (7155:0000).
+        int hp = Scaled(definition?.HitPoints ?? 0);
         var obj = new WorldObject(index, creature ? ObjectKind.Creature : ObjectKind.Thing, -source.Ojff)
         {
             Source = source,
@@ -253,8 +256,9 @@ public sealed partial class GameWorld
             Character = character,
             Name = record?.Name ?? (item is not null ? Items.NameOf(item) : ""),
             Allegiance = record?.Allegiance ?? 0,
-            Vitals = new Vitals { Hp = Scaled(record?.Hp ?? 0), MaxHp = Scaled(record?.Hp ?? 0), Status = record?.Status ?? 0 },
+            Vitals = new Vitals { Hp = hp, MaxHp = hp, Status = record?.Status ?? 0 },
             FixedCell = new Cell(source.EtabX / Region.TileSize, Math.Max(0, source.EtabY - 1) / Region.TileSize),
+            Items = definition is null ? [] : [.. definition.Carried.Select(CarriedItem)],
         };
 
         // Creatures whose animation can walk get a walker, so orders can move them.
@@ -268,6 +272,15 @@ public sealed partial class GameWorld
         }
         return obj;
     }
+
+    /// <summary>
+    /// An item a creature's <c>RDFF</c> gives it: the item record's own
+    /// <c>RDFF</c> (−id), worn in its slot or in the pack; a quantity only for a
+    /// type that stacks (otherwise the quantity is the spell a magic item casts).
+    /// </summary>
+    private Item CarriedItem(ItemRecord record) =>
+        new(Math.Abs(record.Id), record, Stacks(record) ? Math.Max(1, (int)record.Quantity) : 1,
+            record.Slot < Equipment.Slots ? record.Slot : Equipment.Pack);
 
     public Region Region { get; }
 

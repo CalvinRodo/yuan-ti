@@ -41,6 +41,41 @@ public class ItemTests
         return data;
     }
 
+    /// <summary>
+    /// <see cref="Creature"/> as the shipped creatures are: then a character
+    /// record (<paramref name="hp"/> at +8, worth <paramref name="xp"/>) and the
+    /// items it carries (load action 2, then 4), each with its <c>IT1R</c> and
+    /// <c>NAME</c> references, and the 0xFF end header.
+    /// </summary>
+    private static byte[] ArmedCreature(int ojff, short combatHp, short hp, int xp, params (int Ojff, int Type, int Name, byte Slot)[] carried)
+    {
+        var b = new List<byte>(Creature(ojff, combatHp));
+        void Header(int action, int block, int type, int index, int from, int length) =>
+            b.AddRange([(byte)action, (byte)block, (byte)type, 0, (byte)index, (byte)(index >> 8), (byte)from, 0, (byte)length, 0]);
+        Header(3, 0, CharacterRecord.Type, 0, 0, CharacterRecord.Length);
+        var character = new byte[CharacterRecord.Length];
+        BitConverter.GetBytes(xp).CopyTo(character, 4);
+        BitConverter.GetBytes(hp).CopyTo(character, 8);
+        b.AddRange(character);
+        int block = 2;
+        for (int i = 0; i < carried.Length; i++)
+        {
+            var (item, type, name, slot) = carried[i];
+            int at = b.Count;
+            Header(i == 0 ? 2 : 4, i == 0 ? 0 : block - 3, 1, 0, i == 0 ? 0x4F : 1, 21);
+            var record = new byte[21];
+            BitConverter.GetBytes((short)-item).CopyTo(record, 0);
+            record[17] = slot;
+            b.AddRange(record);
+            Header(3, block, 5, type, 4, 0);
+            Header(3, block, 3, name, 2, 0);
+            block += 3;
+        }
+        b.Add(0xFF);
+        b.AddRange(new byte[9]);
+        return [.. b];
+    }
+
     /// <summary>An item <c>RDFF</c>: record of <c>IT1R</c> type <paramref name="type"/>, worth <paramref name="value"/>, named <c>NAME</c> <paramref name="name"/>.</summary>
     private static byte[] ItemRdff(int ojff, int type, int name, int value)
     {
@@ -57,11 +92,18 @@ public class ItemTests
 
     private static readonly ImageFrame Frame = new(10, 20, new byte[200], new bool[200]);
 
-    /// <summary>A templar (20 hit points) at (10, 5), a torch on the ground at (2, 2), the party at (1, 8).</summary>
-    private static (GameWorld World, IReadOnlyList<PartyMemberState> Party) World()
+    /// <summary>
+    /// A templar (20 hit points) at (10, 5), a torch on the ground at (2, 2),
+    /// the party at (1, 8). <paramref name="armed"/>: the templar's <c>RDFF</c>
+    /// as the shipped creatures have it, 30 hit points in its character record,
+    /// worth 270 experience, carrying a torch in its pack and boots on its feet.
+    /// </summary>
+    private static (GameWorld World, IReadOnlyList<PartyMemberState> Party) World(bool armed = false)
     {
         var r = new Resources();
-        r.Data[("RDFF", Templar)] = Creature(Templar, 20);
+        r.Data[("RDFF", Templar)] = armed
+            ? ArmedCreature(Templar, 20, 30, 270, (Torch, 0, 1, 255), (Boots, 2, 3, 13))
+            : Creature(Templar, 20);
         r.Data[("RDFF", Torch)] = ItemRdff(Torch, 0, 1, 2);
         r.Data[("RDFF", Arrows)] = ItemRdff(Arrows, 1, 2, 1);
         r.Data[("RDFF", Boots)] = ItemRdff(Boots, 2, 3, 300);
@@ -314,6 +356,39 @@ public class ItemTests
         WorldObject back = TemplarOf(again);
         Assert.Equal(5, Assert.Single(back.Items).Quantity);
         Assert.Equal(16, back.Vitals.Hp);
+    }
+
+    [Fact]
+    public void CreaturesHaveTheirCharacterRecordsHitPointsAndWhatTheirRdffCarries()
+    {
+        var (w, _) = World(armed: true);
+        WorldObject templar = TemplarOf(w);
+
+        Assert.Equal((30, 30), (templar.Vitals.Hp, templar.Vitals.MaxHp)); // +8, not the combat record's 20
+        Assert.Equal([(Torch, Equipment.Pack), (Boots, 13)], templar.Items.Select(i => (i.Rdff, i.Slot)));
+        Assert.Equal("Boots", w.Items.NameOf(templar.Items[1].Record));
+
+        w.Hurt(templar, 35);
+
+        WorldObject body = Assert.Single(w.Objects, o => o.Id == -GameWorld.DeadBody);
+        Assert.Equal([Torch, Boots], body.Items.Select(i => i.Rdff));
+    }
+
+    [Fact]
+    public void KillingAnEnemyGivesItsExperienceShared()
+    {
+        var (w, _) = World(armed: true);
+        var host = new WorldGplHost { Map = w };
+        var hero = new Characters.Character { Name = "Rikus" };
+        hero.Classes.Add(Characters.CharacterClass.Fighter);
+        host.PartyCharacter = slot => slot == 0 ? hero : null;
+        w.Defeated += c => host.AwardKill(w, c);
+        WorldObject templar = TemplarOf(w);
+
+        Assert.Equal(135, w.KillExperience(templar)); // 270 over the two members
+        w.Hurt(templar, 31); // down (31 < 30 + 10) counts as a kill
+
+        Assert.Equal(135, hero.Experience);
     }
 
     [Fact]

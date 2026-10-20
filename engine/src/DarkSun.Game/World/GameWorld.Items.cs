@@ -448,6 +448,22 @@ public sealed partial class GameWorld
         }
     }
 
+    /// <summary>A creature (not a party member) went down, died or was destroyed: <see cref="KillExperience"/> is due.</summary>
+    public event Action<WorldObject>? Defeated;
+
+    /// <summary>
+    /// What each party member gets for <paramref name="creature"/> falling
+    /// (<c>612E:25F2</c>): for an enemy (allegiance 2), its character record's
+    /// experience value divided by the party slots in use (the fallen
+    /// included, <c>6868:02E9</c>), cut to 16 bits; 0 for anyone else.
+    /// <see cref="WorldGplHost.AwardKill"/> then gives it as AWARD does.
+    /// </summary>
+    public int KillExperience(WorldObject creature)
+    {
+        int slots = Party.Count();
+        return creature is { Allegiance: 2, Character: { } c } && slots > 0 ? (short)(c.ExperienceValue / slots) : 0;
+    }
+
     /// <summary>
     /// <c>612E:18DA</c>: less than the hit points takes that many; up to 9
     /// more leaves the creature down (status 3, 0 hit points); more kills it
@@ -471,6 +487,7 @@ public sealed partial class GameWorld
         v.Hp = 0;
         if (target.Kind != ObjectKind.Party && v.Status >= Vitals.Down)
         {
+            Defeated?.Invoke(target);
             if (v.Status < Vitals.Destroyed)
             {
                 LeaveBody(target);

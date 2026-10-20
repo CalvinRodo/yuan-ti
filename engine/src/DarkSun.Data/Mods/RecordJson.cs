@@ -9,7 +9,7 @@ using DarkSun.Data.Items;
 namespace DarkSun.Data.Mods;
 
 /// <summary>A field of a fixed-layout record: where it is and how it's stored.</summary>
-/// <param name="Kind">u8, s8, u16, s16, or text (Latin-1, NUL-padded, <paramref name="Length"/> bytes).</param>
+/// <param name="Kind">u8, s8, u16, s16, s32, or text (Latin-1, NUL-padded, <paramref name="Length"/> bytes).</param>
 public sealed record RecordField(string Name, int Offset, string Kind, Type? Enum = null, int Length = 0);
 
 /// <summary>
@@ -62,7 +62,7 @@ public static class RecordJson
         new("readyItem", 8, "s16"), new("weaponIndex", 10, "s16"), new("packIndex", 12, "s16"),
         new("specialAttack", 22, "u8"), new("specialDefense", 23, "u8"), new("icon", 24, "s16"),
         new("ac", 26, "s8"), new("move", 27, "u8"), new("status", 28, "u8"), new("allegiance", 29, "u8"),
-        new("thac0", 31, "s8"), new("priority", 32, "u8"), new("flags", 33, "u8"),
+        new("mind", 30, "u8"), new("thac0", 31, "s8"), new("priority", 32, "u8"), new("flags", 33, "u8"),
         new("str", 34, "u8"), new("dex", 35, "u8"), new("con", 36, "u8"), new("int", 37, "u8"),
         new("wis", 38, "u8"), new("cha", 39, "u8"), new("name", 40, "text", Length: 18),
     ];
@@ -70,7 +70,18 @@ public static class RecordJson
     /// <summary>The character record's known fields (<c>CharacterRecord</c>).</summary>
     public static readonly IReadOnlyList<RecordField> CharacterFields =
     [
-        new("hpBeforeDifficulty", 8, "u16"), new("size", 0x3D, "u8"),
+        new("experience", 0, "s32"), new("experienceValue", 4, "s32"), new("hpBeforeDifficulty", 8, "u16"),
+        new("classBits", 0x12, "u16", typeof(ItemClasses)), new("race", 0x18, "u8"),
+        new("class1", 0x21, "u8"), new("class2", 0x22, "u8"), new("class3", 0x23, "u8"),
+        new("level1", 0x24, "u8"), new("level2", 0x25, "u8"), new("level3", 0x26, "u8"),
+        new("baseAc", 0x27, "s8"), new("attackHalves", 0x2A, "u8"),
+        new("natural1Halves", 0x2B, "s8"), new("natural2Halves", 0x2C, "s8"), new("natural3Halves", 0x2D, "s8"),
+        new("natural1Dice", 0x2E, "s8"), new("natural2Dice", 0x2F, "s8"), new("natural3Dice", 0x30, "s8"),
+        new("natural1Sides", 0x31, "s8"), new("natural2Sides", 0x32, "s8"), new("natural3Sides", 0x33, "s8"),
+        new("natural1Bonus", 0x34, "s8"), new("natural2Bonus", 0x35, "s8"), new("natural3Bonus", 0x36, "s8"),
+        new("saveParalysis", 0x37, "u8"), new("saveRod", 0x38, "u8"), new("savePetrification", 0x39, "u8"),
+        new("saveBreath", 0x3A, "u8"), new("saveSpell", 0x3B, "u8"),
+        new("size", 0x3D, "u8"), new("spellSet", 0x3E, "u8"), new("psionicSet", 0x46, "u8"),
     ];
 
     /// <summary><c>RDAT</c> (<c>RegionInfo</c>): colour cycles as first colour, count, and speed × 10.</summary>
@@ -343,6 +354,7 @@ public static class RecordJson
                 "u8" => r[f.Offset],
                 "s8" => (sbyte)r[f.Offset],
                 "u16" => BinaryPrimitives.ReadUInt16LittleEndian(r[f.Offset..]),
+                "s32" => BinaryPrimitives.ReadInt32LittleEndian(r[f.Offset..]),
                 _ => BinaryPrimitives.ReadInt16LittleEndian(r[f.Offset..]),
             };
             o[f.Name] = f.Enum is not null && System.Enum.ToObject(f.Enum, value).ToString() is { } named && !char.IsAsciiDigit(named[0]) && named[0] != '-'
@@ -396,6 +408,9 @@ public static class RecordJson
                 case "u16":
                     BinaryPrimitives.WriteUInt16LittleEndian(r[f.Offset..], (ushort)Number(node, 0, 65535, where + key, f.Enum));
                     break;
+                case "s32":
+                    BinaryPrimitives.WriteInt32LittleEndian(r[f.Offset..], (int)Number(node, int.MinValue, int.MaxValue, where + key, f.Enum));
+                    break;
                 default:
                     BinaryPrimitives.WriteInt16LittleEndian(r[f.Offset..], (short)Number(node, -32768, 32767, where + key, f.Enum));
                     break;
@@ -403,7 +418,7 @@ public static class RecordJson
         }
     }
 
-    private static int Width(RecordField f) => f.Kind switch { "u8" or "s8" => 1, "text" => f.Length, _ => 2 };
+    private static int Width(RecordField f) => f.Kind switch { "u8" or "s8" => 1, "s32" => 4, "text" => f.Length, _ => 2 };
 
     private static long Number(JsonNode? node, long min, long max, string key, Type? enumType)
     {

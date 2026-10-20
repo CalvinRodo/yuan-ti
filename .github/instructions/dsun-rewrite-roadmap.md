@@ -29,7 +29,7 @@ What already exists, and what the engine can reuse:
 | Region maps (`RMAP`, `GMAP`, `ETAB`) and object sprites (`OJFF` → `BMP`) | Rendered | `src/region_renderer.py` |
 | Text (`TEXT`, `MERR`, `NAME`, `SPIN`) | Parsed | `src/text_parsers.py` |
 | Items (`IT1R`, `NAME`, `RDFF` item records) | Decoded | `DarkSun.Data.Items`, `DarkSun.Data.Gff.Rdff`; `src/ds1_parsers.py` |
-| Monsters, spells (`RDFF` combat records, `SPIN`) | Partly parsed | `CombatRecord`, `SpellInfo`; `src/ds1_parsers.py` |
+| Monsters (`RDFF` combat and character records, carried items), spells (`SPIN`) | Monsters decoded; spells partly | `CreatureDefinition`, `CombatRecord`, `CharacterRecord`, `SpellInfo`; `src/ds1_parsers.py` |
 | Music (`CSEQ`/`GSEQ`/`LSEQ`/`PSEQ`, `MSEQ`; XMIDI) | Converts to MIDI | `src/xmi_tool.py` |
 | Sound samples (`BVOC`) | Extracted as Creative `.VOC` | `src/precompute.py` (audio step) |
 | GPL scripts (217 `GPL `, 33 `MAS `) | Bytecode fully documented, disassembler | `src/gpl_parser.py`, `dsun-exe-reference.md` |
@@ -37,7 +37,7 @@ What already exists, and what the engine can reuse:
 | Cinematics (`ACF `, `BMA `, `CINE.GFF` `BMP`/`PAL`) | Decoded and played | `DarkSun.Data.Cinematics`, `DarkSun.Game.Cinematics`, `dsun-exe-reference.md` §7 |
 | UI windows (`WIND`, `BUTN`, `APFM`, `EBOX`, `ACCL`) | Decoded; screens are built from them; JSON for mods | `DarkSun.Data.Ui`, `UiWindowView` |
 | Font (`FONT` 100) | Decoded, drawn as the game draws it, moddable as a picture | `DarkSun.Data.Text.GameFont`, `FontSheet`; `GameFonts` |
-| Not yet decoded | how `APFM` slots are drawn (bevels, bars), `EBOX` fields beyond size and colours, `MENU`; what follows combat records in `RDFF` (type 4 references and the data after them: inventories?) | |
+| Not yet decoded | how `APFM` slots are drawn (bevels, bars), `EBOX` fields beyond size and colours, `MENU` | |
 
 The GOG install ships DOSBox, so the original game is always available to
 compare against by eye.
@@ -501,7 +501,20 @@ executable, not in the data.
 - [ ] Combat details still open: the effect at `37BD:0231`, the ability
       bits' names (`3E45:0000`), the −1 duration unit, the defiler's XP row
       (row 0 isn't an XP table).
-- [ ] Monster data from `RDFF` combat objects (`ds1_parsers.py` has a start).
+- [x] Monster data from `RDFF` (2026-10-19): `CreatureDefinition` reads a
+      creature's whole `RDFF` the way DSUN.EXE's loader does (`7155:0000`;
+      load actions 2 and 4 are the items it carries, 479 in 98 creatures),
+      with the combat and character record fields the code uses (mind,
+      special abilities, experience value, natural attacks, saves, spell
+      and psionic sets). Creatures now get the character record's hit
+      points (85 had the combat record's, e.g. Karas 26 instead of 44) and
+      their items, which their dead bodies keep; killing an enemy gives its
+      experience to the party (`612E:25F2`). The `RDFF` JSON mod format edits
+      the new fields; `make engine-compare` checks the carried items against
+      `ds1_parsers.py`.
+- [ ] The creature spell and psionic sets (`3FB9:0110`, `37F0:001C`) and the
+      special-ability masks (`3E45:0000`) are in DSUN.EXE, not the data
+      files: ship them as JSON rule tables for the combat AI.
 - [ ] Monster AI: port `612E:0BAD`'s order of choices as data-driven rules
       (the weapon score, target choice and action order in JSON, so mods can
       change them). Keep the random target pick (`612E:1284`) as the default
