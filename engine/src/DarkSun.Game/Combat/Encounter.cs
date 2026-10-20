@@ -53,6 +53,7 @@ public static class Encounter
         var battle = new Battle(all, new RegionCombatMap(world.Region), dice, rules, spells, creatures)
         {
             Catalog = world.Items,
+            Characters = characterRules,
             Difficulty = world.Difficulty,
             NewItem = rdff => world.NewItem(rdff, 1, 3),
         };

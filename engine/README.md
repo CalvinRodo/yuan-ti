@@ -349,7 +349,12 @@ may take (humans one; the others up to three, never cleric with druid), good
 or neutral alignments, one psionic discipline (psionicists all three) and a
 sphere for clerics, druids and rangers. Where the manual contradicts itself,
 half-giants can't be rangers and muls and thri-kreen can't be druids. A mod can replace the rules with
-`rules/characters.json` in its folder (the same JSON `CharacterRules` reads).
+`rules/characters.json` in its folder (the same JSON `CharacterRules` reads). The same file holds what
+the character sheet and combat work out: the ability tables (Strength's damage and to-hit,
+Dexterity's reaction and defence, Constitution's poison save, Wisdom's magical defence), Constitution's
+hit points, each class's THAC0 factor and saving throws, attacks a round by warrior level, the
+unarmed blow, and each race's Move and natural attacks (the thri-kreen's claws and bite). A race or
+class that leaves a field out gets the original's.
 
 What creatures can do in combat beyond their `RDFF` records is in DSUN.EXE, not the data files, so
 the engine ships it as `DarkSun.Game.Rules.CreatureRules` (`dsun-exe-reference.md` §8, "The AI"): the
@@ -375,9 +380,12 @@ original is odd (mirror images ignore blows, Negative Plane Protection never sav
 a babau corroding armour and weapons), and its immunities keep effects off it. `Battle.RunAi` is the
 original AI (`612E:0BAD`): its steps (spells, ability, psionics, attack, move, missile, guard), their
 order, how it picks a target (at random as in the original, or the nearest, the weakest, casters
-first), its weapon score and the round's numbers are `CombatRules` (`rules/combat.json`); what each
-spell, power and monster effect does is `SpellRules` (`rules/spells.json`, DSUN.EXE's 196 records
-and 45 area templates, one a line). `Battle.Log` lists what happened for the combat log.
+first), its weapon score, the round's numbers and what each condition adds to hitting, armour
+class, saves and damage (Bless +1, Shield caps armour class at 4 from the front, the protections
+halve their element) are `CombatRules` (`rules/combat.json`); what each spell, power and monster
+effect does is `SpellRules` (`rules/spells.json`, DSUN.EXE's 196 records and 45 area templates, one
+a line, with the cures, what Dispel Magic can't end, whom effects take and the saves set by level).
+What rides on a creature's hits is `CreatureRules.OnHit`. `Battle.Log` lists what happened for the combat log.
 
 Fights happen on the region map. FIGHT, or attacking a creature that has no attack trigger, starts one
 (`Encounter.Start`): the party members standing, each built from the character sheet

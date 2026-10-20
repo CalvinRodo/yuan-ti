@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using DarkSun.Data.Items;
 
 namespace DarkSun.Game.Combat;
 
@@ -96,6 +97,42 @@ public sealed record SpellSlotRow(IReadOnlyList<int> Classes, int Max, int Offse
 }
 
 /// <summary>
+/// What a condition plainly changes in a fight; those that depend on a level,
+/// an alignment or a caster (Barkskin's and Magical Vestments' caps, Prayer,
+/// Protection from Evil…) stay in <see cref="Battle"/>.
+/// </summary>
+/// <param name="ToHit">Added to the to-hit bonus of an attacker with it (<c>80F5:3849</c>): Bless +1, Curse −1, Slow −4.</param>
+/// <param name="ToHitAgainst">Added to the to-hit bonus of one attacking a target with it: Blur −2.</param>
+/// <param name="ArmorClass">Added to the armour class of one with it (<c>80F5:39B7</c>; lower is better): Displacement −2, Blind +4.</param>
+/// <param name="ArmorClassCap">Its armour class is at most this (<c>612E:2113</c>): Spirit Armor 4, Armor 6, Shield 4.</param>
+/// <param name="CapFromFrontOnly">The cap counts only when not attacked from behind (Shield).</param>
+/// <param name="Save">Added to its saves (<c>80F5:119C</c>): Bless +1, Spirit Armor +3.</param>
+/// <param name="NotOnSave">A save (0–4) <paramref name="Save"/> doesn't count on: Spirit Armor's paralysation save (1 in the original's count).</param>
+/// <param name="SaveAgainst">Only against effects of these elements: Protection from Lightning +4 against electricity.</param>
+/// <param name="Halves">Damage of these elements (with magic) is halved (<c>80F5:28F2</c>): the protections, Fire Shield.</param>
+/// <param name="Stops">Damage of these elements alone does nothing: Protection from Energy.</param>
+public sealed record ConditionModifier(
+    Condition Condition,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int ToHit = 0,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int ToHitAgainst = 0,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int ArmorClass = 0,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int? ArmorClassCap = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool CapFromFrontOnly = false,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int Save = 0,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int? NotOnSave = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] DamageElement SaveAgainst = DamageElement.None,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] DamageElement Halves = DamageElement.None,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] DamageElement Stops = DamageElement.None);
+
+/// <summary>
+/// A class's save bonus (<c>80F5:119C</c>): one with levels in a class of
+/// <paramref name="Classes"/> (class codes) saves <paramref name="Bonus"/> better
+/// against effects of <paramref name="Elements"/> or with spell flags
+/// <paramref name="Flags"/>.
+/// </summary>
+public sealed record ClassSaveBonus(IReadOnlyList<int> Classes, int Bonus, DamageElement Elements = DamageElement.None, int Flags = 0);
+
+/// <summary>
 /// The combat numbers and the AI's choices that DSUN.EXE has in its code, not
 /// its data (<c>dsun-exe-reference.md</c> §8). <see cref="Default"/> is the
 /// original's; a mod can change them with <c>rules/combat.json</c>.
@@ -167,6 +204,36 @@ public sealed record CombatRules
 
     /// <summary>The chance in 100, + 5 a level the caster has over the effect's, that Dispel Magic ends an effect (<c>80F5:05E6</c>).</summary>
     public int DispelChance { get; init; } = 50;
+
+    /// <summary>The conditions' plain modifiers to hitting, armour class, saves and damage.</summary>
+    public IReadOnlyList<ConditionModifier> ConditionModifiers { get; init; } =
+    [
+        new(Condition.Blessed, ToHit: 1, Save: 1),
+        new(Condition.Cursed, ToHit: -1),
+        new(Condition.Slowed, ToHit: -4, ArmorClass: 4),
+        new(Condition.GraftWeapon, ToHit: 1),
+        new(Condition.Blur, ToHitAgainst: -2),
+        new(Condition.SpiritArmor, ArmorClassCap: 4, Save: 3, NotOnSave: 1),
+        new(Condition.ImprovedAc, ArmorClassCap: 6),
+        new(Condition.Shielded, ArmorClassCap: 4, CapFromFrontOnly: true),
+        new(Condition.Displacement, ArmorClass: -2),
+        new(Condition.Blind, ArmorClass: 4),
+        new(Condition.Biofeedback, ArmorClass: -1),
+        new(Condition.SavePenalty, Save: -1),
+        new(Condition.Barkskin, Save: 1),
+        new(Condition.ProtectionFromLightning, Save: 4, SaveAgainst: DamageElement.Electricity, Halves: DamageElement.Electricity),
+        new(Condition.ProtectionFromCold, Save: 3, SaveAgainst: DamageElement.Cold, Halves: DamageElement.Cold),
+        new(Condition.ProtectionFromFire, Save: 3, SaveAgainst: DamageElement.Fire, Halves: DamageElement.Fire),
+        new(Condition.FireShield, Halves: DamageElement.Fire | DamageElement.Cold),
+        new(Condition.ProtectionFromEnergy, Stops: DamageElement.Fire | DamageElement.Cold | DamageElement.Electricity | DamageElement.Magic),
+    ];
+
+    /// <summary>Druids (class codes 5–8) +2 against fire and electricity; psionicists (12) +2 against mind and charm effects.</summary>
+    public IReadOnlyList<ClassSaveBonus> ClassSaveBonuses { get; init; } =
+    [
+        new([5, 6, 7, 8], 2, DamageElement.Fire | DamageElement.Electricity),
+        new([12], 2, Flags: SpellFlags.Mind | SpellFlags.CharmOrHold),
+    ];
 
     /// <summary>
     /// Fixes for what the original does oddly; each is off by default, as

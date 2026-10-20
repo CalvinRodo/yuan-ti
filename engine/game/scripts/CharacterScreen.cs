@@ -547,12 +547,12 @@ public partial class CharacterScreen : RetroScreen
         var cc = new CharacterCreation(Session.Rules, Session.Names, new Random());
         var levels = cc.Levels(c);
         string Abil(Ability a) => $"{a.ToString().ToUpperInvariant()} {cc.Adjusted(c, a),2}";
-        int ac = CharacterSheet.ArmorClass(cc.Adjusted(c, Ability.Dex), member.Items, _world!.Items);
+        int ac = CharacterSheet.ArmorClass(cc.Adjusted(c, Ability.Dex), member.Items, _world!.Items, Session.Rules);
         string who = $"{Session.Rules.Race(c.Race).Name.ToUpperInvariant()} {c.Gender.ToString().ToUpperInvariant()}\n"
             + string.Join(" / ", c.Former.Select(f => cc.Active(c, f) ? $"{Session.Rules.Class(f.Class).Name.ToUpperInvariant()} {f.Level}" : $"({Session.Rules.Class(f.Class).Name.ToUpperInvariant()} {f.Level})")
                 .Concat(c.Classes.Select((k, n) => $"{Session.Rules.Class(k).Name.ToUpperInvariant()} {levels[n]}"))) + "\n"
             + $"{Abil(Ability.Str)}   {Abil(Ability.Int)}\n{Abil(Ability.Dex)}   {Abil(Ability.Wis)}\n{Abil(Ability.Con)}   {Abil(Ability.Cha)}";
-        string more = $"HP {v.Hp}/{v.MaxHp}  AC {ac}  THAC0 {CharacterSheet.Thac0(cc.ActiveLevels(c))}\n"
+        string more = $"HP {v.Hp}/{v.MaxHp}  AC {ac}  THAC0 {CharacterSheet.Thac0(cc.ActiveLevels(c), Session.Rules)}\n"
             + $"EXP {c.Experience}   {Spaced(c.Alignment.ToString())}\n"
             + $"PSI {_magic.Psp(c)}/{_magic.MaxPsp(c)}: {string.Join(", ", c.Disciplines.Select(d => d.ToString().ToUpperInvariant()))}"
             + (c.Sphere is { } sphere ? $"\nSPHERE: {sphere.ToString().ToUpperInvariant()}" : "")

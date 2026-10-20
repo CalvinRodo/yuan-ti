@@ -1,4 +1,5 @@
 using DarkSun.Data.Items;
+using DarkSun.Game.Characters;
 using DarkSun.Game.Magic;
 using DarkSun.Game.Movement;
 using DarkSun.Game.Rules;
@@ -8,29 +9,6 @@ namespace DarkSun.Game.Combat;
 
 public sealed partial class Battle
 {
-    /// <summary>The healing spells (<c>80F5:05E6</c>): Cure Light (1d8), Serious (2d8 + 1) and Critical Wounds (3d8 + 3).</summary>
-    public static IReadOnlySet<int> Healing { get; } = new HashSet<int> { 72, 113, 128 };
-
-    /// <summary>Dispel Magic (wizard and priest; <c>80F5:05E6</c> cases 26 and 98).</summary>
-    public static IReadOnlySet<int> Dispelling { get; } = new HashSet<int> { 27, 99 };
-
-    /// <summary>Effect 195 (<c>80F5:05E6</c>): ends Acid, Berserk, Blind, Confused, Cursed, Afraid, Low Resistance, Can't Attack, the save penalty and Slowed.</summary>
-    public const int RemoveAfflictions = 195;
-
-    /// <summary>What Dispel Magic leaves alone (<c>80F5:0D6E</c>).</summary>
-    private static readonly HashSet<Condition> Undispellable =
-    [
-        Condition.Biofeedback, Condition.Diseased, Condition.Feebleminded, Condition.SynapticStatic, Condition.MindBar,
-        Condition.Poisoned, Condition.GraftWeapon, Condition.NoSpells, Condition.Stuck, (Condition)54,
-    ];
-
-    /// <summary>What effect 195 ends (<c>80F5:0D46</c>).</summary>
-    private static readonly HashSet<Condition> Afflictions =
-    [
-        Condition.Acid, Condition.Berserk, Condition.Blind, Condition.Confused, Condition.Cursed, Condition.Afraid,
-        Condition.LowResistance, Condition.CantAttack, Condition.SavePenalty, Condition.Slowed,
-    ];
-
     /// <summary>
     /// Casting (<c>7D80:003B</c>): <paramref name="effect"/> (a <c>SPIN</c> number)
     /// at <paramref name="at"/> for a caster of <paramref name="level"/>. An area
@@ -98,26 +76,18 @@ public sealed partial class Battle
     }
 
     /// <summary>
-    /// Whom some effects take at all (<c>80F5:1CF7</c>, after <c>8BEB:0000</c>):
-    /// Charm Person and the Hold Persons a person (races 1–7), Charm Person or
-    /// Mammal also race 12; Hold Undead and Turn Undead the undead; Dismissal and
-    /// Abjure race 14; Haste the caster's side; Slow, Curse and Minor Malison the
-    /// other side; Bless and Aid the caster's side without an enemy within 28
+    /// Whom some effects take at all (<c>80F5:1CF7</c>, after <c>8BEB:0000</c>;
+    /// <see cref="SpellRules.TargetFilters"/>). "No enemy beside" is within 28
     /// sixteenths (<c>80F5:249D</c>), measured, by a slip, from (x, x) of the
     /// target's position (from where it stands with
     /// <see cref="CombatFixes.BlessFilterFromItsCell"/>).
     /// </summary>
-    public bool Reaches(Combatant caster, SpellEffect e, Combatant t) => e.Number switch
-    {
-        3 or 31 or 87 => t.Race is >= 1 and <= 7,
-        83 => t.Race is >= 1 and <= 7 or 12,
-        32 or TurnUndead => t.IsUndead,
-        Dismissal or 108 => t.Race == 14,
-        30 => t.Side == caster.Side,
-        35 or 38 or 71 => t.Side != caster.Side,
-        70 or 81 => t.Side == caster.Side && !EnemyBeside(t),
-        _ => true,
-    };
+    public bool Reaches(Combatant caster, SpellEffect e, Combatant t) =>
+        Spells.TargetFilters.Where(f => f.Effects.Contains(e.Number)).All(f =>
+            (f.Races is null || f.Races.Contains(t.Race))
+            && (!f.Undead || t.IsUndead)
+            && f.Side switch { TargetSide.Caster => t.Side == caster.Side, TargetSide.Other => t.Side != caster.Side, _ => true }
+            && (!f.NoEnemyBeside || !EnemyBeside(t)));
 
     private bool EnemyBeside(Combatant t)
     {
@@ -202,7 +172,7 @@ public sealed partial class Battle
         {
             AddCondition(caster, t, e, level, field: field);
         }
-        if (e.Damaging && !Healing.Contains(e.Number))
+        if (e.Damaging && !Spells.IsCure(e.Number))
         {
             var (dice, flat) = e.DamageAt(level);
             int damage = RollDice(dice, e.Sides) + flat;
@@ -399,7 +369,7 @@ public sealed partial class Battle
         return (byte)(roll + e.SaveModifier + SaveBonus(t, e, caster, level, save)) >= score;
     }
 
-    public const int Scare = 22, Chaos = 57, Cloudkill = 58, Dismissal = 61;
+    public const int Dismissal = 61;
 
     /// <summary>
     /// What adds to <paramref name="t"/>'s save (<c>80F5:119C</c>): −1 with the
@@ -413,47 +383,26 @@ public sealed partial class Battle
     /// magical defence against flags 0x1E; on the paralysation save Constitution's
     /// poison adjustment, and a dwarf's or halfling's Con × 2 ÷ 7. No save
     /// against Chaos without a warrior's levels, nor against Cloudkill below
-    /// level 7; Dismissal adds the target's level less the caster's; Scare
-    /// can't miss below level 6 and can't land from 6.
+    /// level 7, and Scare can't miss below level 6 and can't land from 6
+    /// (<see cref="SpellRules.SaveRules"/>); Dismissal adds the target's level
+    /// less the caster's.
     /// </summary>
     public int SaveBonus(Combatant t, SpellEffect e, Combatant? caster, int level, int save)
     {
-        if (e.Number == Scare)
+        foreach (SaveRule r in Spells.SaveRules.Where(r => r.Effect == e.Number))
         {
-            return t.Level < 6 ? -100 : 100;
+            SaveOutcome outcome = r.UnlessClasses is { } classes && !classes.Any(code => t.LevelIn(code) > 0) ? SaveOutcome.Fails
+                : t.Level < r.Level ? r.Below : r.From;
+            if (outcome != SaveOutcome.Rolled)
+            {
+                return outcome == SaveOutcome.Fails ? -100 : 100;
+            }
         }
-        int b = 0;
-        if (t.Has(Condition.SavePenalty))
-        {
-            b--;
-        }
-        if (t.Has(Condition.SpiritArmor) && save != 1)
-        {
-            b += 3;
-        }
-        if (t.Has(Condition.Barkskin))
-        {
-            b++;
-        }
-        if (t.Has(Condition.Blessed))
-        {
-            b++;
-        }
+        int b = ModifiersOf(t).Where(m => m.NotOnSave != save && (m.SaveAgainst == DamageElement.None || (e.Elements & m.SaveAgainst) != 0))
+            .Sum(m => m.Save);
         if (t.Has(Condition.ProtectionFromEvil) && caster is { Alignment: 3 or 6 or 9 })
         {
             b += 2;
-        }
-        if ((e.Elements & DamageElement.Electricity) != 0 && t.Has(Condition.ProtectionFromLightning))
-        {
-            b += 4;
-        }
-        if ((e.Elements & DamageElement.Cold) != 0 && t.Has(Condition.ProtectionFromCold))
-        {
-            b += 3;
-        }
-        if ((e.Elements & DamageElement.Fire) != 0 && t.Has(Condition.ProtectionFromFire))
-        {
-            b += 3;
         }
         if (t.Effects.FirstOrDefault(x => x.Condition == Condition.Prayer) is { Caster: { } priest })
         {
@@ -468,29 +417,20 @@ public sealed partial class Battle
             b += 4;
             UseCharge(t, Condition.Brave);
         }
-        if ((e.Elements & (DamageElement.Fire | DamageElement.Electricity)) != 0 && Enumerable.Range(5, 4).Any(code => t.LevelIn(code) > 0))
-        {
-            b += 2;
-        }
-        if (t.LevelIn(Psionicist) > 0 && (e.Flags & (SpellFlags.Mind | SpellFlags.CharmOrHold)) != 0)
-        {
-            b += 2;
-        }
+        b += Rules.ClassSaveBonuses
+            .Where(k => ((e.Elements & k.Elements) != 0 || (e.Flags & k.Flags) != 0) && k.Classes.Any(code => t.LevelIn(code) > 0))
+            .Sum(k => k.Bonus);
         if ((e.Flags & SpellFlags.DexteritySave) != 0 || Rules.Fixes.DexterityAgainstAreas && !e.SingleTarget && Spells.TemplateOf(e) is not null)
         {
-            b -= AbilityTables.DexAc(t.Stats[1]);
+            b -= Abilities.DexDefenceOf(t.Stats[1]);
         }
         if ((e.Flags & SpellFlags.WisdomSave) != 0)
         {
-            b += AbilityTables.WisDefence(t.Stats[4]);
+            b += Abilities.WisDefenceOf(t.Stats[4]);
         }
         if (save == 1)
         {
-            b += AbilityTables.ConPoison(t.Stats[2]) + (t.Race is 2 or 6 ? t.Stats[2] * 2 / 7 : 0);
-        }
-        if (e.Number == Chaos && !Warriors.Any(code => t.LevelIn(code) > 0) || e.Number == Cloudkill && t.Level < 7)
-        {
-            b -= 100;
+            b += Abilities.ConPoisonOf(t.Stats[2]) + (t.Race is 2 or 6 ? t.Stats[2] * 2 / 7 : 0);
         }
         if (e.Number == Dismissal)
         {
@@ -498,11 +438,6 @@ public sealed partial class Battle
         }
         return b;
     }
-
-    private const int Psionicist = 12;
-
-    /// <summary>Fighters, gladiators and rangers: the classes Chaos allows a save (<c>80F5:3589</c>).</summary>
-    private static readonly int[] Warriors = [9, 10, 13, 14, 15, 16];
 
     // -- conditions, durations and charges ----------------------------------------------------------
 
@@ -797,20 +732,11 @@ public sealed partial class Battle
         int duration = Duration(e, level);
         switch (e.Number)
         {
-            case 72:
-                Heal(t, RollDice(1, 8));
+            case var n when Spells.Cures.FirstOrDefault(c => c.Effect == n) is { } cure:
+                Heal(t, RollDice(cure.Dice, cure.Sides) + cure.Bonus);
                 break;
-            case 113:
-                Heal(t, RollDice(2, 8) + 1);
-                break;
-            case 128:
-                Heal(t, RollDice(3, 8) + 3);
-                break;
-            case 152:
-                Heal(t, 2);
-                break;
-            case var n when Dispelling.Contains(n):
-                foreach (ActiveEffect a in t.Effects.Where(a => !Undispellable.Contains(a.Condition)).ToList())
+            case var n when Spells.Dispels.Contains(n):
+                foreach (ActiveEffect a in t.Effects.Where(a => !Spells.Undispellable.Contains(a.Condition)).ToList())
                 {
                     if (Roll(1, 100) <= Rules.DispelChance + 5 * level - 5 * a.Level)
                     {
@@ -818,8 +744,8 @@ public sealed partial class Battle
                     }
                 }
                 break;
-            case RemoveAfflictions:
-                foreach (ActiveEffect a in t.Effects.Where(a => Afflictions.Contains(a.Condition)).ToList())
+            case var n when Spells.AfflictionCures.Contains(n):
+                foreach (ActiveEffect a in t.Effects.Where(a => Spells.Afflictions.Contains(a.Condition)).ToList())
                 {
                     EndEffect(t, a);
                 }

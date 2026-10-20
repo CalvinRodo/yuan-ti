@@ -1,4 +1,5 @@
 using DarkSun.Data.Items;
+using DarkSun.Game.Characters;
 using DarkSun.Data.Regions;
 using DarkSun.Game.Rules;
 using DarkSun.Game.World;
@@ -72,23 +73,19 @@ public sealed partial class Battle
     {
         bool behind = a is not null && FromBehind(a, t);
         int ac = t.ArmorClass + (behind ? t.ShieldClass : 0);
-        int adjust = behind ? 0 : AbilityTables.DexAc(t.Stats[1]);
+        int adjust = behind ? 0 : Abilities.DexDefenceOf(t.Stats[1]);
         int LevelOf(Condition c) => t.Effects.Where(e => e.Condition == c).Sum(e => e.Level);
-        if (t.Has(Condition.SpiritArmor))
+        foreach (ConditionModifier m in ModifiersOf(t))
         {
-            ac = Math.Min(ac, 4);
-        }
-        else if (t.Has(Condition.ImprovedAc))
-        {
-            ac = Math.Min(ac, 6);
+            if (m.ArmorClassCap is { } cap && !(behind && m.CapFromFrontOnly))
+            {
+                ac = Math.Min(ac, cap);
+            }
+            adjust += m.ArmorClass;
         }
         if (t.Has(Condition.Barkskin))
         {
             ac = Math.Min(ac, 6 - LevelOf(Condition.Barkskin) / 4);
-        }
-        if (!behind && t.Has(Condition.Shielded))
-        {
-            ac = Math.Min(ac, 4);
         }
         if (t.Has(Condition.MagicalVestments))
         {
@@ -99,21 +96,9 @@ public sealed partial class Battle
         {
             ac = Math.Min(ac, 10 - LevelOf(Condition.FleshArmor));
         }
-        if (t.Has(Condition.Displacement))
-        {
-            adjust -= 2;
-        }
         if (t.Has(Condition.DispellingEvil) && a is { Race: 14 })
         {
             adjust -= 7;
-        }
-        if (t.Has(Condition.Blind))
-        {
-            adjust += 4;
-        }
-        if (t.Has(Condition.Slowed))
-        {
-            adjust += 4;
         }
         if (t.Has(Condition.ProtectionFromEvil) && a is { Alignment: 3 or 6 or 9 })
         {
@@ -123,12 +108,11 @@ public sealed partial class Battle
         {
             adjust -= 4;
         }
-        if (t.Has(Condition.Biofeedback))
-        {
-            adjust--;
-        }
         return ac + adjust;
     }
+
+    /// <summary>The <see cref="CombatRules.ConditionModifiers"/> of the conditions <paramref name="c"/> has.</summary>
+    private IEnumerable<ConditionModifier> ModifiersOf(Combatant c) => Rules.ConditionModifiers.Where(m => c.Has(m.Condition));
 
     private bool Backstabs(Combatant a, Combatant t, Weapon? w) =>
         a.ThiefLevel > 0 && w is not { IsMissile: true } && (w is null || w.Type.Weight < 41) && FromBehind(a, t);
@@ -148,10 +132,9 @@ public sealed partial class Battle
     {
         bool missile = w is { IsMissile: true };
         int bonus = (w?.Bonus ?? 0) + (w?.MaterialToHit ?? 0)
-            + (missile ? AbilityTables.DexReaction(a.Stats[1]) : AbilityTables.StrToHit(a.Strength))
+            + (missile ? Abilities.DexReactionOf(a.Stats[1]) : Abilities.StrToHitOf(a.Strength))
             + (a.PartyMember ? 0 : Difficulty - 1);
-        bonus += (a.Has(Condition.Blessed) ? 1 : 0) - (a.Has(Condition.Cursed) ? 1 : 0) - (a.Has(Condition.Slowed) ? 4 : 0)
-            + (a.Has(Condition.GraftWeapon) ? 1 : 0) - (t.Has(Condition.Blur) ? 2 : 0);
+        bonus += ModifiersOf(a).Sum(m => m.ToHit) + ModifiersOf(t).Sum(m => m.ToHitAgainst);
         if (a.Effects.FirstOrDefault(e => e.Condition == Condition.Prayer) is { Caster: { } priest })
         {
             bonus += priest.Side == a.Side ? 1 : -1;
@@ -247,7 +230,7 @@ public sealed partial class Battle
         }
         if (melee)
         {
-            damage += AbilityTables.StrDamage(a.Strength);
+            damage += Abilities.StrDamageOf(a.Strength);
         }
         damage = Math.Max(1, damage);
         if (Backstabs(a, t, w))
@@ -325,8 +308,8 @@ public sealed partial class Battle
     public const int CauseFear = 79;
 
     /// <summary>
-    /// The attacker's abilities that ride on a hit (<c>80F5:1999</c>, by ability
-    /// bit; <see cref="CreatureAbilityBit"/>): on the first attack cold, paralysis,
+    /// The attacker's abilities that ride on a hit (<c>80F5:1999</c>;
+    /// <see cref="CreatureRules.OnHit"/>): on the first attack cold, paralysis,
     /// acid, corrosion and (one in 10) disease; on the last natural attack the
     /// poisons, and a thri-kreen's paralysing bite above level 4.
     /// </summary>
@@ -336,34 +319,16 @@ public sealed partial class Battle
         {
             return;
         }
-        void Ride(CreatureAbilityBit bit, int effect)
+        foreach (OnHitEffect h in Creatures.OnHit.Where(h => h.LastAttack ? last : first))
         {
-            if (t.Alive && Creatures.HasAbility(a.Type, bit) && Spells.Effect(effect) is { } e)
+            if (h.OneIn is > 1 and int n && Roll(1, n) != 1)
+            {
+                continue;
+            }
+            if (t.Alive && (h.Bit is not { } bit || Creatures.HasAbility(a.Type, bit)) && (h.Race is not { } race || a.Race == race) && (h.AboveLevel == 0 || a.Level > h.AboveLevel)
+                && Spells.Effect(h.Effect) is { } e)
             {
                 Apply(a, t, e, a.Level);
-            }
-        }
-        if (first)
-        {
-            Ride(CreatureAbilityBit.ColdTouch, 173);
-            Ride(CreatureAbilityBit.ParalysingChill, 174);
-            Ride(CreatureAbilityBit.AcidTouch, 175);
-            Ride(CreatureAbilityBit.CorrodesGear, 187);
-            Ride(CreatureAbilityBit.Acid20, 179);
-            if (Roll(1, 10) == 1)
-            {
-                Ride(CreatureAbilityBit.Disease, 185);
-            }
-            Ride(CreatureAbilityBit.CorrodesGear, 188);
-        }
-        if (last)
-        {
-            Ride(CreatureAbilityBit.Poison10, 177);
-            Ride(CreatureAbilityBit.Poison30, 178);
-            Ride(CreatureAbilityBit.DeadlyPoison, 120);
-            if (a.Race == 8 && a.Level > 4 && t.Alive && Spells.Effect(190) is { } bite)
-            {
-                Apply(a, t, bite, a.Level);
             }
         }
     }
@@ -403,29 +368,17 @@ public sealed partial class Battle
         int percent = t.PartyMember ? 100
             : Rules.Fixes.FireElementalResistances && FireElementalRows.TryGetValue(t.Type, out var row) ? CreatureRules.PercentOf(row, elements)
             : Creatures.DamagePercent(t.Type, elements);
-        DamageElement protection = DamageElement.None;
-        if (t.Has(Condition.ProtectionFromCold))
+        DamageElement protection = DamageElement.None, stops = DamageElement.None;
+        foreach (ConditionModifier m in ModifiersOf(t))
         {
-            protection |= DamageElement.Cold;
-        }
-        if (t.Has(Condition.ProtectionFromFire))
-        {
-            protection |= DamageElement.Fire;
-        }
-        if (t.Has(Condition.ProtectionFromLightning))
-        {
-            protection |= DamageElement.Electricity;
-        }
-        if (t.Has(Condition.FireShield))
-        {
-            protection |= DamageElement.Fire | DamageElement.Cold;
+            protection |= m.Halves;
+            stops |= m.Stops;
         }
         if ((elements & protection) != 0 && (elements & ~(protection | DamageElement.Magic)) == 0)
         {
             percent /= 2;
         }
-        const DamageElement energy = DamageElement.Fire | DamageElement.Cold | DamageElement.Electricity | DamageElement.Magic;
-        if (elements != DamageElement.None && (elements & ~energy) == 0 && t.Has(Condition.ProtectionFromEnergy))
+        if (elements != DamageElement.None && stops != DamageElement.None && (elements & ~stops) == 0)
         {
             percent = 0;
         }

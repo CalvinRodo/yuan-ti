@@ -178,8 +178,8 @@ public class CharacterTests
         }
         Assert.Equal(20, cc.Adjusted(c, Ability.Con));
         Assert.Equal((7, 25), cc.HpRange(c)); // +5 at 19 and above, once
-        Assert.Equal(4, CharacterRules.ConstitutionBonus(18, warrior: true));
-        Assert.Equal(2, CharacterRules.ConstitutionBonus(18, warrior: false));
+        Assert.Equal(4, CharacterRules.Default.ConstitutionBonus(18, warrior: true));
+        Assert.Equal(2, CharacterRules.Default.ConstitutionBonus(18, warrior: false));
 
         cc.ToggleClass(c, CharacterClass.Fighter);
         cc.ToggleClass(c, CharacterClass.Preserver);
@@ -191,7 +191,7 @@ public class CharacterTests
         {
         }
         var (low, high) = cc.HpRange(giant);
-        int bonus = CharacterRules.ConstitutionBonus(cc.Adjusted(giant, Ability.Con), true);
+        int bonus = CharacterRules.Default.ConstitutionBonus(cc.Adjusted(giant, Ability.Con), true);
         Assert.Equal((4 + bonus, 40 + bonus), (low, high)); // half-giants' hit points are doubled (6ECD:0156)
     }
 
@@ -271,6 +271,21 @@ public class CharacterTests
             Assert.Equal(17, rules.Class(CharacterClass.Psionicist).Requirements[Ability.Wis]);
             Assert.Equal(2, rules.Race(Race.HalfGiant).HitPointFactor);
             Assert.Equal((3000, 300, 4), (rules.StartingExperience, rules.IconBase, rules.RollTries));
+            Assert.Equal(CharacterRules.Default.ToJson(), rules.ToJson());
+            Assert.Equal(15, rules.Race(Race.ThriKreen).Move);
+            Assert.Equal(2, rules.Race(Race.ThriKreen).NaturalAttacks!.Count);
+            Assert.Equal(-6, rules.Abilities.DexDefenceOf(25));
+            Assert.Equal(new SaveRow(10, 45, 2), rules.Class(CharacterClass.Cleric).Saves![0]);
+
+            // A file from before the combat tables: each race and class gets the original's.
+            string old = System.Text.RegularExpressions.Regex.Replace(CharacterRules.Default.ToJson(),
+                @",\s*""(Move|NaturalAttacks|Thac0Factor|Saves)"": (\d+|\[[^\]]*\](\s*\])?)", "");
+            Assert.DoesNotContain("Thac0Factor", old);
+            File.WriteAllText(path, old);
+            rules = CharacterRules.Read(path);
+            Assert.Equal(6, rules.Class(CharacterClass.Thief).Thac0Factor);
+            Assert.Equal(15, rules.Race(Race.ThriKreen).Move);
+            Assert.Equal(CharacterRules.Default.ToJson(), rules.ToJson());
         }
         finally
         {

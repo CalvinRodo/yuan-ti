@@ -1,6 +1,5 @@
 using System.Text.Json;
 using DarkSun.Data.Items;
-using System.Text.RegularExpressions;
 using System.Text.Json.Serialization;
 
 namespace DarkSun.Game.Rules;
@@ -10,6 +9,23 @@ namespace DarkSun.Game.Rules;
 /// <param name="Spell">The spell number cast (a spell record, numbered like <c>SPIN</c>: index + 1;
 /// 173 and up are monster-only records with no <c>SPIN</c> text).</param>
 public sealed record CreatureAbility(int Bit, int Spell);
+
+/// <summary>
+/// An effect that rides on a natural hit (<c>80F5:1999</c>): spell record
+/// <paramref name="Effect"/>, for an attacker with ability bit
+/// <paramref name="Bit"/> (<see cref="CreatureAbilityBit"/>) and of race
+/// <paramref name="Race"/>, each when given, above level <paramref name="AboveLevel"/>;
+/// on the first attack of the round, or the last natural one with
+/// <paramref name="LastAttack"/>; one hit in <paramref name="OneIn"/>, when given (rolled
+/// whether or not the attacker has the bit, as the original does).
+/// </summary>
+public sealed record OnHitEffect(
+    int Effect,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int? Bit = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int? Race = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int AboveLevel = 0,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool LastAttack = false,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int? OneIn = null);
 
 /// <summary>
 /// One entry of a type's resistances (<c>3E45:00D2</c>, <c>80F5:28F2</c>): a
@@ -129,7 +145,7 @@ public enum CreatureAbilityBit
 /// <c>rules/creatures.json</c> (<see cref="Read"/>). Spells and powers are
 /// numbered as <c>SPIN</c> (spell record index + 1; powers 139–172).
 /// </summary>
-public sealed partial record CreatureRules
+public sealed record CreatureRules
 {
     private static readonly JsonSerializerOptions Json = new() { WriteIndented = true, Converters = { new JsonStringEnumConverter() } };
 
@@ -156,6 +172,28 @@ public sealed partial record CreatureRules
 
     /// <summary>The AI tries an ability one turn in this many (<c>6466:05EF</c>: rand × 4 / 32768 = 0).</summary>
     public int AbilityChance { get; init; } = 4;
+
+    /// <summary>
+    /// What rides on a creature's hits, in order (<c>80F5:1999</c>): on the
+    /// first attack cold (173), paralysis (174), acid (175, 179), corrosion
+    /// (187, 188) and one in 10 disease (185); on the last natural attack the
+    /// poisons (177, 178, 120) and a thri-kreen's paralysing bite above level 4
+    /// (190). Monsters of type 0 have none, unless thri-kreen.
+    /// </summary>
+    public IReadOnlyList<OnHitEffect> OnHit { get; init; } =
+    [
+        new(173, (int)CreatureAbilityBit.ColdTouch),
+        new(174, (int)CreatureAbilityBit.ParalysingChill),
+        new(175, (int)CreatureAbilityBit.AcidTouch),
+        new(187, (int)CreatureAbilityBit.CorrodesGear),
+        new(179, (int)CreatureAbilityBit.Acid20),
+        new(185, (int)CreatureAbilityBit.Disease, OneIn: 10),
+        new(188, (int)CreatureAbilityBit.CorrodesGear),
+        new(177, (int)CreatureAbilityBit.Poison10, LastAttack: true),
+        new(178, (int)CreatureAbilityBit.Poison30, LastAttack: true),
+        new(120, (int)CreatureAbilityBit.DeadlyPoison, LastAttack: true),
+        new(190, Race: 8, AboveLevel: 4, LastAttack: true),
+    ];
 
     /// <summary>A creature's spells, by character record +0x3E (<c>3FB9:0110</c>, 7 slots; <c>6798:032B</c>); 0 none.</summary>
     public required IReadOnlyList<IReadOnlyList<int>> SpellSets { get; init; }
@@ -232,19 +270,7 @@ public sealed partial record CreatureRules
     /// The rules as JSON, each list of numbers (<c>[5, 7, 17]</c>) and each
     /// resistance on one line, so a table reads as one row each.
     /// </summary>
-    public string ToJson()
-    {
-        string json = NumberList().Replace(JsonSerializer.Serialize(this, Json),
-            m => "[" + string.Join(", ", m.Groups[1].Value.Split(',', StringSplitOptions.TrimEntries)) + "]");
-        return FlatObject().Replace(json, m => "{ " + string.Join(" ", m.Groups[1].Value.Split('\n', StringSplitOptions.TrimEntries).Where(f => f.Length > 0)) + " }");
-    }
-
-    [GeneratedRegex(@"\[\s*(-?\d+(?:\s*,\s*-?\d+)*)\s*\]")]
-    private static partial Regex NumberList();
-
-    /// <summary>An object of numbers and strings only, one field a line.</summary>
-    [GeneratedRegex(@"\{\s*\n((?:\s*""\w+"": (?:-?\d+|""[^""]*""),?\n)+)\s*\}")]
-    private static partial Regex FlatObject();
+    public string ToJson() => Combat.SpellRules.Compact(JsonSerializer.Serialize(this, Json));
 
     private const DamageElement Physical = DamageElement.Bludgeoning | DamageElement.Slashing | DamageElement.Piercing;
 

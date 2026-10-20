@@ -383,6 +383,8 @@ public class CombatTests
             Assert.Contains("\"Targeting\": \"Random\"", json);
             File.WriteAllText(path, json.Replace("\"Random\"", "\"Weakest\""));
             Assert.Equal(TargetChoice.Weakest, CombatRules.Read(path).Targeting);
+            File.WriteAllText(path, json);
+            Assert.Equal(json, CombatRules.Read(path).ToJson());
             File.WriteAllText(path, json.Replace("\"SightRange\": 24", "\"SightRange\": 0"));
             Assert.Throws<InvalidDataException>(() => CombatRules.Read(path));
 

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 
 namespace DarkSun.Game.Characters;
@@ -27,14 +28,36 @@ public sealed record WisdomBonus(int Wisdom, int Level);
 public sealed record SpellbookSize(int Intelligence, int Spells);
 
 /// <param name="HitPointFactor">Hit points are multiplied by this (DSUN.EXE doubles half-giants', <c>6ECD:0156</c>).</param>
+/// <param name="Move">Movement in a fight (character record +0x28, combat record +0x1B; <c>6ECD:1344</c>): 12, a thri-kreen 15.</param>
+/// <param name="NaturalAttacks">Its attacks without a weapon (+0x2B …): a thri-kreen's claws and bite; null: <see cref="CharacterRules.UnarmedDice"/>.</param>
+/// <param name="ConstitutionSaves">Saves Con × 2 ÷ 7 better (<c>8E77:059B</c>: dwarves and halflings).</param>
 public sealed record RaceRules(
     Race Race, string Name, IReadOnlyList<Gender> Genders, IReadOnlyDictionary<Ability, int> Adjustments,
-    IReadOnlyList<CharacterClass> Classes, bool MultiClass, int HitPointFactor = 1);
+    IReadOnlyList<CharacterClass> Classes, bool MultiClass, int HitPointFactor = 1, int Move = 12,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<DarkSun.Data.Regions.NaturalAttack>? NaturalAttacks = null,
+    bool ConstitutionSaves = false);
+
+/// <summary>
+/// A saving throw of a class (<c>40B1:006C + 15·group + 3·save</c>): <paramref name="Base"/>
+/// at level 1, less <paramref name="Rate"/> ÷ 100 a level after, by at most <paramref name="Max"/>.
+/// </summary>
+public sealed record SaveRow(int Base, int Rate, int Max)
+{
+    public int At(int level) => Base - Math.Min(Max, Rate * (Math.Max(1, level) - 1) / 100);
+}
+
+/// <summary>From <paramref name="WarriorLevel"/> in a warrior class on, <paramref name="Halves"/> attacks a round in halves (<c>8E77:038F</c>).</summary>
+public sealed record AttackStep(int WarriorLevel, int Halves);
 
 /// <param name="Levels">Experience needed for levels 1, 2, 3…</param>
+/// <param name="Thac0Factor">THAC0 is 20 − (level − 1) × this ÷ 12 (<c>8E77:0416</c>, <c>40B1:0000</c>): warriors 12, priests 8, rogues and psionicists 6, wizards 4.</param>
+/// <param name="Saves">Its five saving throws (paralysation, rod, petrification, breath, spell; <c>8E77:059B</c>).</param>
 public sealed record ClassRules(
     CharacterClass Class, string Name, IReadOnlyDictionary<Ability, int> Requirements, IReadOnlyList<Ability> PrimeRequisites,
-    int HitDie, bool Warrior, bool ChoosesSphere, IReadOnlyList<int> Levels);
+    int HitDie, bool Warrior, bool ChoosesSphere, IReadOnlyList<int> Levels, int Thac0Factor = 12, IReadOnlyList<SaveRow>? Saves = null)
+{
+    public int Thac0(int level) => 20 - (Math.Max(1, level) - 1) * Thac0Factor / 12;
+}
 
 /// <summary>
 /// The rules character creation follows. <see cref="Default"/> is the
@@ -165,28 +188,74 @@ public sealed record CharacterRules
     /// <summary>Psionic strength points a power costs.</summary>
     public int PowerCost { get; init; } = 5;
 
+    /// <summary>Strength's damage, Dexterity's defence and the other ability tables (<c>DS:07A8</c>).</summary>
+    public AbilityTables Abilities { get; init; } = AbilityTables.Default;
+
+    /// <summary>
+    /// Constitution's hit points a level, by score 0–25 (AD&amp;D 2nd edition's:
+    /// −2 to 3, −1 to 6, +1 at 15, +2 at 16–18, +5 from 19), and for warriors
+    /// (+3 at 17, +4 at 18).
+    /// </summary>
+    public IReadOnlyList<int> ConstitutionHitPoints { get; init; } =
+        [-2, -2, -2, -2, -1, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 2, 2, 5, 5, 5, 5, 5, 5, 5];
+
+    public IReadOnlyList<int> WarriorConstitutionHitPoints { get; init; } =
+        [-2, -2, -2, -2, -1, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 4, 5, 5, 5, 5, 5, 5, 5];
+
+    /// <summary>Attacks a round in halves: 2, then by a warrior class's level (<c>8E77:038F</c>).</summary>
+    public int BaseAttackHalves { get; init; } = 2;
+
+    public IReadOnlyList<AttackStep> AttackSteps { get; init; } = [new(1, 3), new(7, 4), new(13, 5)];
+
+    /// <summary>A blow without a weapon (the new-character template, <c>38D4:0048</c>): its attacks a round of 1d1.</summary>
+    public int UnarmedDice { get; init; } = 1;
+
+    public int UnarmedSides { get; init; } = 1;
+
+    /// <summary>
+    /// <see cref="RaceRules.ConstitutionSaves"/> counts only on a warrior class's
+    /// saves, all five, as DSUN.EXE has it (its test is on the class group,
+    /// <c>8E77:064D</c>); false: on every class's.
+    /// </summary>
+    public bool ConstitutionSavesWarriorsOnly { get; init; } = true;
+
+    /// <summary>A save with no class to give one.</summary>
+    public int NoClassSave { get; init; } = 20;
+
     public RaceRules Race(Race race) => Races.First(r => r.Race == race);
 
     public ClassRules Class(CharacterClass c) => Classes.First(r => r.Class == c);
 
-    /// <summary>Constitution's hit point bonus (AD&amp;D 2nd edition): +1 at 15, +2 at 16, and for warriors +3 at 17 and +4 at 18 (others stay at +2), +5 at 19 and above.</summary>
-    public static int ConstitutionBonus(int con, bool warrior) => con switch
-    {
-        >= 19 => 5,
-        18 => warrior ? 4 : 2,
-        17 => warrior ? 3 : 2,
-        16 => 2,
-        15 => 1,
-        <= 3 => -2,
-        <= 6 => -1,
-        _ => 0,
-    };
+    /// <summary>Constitution's hit point bonus a level (<see cref="ConstitutionHitPoints"/>).</summary>
+    public int ConstitutionBonus(int con, bool warrior) =>
+        (warrior ? WarriorConstitutionHitPoints : ConstitutionHitPoints) is { Count: > 0 } t ? t[Math.Clamp(con, 0, t.Count - 1)] : 0;
 
+    /// <summary>
+    /// A mod's rules. A race or class that leaves out a field (a file written
+    /// before the field existed) gets the original's for that race or class,
+    /// not the record's default: a thief keeps a thief's THAC0 and saves.
+    /// </summary>
     public static CharacterRules Read(string path)
     {
         try
         {
-            return JsonSerializer.Deserialize<CharacterRules>(File.ReadAllText(path), Json) ?? throw new InvalidDataException("empty file");
+            JsonNode node = JsonNode.Parse(File.ReadAllText(path)) ?? throw new InvalidDataException("empty file");
+            JsonNode original = JsonNode.Parse(Default.ToJson())!;
+            foreach (var (list, key) in new[] { ("Races", "Race"), ("Classes", "Class") })
+            {
+                foreach (JsonObject entry in (node[list] as JsonArray ?? []).OfType<JsonObject>())
+                {
+                    if ((original[list] as JsonArray)!.OfType<JsonObject>()
+                        .FirstOrDefault(o => o[key]?.ToJsonString() == entry[key]?.ToJsonString()) is { } same)
+                    {
+                        foreach (var (name, value) in same.Where(p => !entry.ContainsKey(p.Key)).ToList())
+                        {
+                            entry[name] = value?.DeepClone();
+                        }
+                    }
+                }
+            }
+            return node.Deserialize<CharacterRules>(Json) ?? throw new InvalidDataException("empty file");
         }
         catch (JsonException e)
         {
@@ -194,7 +263,7 @@ public sealed record CharacterRules
         }
     }
 
-    public string ToJson() => JsonSerializer.Serialize(this, Json);
+    public string ToJson() => Combat.SpellRules.Compact(JsonSerializer.Serialize(this, Json));
 
     private static Dictionary<Ability, int> A(params (Ability, int)[] values) => values.ToDictionary(v => v.Item1, v => v.Item2);
 
@@ -212,6 +281,12 @@ public sealed record CharacterRules
     /// <summary>The least a class's key ability may be (<c>6ECD:1F19</c>).</summary>
     public const int KeyAbilityMinimum = 17;
 
+    // 40B1:006C: the class groups' saves.
+    private static readonly SaveRow[] PriestSaves = [new(10, 45, 2), new(14, 45, 6), new(13, 45, 5), new(16, 45, 8), new(15, 45, 7)];
+    private static readonly SaveRow[] WarriorSaves = [new(14, 69, 3), new(16, 69, 5), new(15, 69, 4), new(17, 82, 4), new(17, 69, 6)];
+    private static readonly SaveRow[] WizardSaves = [new(14, 30, 8), new(11, 40, 3), new(13, 40, 5), new(15, 40, 7), new(12, 40, 4)];
+    private static readonly SaveRow[] RogueSaves = [new(13, 25, 8), new(14, 50, 4), new(12, 25, 7), new(16, 25, 11), new(15, 50, 5)];
+
     public static CharacterRules Default { get; } = new()
     {
         Races =
@@ -219,7 +294,8 @@ public sealed record CharacterRules
             new(Characters.Race.Human, "Human", [Gender.Male, Gender.Female], A(), All, MultiClass: false),
             new(Characters.Race.Dwarf, "Dwarf", [Gender.Male, Gender.Female],
                 A((Ability.Con, 2), (Ability.Str, 1), (Ability.Dex, -1), (Ability.Cha, -2)),
-                [CharacterClass.Cleric, CharacterClass.Fighter, CharacterClass.Gladiator, CharacterClass.Psionicist, CharacterClass.Thief], true),
+                [CharacterClass.Cleric, CharacterClass.Fighter, CharacterClass.Gladiator, CharacterClass.Psionicist, CharacterClass.Thief], true,
+                ConstitutionSaves: true),
             new(Characters.Race.Elf, "Elf", [Gender.Male, Gender.Female],
                 A((Ability.Dex, 2), (Ability.Int, 1), (Ability.Wis, -1), (Ability.Con, -2)),
                 [CharacterClass.Cleric, CharacterClass.Fighter, CharacterClass.Gladiator, CharacterClass.Preserver, CharacterClass.Psionicist, CharacterClass.Ranger, CharacterClass.Thief], true),
@@ -232,32 +308,35 @@ public sealed record CharacterRules
                 [CharacterClass.Cleric, CharacterClass.Fighter, CharacterClass.Gladiator, CharacterClass.Psionicist], true, HitPointFactor: 2),
             new(Characters.Race.Halfling, "Halfling", [Gender.Male, Gender.Female],
                 A((Ability.Dex, 2), (Ability.Wis, 2), (Ability.Con, -1), (Ability.Cha, -1), (Ability.Str, -2)),
-                [CharacterClass.Cleric, CharacterClass.Druid, CharacterClass.Fighter, CharacterClass.Gladiator, CharacterClass.Psionicist, CharacterClass.Ranger, CharacterClass.Thief], true),
+                [CharacterClass.Cleric, CharacterClass.Druid, CharacterClass.Fighter, CharacterClass.Gladiator, CharacterClass.Psionicist, CharacterClass.Ranger, CharacterClass.Thief], true,
+                ConstitutionSaves: true),
             new(Characters.Race.Mul, "Mul", [Gender.Male],
                 A((Ability.Str, 2), (Ability.Con, 1), (Ability.Int, -1), (Ability.Cha, -2)),
                 [CharacterClass.Cleric, CharacterClass.Fighter, CharacterClass.Gladiator, CharacterClass.Psionicist, CharacterClass.Thief], true),
             new(Characters.Race.ThriKreen, "Thri-kreen", [Gender.Female],
                 A((Ability.Dex, 2), (Ability.Wis, 1), (Ability.Int, -1), (Ability.Cha, -2)),
-                [CharacterClass.Cleric, CharacterClass.Fighter, CharacterClass.Gladiator, CharacterClass.Psionicist, CharacterClass.Ranger], true),
+                [CharacterClass.Cleric, CharacterClass.Fighter, CharacterClass.Gladiator, CharacterClass.Psionicist, CharacterClass.Ranger], true,
+                // 6ECD:1344: four claws of 1d4 a round (8 halves) and a bite of 1d4 + 1; Move 15.
+                Move: 15, NaturalAttacks: [new(8, 1, 4, 0), new(2, 1, 4, 1)]),
         ],
         Classes =
         [
             new(CharacterClass.Cleric, "Cleric", Minimums(Ability.Wis, 9), [Ability.Wis], 8, false, true,
-                [0, 1500, 3000, 6000, 13000, 27500, 55000, 110000, 225000]),
+                [0, 1500, 3000, 6000, 13000, 27500, 55000, 110000, 225000], 8, PriestSaves),
             new(CharacterClass.Druid, "Druid", Minimums(Ability.Wis, 12), [Ability.Wis, Ability.Cha], 8, false, true,
-                [0, 1500, 3000, 6000, 13000, 27500, 55000, 110000, 225000]),
+                [0, 1500, 3000, 6000, 13000, 27500, 55000, 110000, 225000], 8, PriestSaves),
             new(CharacterClass.Fighter, "Fighter", Minimums(Ability.Str, 9), [Ability.Str], 10, true, false,
-                [0, 2000, 4000, 8000, 16000, 32000, 64000, 125000, 250000]),
+                [0, 2000, 4000, 8000, 16000, 32000, 64000, 125000, 250000], 12, WarriorSaves),
             new(CharacterClass.Gladiator, "Gladiator", Minimums(Ability.Str, 13), [Ability.Str], 10, true, false,
-                [0, 2250, 4500, 9000, 18000, 36000, 75000, 150000, 300000]),
+                [0, 2250, 4500, 9000, 18000, 36000, 75000, 150000, 300000], 12, WarriorSaves),
             new(CharacterClass.Preserver, "Preserver", Minimums(Ability.Int, 9), [Ability.Int], 4, false, false,
-                [0, 2500, 5000, 10000, 20000, 40000, 60000, 90000, 135000]),
+                [0, 2500, 5000, 10000, 20000, 40000, 60000, 90000, 135000], 4, WizardSaves),
             new(CharacterClass.Psionicist, "Psionicist", Minimums(Ability.Wis, 12), [Ability.Con, Ability.Wis], 6, false, false,
-                [0, 2200, 4400, 8800, 16500, 30000, 55000, 100000, 200000]),
+                [0, 2200, 4400, 8800, 16500, 30000, 55000, 100000, 200000], 6, RogueSaves),
             new(CharacterClass.Ranger, "Ranger", Minimums(Ability.Wis, 14), [Ability.Str, Ability.Dex, Ability.Wis], 10, true, true,
-                [0, 2250, 4500, 9000, 18000, 36000, 75000, 150000, 300000]),
+                [0, 2250, 4500, 9000, 18000, 36000, 75000, 150000, 300000], 12, WarriorSaves),
             new(CharacterClass.Thief, "Thief", Minimums(Ability.Dex, 9), [Ability.Dex], 6, false, false,
-                [0, 1250, 2500, 5000, 10000, 20000, 40000, 70000, 110000]),
+                [0, 1250, 2500, 5000, 10000, 20000, 40000, 70000, 110000], 6, RogueSaves),
         ],
     };
 }

@@ -623,8 +623,24 @@ executable, not in the data.
       a party member while a window covers the map (`896E:0ED3`: the splash
       on its portrait, no number). The burst uses the area's cells for
       `69CB:0000`'s layout points.
-- [ ] Keep the rules in data (JSON tables) wherever possible, so they're easy to
-      tune and mod.
+- [x] Keep the rules in data (JSON tables) wherever possible, so they're easy to
+      tune and mod (2026-10-20). `characters.json`: the ability tables
+      (`AbilityTables`, `DS:07A8`), Constitution's hit points, each class's
+      THAC0 factor (`8E77:0416`: 20 − (level − 1) × factor ÷ 12, so priests
+      now go 20, 20, 19, 18 as DSUN.EXE has them) and saves (`40B1:006C`),
+      attacks a round by warrior level, the unarmed blow, each race's Move,
+      natural attacks and Con saves. `combat.json`: the conditions' plain
+      to-hit, armour class, cap, save and damage modifiers and the class save
+      bonuses. `spells.json`: the cures, Dispel Magic and what it can't end,
+      effect 195's afflictions, the target filters (`80F5:1CF7`) and the
+      saves set by level or class (Scare, Cloudkill, Chaos). `creatures.json`:
+      what rides on a hit (`80F5:1999`). A rule file from before a field
+      existed gets the original's (per race and class for `characters.json`).
+      Still in code: what depends on a level, alignment or caster (Barkskin's,
+      Magical Vestments' and Flesh Armor's caps, Prayer, Protection from Evil,
+      Dispelling Evil, Dismissal), the effects' own handlers (`80F5:05E6`),
+      the AI's steps' logic, and `Spellcasting.Table` (spell levels and
+      casters, a static table the UI reads before any rules are loaded).
 
 ---
 

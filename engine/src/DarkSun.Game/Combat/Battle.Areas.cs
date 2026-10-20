@@ -288,13 +288,13 @@ public sealed partial class Battle
     private void ClearFields(Combatant caster, SpellEffect e, int level, Cell at, Cell? end)
     {
         bool fire = (e.Elements & DamageElement.Fire) != 0;
-        if (_fields.Count == 0 || !fire && !Dispelling.Contains(e.Number) && e.Number != RemoveAfflictions)
+        if (_fields.Count == 0 || !fire && !Spells.Dispels.Contains(e.Number) && !Spells.AfflictionCures.Contains(e.Number))
         {
             return;
         }
         Shape? shape = Spells.TemplateOf(e) is { } t && !e.SingleTarget ? ShapeOf(caster, e, t, level, at, end) : null;
         bool reaches(Cell cell) => shape is null ? cell == at : Covers(shape, Centre(cell).X, Centre(cell).Y);
-        foreach (AreaField f in _fields.Where(f => (!fire || f.Template.Burns || Dispelling.Contains(e.Number)) && f.Cells.Any(reaches)).ToList())
+        foreach (AreaField f in _fields.Where(f => (!fire || f.Template.Burns || Spells.Dispels.Contains(e.Number)) && f.Cells.Any(reaches)).ToList())
         {
             RemoveField(f);
         }

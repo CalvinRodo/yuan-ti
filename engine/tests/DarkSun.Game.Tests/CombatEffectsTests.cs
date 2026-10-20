@@ -356,9 +356,9 @@ public class CombatEffectsTests
         Combatant priest = Fighter("priest", 1, 5, 10), friend = Fighter("friend", 1, 6, 10), low = Fighter("low", 2, 7, 10);
         Battle b = Started(new ScriptedDice(), null, priest, friend, low);
 
-        Assert.Equal(-100, b.SaveBonus(low, Spell(Battle.Scare), priest, 5, 5));
-        Assert.Equal(100, b.SaveBonus(new Combatant { Name = "high", Level = 6 }, Spell(Battle.Scare), priest, 5, 5));
-        Assert.Equal(-100, b.SaveBonus(low, Spell(Battle.Cloudkill), priest, 5, 1) - b.SaveBonus(low, Spell(9), priest, 5, 1));
+        Assert.Equal(-100, b.SaveBonus(low, Spell(22), priest, 5, 5));
+        Assert.Equal(100, b.SaveBonus(new Combatant { Name = "high", Level = 6 }, Spell(22), priest, 5, 5));
+        Assert.Equal(-100, b.SaveBonus(low, Spell(58), priest, 5, 1));
         friend.Effects.Add(new ActiveEffect(102, Condition.Prayer, 5, priest));
         low.Effects.Add(new ActiveEffect(102, Condition.Prayer, 5, priest));
         Assert.Equal(1, b.SaveBonus(friend, Spell(9), null, 5, 5));
@@ -378,6 +378,26 @@ public class CombatEffectsTests
         Assert.Equal(4, b.ArmorClassAgainst(t, a)); // 6 − 8 ÷ 4
         a.Effects.Add(new ActiveEffect(70, Condition.Blessed, 5, a));
         Assert.Equal(before + 2 + (10 - 4) - 1, b.ToHitNeeded(a, t, null));
+    }
+
+    [Fact]
+    public void TheModifiersComeFromTheRules()
+    {
+        var rules = CombatRules.Default with
+        {
+            ConditionModifiers = [new(Condition.Blessed, ToHit: 3, ArmorClassCap: 2, Save: 5)],
+            ClassSaveBonuses = [],
+        };
+        Combatant a = Fighter("a", 1, 5, 10), t = Fighter("t", 2, 6, 10, ac: 10);
+        var b = new Battle([a, t], new OpenField(30, 30), new ScriptedDice(), rules);
+        b.StartRound();
+        int before = b.ToHitNeeded(a, t, null);
+        a.Effects.Add(new ActiveEffect(70, Condition.Blessed, 5, a));
+        t.Effects.Add(new ActiveEffect(70, Condition.Blessed, 5, t));
+        t.Effects.Add(new ActiveEffect(13, Condition.Blur, 5, t)); // no longer listed: no −2
+        Assert.Equal(2, b.ArmorClassAgainst(t, a));
+        Assert.Equal(before - 3 - (2 - 10), b.ToHitNeeded(a, t, null));
+        Assert.Equal(5, b.SaveBonus(t, Spell(9), null, 5, 5));
     }
 
     // -- the effects' own handling ----------------------------------------------------------------------------------

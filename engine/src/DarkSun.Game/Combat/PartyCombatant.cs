@@ -21,9 +21,10 @@ public static class PartyCombatant
     /// weapon in hand (slot 3), a missile weapon (slot 2) and its ammunition
     /// (slot 1); its memorized spells not yet cast, its powers, ranks and
     /// psionic points. Without a weapon it fights as the new-character
-    /// template has it (<c>38D4:0048</c>: its attacks a round of 1d1); a thri-kreen
-    /// with four claws of 1d4 a round and a bite of 1d4 + 1 (8 and 2 halves;
-    /// <c>8E77:038F</c>, <c>6ECD:1344</c>), and Move 15 (others 12).
+    /// template has it (<see cref="CharacterRules.UnarmedDice"/>: its attacks a
+    /// round of 1d1), or with its race's <see cref="RaceRules.NaturalAttacks"/>
+    /// (a thri-kreen's four claws of 1d4 a round and a bite of 1d4 + 1); its
+    /// race's <see cref="RaceRules.Move"/>. The tables are all <paramref name="rules"/>'.
     /// </summary>
     public static Combatant From(Character c, WorldObject member, ItemCatalog catalog, CharacterRules rules)
     {
@@ -44,6 +45,8 @@ public static class PartyCombatant
             ready.Remove(cast);
         }
         int psp = magic.Psp(c);
+        RaceRules? race = rules.Races.FirstOrDefault(r => r.Race == c.Race);
+        int halves = CharacterSheet.AttackHalves(active, rules);
         return new Combatant
         {
             Name = c.Name.Length > 0 ? c.Name : member.Name,
@@ -54,18 +57,18 @@ public static class PartyCombatant
             Facing = member.Facing,
             PartyMember = true,
             ComputerControlled = c.ComputerControl,
-            ArmorClass = CharacterSheet.ArmorClass(dex, member.Items, catalog) - CharacterSheet.DexterityDefence(dex),
+            ArmorClass = CharacterSheet.ArmorClass(dex, member.Items, catalog, rules) - CharacterSheet.DexterityDefence(dex, rules),
             ShieldClass = shields,
-            Thac0 = CharacterSheet.Thac0(active),
-            Move = c.Race == Race.ThriKreen ? 15 : 12,
+            Thac0 = CharacterSheet.Thac0(active, rules),
+            Move = race?.Move ?? 12,
             Stats = stats,
             Level = Math.Max(1, active.Select(a => a.Level).DefaultIfEmpty(1).Max()),
             Race = (int)c.Race + 1,
             Alignment = (int)c.Alignment + 1,
             Classes = [.. active.Select(a => (Spellcasting.ClassCode(a.Class, c.Sphere), a.Level))],
-            Saves = CharacterSheet.Saves(active, c.Race, stats[(int)Ability.Con]),
-            AttackHalves = CharacterSheet.AttackHalves(active),
-            NaturalAttacks = c.Race == Race.ThriKreen ? [new(8, 1, 4, 0), new(2, 1, 4, 1)] : [new(CharacterSheet.AttackHalves(active), 1, 1, 0)],
+            Saves = CharacterSheet.Saves(active, c.Race, stats[(int)Ability.Con], rules),
+            AttackHalves = halves,
+            NaturalAttacks = race?.NaturalAttacks is { Count: > 0 } natural ? [.. natural] : [new(halves, rules.UnarmedDice, rules.UnarmedSides, 0)],
             Weapon = WornIn(3),
             MissileWeapon = WornIn(2),
             Ammunition = member.Items.FirstOrDefault(i => i.Slot == 1)?.Quantity ?? 0,

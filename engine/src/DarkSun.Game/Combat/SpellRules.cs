@@ -191,6 +191,41 @@ public sealed record SpellLook(int Number, int CastGraphic, int CastSound, int P
 public sealed record PsionicPower(
     int Number, int Ability, int Modifier, int Cost, int Maintenance, int Discipline, int Science, int Defence, int AttackMode);
 
+/// <summary>A cure (<c>80F5:05E6</c>): effect <paramref name="Effect"/> heals <paramref name="Dice"/>d<paramref name="Sides"/> + <paramref name="Bonus"/>.</summary>
+public sealed record Cure(int Effect, int Dice, int Sides, int Bonus);
+
+/// <summary>Whose side a <see cref="TargetFilter"/> takes.</summary>
+public enum TargetSide { Any, Caster, Other }
+
+/// <summary>
+/// Whom effects <paramref name="Effects"/> take at all (<c>80F5:1CF7</c>):
+/// only races <paramref name="Races"/> (when given), only the undead, only
+/// the caster's side or the other, and only those with no enemy beside them
+/// (<c>80F5:249D</c>).
+/// </summary>
+public sealed record TargetFilter(
+    IReadOnlyList<int> Effects,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] IReadOnlyList<int>? Races = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool Undead = false,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] TargetSide Side = TargetSide.Any,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool NoEnemyBeside = false);
+
+/// <summary>How a save against an effect goes, regardless of the roll.</summary>
+public enum SaveOutcome { Rolled, Fails, Succeeds }
+
+/// <summary>
+/// An effect whose save depends on the target's level (<c>80F5:119C</c>):
+/// <paramref name="Below"/> below <paramref name="Level"/>, <paramref name="From"/>
+/// at it and above. With <paramref name="UnlessClasses"/>, there is no save
+/// for a target without levels in one of those class codes.
+/// </summary>
+public sealed record SaveRule(
+    int Effect,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int Level = 0,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] SaveOutcome Below = SaveOutcome.Rolled,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] SaveOutcome From = SaveOutcome.Rolled,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] IReadOnlyList<int>? UnlessClasses = null);
+
 /// <summary>
 /// DSUN.EXE's spell, power and area tables (<see cref="Default"/>); a mod can
 /// replace them with <c>rules/spells.json</c> (<see cref="Read"/>).
@@ -223,6 +258,62 @@ public sealed partial record SpellRules
 
     /// <summary>The arrow (<c>OJFF</c> 8101).</summary>
     public int DefaultMissile { get; init; } = 8101;
+
+    /// <summary>The cures (<c>80F5:05E6</c>): Cure Light (1d8), Serious (2d8 + 1) and Critical Wounds (3d8 + 3), and effect 152 (2).</summary>
+    public IReadOnlyList<Cure> Cures { get; init; } = [new(72, 1, 8, 0), new(113, 2, 8, 1), new(128, 3, 8, 3), new(152, 0, 0, 2)];
+
+    /// <summary>Dispel Magic, wizard's and priest's (<c>80F5:05E6</c> cases 26 and 98): each effect ends 50 in 100 (<see cref="CombatRules.DispelChance"/>).</summary>
+    public IReadOnlyList<int> Dispels { get; init; } = [27, 99];
+
+    /// <summary>What Dispel Magic leaves alone (<c>80F5:0D6E</c>).</summary>
+    public IReadOnlyList<Condition> Undispellable { get; init; } =
+    [
+        Condition.Biofeedback, Condition.Diseased, Condition.Feebleminded, Condition.SynapticStatic, Condition.MindBar,
+        Condition.Poisoned, Condition.GraftWeapon, Condition.NoSpells, Condition.Stuck, (Condition)54,
+    ];
+
+    /// <summary>The effects that end <see cref="Afflictions"/> (<c>80F5:05E6</c>: 195).</summary>
+    public IReadOnlyList<int> AfflictionCures { get; init; } = [195];
+
+    /// <summary>What effect 195 ends (<c>80F5:0D46</c>).</summary>
+    public IReadOnlyList<Condition> Afflictions { get; init; } =
+    [
+        Condition.Acid, Condition.Berserk, Condition.Blind, Condition.Confused, Condition.Cursed, Condition.Afraid,
+        Condition.LowResistance, Condition.CantAttack, Condition.SavePenalty, Condition.Slowed,
+    ];
+
+    /// <summary>
+    /// Whom some effects take at all (<c>80F5:1CF7</c>): Charm Person and the
+    /// Hold Persons a person (races 1–7), Charm Person or Mammal also race 12;
+    /// Hold Undead and Turn Undead the undead; Dismissal and Abjure race 14;
+    /// Haste the caster's side; Slow, Curse and Minor Malison the other side;
+    /// Bless and Aid the caster's side without an enemy beside them.
+    /// </summary>
+    public IReadOnlyList<TargetFilter> TargetFilters { get; init; } =
+    [
+        new([3, 31, 87], Races: [1, 2, 3, 4, 5, 6, 7]),
+        new([83], Races: [1, 2, 3, 4, 5, 6, 7, 12]),
+        new([32, 191], Undead: true),
+        new([61, 108], Races: [14]),
+        new([30], Side: TargetSide.Caster),
+        new([35, 38, 71], Side: TargetSide.Other),
+        new([70, 81], Side: TargetSide.Caster, NoEnemyBeside: true),
+    ];
+
+    /// <summary>
+    /// Saves set by level or class (<c>80F5:119C</c>): Scare can't miss below
+    /// level 6 and can't land from 6; no save against Cloudkill below level 7,
+    /// nor against Chaos without a fighter's, gladiator's or ranger's levels
+    /// (class codes 9, 10, 13–16; <c>80F5:3589</c>).
+    /// </summary>
+    public IReadOnlyList<SaveRule> SaveRules { get; init; } =
+    [
+        new(22, 6, SaveOutcome.Fails, SaveOutcome.Succeeds),
+        new(58, 7, SaveOutcome.Fails),
+        new(57, UnlessClasses: [9, 10, 13, 14, 15, 16]),
+    ];
+
+    public bool IsCure(int number) => Cures.Any(c => c.Effect == number);
 
     public SpellLook? LookOf(int number) => Looks.FirstOrDefault(l => l.Number == number);
 
@@ -280,11 +371,14 @@ public sealed partial record SpellRules
 
     /// <summary>Indented JSON with each list of numbers, and each object of numbers, strings and such lists, on one line.</summary>
     internal static string Compact(string json) => FlatObject().Replace(NumberList().Replace(json,
-            m => "[" + string.Join(", ", m.Groups[1].Value.Split(',', StringSplitOptions.TrimEntries)) + "]"),
+            m => "[" + string.Join(", ", ListItem().Matches(m.Groups[1].Value).Select(i => i.Value)) + "]"),
         m => "{ " + string.Join(" ", m.Groups[1].Value.Split('\n', StringSplitOptions.TrimEntries).Where(f => f.Length > 0)) + " }");
 
-    [GeneratedRegex(@"\[\s*(-?\d+(?:\s*,\s*-?\d+)*)\s*\]")]
+    [GeneratedRegex(@"\[\s*((?:-?\d+|""[^""\n]*"")(?:\s*,\s*(?:-?\d+|""[^""\n]*""))*)\s*\]")]
     private static partial Regex NumberList();
+
+    [GeneratedRegex(@"-?\d+|""[^""\n]*""")]
+    private static partial Regex ListItem();
 
     [GeneratedRegex(@"\{\s*\n((?:\s*""\w+"": (?:-?\d+|""[^""]*""|true|false|\[[^\]\n]*\]),?\n)+)\s*\}")]
     private static partial Regex FlatObject();

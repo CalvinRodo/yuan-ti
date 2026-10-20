@@ -35,5 +35,27 @@ public class CharacterSheetTests
         var c = new Character { Classes = [CharacterClass.Preserver, CharacterClass.Fighter] };
         Assert.Equal(18, CharacterSheet.Thac0(c, [2, 3]));
         Assert.Equal(20, CharacterSheet.Thac0(new Character(), []));
+        Assert.Equal(19, CharacterSheet.Thac0(CharacterClass.Cleric, 3)); // 8E77:0416: 20 − 2 × 8 ÷ 12
+    }
+
+    [Fact]
+    public void TheSheetFollowsTheRules()
+    {
+        var rules = CharacterRules.Default with
+        {
+            Classes = [.. CharacterRules.Default.Classes.Select(k => k.Class == CharacterClass.Thief ? k with { Thac0Factor = 12 } : k)],
+            AttackSteps = [new(1, 4)],
+        };
+        Assert.Equal(17, CharacterSheet.Thac0(CharacterClass.Thief, 4, rules));
+        Assert.Equal(4, CharacterSheet.AttackHalves([(CharacterClass.Fighter, 1)], rules));
+        Assert.Equal(2, CharacterSheet.AttackHalves([(CharacterClass.Thief, 9)], rules));
+        Assert.Equal(3, CharacterSheet.AttackHalves([(CharacterClass.Ranger, 6)]));
+
+        // 40B1:006C: a 1st-level fighter's saves; a dwarf's Con 18 takes 5 off them, not off a thief's.
+        Assert.Equal([14, 16, 15, 17, 17], CharacterSheet.Saves([(CharacterClass.Fighter, 1)], Race.Human, 18));
+        Assert.Equal([9, 11, 10, 12, 12], CharacterSheet.Saves([(CharacterClass.Fighter, 1)], Race.Dwarf, 18));
+        Assert.Equal([13, 14, 12, 16, 15], CharacterSheet.Saves([(CharacterClass.Thief, 1)], Race.Dwarf, 18));
+        var allClasses = CharacterRules.Default with { ConstitutionSavesWarriorsOnly = false };
+        Assert.Equal([8, 9, 7, 11, 10], CharacterSheet.Saves([(CharacterClass.Thief, 1)], Race.Dwarf, 18, allClasses));
     }
 }

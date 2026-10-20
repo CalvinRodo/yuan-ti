@@ -1,4 +1,5 @@
 using DarkSun.Data.Items;
+using DarkSun.Game.Characters;
 using DarkSun.Game.Movement;
 using DarkSun.Game.Rules;
 using DarkSun.Game.World;
@@ -43,6 +44,11 @@ public sealed partial class Battle
     public SpellRules Spells { get; }
 
     public CreatureRules Creatures { get; }
+
+    /// <summary>The character rules: the ability tables (Strength's damage, Dexterity's defence, …) come from them.</summary>
+    public CharacterRules Characters { get; init; } = CharacterRules.Default;
+
+    private AbilityTables Abilities => Characters.Abilities;
 
     /// <summary>Item types, to take corroded armour off a combatant's armour class; without it the class stays.</summary>
     public ItemCatalog? Catalog { get; init; }
@@ -127,7 +133,7 @@ public sealed partial class Battle
         ExpireFields();
         foreach (Combatant c in _all.Where(c => c.Fights))
         {
-            c.Initiative = Rules.InitiativeBase + Roll(0, Rules.InitiativeDice - 1) + AbilityTables.DexReaction(c.Stats[1]);
+            c.Initiative = Rules.InitiativeBase + Roll(0, Rules.InitiativeDice - 1) + Abilities.DexReactionOf(c.Stats[1]);
             c.TieBreak = Roll(0, 199);
             int points = c.Move * Rules.MovementPerMove;
             c.MovementPoints = c.Has(Condition.Paralyzed) || c.Has(Condition.Stuck) ? 0

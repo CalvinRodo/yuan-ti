@@ -1442,6 +1442,11 @@ These are AD&D 2nd edition's, but 18 has no percentile strength (+2 to hit,
   | Wizard | 14 | 11 | 13 | 15 | 12 | 30, 40, 40, 40, 40 | 8, 3, 5, 7, 4 |
   | Rogue | 13 | 14 | 12 | 16 | 15 | 25, 50, 25, 25, 50 | 8, 4, 7, 11, 5 |
 
+  The engine keeps the THAC0 factors and these rows per class in
+  `rules/characters.json` (`ClassRules.Thac0Factor`, `Saves`), the Con
+  saves per race (`RaceRules.ConstitutionSaves`, warriors only unless
+  `ConstitutionSavesWarriorsOnly` is false).
+
 * **The roll** (`80F5:0ED1`): only for an effect whose record allows one
   (save byte bit 0). Category = save byte >> 5; 6 means none; the save
   score is +0x36 + `DS:1E75`[category] (words 1, 1, 1, 2, 3, 3, 4, 5, 5, 5:

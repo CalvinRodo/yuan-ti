@@ -116,5 +116,6 @@ public sealed record CharacterRecord(byte Size, ushort DifficultyScaled, byte[] 
 /// <summary>A natural attack: <paramref name="Halves"/> / 2 attacks a round of <paramref name="Dice"/>d<paramref name="Sides"/> + <paramref name="Bonus"/>.</summary>
 public readonly record struct NaturalAttack(int Halves, int Dice, int Sides, int Bonus)
 {
+    [System.Text.Json.Serialization.JsonIgnore]
     public bool Exists => Halves > 0;
 }

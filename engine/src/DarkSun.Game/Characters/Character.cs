@@ -253,7 +253,7 @@ public sealed class CharacterCreation(CharacterRules rules, CharacterNames names
         }
         var levels = Levels(c);
         int factor = Math.Max(1, Rules.Race(c.Race).HitPointFactor);
-        int bonus = CharacterRules.ConstitutionBonus(Adjusted(c, Ability.Con), Warrior(c));
+        int bonus = Rules.ConstitutionBonus(Adjusted(c, Ability.Con), Warrior(c));
         int low = levels.Sum(l => Math.Max(1, l)) * factor / c.Classes.Count + bonus;
         int high = c.Classes.Select((k, i) => Math.Max(1, levels[i]) * Rules.Class(k).HitDie).Sum() * factor / c.Classes.Count + bonus;
         return (Math.Max(1, low), Math.Max(1, high));
@@ -270,7 +270,7 @@ public sealed class CharacterCreation(CharacterRules rules, CharacterNames names
         int rolled = c.Classes.Select((k, i) => Enumerable.Range(0, Math.Max(1, levels[i])).Sum(_ => random.Next(1, Rules.Class(k).HitDie + 1))).Sum()
             * factor / c.Classes.Count;
         var (low, high) = HpRange(c);
-        return Math.Clamp(rolled + CharacterRules.ConstitutionBonus(Adjusted(c, Ability.Con), Warrior(c)), low, high);
+        return Math.Clamp(rolled + Rules.ConstitutionBonus(Adjusted(c, Ability.Con), Warrior(c)), low, high);
     }
 
     public bool ChangeHp(Character c, int by)

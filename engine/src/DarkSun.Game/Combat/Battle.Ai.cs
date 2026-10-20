@@ -1,4 +1,5 @@
 using DarkSun.Data.Regions;
+using DarkSun.Game.Characters;
 using DarkSun.Game.Magic;
 using DarkSun.Game.Movement;
 using DarkSun.Game.Rules;
@@ -70,7 +71,7 @@ public sealed partial class Battle
             + w.Bonus * k.ItemBonus + (w.ScoresAsMagic ? k.Magic : 0);
         return w.IsMissile
             ? score * Math.Max(1, (int)w.Type.Attacks)
-            : (score + AbilityTables.StrDamage(c.Strength) + k.Material * w.MaterialDamage) * c.AttackHalves;
+            : (score + Abilities.StrDamageOf(c.Strength) + k.Material * w.MaterialDamage) * c.AttackHalves;
     }
 
     /// <summary>
