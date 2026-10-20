@@ -91,10 +91,39 @@ public sealed partial class Battle
         }
         if (Spells.TemplateOf(e) is not { } template || e.SingleTarget)
         {
-            return At(at) is { } one ? [one] : [];
+            return At(at) is { } one && Reaches(caster, e, one) ? [one] : [];
         }
         Shape shape = ShapeOf(caster, e, template, level, at, end);
-        return [.. _all.Where(c => c.Alive && Covers(shape, c))];
+        return [.. _all.Where(c => c.Alive && Covers(shape, c) && Reaches(caster, e, c))];
+    }
+
+    /// <summary>
+    /// Whom some effects take at all (<c>80F5:1CF7</c>, after <c>8BEB:0000</c>):
+    /// Charm Person and the Hold Persons a person (races 1–7), Charm Person or
+    /// Mammal also race 12; Hold Undead and Turn Undead the undead; Dismissal and
+    /// Abjure race 14; Haste the caster's side; Slow, Curse and Minor Malison the
+    /// other side; Bless and Aid the caster's side without an enemy within 28
+    /// sixteenths (<c>80F5:249D</c>), measured, by a slip, from (x, x) of the
+    /// target's position (from where it stands with
+    /// <see cref="CombatFixes.BlessFilterFromItsCell"/>).
+    /// </summary>
+    public bool Reaches(Combatant caster, SpellEffect e, Combatant t) => e.Number switch
+    {
+        3 or 31 or 87 => t.Race is >= 1 and <= 7,
+        83 => t.Race is >= 1 and <= 7 or 12,
+        32 or TurnUndead => t.IsUndead,
+        Dismissal or 108 => t.Race == 14,
+        30 => t.Side == caster.Side,
+        35 or 38 or 71 => t.Side != caster.Side,
+        70 or 81 => t.Side == caster.Side && !EnemyBeside(t),
+        _ => true,
+    };
+
+    private bool EnemyBeside(Combatant t)
+    {
+        var (x, y) = Centre(t.Cell);
+        y = Rules.Fixes.BlessFilterFromItsCell ? y : x;
+        return _all.Any(o => o.Alive && t.IsEnemyOf(o) && Distance16(x, y, Centre(o.Cell).X, Centre(o.Cell).Y) <= 28);
     }
 
     /// <summary>
@@ -134,7 +163,7 @@ public sealed partial class Battle
                     Apply(t, caster, fear, CloakOfFearLevel);
                 }
             }
-            bool small = e.AreaSize(1) <= 8 && e.Number < Spellcasting.FirstPower || e.Number > Spellcasting.LastPower;
+            bool small = Spells.AreaOf(e) <= 8 && (e.Number < Spellcasting.FirstPower || e.Number > Spellcasting.LastPower);
             if (small && Turned(caster, t, e, level))
             {
                 return;
@@ -223,7 +252,9 @@ public sealed partial class Battle
     /// <summary>
     /// Negative Plane Protection (<c>80F5:1999</c>): an undead's negative-energy
     /// attack spends a charge; if the target then saves (as against Vampiric
-    /// Touch), the attack is stopped and the undead takes 2d6.
+    /// Touch, whose record allows none, so never; with
+    /// <see cref="CombatFixes.NegativePlaneProtectionSaves"/> it gets that save),
+    /// the attack is stopped and the undead takes 2d6.
     /// </summary>
     private bool NegativePlaneProtection(Combatant a, Combatant t, DamageElement elements)
     {
@@ -232,7 +263,8 @@ public sealed partial class Battle
             return false;
         }
         UseCharge(t, Condition.NegativePlaneProtection);
-        if (Spells.Effect(VampiricTouch) is not { } touch || !Saved(t, touch, a, a.Level))
+        if (Spells.Effect(VampiricTouch) is not { } touch
+            || !Saved(t, Rules.Fixes.NegativePlaneProtectionSaves ? touch with { SaveAllowed = 1 } : touch, a, a.Level))
         {
             return false;
         }
@@ -254,10 +286,16 @@ public sealed partial class Battle
     /// the undead against mind effects, negative energy and poison; ability
     /// bit 5 against charm and hold, bit 21 against Wall of Fog; bits 0 and 1
     /// (burrowing, flying) against lingering areas, bit 9 against those on the
-    /// ground; type 12 against Web; a grafted weapon against Graft Weapon.
+    /// ground; type 12 against Web; a grafted weapon against Graft Weapon; Blink
+    /// against small effects once it has acted this round (initiative −1,
+    /// <c>37BD:00D9</c>); the carrier of item 30021 against effect 196.
     /// </summary>
     public bool Immune(Combatant t, SpellEffect e)
     {
+        if (Blinked(t) && Spells.AreaOf(e) < 9 || e.Number == DetonateShrapnel && t.Items.Any(i => i.Rdff == ShrapnelGuard))
+        {
+            return true;
+        }
         if (t.Has(Condition.Englobed) && (LowLevelSpell(e) || e.Number == Disintegrate)
             || t.Has(Condition.ProtectionFromMissiles) && e.SaveCategory == 4
             || t.Has(Condition.Shielded) && e.Number == MagicMissile
@@ -280,7 +318,7 @@ public sealed partial class Battle
         {
             return true;
         }
-        if (e.AreaSize(1) > 8 && Spells.TemplateOf(e) is { Lingers: true } template)
+        if (Spells.AreaOf(e) > 8 && Spells.TemplateOf(e) is { Lingers: true } template)
         {
             if (Creatures.HasAbility(t.Type, CreatureAbilityBit.Burrows) || Creatures.HasAbility(t.Type, CreatureAbilityBit.Flies)
                 || template.Kind == AreaTemplate.Ground && Creatures.HasAbility(t.Type, CreatureAbilityBit.NotStuck))
@@ -292,6 +330,12 @@ public sealed partial class Battle
     }
 
     public const int MagicMissile = 9, Disintegrate = 140, GraftWeapon = 156;
+
+    /// <summary>The item whose carrier effect 196 can't touch (<c>80F5:161F</c>: 0x7545).</summary>
+    public const int ShrapnelGuard = 30021;
+
+    /// <summary>Out of reach by Blink (condition 5): it has acted this round (<c>80F5:14E5</c>).</summary>
+    public static bool Blinked(Combatant t) => t.Has(Condition.Blink) && t.Initiative == -1;
 
     /// <summary>
     /// <paramref name="t"/>'s magic resistance against <paramref name="e"/>
@@ -410,11 +454,11 @@ public sealed partial class Battle
         {
             b += priest.Side == t.Side ? 1 : -1;
         }
-        if (caster is not null && e.AreaSize(1) < 9 && CantSee(caster, t))
+        if (caster is not null && Spells.AreaOf(e) < 9 && CantSee(caster, t))
         {
             b += 4;
         }
-        if ((e.Flags & SpellFlags.BraveSave) != 0 && t.Has(Condition.Brave))
+        if (((e.Flags & SpellFlags.BraveSave) != 0 || Rules.Fixes.BraveAgainstFear && (e.Flags & SpellFlags.Fear) != 0) && t.Has(Condition.Brave))
         {
             b += 4;
             UseCharge(t, Condition.Brave);
@@ -427,7 +471,7 @@ public sealed partial class Battle
         {
             b += 2;
         }
-        if ((e.Flags & SpellFlags.DexteritySave) != 0)
+        if ((e.Flags & SpellFlags.DexteritySave) != 0 || Rules.Fixes.DexterityAgainstAreas && !e.SingleTarget && Spells.TemplateOf(e) is not null)
         {
             b -= AbilityTables.DexAc(t.Stats[1]);
         }
@@ -579,8 +623,8 @@ public sealed partial class Battle
     /// <summary>
     /// An effect ending (<c>8053:066F</c>): a charm's end takes its holder back to
     /// its own side; Lent Strength's end ends the Strength it lent; extra hit
-    /// points go. Berserk's and Confused's random side ends with them too (in the
-    /// original it stays).
+    /// points go; a conjured weapon goes. Berserk's and Confused's random side
+    /// stays, as in the original, unless <see cref="CombatFixes.BerserkSideEnds"/>.
     /// </summary>
     private void EndEffect(Combatant t, ActiveEffect e)
     {
@@ -592,7 +636,8 @@ public sealed partial class Battle
         switch (e.Condition)
         {
             case Condition.Charmed or Condition.Berserk or Condition.Confused
-                when !t.Has(Condition.Charmed) && !t.Has(Condition.Berserk) && !t.Has(Condition.Confused) && t.Side != t.HomeSide:
+                when (e.Condition == Condition.Charmed || Rules.Fixes.BerserkSideEnds)
+                    && !t.Has(Condition.Charmed) && !t.Has(Condition.Berserk) && !t.Has(Condition.Confused) && t.Side != t.HomeSide:
                 t.Side = t.HomeSide;
                 t.Target = null;
                 Note(new SideChanged(t, t.Side));
@@ -610,8 +655,31 @@ public sealed partial class Battle
                 t.Vitals.MaxHp = Math.Max(1, t.Vitals.MaxHp - e.Value);
                 t.Vitals.Hp = Math.Min(t.Vitals.Hp, t.Vitals.MaxHp);
                 break;
+            case Condition.FlameBlade or Condition.SpiritualHammer or Condition.Shillelagh:
+                if (t.Items.FirstOrDefault(i => i.Rdff == ConjuredItem(e.Effect)) is { } conjured)
+                {
+                    t.Items.Remove(conjured);
+                    if (t.Weapon?.Item == conjured)
+                    {
+                        t.Weapon = null;
+                    }
+                }
+                break;
         }
     }
+
+    /// <summary>
+    /// The item Shillelagh, Flame Blade and Spiritual Hammer put in the caster's
+    /// hand (<c>80F5:0E2E</c>, <c>7372:0D93</c>): item <c>RDFF</c> 30024 (a 2d4
+    /// club), 30025 (1d4 + 4, fire, +1), 30026 (+1, 1d4 + 1, two attacks).
+    /// </summary>
+    public static int ConjuredItem(int effect) => effect switch { 80 => 30024, 86 => 30025, 90 => 30026, _ => 0 };
+
+    /// <summary>
+    /// Makes an item from its <c>RDFF</c> number (<c>GameWorld.NewItem</c>), for
+    /// the conjured weapons; without it they give only their condition.
+    /// </summary>
+    public Func<int, Item?>? NewItem { get; init; }
 
     /// <summary>
     /// A combatant's effects each round (<c>8053:0163</c>): regeneration (ability
@@ -777,7 +845,10 @@ public sealed partial class Battle
                     AddCondition(t, caster, Condition.Diseased, e.Number, level, duration);
                     EndCondition(t, Condition.Diseased);
                 }
-                AddCondition(caster, t, Condition.Strength, e.Number, level, duration, value: RollDice(1, 6));
+                if (!Rules.Fixes.NoStrengthFromAbsorbDisease)
+                {
+                    AddCondition(caster, t, Condition.Strength, e.Number, level, duration, value: RollDice(1, 6));
+                }
                 break;
             case 24 or 149:
                 AddCondition(caster, t, e.Number == 149 ? Condition.AdrenalinControl : Condition.Strength, e.Number, level, duration,
@@ -826,19 +897,15 @@ public sealed partial class Battle
             case 170 when !saved:
                 Hurt(caster, t, t.Vitals.Hp - t.Vitals.MaxHp * 2 / 10);
                 break;
-            case 80 or 86 or 90 when caster.Weapon is null:
-                // The conjured weapon itself (items 0x7548–0x754A) isn't made here.
-                AddCondition(caster, caster, e.Number switch { 80 => Condition.Shillelagh, 86 => Condition.FlameBlade, _ => Condition.SpiritualHammer },
-                    e.Number, level, duration);
+            case 80 or 86 or 90:
+                Conjure(caster, e, level, duration);
                 break;
             case Dismissal or 108 when t.Race == 14 && Roll(1, 20) >= 11 - level + t.Level:
                 Hurt(caster, t, 1000);
                 break;
-            case TurnUndead when t.IsUndead:
-                if (Roll(1, 20) >= TurnNeeded(t.Level, level))
-                {
-                    Hurt(caster, t, 1000);
-                }
+            case TurnUndead when t.IsUndead && Roll(1, 20) >= TurnNeeded(t.Level, level):
+                // A failed turn does nothing: its call (1A0A:0251) is an empty function.
+                Hurt(caster, t, 1000);
                 break;
             case RaiseDead when t.Vitals.Status == Vitals.Dead:
                 if (t.Stats[2] > 0)
@@ -889,6 +956,29 @@ public sealed partial class Battle
     }
 
     public const int TurnUndead = 191, DetonateShrapnel = 196;
+
+    /// <summary>
+    /// Shillelagh, Flame Blade, Spiritual Hammer (<c>80F5:05E6</c>, <c>80F5:0E2E</c>):
+    /// with the hand free, the weapon (<see cref="ConjuredItem"/>) goes into it
+    /// and the condition marks it; it goes when the condition ends. A hand
+    /// holding something: "Failed: weapon in hand".
+    /// </summary>
+    private void Conjure(Combatant caster, SpellEffect e, int level, int duration)
+    {
+        if (caster.Weapon is not null)
+        {
+            Note(new Avoided(caster, caster, "Failed: weapon in hand"));
+            return;
+        }
+        if (NewItem?.Invoke(ConjuredItem(e.Number)) is { } item && Catalog?.TypeOf(item.Record) is { IsWeapon: true } type)
+        {
+            item.Slot = 3;
+            caster.Items.Add(item);
+            caster.Weapon = new Weapon(type, item.Record.Bonus, item);
+        }
+        AddCondition(caster, caster, e.Number switch { 80 => Condition.Shillelagh, 86 => Condition.FlameBlade, _ => Condition.SpiritualHammer },
+            e.Number, level, duration);
+    }
 
     /// <summary>
     /// What a d20 must reach for Turn Undead to destroy an undead

@@ -369,7 +369,9 @@ lines, saves with their bonuses, magic resistance, psionic defence and resistanc
 last rounds or a number of charges (Armor's hits, Mirror Image's images, Poison's rounds). Areas that
 linger (fog, webs, clouds, walls) stay on the map as `Battle.Fields`, acting on whoever enters or
 stays in them; walls block and fog hides. A creature's casts come from its classes and health, a
-charm takes it to the caster's side, and larger creatures stand and reach by their footprint. A creature's abilities ride on its hits by ability bit (a spider's poison,
+charm takes it to the caster's side, and larger creatures stand and reach by their footprint. Where the
+original is odd (mirror images ignore blows, Negative Plane Protection never saves, …) `combat.json`'s
+`Fixes` turn on a fix; all are off by default. A creature's abilities ride on its hits by ability bit (a spider's poison,
 a babau corroding armour and weapons), and its immunities keep effects off it. `Battle.RunAi` is the
 original AI (`612E:0BAD`): its steps (spells, ability, psionics, attack, move, missile, guard), their
 order, how it picks a target (at random as in the original, or the nearest, the weakest, casters

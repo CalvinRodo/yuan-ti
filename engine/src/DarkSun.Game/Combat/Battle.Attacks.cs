@@ -7,8 +7,25 @@ namespace DarkSun.Game.Combat;
 
 public sealed partial class Battle
 {
-    /// <summary>What a natural attack's hit is made of: the three physical kinds (none of DSUN.EXE's tables says).</summary>
-    public const DamageElement NaturalElements = DamageElement.Bludgeoning | DamageElement.Slashing | DamageElement.Piercing;
+    /// <summary>The physical elements, what Stoneskin and Ironskin stop.</summary>
+    public const DamageElement PhysicalElements = DamageElement.Bludgeoning | DamageElement.Slashing | DamageElement.Piercing;
+
+    /// <summary>
+    /// What a hit without a weapon is made of (<c>612E:1359</c>): bludgeoning;
+    /// a creature that isn't of a player race (race 0 or above 8) counts as
+    /// magic of + (level − 2) ÷ 2 for resistances.
+    /// </summary>
+    public static DamageElement NaturalHit(Combatant a)
+    {
+        int plus = a.Race is 0 or > 8 ? (a.Level - 2) / 2 : 0;
+        return DamageElement.Bludgeoning | plus switch
+        {
+            <= 0 => DamageElement.None,
+            1 => DamageElement.Plus1,
+            2 => DamageElement.Plus1 | DamageElement.Plus2,
+            _ => DamageElement.Plus1 | DamageElement.Plus2 | DamageElement.Plus3,
+        };
+    }
 
     /// <summary>How far <paramref name="c"/> reaches with what it would attack with: a missile weapon's range, else 1.</summary>
     public static int Reach(Combatant c, bool missile = false) =>
@@ -124,7 +141,8 @@ public sealed partial class Battle
     /// for monsters, and 2 from behind (a thief's backstab 4); and from effects
     /// (<c>80F5:3849</c>) Bless +1, Curse −1, Slow −4, a grafted weapon +1,
     /// Prayer +1 when its priest is on the attacker's side and −1 when not, −2
-    /// against a blurred target.
+    /// against a blurred target, and +1 for a halfling with a weapon at more than
+    /// 28 cells (beyond any combat range, so never).
     /// </summary>
     public int ToHitNeeded(Combatant a, Combatant t, Weapon? w)
     {
@@ -137,6 +155,10 @@ public sealed partial class Battle
         if (a.Effects.FirstOrDefault(e => e.Condition == Condition.Prayer) is { Caster: { } priest })
         {
             bonus += priest.Side == a.Side ? 1 : -1;
+        }
+        if (a.Race == 6 && w is not null && Distance(a, t) > 28)
+        {
+            bonus++;
         }
         if (FromBehind(a, t))
         {
@@ -224,22 +246,34 @@ public sealed partial class Battle
         {
             damage *= Math.Min(5, (a.ThiefLevel - 1) / 4 + 2);
         }
-        Hit(a, t, damage, w?.Elements ?? NaturalElements, first, last && natural is not null, missile: !melee);
+        Hit(a, t, damage, w?.Elements ?? NaturalHit(a), first, last && natural is not null, missile: !melee);
     }
 
     /// <summary>
-    /// A weapon or natural hit landing (<c>80F5:0079</c> with no spell): a missile
+    /// A weapon or natural hit landing (<c>80F5:0079</c> with no spell): nothing
+    /// touches a Blinking target that has acted this round (<see cref="Blinked"/>); a missile
     /// can't touch the Protected from Missiles, and a thri-kreen above level 6
     /// dodges one when 1d20 beats 8 (<c>80F5:14E5</c>); Armor spends a charge, a
     /// Cloak of Fear gives the attacker Cause Fear at level 6 (<c>80F5:1999</c>);
     /// the attacker's on-hit abilities; Negative Plane Protection; Dispelling Evil
     /// slays a summoned attacker's target (race 14); Stoneskin and Ironskin; then
-    /// the damage times the target's resistance percent. (Mirror images only take
-    /// spells in DSUN.EXE: a hit has no spell, and <c>80F5:1999</c> tests them for
-    /// spells alone.)
+    /// the damage times the target's resistance percent. Mirror images take
+    /// only spells in DSUN.EXE (a hit has no spell, and <c>80F5:1999</c> tests
+    /// them for spells alone), blows too with <see cref="CombatFixes.MirrorImagesTakeBlows"/>.
     /// </summary>
     public void Hit(Combatant a, Combatant t, int damage, DamageElement elements, bool first = true, bool lastNatural = false, bool missile = false)
     {
+        if (Blinked(t))
+        {
+            Note(new Avoided(a, t, "blinked"));
+            return;
+        }
+        if (Rules.Fixes.MirrorImagesTakeBlows && t.Has(Condition.MirrorImages) && Roll(1, 100) <= Rules.MirrorImageChance)
+        {
+            UseCharge(t, Condition.MirrorImages);
+            Note(new Avoided(a, t, "image"));
+            return;
+        }
         if (missile && (t.Has(Condition.ProtectionFromMissiles) || t.Race == 8 && t.Level > 6 && Roll(1, 20) > 8))
         {
             Note(new Avoided(a, t, "missile"));
@@ -329,7 +363,7 @@ public sealed partial class Battle
     /// <summary>Stoneskin takes a charge from every hit and stops a physical one; Ironskin stops (and is spent by) a physical one (<c>80F5:161F</c>).</summary>
     private bool Skin(Combatant? a, Combatant t, DamageElement elements)
     {
-        bool physical = (elements & NaturalElements) != 0;
+        bool physical = (elements & PhysicalElements) != 0;
         if (t.Has(Condition.Stoneskin))
         {
             UseCharge(t, Condition.Stoneskin);

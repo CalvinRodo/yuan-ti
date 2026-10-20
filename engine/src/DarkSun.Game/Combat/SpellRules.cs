@@ -204,6 +204,14 @@ public sealed partial record SpellRules
 
     public PsionicPower? Power(int number) => Powers.FirstOrDefault(p => p.Number == number);
 
+    /// <summary>
+    /// The area size the code compares with 8 (<c>8BEB:086F</c> at level
+    /// <paramref name="level"/>): 8 for touch, creature and self targets, else
+    /// the area's, doubled for a circle. Up to 8 is "small".
+    /// </summary>
+    public int AreaOf(SpellEffect e, int level = 1) =>
+        e.Target is 3 or 4 or 5 or 7 or 8 ? 8 : e.AreaSize(level) * (TemplateOf(e) is { Shape: AreaTemplate.Circle } ? 2 : 1);
+
     public static SpellRules Read(string path)
     {
         SpellRules rules;

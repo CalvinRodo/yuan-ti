@@ -191,6 +191,17 @@ public sealed class Combatant
     /// </summary>
     public HashSet<int> Maintained { get; } = [];
 
+    /// <summary>
+    /// A party member's rank in each power (<c>DS:0077 + 0x22·member + power</c>,
+    /// bits 3–7; <c>6698:0137</c>): 1 when learned, +1 each time it is learned
+    /// again from an item (<c>91F7:03D0</c>, <c>6698:0685</c>), at most 30. It adds
+    /// to the power check and to a defence mode. Missing powers, and monsters, count 1.
+    /// </summary>
+    public Dictionary<int, int> PowerRanks { get; init; } = [];
+
+    /// <summary>Its rank in power <paramref name="number"/> (<see cref="PowerRanks"/>).</summary>
+    public int PowerRank(int number) => PartyMember ? PowerRanks.GetValueOrDefault(number, 1) : 1;
+
     /// <summary>What it carries; corrosion destroys items here.</summary>
     public List<Item> Items { get; init; } = [];
 

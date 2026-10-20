@@ -126,11 +126,111 @@ public class CombatEffectsTests
         Combatant mage = Fighter("mage", 1, 10, 10), orc = Fighter("orc", 2, 20, 10);
         Battle b = Started(new ScriptedDice(), null, mage, orc);
 
-        b.Cast(mage, 69, 5, new Cell(15, 10));
+        b.Cast(mage, 69, 5, new Cell(15, 4), new Cell(15, 16));
         Assert.False(b.Walkable(new Cell(15, 10)));
-        Assert.False(b.Walkable(new Cell(15, 16)));
+        Assert.False(b.Walkable(new Cell(15, 15))); // the far end itself falls just short: 1A0A:2DE6 scales long distances down
         Assert.True(b.Walkable(new Cell(14, 10)));
         Assert.False(b.InSight(mage, orc));
+    }
+
+    [Fact]
+    public void AWallCastAtOneCellIsAPointUnlessFixed()
+    {
+        Combatant mage = Fighter("mage", 1, 10, 10), orc = Fighter("orc", 2, 20, 10);
+        Battle b = Started(new ScriptedDice(), null, mage, orc);
+        b.Cast(mage, 69, 5, new Cell(15, 10));
+        Assert.Equal(1, b.Fields[0].Cells.Count);
+
+        var rules = new CombatRules { Fixes = new CombatFixes(WallsFromOneCell: true) };
+        var fixedBattle = new Battle([mage, orc], new OpenField(30, 30), new ScriptedDice(), rules);
+        fixedBattle.StartRound();
+        fixedBattle.Cast(mage, 69, 5, new Cell(15, 10));
+        Assert.False(fixedBattle.Walkable(new Cell(15, 14)));
+    }
+
+    // -- the rest of the traced details ------------------------------------------------------------------------
+
+    [Fact]
+    public void ABlinkerIsOutOfReachOnceItHasActed()
+    {
+        Combatant a = Fighter("a", 1, 5, 10), t = Fighter("t", 2, 6, 10);
+        Battle b = Started(new ScriptedDice(), null, a, t);
+        t.Effects.Add(new ActiveEffect(26, Condition.Blink, 5, t));
+
+        b.Hit(a, t, 5, DamageElement.Slashing);
+        Assert.Equal(25, t.Vitals.Hp); // still to act this round
+        b.EndTurn(t);
+        b.Hit(a, t, 5, DamageElement.Slashing);
+        Assert.Equal(25, t.Vitals.Hp);
+        Assert.True(b.Immune(t, Spell(9)));
+        Assert.False(b.Immune(t, Spell(28))); // a Fireball's area is large
+    }
+
+    [Fact]
+    public void SomeSpellsChooseWhomTheyTake()
+    {
+        Combatant priest = Fighter("priest", 1, 5, 10), friend = Fighter("friend", 1, 6, 10), orc = Fighter("orc", 2, 9, 10),
+            human = Fighter("human", 2, 7, 10, race: 1), ghoul = new() { Name = "ghoul", Side = 2, Race = 9, Cell = new Cell(8, 10) };
+        Battle b = Started(new ScriptedDice(), null, priest, friend, orc, human, ghoul);
+
+        Assert.True(b.Reaches(priest, Spell(31), human));
+        Assert.False(b.Reaches(priest, Spell(31), orc));     // Hold Person: races 1–7
+        Assert.True(b.Reaches(priest, Spell(32), ghoul));    // Hold Undead
+        Assert.False(b.Reaches(priest, Spell(30), orc));     // Haste: its own side
+        Assert.False(b.Reaches(priest, Spell(38), friend));  // Slow: the other side
+        Assert.Empty(b.AffectedBy(priest, Spell(31), 5, orc.Cell));
+    }
+
+    [Fact]
+    public void AConjuredWeaponNeedsAFreeHandAndGoesWithItsCondition()
+    {
+        Combatant druid = Fighter("druid", 1, 5, 10);
+        Battle b = Started(new ScriptedDice(), null, druid);
+
+        druid.Weapon = Sword();
+        b.Apply(druid, druid, Spell(86), 5);
+        Assert.Contains(b.Log, e => e is Avoided { Why: "Failed: weapon in hand" });
+        Assert.False(druid.Has(Condition.FlameBlade));
+
+        druid.Weapon = null;
+        b.Apply(druid, druid, Spell(86), 5);
+        Assert.True(druid.Has(Condition.FlameBlade));
+        Assert.Equal(30025, Battle.ConjuredItem(86));
+    }
+
+    [Fact]
+    public void BlowsWithoutAWeaponBludgeonAndACreaturesCountAsMagicByLevel()
+    {
+        Assert.Equal(DamageElement.Bludgeoning | DamageElement.Plus1, Battle.NaturalHit(Fighter("orc", 2, 0, 0)));      // level 5, race 0
+        Assert.Equal(DamageElement.Bludgeoning, Battle.NaturalHit(Fighter("man", 1, 0, 0, race: 1)));
+    }
+
+    [Fact]
+    public void APowersRankAddsToItsCheck()
+    {
+        var psion = new Combatant { Name = "psion", Side = 1, PartyMember = true, Stats = [10, 10, 10, 10, 10, 10], PowerRanks = { [161] = 4 } };
+        var b = new Battle([psion], new OpenField(10, 10), new ScriptedDice(null, 9));
+        PsionicPower crush = SpellRules.Default.Power(161)!;
+
+        Assert.Equal(9, b.PowerCheck(psion, 161, crush)); // 9 ≤ Wis 10 − 4 + 4 − 1
+    }
+
+    [Fact]
+    public void TheFixesAreOffUnlessAsked()
+    {
+        Combatant a = Fighter("a", 1, 5, 10), t = Fighter("t", 2, 6, 10, hp: 50);
+        t.Effects.Add(new ActiveEffect(20, Condition.MirrorImages, 5, t) { Charges = 2 });
+        var b = new Battle([a, t], new OpenField(10, 20), new ScriptedDice(), new CombatRules { Fixes = CombatFixes.All });
+        b.StartRound();
+
+        b.Hit(a, t, 5, DamageElement.Slashing);
+        Assert.Equal(50, t.Vitals.Hp); // an image took it
+        Assert.False(CombatRules.Default.Fixes.MirrorImagesTakeBlows);
+
+        t.Effects.Add(new ActiveEffect(3, Condition.Berserk, 5, t));
+        t.Side = 1;
+        b.EndCondition(t, Condition.Berserk);
+        Assert.Equal(2, t.Side);
     }
 
     [Fact]
@@ -174,7 +274,7 @@ public class CombatEffectsTests
     [Fact]
     public void ACharmTakesItToTheCastersSideUntilItEnds()
     {
-        Combatant mage = Fighter("mage", 1, 5, 10), orc = Fighter("orc", 2, 6, 10);
+        Combatant mage = Fighter("mage", 1, 5, 10), orc = Fighter("orc", 2, 6, 10, race: 7);
         Battle b = Started(new ScriptedDice(), null, mage, orc);
 
         b.Cast(mage, 3, 5, orc.Cell);
@@ -238,9 +338,9 @@ public class CombatEffectsTests
         Battle b = Started(new ScriptedDice(), null, psion, holder, target);
         PsionicPower crush = SpellRules.Default.Power(161)!;
 
-        Assert.Equal(-1, b.PowerCheck(psion, crush)); // the holder's 1 isn't over Int 10 − 4
+        Assert.Equal(-1, b.PowerCheck(psion, 161, crush)); // the holder's 1 isn't over Int 10 − 4
         holder.Effects.Clear();
-        Assert.Equal(1, b.PowerCheck(psion, crush));
+        Assert.Equal(1, b.PowerCheck(psion, 161, crush));
 
         // A monster defends with its level (5): two rolls over the attacker's 1 hold.
         var high = new Battle([psion, target], new OpenField(30, 30), new ScriptedDice(Highest, 1));

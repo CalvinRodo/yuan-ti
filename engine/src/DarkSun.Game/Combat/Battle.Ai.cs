@@ -299,7 +299,7 @@ public sealed partial class Battle
         {
             return false;
         }
-        _powerRoll = PowerCheck(c, power);
+        _powerRoll = PowerCheck(c, number, power);
         if (_powerRoll <= 0)
         {
             Note(new Avoided(c, c, _powerRoll < 0 ? "psionics blocked" : "power failed"));
@@ -324,13 +324,14 @@ public sealed partial class Battle
 
     /// <summary>
     /// The power check (<c>6698:0CED</c>): d20 ≤ the ability + the power's
-    /// modifier succeeds (a 20 always fails, a 1 always succeeds); the result is
-    /// the roll, 0 a failure. While someone else keeps Synaptic Static up,
-    /// psionics are blocked (−1) unless the user beats it: d20 ≤ 1, and the
-    /// holder's d20 over its Intelligence + Synaptic Static's modifier or under
+    /// modifier + its rank − 1 (<see cref="Combatant.PowerRank"/>) succeeds (a 20
+    /// always fails, a 1 always succeeds); the result is the roll, 0 a failure.
+    /// While someone else keeps Synaptic Static up, psionics are blocked (−1)
+    /// unless the user beats it: d20 ≤ its rank in the power, and the holder's
+    /// d20 over its Intelligence + Synaptic Static's modifier + rank − 1 or under
     /// the user's. The holder itself can use none.
     /// </summary>
-    public int PowerCheck(Combatant c, PsionicPower power)
+    public int PowerCheck(Combatant c, int number, PsionicPower power)
     {
         if (_all.FirstOrDefault(o => o.Alive && o.Has(Condition.SynapticStatic)) is { } holder)
         {
@@ -339,13 +340,13 @@ public sealed partial class Battle
                 return -1;
             }
             int mine = Roll(1, 20), theirs = Roll(1, 20);
-            int static_ = holder.Stats[3] + (Spells.Power(SynapticStatic)?.Modifier ?? 0);
-            if (mine > 1 || theirs <= static_ && theirs >= mine)
+            int static_ = holder.Stats[3] + (Spells.Power(SynapticStatic)?.Modifier ?? 0) + holder.PowerRank(SynapticStatic) - 1;
+            if (mine > c.PowerRank(number) || theirs <= static_ && theirs >= mine)
             {
                 return -1;
             }
         }
-        int score = c.Stats[Math.Clamp(power.Ability, 0, 5)] + power.Modifier;
+        int score = c.Stats[Math.Clamp(power.Ability, 0, 5)] + power.Modifier + c.PowerRank(number) - 1;
         int roll = Roll(1, 20);
         return roll == 20 ? 0 : roll <= score || roll == 1 ? roll : 0;
     }
@@ -355,7 +356,7 @@ public sealed partial class Battle
     /// <summary>
     /// A psionic attack on <paramref name="t"/> (effects of the psionic element,
     /// <c>6698:0E68</c>): its defence is Wisdom − 7; a party member's best defence
-    /// mode kept up (1 + its cost ÷ 2, if better and paid for again now), a
+    /// mode kept up (its rank + its cost ÷ 2, if better and paid for again now), a
     /// monster's level if better; at least 1. It holds when two rolls of 1 … the
     /// defence both beat the attacker's power check.
     /// </summary>
@@ -367,9 +368,10 @@ public sealed partial class Battle
             PsionicPower? best = null;
             foreach (PsionicPower p in t.Maintained.Select(n => Spells.Power(n)).OfType<PsionicPower>().Where(p => p.AttackMode == DefenceMode))
             {
-                if (1 + p.Cost / 2 > defence && p.Cost <= t.Psp)
+                int score = t.PowerRank(p.Number) + p.Cost / 2;
+                if (score > defence && p.Cost <= t.Psp)
                 {
-                    (best, defence) = (p, 1 + p.Cost / 2);
+                    (best, defence) = (p, score);
                 }
             }
             t.Psp -= best?.Cost ?? 0;

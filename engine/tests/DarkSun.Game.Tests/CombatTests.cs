@@ -18,7 +18,7 @@ internal sealed class ScriptedDice(Func<int, int, int>? then = null, params int[
 
 public class CombatTests
 {
-    internal static Combatant Fighter(string name, int side, int x, int y, int hp = 30, int type = 0, int dex = 10, int ac = 5, int str = 10, int mind = 2) => new()
+    internal static Combatant Fighter(string name, int side, int x, int y, int hp = 30, int type = 0, int dex = 10, int ac = 5, int str = 10, int mind = 2, int race = 0) => new()
     {
         Name = name,
         Side = side,
@@ -30,6 +30,7 @@ public class CombatTests
         Thac0 = 20,
         Type = type,
         Level = 5,
+        Race = race,
         Facing = side == 1 ? 2 : 6,
         ComputerControlled = side != 1,
     };
@@ -149,7 +150,7 @@ public class CombatTests
 
         for (int i = 0; i < 5; i++)
         {
-            b.Hit(a, t, 1, Battle.NaturalElements); // a hit spends one, the wound another
+            b.Hit(a, t, 1, Battle.PhysicalElements); // a hit spends one, the wound another
         }
         Assert.False(t.Has(Condition.ImprovedAc));
         Assert.Contains(b.Log, e => e is ConditionEnded { Condition: Condition.ImprovedAc });
@@ -213,14 +214,14 @@ public class CombatTests
     {
         Combatant spider = Fighter("spider", 2, 5, 5, type: 5), t = Fighter("t", 1, 6, 5, hp: 500);
         Battle b = Started(new ScriptedDice(), spider, t); // lowest rolls: saves fail
-        b.Hit(spider, t, 1, Battle.NaturalElements, first: false, lastNatural: true);
+        b.Hit(spider, t, 1, Battle.PhysicalElements, first: false, lastNatural: true);
         Assert.Equal(500 - 1 - 10, t.Vitals.Hp); // the bite, then effect 177's 10 poison
 
         var plate = new Item(1, new ItemRecord(-1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 9, 0, 0), slot: 9);
         t.Items.Add(plate);
         Combatant babau = Fighter("babau", 2, 4, 5, type: 3);
         b.Add(babau);
-        b.Hit(babau, t, 1, Battle.NaturalElements, first: true);
+        b.Hit(babau, t, 1, Battle.PhysicalElements, first: true);
         Assert.DoesNotContain(plate, t.Items);
         Assert.Contains(b.Log, e => e is ItemDestroyed { Message: "Armor is corroded" });
     }

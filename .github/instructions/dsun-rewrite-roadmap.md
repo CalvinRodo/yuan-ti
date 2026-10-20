@@ -570,17 +570,23 @@ executable, not in the data.
       bonuses of `80F5:119C`; the defences of `80F5:14E5`, `1999` and
       `161F`; to-hit and armour class from effects (`80F5:3849`, `39B7`);
       footprints for reach and standing (`1A0A:2BA5`, `11DB`).
-- [ ] Combat left: Blink (its state isn't traced), the conjured weapons of
-      Shillelagh, Flame Blade and Spiritual Hammer (only the condition),
-      what Turn Undead does to an undead it doesn't destroy (`1A0A:0251`),
-      the area filter `80F5:1CF7`, a party member's power level (`6698:0137`;
-      1 for now), the halfling's missile bonus, walls cast at one cell (the
-      original asks for both ends; one cell gives a wall across the line of
-      fire). Kept as the original has them, open to a QOL fix: Mirror Image
-      takes spells only, Negative Plane Protection never saves, the Brave,
-      gaze and Dexterity save flags are set on no record, Absorb Disease
-      also gives Strength. Changed: Berserk's and Confused's random side
-      ends with them (the original keeps it).
+- [x] Combat's last details (2026-10-20): Blink (out of reach once its
+      holder has acted this round, `80F5:14E5`); the conjured weapons (items
+      30024–30026 in the free hand, gone with the condition; `Battle.NewItem`
+      makes them); Turn Undead's failure (nothing: `1A0A:0251` is empty);
+      whom some spells take (`80F5:1CF7`: persons, undead, sides);
+      power ranks (`Combatant.PowerRanks`, `6698:0137`); the halfling's
+      bonus (never at combat range); a blow without a weapon bludgeons, and
+      a creature's counts as magic by level (`612E:1359`); the AI's walls are
+      a point. The oddities are options in `rules/combat.json`'s `Fixes`,
+      all off as the original has them: mirror images taking blows, Negative
+      Plane Protection's save, Brave against fear, Dexterity against areas,
+      no Strength from Absorb Disease, Berserk's side ending, walls from one
+      cell, Bless and Aid's filter measured from the right cell. (A gaze
+      flag, 0x80, is on no record; a mod can set it in `rules/spells.json`.)
+- [ ] Power ranks in the character data: learning a known power again
+      from an item (`91F7:03D0`) should raise its rank; `Character` keeps
+      only the powers, so a combatant's ranks are 1 until it does.
 - [ ] Tactical combat scene on the region map, with clear feedback: hit chance
       shown, a combat log, damage numbers. FIGHT starts a `Battle` from the
       region's creatures (`Combatant.FromCreature`) and the party; the party's

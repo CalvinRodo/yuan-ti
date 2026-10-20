@@ -1586,7 +1586,8 @@ the vector back, `69CB:08AA` a rotation). The template:
   from one to the other); otherwise the area size (`086F`: +2 + +4 ×
   level, doubled for a circle), at least 1; targets 3, 4, 5, 7, 8 use 8.
   The cast's direction is from the caster to the point; a cone starts 4
-  sixteenths out along it.
+  sixteenths out along it. The AI casts with both points on its chosen cell
+  (`6466:0000`), so its walls are a single point.
 * **Width and length** (`0393`) for size s: with +7 > 0, width s and length
   +8 × s ÷ +7, or −(+8) when +8 is negative; with +7 < 0 (none), −(+7) and s.
 * **Circle** (`612E:2DCC`): within s ÷ 2 of the point. Fireball (80, so
@@ -1630,7 +1631,9 @@ which field is a list at `DS:000A` (3 bytes: object, template; up to 84).
   above level 6 dodges a missile when 1d20 > 8 (`1E5D`); Minor Globe (26)
   stops spells of level 1–3 (`31FC`) and Disintegrate (record 0x8B);
   Shield (46) stops Magic Missile (`DS:1607`, 6 entries; the other five do
-  nothing). Blink (5) stops small effects in a state not traced.
+  nothing). Blink (5) stops blows and small effects (area < 9) once its
+  holder has acted this round: its initiative (`37BD:00D9 + 4·slot`, −1
+  when its turn is over) is −1.
 * `1999`: Armor (2) spends a charge and a Cloak of Fear (18) gives the
   attacker Cause Fear (record 0x4E) at level 6, for any effect (the port: hostile ones). Then
   for a blow (no spell), an area over 8 or a power: the on-hit abilities;
@@ -1653,10 +1656,25 @@ which field is a list at `DS:000A` (3 bytes: object, template; up to 84).
   effects are level 3); the undead against mind effects and elements 0x100
   and 0x1; the ability bits; Web (record 0x18) against type 12; Graft
   Weapon (0x9B) when grafted (49); effect 196 against a carrier of item
-  0x7545.
-* **To hit** (`80F5:3849`): Bless +1, Curse −1, Slow −4, Graft Weapon +1
-  for the attacker, Prayer ±1 as for saves, −2 against Blur (55), a
-  halfling's +1 with some missiles; then Strength or Dexterity.
+  0x7545 (`RDFF` 30021).
+* **Whom some effects take** (`80F5:1CF7`, applied by `8BEB:02DA` to every
+  target list; 14 entries at `80F5:1DCF`): Charm Person and both Hold
+  Persons a person (race 1–7, `80F5:2447`), Charm Person or Mammal also
+  race 12 (`23FE`); Hold Undead and Turn Undead the undead; Dismissal and
+  Abjure race 14; Haste the caster's allegiance; Slow, Curse and Minor
+  Malison any other; Bless and Aid the caster's allegiance with no enemy
+  within 28 sixteenths (`80F5:249D`, which by a slip measures from the
+  object's (x, x)).
+* **To hit** (`80F5:3849(target, attacker, items, distance)`): Bless +1,
+  Curse −1, Slow −4, Graft Weapon +1 for the attacker, Prayer ±1 as for
+  saves, −2 against Blur (55), +1 for a halfling (race 6) with a weapon at
+  a distance over 28 cells (beyond sight, so never); then Strength within
+  1 cell, Dexterity beyond.
+* **A blow's elements** (`612E:1359`): a weapon's `IT1R` +2 and its bonus's
+  magic bits; without one, bludgeoning (8), and a creature not of a player
+  race (race 0 or above 8) counts as magic of (level − 2) ÷ 2 (0x1000,
+  0x3000, 0xB000). A missile's bonus is the better of the weapon's and the
+  ammunition's (`612E:1FCF`, `DS:47BD:0006`).
 * **Armour class** (`80F5:39B7`): from the front Dexterity's adjustment;
   Spirit Armor caps it at 4, else Armor at 6; Barkskin at 6 − level ÷ 4;
   Shield at 4 from the front; Magical Vestments (60) at 5 − (level − 5) ÷ 3
@@ -1753,12 +1771,15 @@ isn't restored (the port restores it).
   ((24 − character record +0x1B) × 2) and the dominations (by the target's
   level: below 6 3, below 11 8, below 16 13, else 18). Not enough points:
   message 0x612. The power check (`6698:0CED`): score = ability + modifier
-  + `6698:0137` − 1 (`0137`: a party member's power byte >> 3, a monster's
-  1); d20 ≤ score succeeds (20 always fails, 1 always succeeds), and the
+  + `6698:0137` − 1 (`0137`: a party member's rank in the power, the power
+  byte >> 3, a monster's 1; learning a power makes it 1, `6698:07C5`, and
+  learning it again from an item, `91F7:03D0`, raises it, `6698:0685`, up to
+  30; `085D` and `06F9` lower it; it is saved as `PSPP`); d20 ≤ score succeeds (20 always fails, 1 always succeeds), and the
   roll is kept (`DS:47F0:0076`). While anyone has Synaptic Static (30,
   `7D80:1963`) its holder can use none, and anyone else is blocked
-  (message 0x626) unless its d20 ≤ `0137` and the holder's d20 is over Int
-  + Synaptic Static's modifier or under the user's. A failed check costs
+  (message 0x626) unless its d20 ≤ its rank and the holder's d20 is over
+  Int + Synaptic Static's modifier + the holder's rank − 1 or under the
+  user's. A failed check costs
   half; a success the full cost, then `6698:0C54` and the effect
   (`7D80:0000`, effect 0x8A + power). A party member's power with a
   maintenance cost stays up (`DS:0077 + 0x22·member + power`, bit 1):
@@ -1766,7 +1787,7 @@ isn't restored (the port restores it).
   maintenance, or drops it and ends its effects (`060D`).
 * **Psionic defence** (`6698:0E68`, from the resistances `80F5:28F2` for an
   effect of element 0x400 alone): the defence is Wis − 7; a party member's
-  best defence mode (+5 = 254) that is up, if 1 + cost ÷ 2 is better and it
+  best defence mode (+5 = 254) that is up, if rank + cost ÷ 2 is better and it
   can pay the cost again now (it does); a monster's first-class level if
   better; at least 1. Two rolls of 1 … defence both over the attacker's kept
   roll resist it. So the defence modes work only as kept-up powers, and the
@@ -1967,7 +1988,7 @@ on the record index (38 cases at `80F5:0D96`, handlers at `+0x4C`; by
 | 30 Haste, 38 Slow | this round's movement points doubled (at most Move × 20) or halved (`80F5:36CC`) |
 | 27, 99 Dispel Magic | each condition but those at `0D6E` (Biofeedback, Diseased, Feeblemind, Synaptic Static, Mind Bar, Poisoned, Graft Weapon, No Spells, Stuck, 54) ends if d100 ≤ 50 + 5 × level − 5 × its effect's level |
 | 195 | ends the conditions at `0D46`: Acid, Berserk, Blind, Confused, Cursed, Afraid, Low Resistance, Can't Attack, Save Penalty, Slowed |
-| 191 Turn Undead | an undead (race 9) is destroyed when d20 ≥ (u − p) × 3 + 10 (22 → 20), u its level (+1 above 4, at most 13), p the priest's (at most 14, −1 above 10, −2 above 12; `80F5:2217`); otherwise `1A0A:0251` |
+| 191 Turn Undead | an undead (race 9) is destroyed when d20 ≥ (u − p) × 3 + 10 (22 → 20), u its level (+1 above 4, at most 13), p the priest's (at most 14, −1 above 10, −2 above 12; `80F5:2217`); otherwise nothing (`1A0A:0251` is an empty function) |
 | 61 Dismissal, 108 Abjure | a race-14 creature dies when d20 ≥ 11 − level + its level |
 | 133 Insect Plague | No Spells (50) for a round |
 | 21, 106, 118 | end Slowed, and Paralyzed unless Poisoned |
@@ -1984,7 +2005,7 @@ on the record index (38 cases at `80F5:0D96`, handlers at `+0x4C`; by
 | 81 Aid | Extra Hit Points (69) 1d8 for 600 (`80F5:3142`) |
 | 40 Vampiric Touch, 147 Life Draining | (level ÷ 2)d6 or 1d6 damage, the caster gets them as Extra Hit Points (`80F5:316E`) |
 | 170 Psionic Blast | if not saved, down to a fifth of its hit points |
-| 80, 86, 90 | Shillelagh, Flame Blade, Spiritual Hammer: an item (0x7548–0x754A) with the hand free ("Failed: weapon in hand") and condition 72, 70, 71 |
+| 80, 86, 90 | Shillelagh, Flame Blade, Spiritual Hammer: with the hand free (else "Failed: weapon in hand"), `7372:0D93` gives the caster item `RDFF` 30024 (a 2d4 club), 30025 (1d4 + 4, fire and magic, +1) or 30026 (+1, 1d4 + 1, two attacks) in slot 3, and condition 72, 70, 71 (value: an uninitialised byte); the item goes when the condition ends (`8053:066F`) |
 | 136 Raise Dead | the dead with Con left: Con − 1, 1 hit point, well; else status 8 |
 | 139 Detonate | effect 196 too, then `1F4B` breaks the item most likely to |
 | 179, 187; 188 | corrode armour (`2024`); corrode weapon (`1EBA`) |
@@ -2014,8 +2035,5 @@ halved by Low Resistance (31), less 30 + level for Lower Resistance.
 
 What the mind values 0, 2, 4, 7 and 10 mean outside the AI, the save
 category table's intent, whether ability bits 7 and 28 meant what the
-monster entries suggest, Blink's state (`80F5:14E5`, `DS:00D9`), the area
-filter `80F5:1CF7`, the class caster mask at `DS:0118` (`6798:071C`), what
-`1A0A:0251` does to an undead Turn Undead didn't destroy, what a party
-member's power byte (>> 3) counts, and the halfling's missile bonus in
-`80F5:3849`.
+monster entries suggest, and the class caster mask at `DS:0118`
+(`6798:071C`).

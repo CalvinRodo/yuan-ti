@@ -579,3 +579,9 @@
 80F5:2217	func	turn_undead	destroys an undead on d20 >= (level - priest) * 3 + 10
 1A0A:2DE6	func	int distance16(int x1, int y1, int x2, int y2)	distance in sixteenths, scaled to 127
 69CB:09D8	func	int angle256(int x1, int y1, int x2, int y2)	0 north, clockwise, 256 a turn
+80F5:1CF7	func	effect_takes	(target, caster, record): whom Charm/Hold Person, Hold Undead, Turn Undead, Dismissal, Haste, Slow, Curse, Bless, Aid take
+80F5:2447	func	is_person	race 1-7
+80F5:249D	func	enemies_beside	enemies within 28 sixteenths (measured from (x, x))
+6698:0137	func	power_rank	a party member's rank in a power (byte >> 3); monsters 1
+6698:0685	func	power_rank_up	learning a known power again, up to 30
+7372:0D93	func	give_item	(from, to, quantity, item id, slot): GIVE; 9999 from nowhere

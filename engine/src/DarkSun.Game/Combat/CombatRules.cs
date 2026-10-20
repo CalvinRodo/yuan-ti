@@ -53,6 +53,27 @@ public enum TargetChoice
 public sealed record WeaponScoring(int PerDieSide = 1, int DamageBonus = 2, int ItemBonus = 4, int Magic = 10, int Material = 3);
 
 /// <summary>
+/// Quality-of-life fixes for what DSUN.EXE does oddly (<c>dsun-exe-reference.md</c>
+/// §8), each false as the original has it.
+/// </summary>
+/// <param name="MirrorImagesTakeBlows">Mirror images take weapon hits too (the original tests them only for spells, <c>80F5:1999</c>).</param>
+/// <param name="NegativePlaneProtectionSaves">Negative Plane Protection gets its save (the original saves as against Vampiric Touch, whose record allows none).</param>
+/// <param name="BraveAgainstFear">Brave's +4 counts against fear (flag 0x10), not only flag 0x100, which no record has.</param>
+/// <param name="DexterityAgainstAreas">Dexterity's adjustment counts against every area effect, not only flag 0x40, which no record has.</param>
+/// <param name="NoStrengthFromAbsorbDisease">Absorb Disease gives no Strength (the original falls through into Strength's handler).</param>
+/// <param name="BerserkSideEnds">A Berserk or Confused combatant goes back to its own side when the condition ends (the original keeps the random one).</param>
+/// <param name="WallsFromOneCell">A wall cast at one cell runs across the line of fire, its area long (the original's AI gives both ends the same cell, a wall of one point).</param>
+/// <param name="BlessFilterFromItsCell">Bless and Aid leave out those of their side with an enemy beside them, measured from where they stand (the original measures from (x, x), a slip, <c>80F5:249D</c>).</param>
+public sealed record CombatFixes(
+    bool MirrorImagesTakeBlows = false, bool NegativePlaneProtectionSaves = false, bool BraveAgainstFear = false,
+    bool DexterityAgainstAreas = false, bool NoStrengthFromAbsorbDisease = false, bool BerserkSideEnds = false,
+    bool WallsFromOneCell = false, bool BlessFilterFromItsCell = false)
+{
+    /// <summary>All of them.</summary>
+    public static CombatFixes All { get; } = new(true, true, true, true, true, true, true, true);
+}
+
+/// <summary>
 /// One row of a creature's spells per level (<c>6798:0B32</c>; the rows at
 /// <c>DS:0678</c>, chosen by class code at <c>DS:0664</c>): for a class in
 /// <paramref name="Classes"/>, with v its level (or Wisdom, with
@@ -145,6 +166,12 @@ public sealed record CombatRules
 
     /// <summary>The chance in 100, + 5 a level the caster has over the effect's, that Dispel Magic ends an effect (<c>80F5:05E6</c>).</summary>
     public int DispelChance { get; init; } = 50;
+
+    /// <summary>
+    /// Fixes for what the original does oddly; each is off by default, as
+    /// DSUN.EXE has it (<see cref="CombatFixes"/>).
+    /// </summary>
+    public CombatFixes Fixes { get; init; } = new();
 
     public static CombatRules Default { get; } = new();
 

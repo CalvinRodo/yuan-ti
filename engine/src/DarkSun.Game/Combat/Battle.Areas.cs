@@ -80,7 +80,9 @@ public sealed partial class Battle
     /// The shape of <paramref name="e"/> cast by <paramref name="caster"/> at
     /// <paramref name="at"/> (<c>8BEB:0000</c>, <c>8BEB:092D</c>, <c>8BEB:0393</c>).
     /// Its size is the area's (doubled for a circle), or for a wall the distance
-    /// between its ends. A circle has radius size ÷ 2 around the cell; a cone
+    /// between its ends: the player gives both; cast at one cell (as the
+    /// original's AI does, <c>6466:0000</c>) both are that cell and the wall is
+    /// a point, unless <see cref="CombatFixes.WallsFromOneCell"/>. A circle has radius size ÷ 2 around the cell; a cone
     /// starts 4 sixteenths out from the caster toward the cell, size ÷ 2 long,
     /// as wide as the template's width and length make its angle, and leaves the
     /// caster out; a line is a box centred on the cell (a wall's middle), the
@@ -99,10 +101,9 @@ public sealed partial class Battle
             {
                 (x2, y2) = Centre(other);
             }
-            else
+            else if (Rules.Fixes.WallsFromOneCell)
             {
-                // DSUN.EXE asks the player for both ends; cast at one cell, the wall
-                // runs across the caster's line of fire, centred on it, the area's size long.
+                // Across the caster's line of fire, centred on the cell, the area's size long.
                 var (dx, dy) = Polar(Angle(cx, cy, x, y) + 64, Math.Max(16, e.AreaSize(level)) / 2);
                 (x, y, x2, y2) = (x - dx, y - dy, x + dx, y + dy);
             }
