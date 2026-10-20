@@ -259,54 +259,42 @@ public static class Session
 
     private static CharacterRules? _rules;
     private static DarkSun.Game.Rules.CreatureRules? _creatureRules;
+    private static DarkSun.Game.Combat.CombatRules? _combatRules;
+    private static DarkSun.Game.Combat.SpellRules? _spellRules;
 
     /// <summary>
-    /// What creatures do in combat (special abilities, spell and psionic sets,
-    /// the AI's spell weights): a mod's <c>rules/creatures.json</c> if one has
-    /// it, else DSUN.EXE's (<see cref="DarkSun.Game.Rules.CreatureRules.Default"/>).
+    /// What creatures do in combat (special abilities, resistances, spell and
+    /// psionic sets, the AI's spell weights): a mod's <c>rules/creatures.json</c>
+    /// if one has it, else DSUN.EXE's (<see cref="DarkSun.Game.Rules.CreatureRules.Default"/>).
     /// </summary>
-    public static DarkSun.Game.Rules.CreatureRules CreatureRules
+    public static DarkSun.Game.Rules.CreatureRules CreatureRules =>
+        _creatureRules ??= ModRules("creatures.json", DarkSun.Game.Rules.CreatureRules.Read, DarkSun.Game.Rules.CreatureRules.Default);
+
+    /// <summary>The combat numbers and the AI's choices: a mod's <c>rules/combat.json</c>, else the original's.</summary>
+    public static DarkSun.Game.Combat.CombatRules CombatRules =>
+        _combatRules ??= ModRules("combat.json", DarkSun.Game.Combat.CombatRules.Read, DarkSun.Game.Combat.CombatRules.Default);
+
+    /// <summary>What spells, powers and monster effects do in combat: a mod's <c>rules/spells.json</c>, else DSUN.EXE's.</summary>
+    public static DarkSun.Game.Combat.SpellRules SpellRules =>
+        _spellRules ??= ModRules("spells.json", DarkSun.Game.Combat.SpellRules.Read, DarkSun.Game.Combat.SpellRules.Default);
+
+    /// <summary>The first mod's <c>rules/<paramref name="file"/></c>, else <paramref name="original"/> (with a warning if a mod's can't be used).</summary>
+    private static T ModRules<T>(string file, Func<string, T> read, T original)
     {
-        get
+        string? path = Mods.Mods.Select(m => Path.Combine(m.Directory, "rules", file)).FirstOrDefault(File.Exists);
+        try
         {
-            if (_creatureRules is null)
-            {
-                string? path = Mods.Mods.Select(m => Path.Combine(m.Directory, "rules", "creatures.json")).FirstOrDefault(File.Exists);
-                try
-                {
-                    _creatureRules = path is null ? DarkSun.Game.Rules.CreatureRules.Default : DarkSun.Game.Rules.CreatureRules.Read(path);
-                }
-                catch (InvalidDataException e)
-                {
-                    Godot.GD.PushWarning($"Mod file not used: {path}: {e.Message}");
-                    _creatureRules = DarkSun.Game.Rules.CreatureRules.Default;
-                }
-            }
-            return _creatureRules;
+            return path is null ? original : read(path);
+        }
+        catch (InvalidDataException e)
+        {
+            Godot.GD.PushWarning($"Mod file not used: {path}: {e.Message}");
+            return original;
         }
     }
 
     /// <summary>The character creation rules: a mod's <c>rules/characters.json</c> if one has it, else the original's (<see cref="CharacterRules.Default"/>).</summary>
-    public static CharacterRules Rules
-    {
-        get
-        {
-            if (_rules is null)
-            {
-                string? path = Mods.Mods.Select(m => Path.Combine(m.Directory, "rules", "characters.json")).FirstOrDefault(File.Exists);
-                try
-                {
-                    _rules = path is null ? CharacterRules.Default : CharacterRules.Read(path);
-                }
-                catch (InvalidDataException e)
-                {
-                    Godot.GD.PushWarning($"Mod file not used: {path}: {e.Message}");
-                    _rules = CharacterRules.Default;
-                }
-            }
-            return _rules;
-        }
-    }
+    public static CharacterRules Rules => _rules ??= ModRules("characters.json", CharacterRules.Read, CharacterRules.Default);
 
     /// <summary>The names new characters get (<c>TEXT</c> in <c>RESOURCE.GFF</c>).</summary>
     public static CharacterNames Names => _names ??= CharacterNames.Load(Open("RESOURCE.GFF"));

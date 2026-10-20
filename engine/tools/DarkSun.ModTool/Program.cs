@@ -21,8 +21,9 @@
 // builds them all and prints the files that can't be used (exit code 1 if
 // any). gpl-check exports every script as source and assembles it again,
 // and fails unless every one comes back byte for byte. rules writes the
-// original's rule tables into <mod-dir>/rules/ (characters.json, creatures.json),
-// keeping any that are there; check also reads the mods' rule files.
+// original's rule tables into <mod-dir>/rules/ (characters.json, creatures.json,
+// combat.json, spells.json), keeping any that are there; check also reads the
+// mods' rule files.
 
 using System.Globalization;
 using System.Text;
@@ -31,13 +32,20 @@ using DarkSun.Data.Images;
 using DarkSun.Data.Mods;
 using DarkSun.Data.Text;
 using DarkSun.Game.Characters;
+using DarkSun.Game.Combat;
 using DarkSun.Game.Rules;
 using DarkSun.Game.Scripting;
 
 string[] imageTags = ["BMP ", "CBMP", "TILE", "ICON", "PORT", "WALL"];
 string[] textTags = ["TEXT", "MERR", "SPIN"];
-// The rule files a mod may have in rules/, and what reads each (throwing InvalidDataException when it can't be used).
-(string File, Action<string> Read)[] ruleFiles = [("characters.json", p => CharacterRules.Read(p)), ("creatures.json", p => CreatureRules.Read(p))];
+// The rule files a mod may have in rules/, what reads each (throwing InvalidDataException when it can't be used) and the original's.
+(string File, Action<string> Read, Func<string> Original)[] ruleFiles =
+[
+    ("characters.json", p => CharacterRules.Read(p), () => CharacterRules.Default.ToJson()),
+    ("creatures.json", p => CreatureRules.Read(p), () => CreatureRules.Default.ToJson()),
+    ("combat.json", p => CombatRules.Read(p), () => CombatRules.Default.ToJson()),
+    ("spells.json", p => SpellRules.Read(p), () => SpellRules.Default.ToJson()),
+];
 
 if (args.Length >= 6 && args[0] == "export")
 {
@@ -119,7 +127,7 @@ if (args.Length == 3 && args[0] == "check")
     var bad = new List<string>();
     foreach (var mod in mods.Mods)
     {
-        foreach (var (file, read) in ruleFiles)
+        foreach (var (file, read, _) in ruleFiles)
         {
             string path = Path.Combine(mod.Directory, "rules", file);
             try
@@ -150,7 +158,7 @@ if (args.Length == 2 && args[0] == "rules")
 {
     string dir = Path.Combine(args[1], "rules");
     Directory.CreateDirectory(dir);
-    foreach (var (file, json) in new[] { ("characters.json", CharacterRules.Default.ToJson()), ("creatures.json", CreatureRules.Default.ToJson()) })
+    foreach (var (file, _, original) in ruleFiles)
     {
         string path = Path.Combine(dir, file);
         if (File.Exists(path))
@@ -158,7 +166,7 @@ if (args.Length == 2 && args[0] == "rules")
             Console.WriteLine($"{path}: kept (already there)");
             continue;
         }
-        File.WriteAllText(path, json);
+        File.WriteAllText(path, original());
         Console.WriteLine($"{path}: the original's rules");
     }
     return 0;

@@ -35,16 +35,16 @@ public class CreatureRulesTests
     }
 
     [Fact]
-    public void ResistancesAreTheHighestChanceThatMatches()
+    public void ResistancesAreTheHighestPercentThatMatches()
     {
         const DamageElement sword = DamageElement.Slashing, plus1 = DamageElement.Plus1;
         // Shadows (13): hit only by +1 weapons.
-        Assert.Equal((0, 100), (Original.ChanceToAffect(13, sword), Original.ChanceToAffect(13, sword | plus1)));
+        Assert.Equal((0, 100), (Original.DamagePercent(13, sword), Original.DamagePercent(13, sword | plus1)));
         // Elementals (7) need +2; the rampager (12) takes half from a sword, all from Fireball.
-        Assert.Equal((0, 100), (Original.ChanceToAffect(7, sword | plus1), Original.ChanceToAffect(7, sword | plus1 | DamageElement.Plus2)));
-        Assert.Equal((50, 100), (Original.ChanceToAffect(12, sword), Original.ChanceToAffect(12, DamageElement.Fire | DamageElement.Magic)));
+        Assert.Equal((0, 100), (Original.DamagePercent(7, sword | plus1), Original.DamagePercent(7, sword | plus1 | DamageElement.Plus2)));
+        Assert.Equal((50, 100), (Original.DamagePercent(12, sword), Original.DamagePercent(12, DamageElement.Fire | DamageElement.Magic)));
         // No row, or a type past the table: always.
-        Assert.Equal((100, 100), (Original.ChanceToAffect(0, sword), Original.ChanceToAffect(129, sword)));
+        Assert.Equal((100, 100), (Original.DamagePercent(0, sword), Original.DamagePercent(129, sword)));
     }
 
     [Fact]

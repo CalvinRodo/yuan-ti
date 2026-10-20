@@ -13,8 +13,11 @@ public sealed record CreatureAbility(int Bit, int Spell);
 
 /// <summary>
 /// One entry of a type's resistances (<c>3E45:00D2</c>, <c>80F5:28F2</c>): a
-/// hit or spell with any of <paramref name="Elements"/> affects the creature
-/// <paramref name="Percent"/> % of the time.
+/// hit or spell with any of <paramref name="Elements"/> does
+/// <paramref name="Percent"/> % of its damage (<c>80F5:0079</c>: damage ×
+/// percent / 100); 0 leaves the creature unaffected, effect and all
+/// (<c>80F5:161F</c>). The ssurrans' 50 % against fire is the manual's "half
+/// damage from fire".
 /// </summary>
 public sealed record CreatureResistance(DamageElement Elements, int Percent);
 
@@ -178,12 +181,12 @@ public sealed partial record CreatureRules
     public bool HasAbility(int type, CreatureAbilityBit bit) => HasAbility(type, (int)bit);
 
     /// <summary>
-    /// The percent chance a hit or spell of <paramref name="elements"/> affects
-    /// type <paramref name="type"/>: the highest of its resistances that share a
-    /// bit with them, else 100 (<c>80F5:28F2</c>, before the target's
-    /// protection conditions halve it).
+    /// The percent of a hit's or spell's damage that type <paramref name="type"/>
+    /// takes from <paramref name="elements"/>: the highest of its resistances
+    /// that share a bit with them, else 100 (<c>80F5:28F2</c>, before the
+    /// target's protection conditions halve it); 0 is unaffected.
     /// </summary>
-    public int ChanceToAffect(int type, DamageElement elements) =>
+    public int DamagePercent(int type, DamageElement elements) =>
         type >= 0 && type < Resistances.Count && Resistances[type].Where(r => (r.Elements & elements) != 0).ToList() is { Count: > 0 } hits
             ? hits.Max(r => r.Percent)
             : 100;

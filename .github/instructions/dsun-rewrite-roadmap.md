@@ -536,15 +536,36 @@ executable, not in the data.
 - [ ] Decide whether to fix the original's swapped resistance rows for
       the fire elemental and lesser fire elemental (types 32, 33: the
       lesser one needs +2 weapons, the greater +1).
-- [ ] Combat effects to port with the AI: charges, guarding and waiting,
-      the on-hit effects and immunities by ability bit, and resistances
-      (`dsun-exe-reference.md` §8).
-- [ ] Monster AI: port `612E:0BAD`'s order of choices as data-driven rules
-      (the weapon score, target choice and action order in JSON, so mods can
-      change them). Keep the random target pick (`612E:1284`) as the default
-      for fidelity; offer smarter targeting as an option.
+- [x] Combat rules and effects ported (2026-10-20, `DarkSun.Game.Combat`,
+      headless): `Battle` runs rounds (initiative, movement points, speed
+      conditions), turns, GUARD / WAIT / END TURN, attacks (THAC0, armour
+      class with Dexterity, shields and Armor's cap, from behind, backstab,
+      natural attacks, Strength), spells, powers and abilities with their
+      areas, immunities, magic resistance, resistances, saves, conditions
+      with durations or charges, regeneration, poison and acid each round,
+      the on-hit effects by ability bit, corrosion and breakage. DSUN.EXE's
+      196 spell records, 45 area templates and 34 power records ship as
+      `SpellRules` (`rules/spells.json`). Checked over 600 random fights
+      with every creature in `SEGOBJEX.GFF`.
+- [x] Monster AI (2026-10-20, `Battle.RunAi`): `612E:0BAD`'s minds (flee,
+      stand by, Berserk, Confused), target keeping, its steps (spells by
+      weight with stepping back, abilities one turn in 4, psionics, attack,
+      an adjacent enemy, move, missile weapon, guard), area targeting by hit
+      points and the weapon score with re-equipping. Their order, the
+      targeting (Random as in the original; Nearest, Weakest, Casters), the
+      weapon score and the round's numbers are `CombatRules`
+      (`rules/combat.json`).
+- [ ] Combat still approximate or missing: area shapes (sizes are the
+      original's, the circle / cone / line geometry isn't), lingering areas
+      (clouds and walls act once), psionic attack and defence modes (powers
+      act as spells), a creature's casts per spell (one each; `6798:0366`'s
+      table isn't traced), Charmed changing sides, Negative Plane
+      Protection, the rest of `80F5:05E6`'s handlers and `80F5:119C`'s save
+      bonuses, multi-cell creatures' reach.
 - [ ] Tactical combat scene on the region map, with clear feedback: hit chance
-      shown, a combat log, damage numbers.
+      shown, a combat log, damage numbers. FIGHT starts a `Battle` from the
+      region's creatures (`Combatant.FromCreature`) and the party; the party's
+      combatants come from their character sheets.
 - [ ] Keep the rules in data (JSON tables) wherever possible, so they're easy to
       tune and mod.
 

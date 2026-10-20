@@ -1,0 +1,261 @@
+using DarkSun.Data.Items;
+using DarkSun.Data.Regions;
+using DarkSun.Game.Movement;
+using DarkSun.Game.Rules;
+using DarkSun.Game.World;
+
+namespace DarkSun.Game.Combat;
+
+/// <summary>A weapon in use: its type and the item's bonus (record +0x14).</summary>
+public sealed record Weapon(ItemType Type, int Bonus = 0, Item? Item = null)
+{
+    public bool IsMissile => Type.Range > 1;
+
+    /// <summary>Magic: a bonus, or a named magic item (<c>IT1R</c> +8 &amp; 0x80).</summary>
+    public bool Magic => Bonus > 0 || (Type.Material & 0x80) != 0;
+
+    /// <summary>
+    /// What the AI's weapon score counts as magic (<c>612E:0350</c>): a bonus,
+    /// the item's +0x0F, or <c>IT1R</c> +8 &amp; 4, which every metal (4) and
+    /// leather (5) item has, as the original reads it.
+    /// </summary>
+    public bool ScoresAsMagic => Bonus > 0 || Item is { Record.Flags: not 0 } || (Type.Material & 0x04) != 0;
+
+    /// <summary>What a hit is made of: the type's damage bits and the magic bits for its bonus (<c>612E:1359</c>).</summary>
+    public DamageElement Elements => (DamageElement)Type.DamageType | Bonus switch
+    {
+        <= 0 => DamageElement.None,
+        1 => DamageElement.Plus1,
+        2 => DamageElement.Plus1 | DamageElement.Plus2,
+        _ => DamageElement.Plus1 | DamageElement.Plus2 | DamageElement.Plus3,
+    };
+
+    /// <summary>
+    /// The to-hit penalty of a weapon not made of metal, when it has no bonus and
+    /// isn't magic (<c>6868:0411</c>): wooden −3, bone −1, stone and obsidian −2.
+    /// </summary>
+    public int MaterialToHit => Magic ? 0 : Type.MadeOf switch
+    {
+        ItemMaterial.Wooden => -3,
+        ItemMaterial.Bone => -1,
+        ItemMaterial.Stone or ItemMaterial.Obsidian => -2,
+        _ => 0,
+    };
+
+    /// <summary>The damage penalty for the material (<c>6868:0489</c>): wooden −2, bone, stone, obsidian −1.</summary>
+    public int MaterialDamage => Type.MadeOf switch
+    {
+        ItemMaterial.Wooden => -2,
+        ItemMaterial.Bone or ItemMaterial.Stone or ItemMaterial.Obsidian => -1,
+        _ => 0,
+    };
+}
+
+/// <summary>
+/// One side of a fight: what DSUN.EXE reads from a combatant's combat and
+/// character records (<c>dsun-exe-reference.md</c> §8) and its state for the
+/// fight. <see cref="FromCreature"/> builds one from a region creature; a
+/// party member's values come from its character sheet. <see cref="Vitals"/>
+/// is shared with the world object, so damage done here is the creature's.
+/// </summary>
+public sealed class Combatant
+{
+    public required string Name { get; init; }
+
+    /// <summary>Allegiance (+0x1D): 1 the party's side, 2 its enemies; &amp; 3 fights.</summary>
+    public int Side { get; set; }
+
+    public Vitals Vitals { get; init; } = new() { Hp = 1, MaxHp = 1 };
+
+    public Cell Cell { get; set; }
+
+    /// <summary>Facing 0–7 clockwise from north.</summary>
+    public int Facing { get; set; }
+
+    /// <summary>A party member (indexes 0–3): the AI uses no psionics for them, they give no experience.</summary>
+    public bool PartyMember { get; init; }
+
+    /// <summary>Computer control (+0x21 &amp; 0x20); conditions such as Charmed also hand it over (<see cref="UnderAi"/>).</summary>
+    public bool ComputerControlled { get; set; }
+
+    /// <summary>Armour class before effects: the character record's +0x27 for a creature, the sheet's for a member.</summary>
+    public int ArmorClass { get; set; } = 10;
+
+    /// <summary>Of <see cref="ArmorClass"/>, what shields give (they don't count from behind).</summary>
+    public int ShieldClass { get; init; }
+
+    public int Thac0 { get; init; } = 20;
+
+    /// <summary>Move (+0x1B): movement points are this × 10 a round.</summary>
+    public int Move { get; init; } = 12;
+
+    /// <summary>Str, Dex, Con, Int, Wis, Cha (+0x22).</summary>
+    public IReadOnlyList<int> Stats { get; init; } = [10, 10, 10, 10, 10, 10];
+
+    /// <summary>The creature type (+0x16): its abilities and resistances (<see cref="DarkSun.Game.Rules.CreatureRules"/>).</summary>
+    public int Type { get; init; }
+
+    /// <summary>What the AI does when no condition overrides it (+0x1E; 1 flees, 8 stands by).</summary>
+    public int Mind { get; init; } = 2;
+
+    /// <summary>The level its spells and abilities are cast at.</summary>
+    public int Level { get; init; } = 1;
+
+    /// <summary>Character record +0x18: 9 is undead, 8 thri-kreen.</summary>
+    public int Race { get; init; }
+
+    public int MagicResistance { get; init; }
+
+    /// <summary>The five saving throws (paralysation, rod, petrification, breath, spell).</summary>
+    public IReadOnlyList<int> Saves { get; init; } = [16, 16, 16, 16, 16];
+
+    /// <summary>Attacks a round in halves (+0x2A; 3 alternates 1 and 2).</summary>
+    public int AttackHalves { get; init; } = 2;
+
+    /// <summary>Attacks without a weapon (+0x2B …).</summary>
+    public IReadOnlyList<NaturalAttack> NaturalAttacks { get; init; } = [new(2, 1, 2, 0)];
+
+    /// <summary>The weapon in hand (slot 3), if any.</summary>
+    public Weapon? Weapon { get; set; }
+
+    /// <summary>A missile weapon (slot 2) and how many shots its ammunition (slot 1) has.</summary>
+    public Weapon? MissileWeapon { get; set; }
+
+    public int Ammunition { get; set; }
+
+    /// <summary>A thief's level, for backstabs (0 for others).</summary>
+    public int ThiefLevel { get; init; }
+
+    /// <summary>Spells it can still cast this fight (<c>SPIN</c> numbers, one entry a slot).</summary>
+    public List<int> Spells { get; init; } = [];
+
+    public int Psp { get; set; }
+
+    /// <summary>Its psionic set (+0x46), 0 none.</summary>
+    public int PsionicSet { get; init; }
+
+    /// <summary>What it carries; corrosion destroys items here.</summary>
+    public List<Item> Items { get; init; } = [];
+
+    /// <summary>The region object it is, if any.</summary>
+    public WorldObject? Source { get; init; }
+
+    public List<ActiveEffect> Effects { get; } = [];
+
+    // -- the fight's state (612E:0754, 612E:0BAD) ------------------------------------------------
+
+    public int Initiative { get; internal set; } = -1;
+
+    internal int TieBreak { get; set; }
+
+    public int MovementPoints { get; internal set; }
+
+    public TurnFlags Flags { get; internal set; }
+
+    /// <summary>Guarding (<c>3931:0231</c>): attacks the first enemy that moves next to it.</summary>
+    public bool Guarding { get; internal set; }
+
+    /// <summary>The AI's target (<c>3931:01DD</c>).</summary>
+    public Combatant? Target { get; internal set; }
+
+    /// <summary>The AI has tried its spells this round (<c>37BD:00AF</c>).</summary>
+    internal bool TriedSpells { get; set; }
+
+    /// <summary>This turn's mind (<c>DS:4946</c>, <c>8053:000E</c>).</summary>
+    public int CurrentMind { get; internal set; }
+
+    public bool Alive => Vitals.Alive;
+
+    /// <summary>Still in the fight: alive, on a side that fights.</summary>
+    public bool Fights => Alive && (Side & 3) != 0;
+
+    public bool Has(Condition c) => Effects.Any(e => e.Condition == c);
+
+    /// <summary>Afraid, Charmed, Berserk and Confused hand a creature to the AI (combat record +0x21 |= 0x60, <c>8053:03C0</c>).</summary>
+    public bool UnderAi => ComputerControlled || Has(Condition.Afraid) || Has(Condition.Charmed) || Has(Condition.Berserk) || Has(Condition.Confused);
+
+    /// <summary>Is <paramref name="other"/> on a side this one fights (allegiance &amp; (3 − own))?</summary>
+    public bool IsEnemyOf(Combatant other) => other.Fights && (other.Side & (3 - (Side & 3))) != 0;
+
+    public bool IsUndead => Race == 9;
+
+    public override string ToString() => Name;
+
+    /// <summary>
+    /// A region creature as a combatant: its combat record (THAC0, Move, the
+    /// abilities, type, mind, flags), its character record (armour class, level,
+    /// saves, magic resistance, attacks, spell and psionic sets) and the weapons
+    /// it wears (<paramref name="catalog"/> gives their types). Its spells are
+    /// its set's (<paramref name="creatures"/>), each once: DSUN.EXE counts a
+    /// creature's casts in a table (<c>6798:0366</c>) whose starting values
+    /// aren't traced.
+    /// </summary>
+    public static Combatant FromCreature(WorldObject obj, ItemCatalog? catalog = null, CreatureRules? creatures = null) =>
+        Build(obj.Record, obj.Character, obj.Items, obj.Vitals, obj.Name, obj.Allegiance, obj.Kind == ObjectKind.Party,
+            catalog, creatures, obj, obj.Cell, obj.Facing);
+
+    /// <summary>A creature straight from its <c>RDFF</c> (<see cref="CreatureDefinition"/>), carrying its items, with full hit points.</summary>
+    public static Combatant FromDefinition(CreatureDefinition d, ItemCatalog? catalog = null, CreatureRules? creatures = null, Cell cell = default)
+    {
+        List<Item> items = [.. d.Carried.Select(r => new Item(-r.Id, r, 1, r.Slot < Equipment.Slots ? r.Slot : Equipment.Pack))];
+        var vitals = new Vitals { Hp = Math.Max(1, d.HitPoints), MaxHp = Math.Max(1, d.HitPoints) };
+        return Build(d.Combat, d.Character, items, vitals, d.Combat.Name, d.Combat.Allegiance, false, catalog, creatures, null, cell, 0);
+    }
+
+    private static Combatant Build(CombatRecord? r, CharacterRecord? ch, List<Item> carried, Vitals vitals, string name, int side,
+        bool party, ItemCatalog? catalog, CreatureRules? creatures, WorldObject? source, Cell cell, int facing)
+    {
+        Weapon? WornIn(int slot) =>
+            catalog is null ? null
+            : carried.FirstOrDefault(i => i.Slot == slot) is { } item && catalog.TypeOf(item.Record) is { IsWeapon: true } type
+                ? new Weapon(type, item.Record.Bonus, item)
+                : null;
+        Item? ammo = carried.FirstOrDefault(i => i.Slot == 1);
+        return new Combatant
+        {
+            Name = name.Length > 0 ? name : r?.Name ?? "",
+            Side = side,
+            Vitals = vitals,
+            Cell = cell,
+            Facing = facing,
+            PartyMember = party,
+            ComputerControlled = r?.ComputerControlled ?? !party,
+            ArmorClass = ch?.BaseArmorClass ?? r?.Ac ?? 10,
+            Thac0 = r?.Thac0 ?? 20,
+            Move = r?.Move ?? 12,
+            Stats = r is null ? [10, 10, 10, 10, 10, 10] : [.. r.Stats.Select(s => (int)s)],
+            Type = r?.SpecialAttack ?? 0,
+            Mind = r?.Mind ?? 2,
+            Level = ch is null ? 1 : Math.Max(1, (int)ch.Levels.ToArray().Max()),
+            Race = ch?.Race ?? 0,
+            MagicResistance = Math.Max(0, (int)(ch?.MagicResistance ?? 0)),
+            Saves = ch is null ? [16, 16, 16, 16, 16] : [.. ch.Saves.ToArray().Select(s => (int)s)],
+            AttackHalves = ch is { AttackHalves: > 0 } ? ch.AttackHalves : 2,
+            NaturalAttacks = ch is null ? [new(2, 1, 2, 0)]
+                : [.. Enumerable.Range(0, CharacterRecord.NaturalAttackCount).Select(ch.NaturalAttack).Where(n => n.Exists)],
+            Weapon = WornIn(3),
+            MissileWeapon = WornIn(2),
+            Ammunition = ammo?.Quantity ?? 0,
+            Spells = [.. creatures is not null && ch is not null ? creatures.SpellsOf(ch.SpellSet) : []],
+            Psp = r?.Psp ?? 0,
+            PsionicSet = ch?.PsionicSet ?? 0,
+            Items = carried,
+            Source = source,
+        };
+    }
+}
+
+/// <summary>A combatant's action flags (<c>37BD:01D5</c>), 0x3FF at the start of a round.</summary>
+[Flags]
+public enum TurnFlags
+{
+    None = 0,
+    MayMove = 0x001,
+    MayAttack = 0x002,
+    Waited = 0x010,
+    Reequip = 0x040,
+    MayUsePsionics = 0x080,
+    NewRound = 0x100,
+    MayUseAbility = 0x200,
+    All = 0x3FF,
+}

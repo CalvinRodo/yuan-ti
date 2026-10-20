@@ -359,9 +359,25 @@ regeneration, poison on hit, immunity to charm, …) and the 11 the AI tries, in
 (shadows are hit only by magic or +1 weapons, elementals by +2, spiders ignore poison); the spell sets (character record
 +0x3E; `3FB9:0110`) and psionic sets (+0x46; `37F0:001C`); and how much the AI wants each spell
 (`37E5:0000`: Fireball 63, Magic Missile 40, …). Spells and powers are numbered as `SPIN`. A mod can
-replace them with `rules/creatures.json`. `make engine-mod-rules MOD=mods/MyMod` writes both rule
-files with the original's values to start from, and `make engine-mod-check` reports rule files that
-can't be read.
+replace them with `rules/creatures.json`.
+
+Combat itself is `DarkSun.Game.Combat.Battle`, a port of DSUN.EXE's rules that knows nothing of the
+screen (`dsun-exe-reference.md` §8): rounds with initiative and movement points, turns in initiative
+order, GUARD, WAIT and END TURN, attacks (THAC0, armour class, from behind, backstabs, natural
+attacks), spells, psionic powers and monster abilities with their areas, saves, magic resistance and
+resistances, and effects that last rounds or a number of charges (Armor's hits, Mirror Image's
+images, Poison's rounds). A creature's abilities ride on its hits by ability bit (a spider's poison,
+a babau corroding armour and weapons), and its immunities keep effects off it. `Battle.RunAi` is the
+original AI (`612E:0BAD`): its steps (spells, ability, psionics, attack, move, missile, guard), their
+order, how it picks a target (at random as in the original, or the nearest, the weakest, casters
+first), its weapon score and the round's numbers are `CombatRules` (`rules/combat.json`); what each
+spell, power and monster effect does is `SpellRules` (`rules/spells.json`, DSUN.EXE's 196 records,
+one a line). `Battle.Log` lists what happened for the combat log. The tactical scene that drives it
+is still to come.
+
+`make engine-mod-rules MOD=mods/MyMod` writes all four rule files (`characters.json`,
+`creatures.json`, `combat.json`, `spells.json`) with the original's values to start from, keeping any
+that are there, and `make engine-mod-check` reports rule files that can't be read.
 
 The party is kept in `party.json` in the Godot user data folder and starts
 the next new game (no party: four placeholder characters); characters made

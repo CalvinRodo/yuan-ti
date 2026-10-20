@@ -1439,19 +1439,24 @@ These are AD&D 2nd edition's, but 18 has no percentile strength (+2 to hit,
 ### Spells in combat (`3CB4:0037 + 0x20 · (spell − 1)`)
 
 * A 32-byte record per spell (index = `SPIN` number − 1; checked against
-  the saves of 18 spells). The fields the code reads:
+  the saves of 18 spells; 196 records, the monster effects up to 196). The
+  engine ships them as `DarkSun.Game.Combat.SpellRules` (`rules/spells.json`).
+  The fields the code reads:
 
   | Offset | Read as | Meaning (examples) |
   |---|---|---|
+  | −0x06 | word | range (`8BEB:07F3`): (this + −0x04 × level) × 4, in sixteenths of a cell; −1 touch (8), −2 a short reach (28). Magic Missile 720 + 120 a level, Fireball 120 + 80 |
+  | −0x04 | byte | range per level |
   | −0x03 | byte | duration dice: low 4 bits count, high 4 sides (Color Spray 0x42: 2d4; Haste 0x13: 3) |
   | −0x02 | word | duration per level (Hold Person 2, Shield 5) |
   | +0x00 | word | duration unit: 60 (a round) for most, 600 a turn, 3600 an hour, −9999 permanent (Charm Person, Thought Shield), 0 instant (Magic Missile), −1 **charges**: the duration is a count of uses, not time (see "Charges") |
-  | +0x02 | word | area size: 1, 40 (Burning Hands, Lightning Bolt), 80 (Fireball), 240 (Confusion) |
+  | +0x02 | word | area size (`8BEB:086F`): this + +0x04 × level, doubled for a circle template; 1, 40 (Burning Hands, Lightning Bolt), 80 (Fireball), 240 (Confusion). Cones use it as their range |
+  | +0x04 | byte | area size per level (Cone of Cold 40) |
   | +0x05 | byte | target: 1 an area, 3 touch, 4 a creature, 6 a cone, 7 self |
   | +0x09 | byte | projectile (Magic Missile 4, Fireball 1, Lightning 5); 0xFF none |
   | +0x0A | word | flags: 0x4000 damaging, 0x0200 combat only, 0x8000 no damage if saved (else half), 0x0010 psionic |
   | +0x0D | word | effect graphic (0x20xx), 0xFFFF none |
-  | +0x10 | byte | animation (×0x12 table) |
+  | +0x10 | byte | area template (signed, −1 none): `3C81:0000 + 0x12 ·` it; byte +2 & 0xF its kind (1 a burst gone at once, 0 fog, 2 on the ground, 3 a cloud; `80F5:161F`), +5 bits 2–3 its shape (0 a line or wall, 1 a circle, 2 a cone; `8BEB:0000`), +7, +8, +9 its proportions (`8BEB:0393`) |
   | +0x12 | byte | condition on a failed save: Armor 2, Charm 10, Confusion 11, Ego Whip 33, Hold 34, Shield 46 |
   | +0x13 | word | element bits for resistances (see "Elements"): poison 0x1, fire 0x2, cold 0x4, acid 0x40, electricity 0x80, negative 0x100, magic 0x200, psionic 0x400 |
   | +0x15 | byte | damage: bits 5–7 dice per step, bits 0–4 flat damage per step |
@@ -1509,9 +1514,11 @@ These are AD&D 2nd edition's, but 18 has no percentile strength (+2 to hit,
   carry them. A creature's resistances (`80F5:28F2`) are the 4-entry row
   `3E45:00D2 + 12·row`, row = `3E45:00A8`[type] (type = combat record
   +0x16, 42 types, 16 rows): entry i is an element mask (word +2i) and a
-  percent (byte +8 + i). The chance an effect gets through is the highest
-  percent among the entries sharing a bit with its elements, else 100; then
-  the target's protection conditions halve it, and some make it 0. Most rows
+  percent (byte +8 + i). The percent of the damage taken is the highest
+  among the entries sharing a bit with its elements, else 100; then the
+  target's protection conditions halve it, and some make it 0. `80F5:0079`
+  multiplies the damage by it ÷ 100; at 0 `161F` stops the effect too
+  (the ssurrans' 50 % against fire is the manual's "half damage from fire"). Most rows
   are AD&D's "hit only by magic weapons": babau, shadows and lesser
   elementals take physical elements at 0 % and anything with magic or +1 at
   100 %; elementals and vrocks need +2. Spiders ignore poison, slimes all but
@@ -1725,6 +1732,8 @@ loop calls the AI again.
   `37E5:0000` (sizes from the segment table and the layout of `3E45`: 42
   masks, 16 resistance rows, 174 weights; spell sets 0–9, psionic sets 1–9
   used, the rows after them zero).
+* The engine's port is `DarkSun.Game.Combat.Battle` (`Battle.Ai.cs` for
+  this AI; its choices are `CombatRules`, `rules/combat.json`).
 * **Distance** (`0898:000C`) is in cells: the smallest d with d² ≥ dx² +
   dy², from an octagonal first guess. 999 out of range.
 
