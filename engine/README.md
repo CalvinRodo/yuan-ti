@@ -351,6 +351,16 @@ sphere for clerics, druids and rangers. Where the manual contradicts itself,
 half-giants can't be rangers and muls and thri-kreen can't be druids. A mod can replace the rules with
 `rules/characters.json` in its folder (the same JSON `CharacterRules` reads).
 
+What creatures can do in combat beyond their `RDFF` records is in DSUN.EXE, not the data files, so
+the engine ships it as `DarkSun.Game.Rules.CreatureRules` (`dsun-exe-reference.md` §8, "The AI"): the
+special abilities each type has (combat record +0x16; `3E45:0000`) and the 11 the AI tries, in order,
+one turn in 4 (a fire cone, Fireball, paralysis, a web, Fear …); the spell sets (character record
++0x3E; `3FB9:0110`) and psionic sets (+0x46; `37F0:001C`); and how much the AI wants each spell
+(`37E5:0000`: Fireball 63, Magic Missile 40, …). Spells and powers are numbered as `SPIN`. A mod can
+replace them with `rules/creatures.json`. `make engine-mod-rules MOD=mods/MyMod` writes both rule
+files with the original's values to start from, and `make engine-mod-check` reports rule files that
+can't be read.
+
 The party is kept in `party.json` in the Godot user data folder and starts
 the next new game (no party: four placeholder characters); characters made
 or dropped are kept in `characters/` for ADD. Party members walk as their

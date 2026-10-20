@@ -3,6 +3,7 @@
 //   DarkSun.ModTool list <game-dir> <mods-dir>
 //   DarkSun.ModTool check <game-dir> <mods-dir>
 //   DarkSun.ModTool gpl-check <game-dir>
+//   DarkSun.ModTool rules <mod-dir>
 //
 // export writes a resource into a mod folder in the form the engine reads
 // back: images as PNG (one file, or a folder with one PNG per frame), text
@@ -19,7 +20,9 @@
 // list prints every resource the mods in <mods-dir> replace or add; check
 // builds them all and prints the files that can't be used (exit code 1 if
 // any). gpl-check exports every script as source and assembles it again,
-// and fails unless every one comes back byte for byte.
+// and fails unless every one comes back byte for byte. rules writes the
+// original's rule tables into <mod-dir>/rules/ (characters.json, creatures.json),
+// keeping any that are there; check also reads the mods' rule files.
 
 using System.Globalization;
 using System.Text;
@@ -27,10 +30,14 @@ using DarkSun.Data.Gff;
 using DarkSun.Data.Images;
 using DarkSun.Data.Mods;
 using DarkSun.Data.Text;
+using DarkSun.Game.Characters;
+using DarkSun.Game.Rules;
 using DarkSun.Game.Scripting;
 
 string[] imageTags = ["BMP ", "CBMP", "TILE", "ICON", "PORT", "WALL"];
 string[] textTags = ["TEXT", "MERR", "SPIN"];
+// The rule files a mod may have in rules/, and what reads each (throwing InvalidDataException when it can't be used).
+(string File, Action<string> Read)[] ruleFiles = [("characters.json", p => CharacterRules.Read(p)), ("creatures.json", p => CreatureRules.Read(p))];
 
 if (args.Length >= 6 && args[0] == "export")
 {
@@ -109,12 +116,52 @@ if (args.Length == 3 && args[0] == "check")
     ModSet mods = ModSet.Load([args[2]], GplModFormat.Builders);
     var problems = mods.Verify(Directory.EnumerateFiles(args[1], "*.GFF", new EnumerationOptions { MatchCasing = MatchCasing.CaseInsensitive })
         .Order().Select(p => (Path.GetFileName(p).ToUpperInvariant(), GffFile.Open(p))));
-    Console.WriteLine($"{mods.Mods.Count} mods, {mods.Count} resources, {problems.Count} files can't be used");
+    var bad = new List<string>();
+    foreach (var mod in mods.Mods)
+    {
+        foreach (var (file, read) in ruleFiles)
+        {
+            string path = Path.Combine(mod.Directory, "rules", file);
+            try
+            {
+                if (File.Exists(path))
+                {
+                    read(path);
+                }
+            }
+            catch (InvalidDataException e)
+            {
+                bad.Add($"{path}: {e.Message}");
+            }
+        }
+    }
+    Console.WriteLine($"{mods.Mods.Count} mods, {mods.Count} resources, {problems.Count + bad.Count} files can't be used");
     foreach (ModProblem p in problems)
     {
         Console.WriteLine($"  {p}");
     }
-    return problems.Count > 0 ? 1 : 0;
+    foreach (string b in bad)
+    {
+        Console.WriteLine($"  {b}");
+    }
+    return problems.Count + bad.Count > 0 ? 1 : 0;
+}
+if (args.Length == 2 && args[0] == "rules")
+{
+    string dir = Path.Combine(args[1], "rules");
+    Directory.CreateDirectory(dir);
+    foreach (var (file, json) in new[] { ("characters.json", CharacterRules.Default.ToJson()), ("creatures.json", CreatureRules.Default.ToJson()) })
+    {
+        string path = Path.Combine(dir, file);
+        if (File.Exists(path))
+        {
+            Console.WriteLine($"{path}: kept (already there)");
+            continue;
+        }
+        File.WriteAllText(path, json);
+        Console.WriteLine($"{path}: the original's rules");
+    }
+    return 0;
 }
 if (args.Length == 2 && args[0] == "gpl-check")
 {
@@ -175,6 +222,7 @@ Console.Error.WriteLine("usage: DarkSun.ModTool export <game-dir> <file.gff> <ta
 Console.Error.WriteLine("       DarkSun.ModTool list <game-dir> <mods-dir>");
 Console.Error.WriteLine("       DarkSun.ModTool check <game-dir> <mods-dir>");
 Console.Error.WriteLine("       DarkSun.ModTool gpl-check <game-dir>");
+Console.Error.WriteLine("       DarkSun.ModTool rules <mod-dir>");
 return 2;
 
 static byte[] FieldTypes(GffFile gpl) => gpl.TryRead("GPLX", 1, out var gplx) ? GplDecoder.FieldTypes(gplx.Span) : [];

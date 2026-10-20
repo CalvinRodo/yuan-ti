@@ -1673,6 +1673,13 @@ loop calls the AI again.
   9. **Otherwise:** with more than 10 movement points left, forget the
      target. With flag 0x2, `612E:2514(actor, 1)` sets byte +0x231 for this
      combatant (*meaning unverified*) and ends the turn; else it just ends.
+* The tables this uses that are only in the EXE (ability masks and the 11
+  abilities, spell and psionic sets, spell weights) ship as
+  `DarkSun.Game.Rules.CreatureRules`, generated from `3E45:0000`,
+  `DS:05D0`/`05DB`, `3FB9:0110`, `37F0:001C` and `37E5:0000` (sizes from the
+  segment table: 100 masks, 174 weights; spell sets 0–9, psionic sets 1–9
+  used, the rows after them zero). The other ability bits (not the AI's 11)
+  are tested by `80F5:0E61`, `161F`, `1E07`, `31AB`, `8053:0163` and `8B7D`.
 * **Distance** (`0898:000C`) is in cells: the smallest d with d² ≥ dx² +
   dy², from an octagonal first guess. 999 out of range.
 

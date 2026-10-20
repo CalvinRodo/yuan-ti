@@ -258,6 +258,33 @@ public static class Session
     }
 
     private static CharacterRules? _rules;
+    private static DarkSun.Game.Rules.CreatureRules? _creatureRules;
+
+    /// <summary>
+    /// What creatures do in combat (special abilities, spell and psionic sets,
+    /// the AI's spell weights): a mod's <c>rules/creatures.json</c> if one has
+    /// it, else DSUN.EXE's (<see cref="DarkSun.Game.Rules.CreatureRules.Default"/>).
+    /// </summary>
+    public static DarkSun.Game.Rules.CreatureRules CreatureRules
+    {
+        get
+        {
+            if (_creatureRules is null)
+            {
+                string? path = Mods.Mods.Select(m => Path.Combine(m.Directory, "rules", "creatures.json")).FirstOrDefault(File.Exists);
+                try
+                {
+                    _creatureRules = path is null ? DarkSun.Game.Rules.CreatureRules.Default : DarkSun.Game.Rules.CreatureRules.Read(path);
+                }
+                catch (InvalidDataException e)
+                {
+                    Godot.GD.PushWarning($"Mod file not used: {path}: {e.Message}");
+                    _creatureRules = DarkSun.Game.Rules.CreatureRules.Default;
+                }
+            }
+            return _creatureRules;
+        }
+    }
 
     /// <summary>The character creation rules: a mod's <c>rules/characters.json</c> if one has it, else the original's (<see cref="CharacterRules.Default"/>).</summary>
     public static CharacterRules Rules

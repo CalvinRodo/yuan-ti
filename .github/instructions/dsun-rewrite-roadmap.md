@@ -512,9 +512,16 @@ executable, not in the data.
       experience to the party (`612E:25F2`). The `RDFF` JSON mod format edits
       the new fields; `make engine-compare` checks the carried items against
       `ds1_parsers.py`.
-- [ ] The creature spell and psionic sets (`3FB9:0110`, `37F0:001C`) and the
-      special-ability masks (`3E45:0000`) are in DSUN.EXE, not the data
-      files: ship them as JSON rule tables for the combat AI.
+- [x] The creature tables that are only in DSUN.EXE ship as rules
+      (2026-10-20, `DarkSun.Game.Rules.CreatureRules`): special-ability masks
+      by type (`3E45:0000`, 100 types) and the 11 abilities the AI tries in
+      order (`DS:05D0`/`05DB`), spell sets (`3FB9:0110`), psionic sets
+      (`37F0:001C`) and the AI's spell weights (`37E5:0000`), numbered as
+      `SPIN`. A mod replaces them with `rules/creatures.json`;
+      `make engine-mod-rules` writes it (and `characters.json`) with the
+      original's values; `engine-mod-check` validates rule files.
+- [ ] Name the ability bits the AI doesn't use (tested by `80F5`, `8053:0163`,
+      `8B7D`: likely immunities and resistances).
 - [ ] Monster AI: port `612E:0BAD`'s order of choices as data-driven rules
       (the weapon score, target choice and action order in JSON, so mods can
       change them). Keep the random target pick (`612E:1284`) as the default
