@@ -1792,6 +1792,15 @@ isn't restored (the port restores it).
   better; at least 1. Two rolls of 1 … defence both over the attacker's kept
   roll resist it. So the defence modes work only as kept-up powers, and the
   attack modes (+5 0–3) are never compared with them.
+* **Learning from an item** (USE, `91F7:03D0`): items `RDFF` 1400–1499
+  teach the spell or power of record +0x0F − 1 (a record index). A spell
+  (index < 0x8A) is set known if it wasn't ("YOU LEARN THE SPELL", else "YOU
+  ALREADY KNOW THIS SPELL"); a power is learned at rank 1 (`6698:07C5`,
+  "%Fs LEARNED" with its name, power record +6) or, if known, raised a rank
+  (`6698:0685`, at most 30; "%Fs ENHANCED TO %d"); no class, discipline or
+  count is checked. Learning uses up the item (`7BEB:0A06`); anything else
+  is "CANNOT LEARN FROM THIS ITEM". Items 30999 down to 0x754D and
+  0x7929–0x7940 run their own use code instead.
 * `6698:0C54(object, code)` is the level in class code (a psionicist's at
   least 1).
 
@@ -1976,7 +1985,9 @@ Bits 10 and 11 agree with the clue book ("lesser elementals can only be
 affected by +1 or greater weapons, the regular elementals +2") except that
 the resistance rows of types 32 (fire elemental, bit 11) and 33 (lesser fire
 elemental, bit 10) are swapped: in the original the fire elemental takes +1
-weapons and the lesser one needs +2.
+weapons and the lesser one needs +2. The port keeps that and offers `Fixes.FireElementalResistances`
+(`rules/combat.json`): the fire elemental needing +2, the lesser +1, both
+untouched by fire.
 
 **Effect handlers** (`80F5:05E6(target, caster, set, record, saved, …,
 level, allegiance, duration)`): what a record alone doesn't say is a switch

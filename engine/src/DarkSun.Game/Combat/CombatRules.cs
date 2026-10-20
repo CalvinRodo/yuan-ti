@@ -63,14 +63,15 @@ public sealed record WeaponScoring(int PerDieSide = 1, int DamageBonus = 2, int 
 /// <param name="NoStrengthFromAbsorbDisease">Absorb Disease gives no Strength (the original falls through into Strength's handler).</param>
 /// <param name="BerserkSideEnds">A Berserk or Confused combatant goes back to its own side when the condition ends (the original keeps the random one).</param>
 /// <param name="WallsFromOneCell">A wall cast at one cell runs across the line of fire, its area long (the original's AI gives both ends the same cell, a wall of one point).</param>
+/// <param name="FireElementalResistances">The fire elemental (type 32) needs +2 weapons and the lesser one (33) +1, as the clue book has them, both untouched by fire (the original's rows are the wrong way round: <see cref="Battle.FireElementalRows"/>).</param>
 /// <param name="BlessFilterFromItsCell">Bless and Aid leave out those of their side with an enemy beside them, measured from where they stand (the original measures from (x, x), a slip, <c>80F5:249D</c>).</param>
 public sealed record CombatFixes(
     bool MirrorImagesTakeBlows = false, bool NegativePlaneProtectionSaves = false, bool BraveAgainstFear = false,
     bool DexterityAgainstAreas = false, bool NoStrengthFromAbsorbDisease = false, bool BerserkSideEnds = false,
-    bool WallsFromOneCell = false, bool BlessFilterFromItsCell = false)
+    bool WallsFromOneCell = false, bool BlessFilterFromItsCell = false, bool FireElementalResistances = false)
 {
     /// <summary>All of them.</summary>
-    public static CombatFixes All { get; } = new(true, true, true, true, true, true, true, true);
+    public static CombatFixes All { get; } = new(true, true, true, true, true, true, true, true, true);
 }
 
 /// <summary>

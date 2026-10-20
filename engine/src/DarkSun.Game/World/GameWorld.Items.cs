@@ -1,5 +1,7 @@
 using DarkSun.Data.Items;
 using DarkSun.Data.Regions;
+using DarkSun.Game.Characters;
+using DarkSun.Game.Magic;
 using DarkSun.Game.Movement;
 using DarkSun.Game.Scripting;
 
@@ -240,6 +242,28 @@ public sealed partial class GameWorld
         taker.Items.Add(item);
         Remove(ground);
         return true;
+    }
+
+    /// <summary>
+    /// USE on an item that teaches (<see cref="Spellcasting.Teaches"/>,
+    /// <c>91F7:03D0</c>): <paramref name="character"/> learns its spell or power
+    /// (<see cref="Spellcasting.LearnFromItem"/>) and the item goes from
+    /// <paramref name="holder"/>; null when the item teaches nothing.
+    /// <paramref name="name"/> names a spell by number for the message.
+    /// </summary>
+    public string? LearnFrom(WorldObject holder, Item item, Character character, Func<int, string> name)
+    {
+        if (!Spellcasting.Teaches(item.Rdff))
+        {
+            return null;
+        }
+        int number = item.Record.Flags;
+        string message = Spellcasting.LearnFromItem(character, number, name(number), out bool consumed);
+        if (consumed)
+        {
+            holder.Items.Remove(item);
+        }
+        return message;
     }
 
     /// <summary>

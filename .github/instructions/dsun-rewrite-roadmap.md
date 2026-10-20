@@ -533,9 +533,11 @@ executable, not in the data.
       `DamageElement` bits. Nothing tests bits 7, 10, 11 and 28: from the
       manual and clue book 10 and 11 are "+1/+2 weapon to hit", 7 and 28
       likely seeing in the dark and not being surprised.
-- [ ] Decide whether to fix the original's swapped resistance rows for
-      the fire elemental and lesser fire elemental (types 32, 33: the
-      lesser one needs +2 weapons, the greater +1).
+- [x] The fire elementals' swapped resistance rows (types 32, 33: in the
+      original the lesser one needs +2 weapons, the greater +1): a toggle,
+      `Fixes.FireElementalResistances` in `rules/combat.json`, off by
+      default; on, the fire elemental needs +2 and the lesser +1, both
+      untouched by fire (`Battle.FireElementalRows`).
 - [x] Combat rules and effects ported (2026-10-20, `DarkSun.Game.Combat`,
       headless): `Battle` runs rounds (initiative, movement points, speed
       conditions), turns, GUARD / WAIT / END TURN, attacks (THAC0, armour
@@ -584,9 +586,15 @@ executable, not in the data.
       no Strength from Absorb Disease, Berserk's side ending, walls from one
       cell, Bless and Aid's filter measured from the right cell. (A gaze
       flag, 0x80, is on no record; a mod can set it in `rules/spells.json`.)
-- [ ] Power ranks in the character data: learning a known power again
-      from an item (`91F7:03D0`) should raise its rank; `Character` keeps
-      only the powers, so a combatant's ranks are 1 until it does.
+- [x] Power ranks in the character data (2026-10-20): `Character.PowerRanks`
+      (saved with the character), and USE on an item that teaches (`RDFF`
+      1400–1499, `91F7:03D0`) as `GameWorld.LearnFrom` /
+      `Spellcasting.LearnFromItem`: a spell into the spellbook, a power
+      learned at rank 1 or raised a rank (to 30), the item used up.
+      `Combatant.PowerRanksOf` gives a party combatant its ranks.
+- [ ] An inventory USE action that calls `GameWorld.LearnFrom` (no USE
+      exists in the inventory screen yet), and the FIGHT wiring passing
+      `Combatant.PowerRanksOf` and `GameWorld.NewItem` (`Battle.NewItem`).
 - [ ] Tactical combat scene on the region map, with clear feedback: hit chance
       shown, a combat log, damage numbers. FIGHT starts a `Battle` from the
       region's creatures (`Combatant.FromCreature`) and the party; the party's

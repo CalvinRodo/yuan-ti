@@ -1,5 +1,6 @@
 using DarkSun.Data.Items;
 using DarkSun.Data.Regions;
+using DarkSun.Game.Characters;
 using DarkSun.Game.Movement;
 using DarkSun.Game.Rules;
 using DarkSun.Game.World;
@@ -198,6 +199,9 @@ public sealed class Combatant
     /// to the power check and to a defence mode. Missing powers, and monsters, count 1.
     /// </summary>
     public Dictionary<int, int> PowerRanks { get; init; } = [];
+
+    /// <summary>A party member's ranks from its character (<see cref="Character.PowerRanks"/>), for <see cref="PowerRanks"/>.</summary>
+    public static Dictionary<int, int> PowerRanksOf(Character c) => c.Powers.Distinct().ToDictionary(n => n, c.PowerRank);
 
     /// <summary>Its rank in power <paramref name="number"/> (<see cref="PowerRanks"/>).</summary>
     public int PowerRank(int number) => PartyMember ? PowerRanks.GetValueOrDefault(number, 1) : 1;

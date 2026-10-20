@@ -187,9 +187,11 @@ public sealed partial record CreatureRules
     /// target's protection conditions halve it); 0 is unaffected.
     /// </summary>
     public int DamagePercent(int type, DamageElement elements) =>
-        type >= 0 && type < Resistances.Count && Resistances[type].Where(r => (r.Elements & elements) != 0).ToList() is { Count: > 0 } hits
-            ? hits.Max(r => r.Percent)
-            : 100;
+        type >= 0 && type < Resistances.Count ? PercentOf(Resistances[type], elements) : 100;
+
+    /// <summary>The highest percent of <paramref name="row"/> sharing a bit with <paramref name="elements"/>, else 100.</summary>
+    public static int PercentOf(IEnumerable<CreatureResistance> row, DamageElement elements) =>
+        row.Where(r => (r.Elements & elements) != 0).Select(r => r.Percent).DefaultIfEmpty(100).Max();
 
     /// <summary>The abilities the AI may use for <paramref name="type"/>, in the order it tries them.</summary>
     public IEnumerable<CreatureAbility> AbilitiesOf(int type) => Abilities.Where(a => HasAbility(type, a.Bit));

@@ -252,6 +252,51 @@ public sealed class Spellcasting(CharacterRules rules)
         return "IS LEARNED";
     }
 
+    /// <summary>The highest a power's rank goes (<c>6698:0685</c>).</summary>
+    public const int MaxPowerRank = 30;
+
+    /// <summary>The items that teach a spell or power when used: <c>RDFF</c> 1400–1499 (<c>91F7:03D0</c>).</summary>
+    public static bool Teaches(int rdff) => rdff is >= 1400 and <= 1499;
+
+    /// <summary>
+    /// Using an item that teaches (<c>91F7:03D0</c>): <paramref name="number"/>
+    /// is its record +0x0F (the spell's record index + 1, so a <c>SPIN</c>
+    /// number). A spell goes into the spellbook ("YOU LEARN THE SPELL", or "YOU
+    /// ALREADY KNOW THIS SPELL"); a power is learned at rank 1 ("NAME LEARNED",
+    /// <c>6698:07C5</c>) or, if known, rises a rank to at most 30 ("NAME
+    /// ENHANCED TO n", <c>6698:0685</c>). Neither checks the class, discipline
+    /// or how many it may know. Anything else: "CANNOT LEARN FROM THIS ITEM".
+    /// <paramref name="consumed"/>: the item is used up (<c>7BEB:0A06</c>).
+    /// </summary>
+    public static string LearnFromItem(Character c, int number, string name, out bool consumed)
+    {
+        consumed = true;
+        if (number >= 1 && number < FirstPower)
+        {
+            if (c.Spellbook.Contains(number))
+            {
+                consumed = false;
+                return "YOU ALREADY KNOW THIS SPELL";
+            }
+            c.Spellbook.Add(number);
+            return "YOU LEARN THE SPELL";
+        }
+        if (number is >= FirstPower and <= LastPower)
+        {
+            if (!c.Powers.Contains(number))
+            {
+                c.Powers.Add(number);
+                c.PowerRanks.Remove(number);
+                return $"{name} LEARNED";
+            }
+            int rank = Math.Min(MaxPowerRank, c.PowerRank(number) + 1);
+            c.PowerRanks[number] = rank;
+            return $"{name} ENHANCED TO {rank}";
+        }
+        consumed = false;
+        return "CANNOT LEARN FROM THIS ITEM";
+    }
+
     // -- casting out of combat --------------------------------------------------------------
 
     /// <summary>

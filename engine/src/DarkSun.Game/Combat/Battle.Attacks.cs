@@ -387,11 +387,14 @@ public sealed partial class Battle
     /// takes (<c>80F5:28F2</c>): its type's resistances, halved by a protection
     /// that covers all the elements (Protection from Cold, Fire, Lightning; Fire
     /// Shield covers fire and cold), 0 against fire, cold, electricity and magic
-    /// alone with Protection from Energy.
+    /// alone with Protection from Energy. With <see cref="CombatFixes.FireElementalResistances"/>
+    /// the fire elementals use <see cref="FireElementalRows"/>.
     /// </summary>
     public int DamagePercent(Combatant t, DamageElement elements)
     {
-        int percent = t.PartyMember ? 100 : Creatures.DamagePercent(t.Type, elements);
+        int percent = t.PartyMember ? 100
+            : Rules.Fixes.FireElementalResistances && FireElementalRows.TryGetValue(t.Type, out var row) ? CreatureRules.PercentOf(row, elements)
+            : Creatures.DamagePercent(t.Type, elements);
         DamageElement protection = DamageElement.None;
         if (t.Has(Condition.ProtectionFromCold))
         {
@@ -420,6 +423,22 @@ public sealed partial class Battle
         }
         return percent;
     }
+
+    /// <summary>
+    /// The fire elementals' resistances as the clue book has them ("lesser
+    /// elementals can only be affected by +1 or greater weapons, the regular
+    /// elementals +2"), for <see cref="CombatFixes.FireElementalResistances"/>:
+    /// the lesser one (33) gets the row DSUN.EXE gives the fire elemental (fire
+    /// and unmagical blows do nothing, +1 does), the fire elemental (32) that row
+    /// with +1 weapons doing nothing too. In the original type 32 takes +1
+    /// weapons and type 33 needs +2, and only 32 is untouched by fire.
+    /// </summary>
+    public static IReadOnlyDictionary<int, IReadOnlyList<CreatureResistance>> FireElementalRows { get; } =
+        new Dictionary<int, IReadOnlyList<CreatureResistance>>
+        {
+            [32] = [new(PhysicalElements | DamageElement.Fire | DamageElement.Plus1, 0), new(DamageElement.Plus2 | DamageElement.Plus3, 100)],
+            [33] = [new(PhysicalElements | DamageElement.Fire, 0), new(DamageElement.Plus1 | DamageElement.Plus2 | DamageElement.Plus3, 100)],
+        };
 
     /// <summary>
     /// Damage (<c>612E:18DA</c>): less than the hit points takes that many; up to

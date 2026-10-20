@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 using DarkSun.Data.Gff;
 using DarkSun.Data.Items;
 using DarkSun.Data.Text;
+using DarkSun.Game.Magic;
 
 namespace DarkSun.Game.Characters;
 
@@ -58,6 +59,17 @@ public sealed record Character
 
     /// <summary>The psionic powers learned (<c>SPIN</c> 139–172).</summary>
     public List<int> Powers { get; set; } = [];
+
+    /// <summary>
+    /// A power's rank where it is above 1 (<c>DS:0077 + 0x22·member + power</c>,
+    /// bits 3–7, saved as <c>PSPP</c>): learning a known power again from an item
+    /// raises it, up to <see cref="Spellcasting.MaxPowerRank"/>
+    /// (<see cref="Spellcasting.LearnFromItem"/>). It adds to the power check and to a defence mode.
+    /// </summary>
+    public Dictionary<int, int> PowerRanks { get; set; } = [];
+
+    /// <summary>Its rank in power <paramref name="number"/>: 0 unknown, else 1 or what <see cref="PowerRanks"/> says.</summary>
+    public int PowerRank(int number) => Powers.Contains(number) ? Math.Max(1, PowerRanks.GetValueOrDefault(number, 1)) : 0;
 
     /// <summary>Psionic strength points spent since the last rest.</summary>
     public int PspSpent { get; set; }
