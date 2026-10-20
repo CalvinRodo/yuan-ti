@@ -128,9 +128,12 @@ public static class SpellFlags
 /// cell). A field lasts <paramref name="DurationUnit"/> (+0xC; 30000
 /// permanent) × (<paramref name="DurationDice"/> d <paramref name="DurationSides"/>
 /// + <paramref name="DurationPerLevel"/> × level) game seconds (+0xA, +0xB; <c>7D80:05C7</c>).
+/// <paramref name="Graphic"/> (+3): the <c>OJFF</c> a field shows on its cells
+/// (<c>7D80:2782</c>), and what a spell without a hit graphic shows on those it
+/// reaches (<c>80F5:0079</c>); −1 none.
 /// </summary>
 public sealed record AreaTemplate(int Kind, int Shape, int Effect = 0, int Flags = 0, int Turn = 0, int Width = 1, int Length = 1,
-    int DurationDice = 0, int DurationSides = 0, int DurationPerLevel = 0, int DurationUnit = AreaTemplate.Round)
+    int DurationDice = 0, int DurationSides = 0, int DurationPerLevel = 0, int DurationUnit = AreaTemplate.Round, int Graphic = -1)
 {
     public const int Fog = 0, Burst = 1, Ground = 2, Cloud = 3;
     public const int Line = 0, Circle = 1, Cone = 2;
@@ -165,6 +168,19 @@ public sealed record AreaTemplate(int Kind, int Shape, int Effect = 0, int Flags
 }
 
 /// <summary>
+/// How a spell, power or monster effect looks and sounds (its record, read by
+/// <c>7D80:003B</c> and <c>80F5:0079</c>): <paramref name="CastGraphic"/> (+6,
+/// an <c>OJFF</c> played over the caster), <paramref name="CastSound"/> (+8),
+/// <paramref name="Projectile"/> (+9: an entry of <see cref="SpellRules.Projectiles"/>
+/// flown from the caster to the target point, −1 none) with
+/// <paramref name="FlightSound"/> (+0xC), and <paramref name="HitGraphic"/>
+/// (+0xD, played over each one it affects without hurting; −1: the template's
+/// <see cref="AreaTemplate.Graphic"/>) with <paramref name="HitSound"/> (+0xF).
+/// Sounds are <c>play_sound_effect</c> numbers.
+/// </summary>
+public sealed record SpellLook(int Number, int CastGraphic, int CastSound, int Projectile, int FlightSound, int HitGraphic, int HitSound);
+
+/// <summary>
 /// A psionic power's 8-byte record (<c>3FB9:0000 + 8 · (power − 139)</c>):
 /// the power check is d20 ≤ ability (<paramref name="Ability"/>, Str–Cha) +
 /// <paramref name="Modifier"/>; <paramref name="Cost"/> points to start,
@@ -190,6 +206,31 @@ public sealed partial record SpellRules
 
     /// <summary>Powers 139–172.</summary>
     public required IReadOnlyList<PsionicPower> Powers { get; init; }
+
+    /// <summary>How each effect looks and sounds, by number (optional in a mod's file: then none).</summary>
+    public IReadOnlyList<SpellLook> Looks { get; init; } = [];
+
+    /// <summary>The projectiles' <c>OJFF</c> numbers (<c>3CB4:0000</c>, 3 bytes each; the third byte isn't read here).</summary>
+    public IReadOnlyList<int> Projectiles { get; init; } = [];
+
+    /// <summary>
+    /// What a missile weapon shoots (<c>896E:0000</c>, by the item's number):
+    /// <c>OJFF</c> 8117 for items 1010 and 2646, 8500 for 1015, 1016, 2533 and
+    /// 2644, else <see cref="DefaultMissile"/>.
+    /// </summary>
+    public IReadOnlyDictionary<int, int> MissileProjectiles { get; init; } =
+        new Dictionary<int, int> { [1010] = 8117, [2646] = 8117, [1015] = 8500, [1016] = 8500, [2533] = 8500, [2644] = 8500 };
+
+    /// <summary>The arrow (<c>OJFF</c> 8101).</summary>
+    public int DefaultMissile { get; init; } = 8101;
+
+    public SpellLook? LookOf(int number) => Looks.FirstOrDefault(l => l.Number == number);
+
+    /// <summary>The projectile <c>OJFF</c> of a look, or null.</summary>
+    public int? ProjectileOf(SpellLook look) => look.Projectile >= 0 && look.Projectile < Projectiles.Count ? Projectiles[look.Projectile] : null;
+
+    /// <summary>What a missile weapon of item <paramref name="rdff"/> shoots.</summary>
+    public int MissileOf(int rdff) => MissileProjectiles.TryGetValue(Math.Abs(rdff), out int ojff) ? ojff : DefaultMissile;
 
     /// <summary>
     /// The save a category rolls against, 1–5 (paralysation, rod, petrification,

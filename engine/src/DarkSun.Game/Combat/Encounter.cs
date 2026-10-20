@@ -68,9 +68,12 @@ public static class Encounter
 
     /// <summary>
     /// After the fight: the party members' sheets get what they used
-    /// (<see cref="Battle.SyncSheets"/>), and those standing get their places on
-    /// the map back as their combatants left them; creatures that moved stay
-    /// where they ended (their fixed cells; walkers the caller places).
+    /// (<see cref="Battle.SyncSheets"/>) and the party gets up
+    /// (<see cref="Battle.Finish"/>). True: the party has fallen.
     /// </summary>
-    public static void End(Battle battle) => battle.SyncSheets();
+    public static bool End(Battle battle)
+    {
+        battle.SyncSheets();
+        return battle.Finish();
+    }
 }

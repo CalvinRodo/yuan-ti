@@ -126,6 +126,12 @@ public sealed class Combatant
     /// <summary>Its level in class <paramref name="code"/> (<c>6698:0C54</c>), 0 none.</summary>
     public int LevelIn(int code) => Classes.Where(c => c.Code == code).Select(c => c.Level).DefaultIfEmpty(0).Max();
 
+    /// <summary>The sound when a blow hurts it (character record +0x42), 0 the default (4).</summary>
+    public int HurtSound { get; init; }
+
+    /// <summary>The sound of its blows (character record +0x44), 0 none.</summary>
+    public int AttackSound { get; init; }
+
     /// <summary>Its footprint (character record +0x3D, <c>1A0A:2AB4</c>): x ± (size &amp; 7), y − size / 8 … y.</summary>
     public int Size { get; init; }
 
@@ -315,6 +321,8 @@ public sealed class Combatant
             Alignment = ch?.Alignment ?? 0,
             Classes = ch is null ? [] : [.. Enumerable.Range(0, 3).Where(i => ch.ClassCodes[i] != 0).Select(i => ((int)ch.ClassCodes[i], (int)ch.Levels[i]))],
             Size = ch?.Size ?? 0,
+            HurtSound = ch?.HurtSound ?? 0,
+            AttackSound = ch?.AttackSound ?? 0,
             MagicResistance = Math.Max(0, (int)(ch?.MagicResistance ?? 0)),
             Saves = ch is null ? [16, 16, 16, 16, 16] : [.. ch.Saves.ToArray().Select(s => (int)s)],
             AttackHalves = ch is { AttackHalves: > 0 } ? ch.AttackHalves : 2,

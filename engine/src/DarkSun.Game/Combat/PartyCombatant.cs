@@ -20,9 +20,10 @@ public static class PartyCombatant
     /// wears, without Dexterity (the battle adds that), shields apart; the
     /// weapon in hand (slot 3), a missile weapon (slot 2) and its ammunition
     /// (slot 1); its memorized spells not yet cast, its powers, ranks and
-    /// psionic points. Without a weapon it fights with fists (1d2); a
-    /// thri-kreen with its four claws and bite (8 halves of 1d4, 2 of 1d4 + 1;
-    /// <c>8E77:038F</c> gives the halves, the dice are AD&amp;D's).
+    /// psionic points. Without a weapon it fights as the new-character
+    /// template has it (<c>38D4:0048</c>: its attacks a round of 1d1); a thri-kreen
+    /// with four claws of 1d4 a round and a bite of 1d4 + 1 (8 and 2 halves;
+    /// <c>8E77:038F</c>, <c>6ECD:1344</c>), and Move 15 (others 12).
     /// </summary>
     public static Combatant From(Character c, WorldObject member, ItemCatalog catalog, CharacterRules rules)
     {
@@ -56,7 +57,7 @@ public static class PartyCombatant
             ArmorClass = CharacterSheet.ArmorClass(dex, member.Items, catalog) - CharacterSheet.DexterityDefence(dex),
             ShieldClass = shields,
             Thac0 = CharacterSheet.Thac0(active),
-            Move = 12,
+            Move = c.Race == Race.ThriKreen ? 15 : 12,
             Stats = stats,
             Level = Math.Max(1, active.Select(a => a.Level).DefaultIfEmpty(1).Max()),
             Race = (int)c.Race + 1,
@@ -64,7 +65,7 @@ public static class PartyCombatant
             Classes = [.. active.Select(a => (Spellcasting.ClassCode(a.Class, c.Sphere), a.Level))],
             Saves = CharacterSheet.Saves(active, c.Race, stats[(int)Ability.Con]),
             AttackHalves = CharacterSheet.AttackHalves(active),
-            NaturalAttacks = c.Race == Race.ThriKreen ? [new(8, 1, 4, 0), new(2, 1, 4, 1)] : [new(2, 1, 2, 0)],
+            NaturalAttacks = c.Race == Race.ThriKreen ? [new(8, 1, 4, 0), new(2, 1, 4, 1)] : [new(CharacterSheet.AttackHalves(active), 1, 1, 0)],
             Weapon = WornIn(3),
             MissileWeapon = WornIn(2),
             Ammunition = member.Items.FirstOrDefault(i => i.Slot == 1)?.Quantity ?? 0,

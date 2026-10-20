@@ -82,6 +82,12 @@ public sealed record CharacterRecord(byte Size, ushort DifficultyScaled, byte[] 
     /// <summary>+0x37–0x3B: saving throws (paralysation, rod, petrification, breath, spell).</summary>
     public ReadOnlySpan<byte> Saves => Bytes.AsSpan(0x37, 5);
 
+    /// <summary>+0x42: the sound it makes when a blow hurts it (<c>80F5:0079</c>; 0: sound 4).</summary>
+    public short HurtSound => BinaryPrimitives.ReadInt16LittleEndian(Bytes.AsSpan(0x42));
+
+    /// <summary>+0x44: the sound of its blows (<c>896E:0000</c>; 0 none).</summary>
+    public short AttackSound => BinaryPrimitives.ReadInt16LittleEndian(Bytes.AsSpan(0x44));
+
     /// <summary>+0x3C: its own allegiance, which it goes back to when a charm ends (<c>8053:066F</c>).</summary>
     public byte HomeAllegiance => Bytes[0x3C];
 

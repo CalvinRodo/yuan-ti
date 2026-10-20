@@ -1,3 +1,4 @@
+using DarkSun.Data.Items;
 using DarkSun.Data.Regions;
 using DarkSun.Game.Movement;
 using DarkSun.Game.Rules;
@@ -56,7 +57,8 @@ public sealed record Moved(Combatant Actor, Cell From, Cell To) : CombatEvent;
 /// <summary>An attack roll: <paramref name="Roll"/> against <paramref name="Needed"/>.</summary>
 public sealed record AttackRolled(Combatant Actor, Combatant Target, int Roll, int Needed, bool Hit) : CombatEvent;
 
-public sealed record Damaged(Combatant? Actor, Combatant Target, int Amount) : CombatEvent;
+/// <summary>Damage dealt, and what it was made of (DSUN.EXE picks its damage splash by it, <c>896E:0A0E</c>).</summary>
+public sealed record Damaged(Combatant? Actor, Combatant Target, int Amount, DamageElement Elements = DamageElement.None) : CombatEvent;
 
 /// <summary>Damage or an effect that didn't land, and why ("immune", "resisted", "saved", "image", …).</summary>
 public sealed record Avoided(Combatant? Actor, Combatant Target, string Why) : CombatEvent;

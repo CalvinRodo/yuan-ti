@@ -606,12 +606,20 @@ executable, not in the data.
       preview, GUARD, WAIT, END TURN, AUTO. Fallen creatures leave bodies and
       experience (`GameWorld.Fell`); spells, PSP and ammunition used go back
       to the sheets. `--fight`, `--check-combat`, `--screenshot`.
-- [ ] Combat scene, still to do: the original's combat screen (its icons and
-      menu, `1587:2EAF`), sounds and attack animations, missiles and spell
-      effects drawn in flight, party members who are down getting up after
-      the fight, a game-over when the whole party falls, move triggers while
-      fighting (they don't fire), and a thri-kreen's natural attacks (the
-      dice are AD&D's, not traced).
+- [x] Combat scene, the rest (2026-10-20): the original's combat menu
+      (`WIND` 14000, "END name's MOVE" with GUARD / WAIT / END TURN, by the
+      member once it can't move, `1587:2EAF`); attack animations (`SCMD`
+      action 4, 5 to shoot; `Walker.PlayAction`) and sounds (the attacker's
+      +0x44, the hurt target's +0x42 or 4, 5 for a harmless hit); missiles
+      (`OJFF` 8101/8117/8500) and spell projectiles flown to the target;
+      spell cast and hit graphics and sounds (`SpellRules.Looks`,
+      `Projectiles`); the damage splash (`BMP` 5014); field graphics
+      (template +3); getting up at the end (`Battle.Finish`) and the game
+      over (`WIND` 3004, `BMP` 10004); move triggers mid-fight; the
+      thri-kreen's claws and bite and Move 15, everyone else's 1d1 blows.
+- [ ] Combat looks, left: a burst area's own animation over its cells
+      (`7D80:200D`, not traced), and `896E:0ED3`, what the damage code shows
+      instead of the splash in another mode (`DS:0BC9` ≠ 1, not traced).
 - [ ] Keep the rules in data (JSON tables) wherever possible, so they're easy to
       tune and mod.
 

@@ -587,3 +587,9 @@
 7372:0D93	func	give_item	(from, to, quantity, item id, slot): GIVE; 9999 from nowhere
 91F7:03D0	func	item_use	inventory USE: learning items RDFF 1400-1499 teach the spell or power of record +0x0F - 1
 6698:07C5	func	power_learn	a party member learns a power at rank 1
+1587:2EAF	func	combat_menu	WIND 14000 "END name's MOVE": GUARD / WAIT / END TURN
+5F6D:0191	func	popup_choice	(x, y, title, …, three button texts): a small WIND with three choices
+896E:0000	func	attack_animation	(attacker, target, …, distance, item): SCMD action 4/5, blow sound or missile flight
+896E:0A0E	func	damage_splash	(damage, target, elements): the number on BMP 5014's frame by element
+612E:3060	func	combat_end_party	members get up with 1 hp; DS:116A = party fallen
+85FE:02C9	func	game_over	WIND 3004 with BMP 10004

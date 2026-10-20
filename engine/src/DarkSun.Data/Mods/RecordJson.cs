@@ -81,7 +81,7 @@ public static class RecordJson
         new("natural1Bonus", 0x34, "s8"), new("natural2Bonus", 0x35, "s8"), new("natural3Bonus", 0x36, "s8"),
         new("saveParalysis", 0x37, "u8"), new("saveRod", 0x38, "u8"), new("savePetrification", 0x39, "u8"),
         new("saveBreath", 0x3A, "u8"), new("saveSpell", 0x3B, "u8"),
-        new("homeAllegiance", 0x3C, "u8"), new("size", 0x3D, "u8"), new("spellSet", 0x3E, "u8"), new("psionicSet", 0x46, "u8"),
+        new("homeAllegiance", 0x3C, "u8"), new("size", 0x3D, "u8"), new("spellSet", 0x3E, "u8"), new("hurtSound", 0x42, "s16"), new("attackSound", 0x44, "s16"), new("psionicSet", 0x46, "u8"),
     ];
 
     /// <summary><c>RDAT</c> (<c>RegionInfo</c>): colour cycles as first colour, count, and speed × 10.</summary>

@@ -108,4 +108,19 @@ public sealed class Scmd
         && (Records[WalkStart(d)].Dx != 0 || Records[WalkStart(d)].Dy != 0));
 
     public int WalkStart(Direction direction) => Slots[WalkSlots[(int)direction]];
+
+    /// <summary>Attacking (<c>896E:0191</c>, action 4) and shooting or throwing (action 5).</summary>
+    public const int AttackAction = 4, MissileAction = 5;
+
+    /// <summary>
+    /// The first record of action <paramref name="action"/> facing
+    /// <paramref name="direction"/> (slot = facing × 8 + action, the facing as
+    /// the stand slots map it), or null when the script has no such action
+    /// (its slot is the stand slot's).
+    /// </summary>
+    public int? ActionStart(Direction direction, int action)
+    {
+        int slot = StandSlots[(int)direction] + action;
+        return slot < Slots.Count && Slots[slot] != StandStart(direction) && Slots[slot] < Records.Count ? Slots[slot] : null;
+    }
 }

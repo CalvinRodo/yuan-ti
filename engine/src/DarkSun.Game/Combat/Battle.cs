@@ -248,6 +248,44 @@ public sealed partial class Battle
     }
 
     /// <summary>
+    /// The fight's end for the party (<c>612E:3060</c>, <c>612E:3199</c>): each
+    /// member is no longer Paralyzed and drops the powers it kept up; one down
+    /// or hurt but alive (status 1–3) gets up, with 1 hit point if it had none.
+    /// True when no member was standing with hit points left: the party has
+    /// fallen (DSUN.EXE's game over, <c>85FE:02C9</c>), even if some only went down.
+    /// </summary>
+    public bool Finish()
+    {
+        bool fallen = true;
+        foreach (Combatant c in _all.Where(c => c.PartyMember))
+        {
+            EndCondition(c, Condition.Paralyzed);
+            foreach (int power in c.Maintained.ToList())
+            {
+                c.Maintained.Remove(power);
+                foreach (ActiveEffect e in c.Effects.Where(e => e.Effect == power).ToList())
+                {
+                    EndEffect(c, e);
+                }
+            }
+            Vitals v = c.Vitals;
+            if (v.Status is >= Vitals.Well and <= Vitals.Down)
+            {
+                if (v.Hp < 1)
+                {
+                    v.Hp = 1;
+                }
+                else if (v.Status != Vitals.Down)
+                {
+                    fallen = false;
+                }
+                v.Status = Vitals.Well;
+            }
+        }
+        return fallen;
+    }
+
+    /// <summary>
     /// After a fight, what the party members used goes back to their sheets:
     /// the spells cast (<see cref="Characters.Character.Cast"/>), the psionic
     /// points spent, the ammunition shot.

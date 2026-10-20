@@ -144,6 +144,35 @@ public sealed class Walker
         }
     }
 
+    /// <summary>
+    /// Play action <paramref name="action"/> of its script once, turned toward
+    /// <paramref name="facing"/> (an attack, <c>896E:0191</c>), then stand again.
+    /// False while it walks, or when the script has no such action.
+    /// </summary>
+    public bool PlayAction(int action, Direction facing)
+    {
+        if (IsWalking || _script.ActionStart(facing, action) is not int start)
+        {
+            return false;
+        }
+        Facing = facing;
+        Animator = ScmdAnimator.ForCreature(_script, _frames, start);
+        _standing = false;
+        _acting = true;
+        _actingSince = -1;
+        return true;
+    }
+
+    /// <summary>The longest an action plays (one that loops would never stop): 1.5 s.</summary>
+    public const int MaxActionTicks = 144;
+
+    private long _actingSince;
+
+    /// <summary>Playing an action (<see cref="PlayAction"/>).</summary>
+    public bool IsActing => _acting;
+
+    private bool _acting;
+
     public void Stop()
     {
         _goal = null;
@@ -166,6 +195,7 @@ public sealed class Walker
         _occupancy.TryClaim(Id, Footprint.Cells(cell));
         Cell = cell;
         _standing = false;
+        _acting = false;
         Animator = Stand();
         return true;
     }
@@ -201,6 +231,18 @@ public sealed class Walker
             return Animator.Update(now);
         }
         bool changed = _target is null && Animator.Update(now);
+        if (_acting)
+        {
+            if (_actingSince < 0)
+            {
+                _actingSince = now;
+            }
+            if ((Animator.Animating || now < Animator.NextStepAt) && now - _actingSince < MaxActionTicks)
+            {
+                return changed;
+            }
+            _acting = false;
+        }
 
         if (_target is { } arrived)
         {
@@ -270,6 +312,7 @@ public sealed class Walker
         Facing = DirectionOf(dx, dy);
         _target = next;
         _standing = false;
+        _acting = false;
         Animator = ScmdAnimator.ForCreature(_script, _frames, _script.WalkStart(Facing));
         Animator.Update(now);
         return true;

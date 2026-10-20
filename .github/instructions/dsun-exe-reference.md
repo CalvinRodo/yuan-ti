@@ -2029,6 +2029,53 @@ whoever changed. Magic resistance (`80F5:1901`) is character record +0x29
 rampager 25): +75 against mind spells (flags 0x26) with Mind Bar (32),
 halved by Low Resistance (31), less 30 + level for Lower Resistance.
 
+### The combat screen
+
+* **The menu** (`1587:2EAF`, from `1587:1B43`): once the active party member
+  can't move any more but still has action flags (and isn't under computer
+  control), a one-shot flag `DS:0BC3` pops up `WIND` 14000 by it
+  (`5F6D:0191`): its title bar (button 14004) reads "END %Fs's MOVE"
+  (`DS:0C1D`, the name; "END MOVE", `DS:0C2C`, when longer than 20), its
+  buttons 14001–14003 GUARD, WAIT and END TURN (`612E:2514(member, 1 / 2)`,
+  `612E:2596(member, 0)`), and 10308 closes it. Low on memory it uses
+  `WIND` 14001 and buttons 14005 on.
+* **Attacks** (`896E:0000(attacker, target, …, distance, item)`): the
+  attacker plays `SCMD` action 4 (slot facing × 8 + 4), or 5 at range
+  (`896E:0191`). In melee its character record +0x44 is its blow's sound; at
+  range a missile object flies from it to the target (`896E:084E` →
+  `0245`, 4 a tick): `OJFF` 8117 for items 1010 and 2646, 8500 for 1015,
+  1016, 2533 and 2644, else 8101. 36 of the 256 `SCMD` scripts have an
+  action 4 and 35 an action 5. A blow that wounds sounds the target's
+  character record +0x42 (0: sound 4); one that does nothing sound 5
+  (`80F5:0079`).
+* **Spells** (`7D80:003B`): record +8 the cast sound, +6 an `OJFF` played
+  over the caster, +9 a projectile (`3CB4:0000 + 3·n`: 16 entries, a word
+  `OJFF` 8100–8116 and a byte) flown from the caster to the point with
+  +0xC's sound. On each target it affects without hurting (`80F5:0079`):
+  +0xF's sound and +0xD's `OJFF` (−1: the template's +3). Template +3 is
+  also the `OJFF` a field shows on its cells (`7D80:2782`). Sounds are
+  `play_sound_effect` (`191F:0A6F`) numbers.
+* **Damage** (`80F5:0E61` → `896E:0A0E`): the number over the target on a
+  splash, `BMP` 5014's frame 4 for fire, cold or electricity (0x86), 2
+  poison or acid (0x41), 3 magic (0x200), else 0 under 15 and 1 from 15.
+  `0E61` also adds 1000 for ability bit 23 against an area over 8.
+* **The fight's end** (`612E:04A7` when `612E:0754` finds no enemies):
+  `87B3:11AC`, `612E:3199` (kept-up powers end), `8053:0914`, `896E:09D6`,
+  `612E:3060`: each party member's Paralyzed ends, its orders clear; one with
+  status 1–3 gets status 1, with 1 hit point if it had none; if none of
+  them had status 1 or 2 with hit points left (`DS:116A` stays 1), the
+  party has fallen: `85FE:02C9` shows `WIND` 3004 (full screen, one button)
+  with `BMP` 10004 ("your party has been defeated") at (68, 24) and waits;
+  otherwise the experience level check (`8E77:0A8F`) follows.
+* **Move triggers** fire for every step planned (`1A0A:0B0F` calls
+  `trigger_on_move`), in a fight too.
+* **Natural attacks** of a new character (`38D4:0048`, `6ECD:1344`,
+  `8E77:038F`): attack 1 with the attack halves of +0x2A (2, 3 from warrior
+  level 1, 4 from 7, 5 from 13) of 1d1; a thri-kreen 8 halves of 1d4 and
+  attack 3, 2 halves of 1d4 + 1, Move 15 (others 12, +0x28 and combat
+  record +0x1B). In a fight (`80F5:2ACC`) Body Weaponry (62) makes attack 1
+  2d4 and Animal Affinity (61) at least 1d10.
+
 ### Order modes (`1A0A:0B0F`)
 
 `0B0F` plans a move from the order record's mode (+4; jump table at

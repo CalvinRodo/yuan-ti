@@ -205,10 +205,18 @@ public sealed partial class Battle
             int last = a.NaturalAttacks.Count - 1;
             for (int n = 0; n <= last && t.Alive; n++)
             {
-                int count = AttacksThisRound(a, a.NaturalAttacks[n].Halves);
+                NaturalAttack natural = a.NaturalAttacks[n];
+                if (n == 0)
+                {
+                    // 80F5:2ACC: Body Weaponry makes the first attack 2d4; Animal Affinity at least 1d10.
+                    natural = a.Has(Condition.BodyWeaponry) ? natural with { Dice = 2, Sides = 4 }
+                        : a.Has(Condition.AnimalAffinity) ? natural with { Dice = Math.Max(1, natural.Dice), Sides = Math.Max(10, natural.Sides) }
+                        : natural;
+                }
+                int count = AttacksThisRound(a, natural.Halves);
                 for (int i = 0; i < count && t.Alive; i++)
                 {
-                    Swing(a, t, null, a.NaturalAttacks[n], n == 0 && i == 0, n == last && i == count - 1);
+                    Swing(a, t, null, natural, n == 0 && i == 0, n == last && i == count - 1);
                 }
             }
         }
@@ -234,7 +242,7 @@ public sealed partial class Battle
         }
         else
         {
-            NaturalAttack n = natural ?? new(2, 1, 2, 0);
+            NaturalAttack n = natural ?? new(2, 1, 1, 0);
             damage = RollDice(n.Dice, n.Sides) + n.Bonus;
         }
         if (melee)
@@ -308,7 +316,7 @@ public sealed partial class Battle
             Note(new Avoided(a, t, "immune"));
             return;
         }
-        Hurt(a, t, damage * percent / 100);
+        Hurt(a, t, damage * percent / 100, elements);
     }
 
     private const int CloakOfFearLevel = 6;
@@ -445,14 +453,14 @@ public sealed partial class Battle
     /// 9 more leaves it down (status 3), more kills it (5), 10 000 or more
     /// destroys it (8). Armor loses a charge to every wound (<c>80F5:0E61</c>).
     /// </summary>
-    public void Hurt(Combatant? a, Combatant t, int damage)
+    public void Hurt(Combatant? a, Combatant t, int damage, DamageElement elements = DamageElement.None)
     {
         if (damage < 1 || !t.Alive)
         {
             return;
         }
         UseCharge(t, Condition.ImprovedAc);
-        Note(new Damaged(a, t, damage));
+        Note(new Damaged(a, t, damage, elements));
         Vitals v = t.Vitals;
         if (damage < v.Hp)
         {

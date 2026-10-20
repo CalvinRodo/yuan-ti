@@ -207,7 +207,12 @@ public sealed partial class Battle
             var (dice, flat) = e.DamageAt(level);
             int damage = RollDice(dice, e.Sides) + flat;
             damage = saved ? (e.SaveCancels ? 0 : damage / 2) : damage;
-            Hurt(caster, t, damage * percent / 100);
+            damage = damage * percent / 100;
+            if (damage > 0 && Spells.AreaOf(e) > 8 && Creatures.HasAbility(t.Type, CreatureAbilityBit.DiesToRangedSpells))
+            {
+                damage += 1000; // 80F5:0E61: ability bit 23
+            }
+            Hurt(caster, t, damage, e.Elements);
         }
         Special(caster, t, e, level, saved);
     }

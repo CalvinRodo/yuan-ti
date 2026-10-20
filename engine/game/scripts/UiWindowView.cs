@@ -183,6 +183,32 @@ public partial class UiWindowView : Control
         MouseFilter = MouseFilterEnum.Ignore,
     };
 
+    /// <summary>
+    /// Put <paramref name="text"/> on button <paramref name="number"/>, centred in
+    /// the game's font (a screen filling in a window's labels, as DSUN.EXE's code does).
+    /// </summary>
+    public void SetButtonText(int number, string text)
+    {
+        if (Button(number) is not { } button)
+        {
+            return;
+        }
+        if (button.GetNodeOrNull<Label>("Text") is not { } label)
+        {
+            label = new Label
+            {
+                Name = "Text",
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                LabelSettings = GameFonts.Settings(GameFonts.Tan),
+                MouseFilter = MouseFilterEnum.Ignore,
+            };
+            button.AddChild(label);
+            label.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
+        }
+        label.Text = text;
+    }
+
     // -- finding controls ------------------------------------------------------------
 
     /// <summary>The control <c>tag number</c>, or null if the window hasn't it.</summary>

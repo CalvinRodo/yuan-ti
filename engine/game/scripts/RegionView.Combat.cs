@@ -1,6 +1,7 @@
 using DarkSun.Data.Images;
 using DarkSun.Data.Items;
 using DarkSun.Data.Regions;
+using DarkSun.Game.Animation;
 using DarkSun.Game.Combat;
 using DarkSun.Game.Movement;
 using DarkSun.Game.Rules;
@@ -53,12 +54,18 @@ public partial class RegionView
 
     private bool InCombat => _battle is not null;
 
+    /// <summary>The longest the playback waits for a missile or spell in flight.</summary>
+    private const double GraphicsTimeout = 1.5;
+
+    private double _graphicsWait;
+
     /// <summary>The party member whose turn it is, waiting for the player (null while the battle plays or the AI acts).</summary>
     private Combatant? PlayerTurn =>
         _battle is { Current: { } c } && _combatEvents.Count == 0 && _combatWalk is null && _combatWait <= 0 && !c.UnderAi && c.Fights ? c : null;
 
     private void BuildCombatHud(CanvasLayer layer)
     {
+        _combatLayer = layer;
         _floaters = new Node2D { ZIndex = 100 };
         AddChild(_floaters);
 
@@ -174,6 +181,8 @@ public partial class RegionView
         _combatEvents.Clear();
         (_combatWait, _combatWalk, _castChoice) = (0, null, null);
         _combatPanel.Visible = _combatLogPanel.Visible = false;
+        HideCombatMenu();
+        ClearGraphics();
     }
 
     private void EndCombat()
@@ -182,8 +191,8 @@ public partial class RegionView
         {
             return;
         }
-        Encounter.End(battle);
-        bool won = battle.Combatants.Any(c => c.PartyMember && c.Alive);
+        bool fallen = Encounter.End(battle);
+        bool won = !fallen;
         Log(won ? "[color=#a0ffa0]The fight is over.[/color]" : "[color=#ff8080]The party has fallen.[/color]");
         AddScriptLine($"> combat over after {battle.Round} rounds: {(won ? "won" : "lost")}");
         foreach (Combatant c in battle.Combatants.Where(c => c.PartyMember && c.Source is not null))
@@ -191,18 +200,26 @@ public partial class RegionView
             if (_party.FirstOrDefault(m => m.Walker == c.Source!.Walker) is { } member)
             {
                 member.Node.Modulate = c.Alive ? Colors.White : new Color(0.5f, 0.3f, 0.3f);
+                OnWorldChanged(c.Source!, null);
             }
         }
         _battle = null;
         _castChoice = null;
         _combatPanel.Visible = false;
+        HideCombatMenu();
+        ClearGraphics();
         _marker.Follow(Selected?.Walker);
         UpdateHud();
         if (!_checking)
         {
             Notice(won ? "The fight is over." : "The party has fallen.");
             GetTree().CreateTimer(6).Timeout += () => _combatLogPanel.Visible = InCombat;
+            if (fallen)
+            {
+                GameOver();
+            }
         }
+        _partyFell = fallen;
     }
 
     // -- each frame -----------------------------------------------------------------------------------
@@ -224,6 +241,16 @@ public partial class RegionView
             {
                 _combatWait -= delta;
                 return;
+            }
+            if (GraphicsBlock && _graphicsWait < GraphicsTimeout)
+            {
+                _graphicsWait += delta;
+                return;
+            }
+            _graphicsWait = 0;
+            if (Session.Scripts.IsSuspended || _transitioning || !InCombat)
+            {
+                return; // a move trigger's script is talking to the player, or the party is leaving
             }
             if (_combatWalk is { } walk)
             {
@@ -264,17 +291,24 @@ public partial class RegionView
     }
 
     /// <summary>Walkers and animations while fighting: no orders, scripts or move triggers.</summary>
-    private void AnimateCombat()
+    private void AnimateCombat(double delta)
     {
+        UpdateGraphics(delta);
         long now = Now;
         foreach (AnimatedObject animated in Settings.Animations || _checking ? _animated : [])
         {
-            if (animated.Animator.Update(now))
+            (Sprite2D sprite, RegionObject obj, ScmdAnimator animator) = (animated.Sprite, animated.Object, animated.Animator);
+            if (!animator.Update(now))
             {
-                ImageFrame frame = animated.Object.Frames[animated.Animator.Frame];
-                animated.Sprite.Texture = TextureFor(frame);
-                animated.Sprite.FlipH = animated.Animator.Mirrored;
+                continue;
             }
+            ImageFrame frame = obj.Frames[animator.Frame];
+            sprite.Texture = TextureFor(frame);
+            sprite.Visible = frame.Width > 0 && frame.Height > 0 && !_hidden.Contains(obj);
+            sprite.FlipH = animator.Mirrored;
+            Vector2 at = _moved.TryGetValue(obj, out Vector2 m) ? m : new Vector2(obj.EtabX, obj.EtabY);
+            sprite.Position = at + new Vector2(animator.OffsetX, animator.OffsetY);
+            sprite.Offset = -new Vector2(animator.HotX, animator.HotY + obj.YAdjust);
         }
         foreach (PartyMember member in _party)
         {
@@ -311,6 +345,8 @@ public partial class RegionView
                 Log($"[color=#c0c0c0]— Round {r.Round} —[/color]");
                 break;
             case TurnStarted t:
+                _menuShown = false;
+                HideCombatMenu();
                 if (t.Actor.PartyMember && t.Actor.Source is { } member && member.Index < _party.Count)
                 {
                     _selected = member.Index;
@@ -319,6 +355,7 @@ public partial class RegionView
                 break;
             case Moved m:
                 MoveSprite(m.Actor, m.From, m.To);
+                MoveTriggers(m.Actor, m.To);
                 return;
             case AttackRolled a:
                 Log($"{Who(a.Actor)} attacks {Who(a.Target)}: rolls {a.Roll}, needs {Math.Max(2, a.Needed)} — {(a.Hit ? "[color=#ffd080]hit[/color]" : "miss")}");
@@ -326,16 +363,18 @@ public partial class RegionView
                 {
                     Float(a.Target, "miss", new Color(0.8f, 0.8f, 0.8f));
                 }
+                LookOfAttack(a);
                 _combatWait = fast ? 0 : AttackPause;
                 return;
             case Damaged d:
                 Log($"{Who(d.Target)} takes [color=#ff8080]{d.Amount}[/color] ({Math.Max(0, d.Target.Vitals.Hp)} left)");
-                Float(d.Target, $"-{d.Amount}", new Color(1f, 0.35f, 0.3f));
+                LookOfDamage(d);
                 _combatWait = fast ? 0 : NotePause;
                 return;
             case Healed h:
                 Log($"{Who(h.Target)} heals [color=#a0ffa0]{h.Amount}[/color]");
                 Float(h.Target, $"+{h.Amount}", new Color(0.5f, 1f, 0.5f));
+                LookOfSpellOn(h.Target);
                 _combatWait = fast ? 0 : NotePause;
                 return;
             case Avoided v:
@@ -346,11 +385,13 @@ public partial class RegionView
             case Cast c:
                 Log($"{Who(c.Actor)} {(c.Effect is >= DarkSun.Game.Magic.Spellcasting.FirstPower and <= DarkSun.Game.Magic.Spellcasting.LastPower ? "uses" : "casts")} [color=#c0a0ff]{EffectName(c.Effect)}[/color]");
                 Float(c.Actor, EffectName(c.Effect), new Color(0.8f, 0.65f, 1f));
+                LookOfCast(c);
                 _combatWait = fast ? 0 : CastPause;
                 return;
             case ConditionGained g:
                 Log($"{Who(g.Target)} is {Words(g.Condition)}");
                 Float(g.Target, Words(g.Condition), new Color(1f, 0.85f, 0.4f));
+                LookOfSpellOn(g.Target);
                 break;
             case ConditionEnded x:
                 Log($"[color=#a0a0a0]{Who(x.Target)} is no longer {Words(x.Condition)}[/color]");
@@ -374,9 +415,11 @@ public partial class RegionView
                 break;
             case FieldMade fm:
                 Log($"{EffectName(fm.Field.Effect.Number)} covers {fm.Field.Cells.Count} cells");
+                LookOfField(fm.Field);
                 break;
             case FieldEnded fe:
                 Log($"[color=#a0a0a0]{EffectName(fe.Field.Effect.Number)} fades[/color]");
+                FieldGone(fe.Field);
                 break;
             case SideChanged s:
                 Log($"{Who(s.Actor)} now fights for {(s.Side == 1 ? "the party" : "the enemy")}");
@@ -481,6 +524,10 @@ public partial class RegionView
             _combatTip.Text = "";
             return;
         }
+        if (!_menuShown && (c.Flags & TurnFlags.MayMove) == 0 && (c.Flags & ~TurnFlags.Waited) != TurnFlags.None)
+        {
+            ShowCombatMenu(c);
+        }
         int steps = c.MovementPoints / Math.Max(1, battle.Rules.StepCost);
         _combatTurn.Text = $"{Who(c)}: HP {c.Vitals.Hp}/{c.Vitals.MaxHp} · moves {((c.Flags & TurnFlags.MayMove) != 0 ? steps : 0)}"
             + ((c.Flags & TurnFlags.MayAttack) != 0 ? " · may attack" : "") + (c.Psp > 0 ? $" · PSP {c.Psp}" : "");
@@ -537,6 +584,7 @@ public partial class RegionView
             return;
         }
         _castChoice = null;
+        HideCombatMenu();
         act(c);
         if (_battle!.Current == c && (c.Flags & (TurnFlags.MayMove | TurnFlags.MayAttack)) == 0)
         {
@@ -708,6 +756,140 @@ public partial class RegionView
         UpdateCombatHud();
     }
 
+    // -- the original's windows ------------------------------------------------------------------------
+
+    private CanvasLayer _combatLayer = null!;
+    private UiWindowView? _combatMenu;
+    private bool _menuShown, _partyFell;
+
+    /// <summary>
+    /// <c>WIND</c> 14000 (<c>5F6D:0020</c>): its title bar (button 14004), the
+    /// GUARD, WAIT and END TURN buttons, and a close button (10308).
+    /// </summary>
+    private const int CombatMenuWindow = 14000, MenuGuard = 14001, MenuWait = 14002, MenuEndTurn = 14003, MenuTitle = 14004, MenuClose = 10308;
+
+    /// <summary>
+    /// The original's combat menu (<c>1587:2EAF</c>, from <c>1587:1B43</c>):
+    /// once a member can't move any more but may still act, "END name's MOVE"
+    /// (or "END MOVE" for a long name) with GUARD, WAIT and END TURN, by the
+    /// member. Clicking elsewhere (attacking, casting) just goes on.
+    /// </summary>
+    private void ShowCombatMenu(Combatant c)
+    {
+        _menuShown = true;
+        if (_checking)
+        {
+            return;
+        }
+        if (_combatMenu is null)
+        {
+            _combatMenu = UiWindowView.Build(CombatMenuWindow, _palette);
+            if (_combatMenu is null)
+            {
+                return;
+            }
+            _combatMenu.MouseFilter = Control.MouseFilterEnum.Stop;
+            _combatLayer.AddChild(_combatMenu);
+            (int Button, Action<Combatant> Act)[] buttons =
+                [(MenuGuard, m => _battle!.Guard(m)), (MenuWait, m => _battle!.Wait(m)), (MenuEndTurn, m => _battle!.EndTurn(m))];
+            foreach (var (number, act) in buttons)
+            {
+                if (_combatMenu.Button(number) is { } button)
+                {
+                    button.Pressed += () => PlayerAct(act);
+                }
+            }
+            _combatMenu.SetButtonText(MenuGuard, "GUARD");
+            _combatMenu.SetButtonText(MenuWait, "WAIT");
+            _combatMenu.SetButtonText(MenuEndTurn, "END TURN");
+            if (_combatMenu.Button(MenuClose) is { } close)
+            {
+                close.Pressed += HideCombatMenu;
+            }
+        }
+        // DS:0C1D "END %Fs's MOVE", or DS:0C2C "END MOVE" when that is longer than 20.
+        string title = $"END {Who(c).ToUpperInvariant()}'s MOVE";
+        _combatMenu.SetButtonText(MenuTitle, title.Length > 20 ? "END MOVE" : title);
+        float scale = Math.Max(1f, MathF.Floor(Math.Min(GetViewportRect().Size.X / RetroScreen.Width, GetViewportRect().Size.Y / RetroScreen.Height)));
+        _combatMenu.Scale = new Vector2(scale, scale);
+        Vector2 head = GetViewport().GetCanvasTransform() * Head(c);
+        Vector2 size = _combatMenu.Size * scale, screen = GetViewportRect().Size;
+        _combatMenu.Position = new Vector2(Math.Clamp(head.X - size.X / 2, 0, screen.X - size.X), Math.Clamp(head.Y - size.Y - 8, 0, screen.Y - size.Y)).Floor();
+        _combatMenu.Visible = true;
+    }
+
+    private void HideCombatMenu()
+    {
+        if (_combatMenu is not null)
+        {
+            _combatMenu.Visible = false;
+        }
+    }
+
+    /// <summary>
+    /// The party has fallen (<c>85FE:02C9</c>): <c>WIND</c> 3004 over the screen
+    /// with <c>BMP</c> 10004; its button, or any key, goes back to the main menu.
+    /// </summary>
+    private void GameOver()
+    {
+        if (UiWindowView.Build(GameOverWindow, _palette, backdrop: 0) is not { } window)
+        {
+            GetTree().CallDeferred(SceneTree.MethodName.ChangeSceneToFile, MainMenu.ScenePath);
+            return;
+        }
+        var layer = new CanvasLayer { Layer = 50 };
+        var shade = new ColorRect { Color = Colors.Black, MouseFilter = Control.MouseFilterEnum.Stop };
+        shade.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
+        layer.AddChild(shade);
+        float scale = Math.Max(1f, MathF.Floor(Math.Min(GetViewportRect().Size.X / RetroScreen.Width, GetViewportRect().Size.Y / RetroScreen.Height)));
+        window.Scale = new Vector2(scale, scale);
+        window.Position = ((GetViewportRect().Size - window.Size * scale) / 2).Floor();
+        window.MouseFilter = Control.MouseFilterEnum.Stop;
+        // 85FE:02C9 draws BMP 10004 at (68, 24) of the screen.
+        if (Session.Open("RESOURCE.GFF").TryRead("BMP ", GameOverPicture, out var picture) && Session.Assets.Frames(picture) is [{ Width: > 1 } frame, ..])
+        {
+            window.AddChild(new TextureRect { Texture = TextureFor(frame), Position = new Vector2(68, 24), MouseFilter = Control.MouseFilterEnum.Ignore });
+        }
+        layer.AddChild(window);
+        AddChild(layer);
+        void Leave() => GetTree().CallDeferred(SceneTree.MethodName.ChangeSceneToFile, MainMenu.ScenePath);
+        foreach (var (tag, _, control) in window.Items)
+        {
+            if (tag == "BUTN" && control is TextureButton b)
+            {
+                b.Pressed += Leave;
+            }
+        }
+        shade.GuiInput += e =>
+        {
+            if (e is InputEventMouseButton { Pressed: true } or InputEventKey { Pressed: true })
+            {
+                Leave();
+            }
+        };
+    }
+
+    private const int GameOverWindow = 3004, GameOverPicture = 10004;
+
+    /// <summary>
+    /// A party member's step in a fight fires the move triggers of its new cell
+    /// (<c>1A0A:0B0F</c> calls <c>trigger_on_move</c> for every step, fighting or
+    /// not); the fight waits while the script talks to the player.
+    /// </summary>
+    private void MoveTriggers(Combatant c, Cell cell)
+    {
+        if (!c.PartyMember || c.Source is not { Kind: ObjectKind.Party } member || member.Index >= _party.Count || _checking)
+        {
+            return;
+        }
+        int i = member.Index;
+        _lastCells[_party[i].Walker] = cell;
+        if (Session.Scripts.OnMove(i, cell.X, cell.Y, i == _selected) is { } run)
+        {
+            ReportScript($"character {i + 1} reached ({cell.X},{cell.Y}) in a fight", run);
+        }
+    }
+
     // -- development and the headless check ---------------------------------------------------------------
 
     /// <summary>
@@ -718,7 +900,7 @@ public partial class RegionView
     {
         WorldObject? foe = _world.Objects.Where(o => o.Kind == ObjectKind.Creature && !o.Hidden && o.Vitals.Alive
                 && o.Record is { Mind: not (CombatRecord.MindIdle or CombatRecord.MindFlees) })
-            .OrderBy(o => Battle.Distance(o.Cell, _party[0].Walker.Cell)).FirstOrDefault();
+            .OrderBy(o => o.Walker is null).ThenBy(o => Battle.Distance(o.Cell, _party[0].Walker.Cell)).FirstOrDefault();
         Cell leader = _party[0].Walker.Cell;
         Cell? near = foe is null ? null : Enumerable.Range(3, 6).SelectMany(r => new[] { new Cell(leader.X + r, leader.Y), new Cell(leader.X - r, leader.Y),
             new Cell(leader.X, leader.Y + r), new Cell(leader.X, leader.Y - r) }).FirstOrDefault(c => !_region.IsBlocked(c.X, c.Y)
@@ -780,6 +962,10 @@ public partial class RegionView
         if (_combatLines.Count == 0)
         {
             problems.Add("nothing was logged");
+        }
+        if (!_partyFell && battle.Combatants.Any(c => c.PartyMember && c.Vitals is not { Status: Vitals.Well, Hp: >= 1 } && c.Vitals.Status < Vitals.Dead))
+        {
+            problems.Add("a member who went down didn't get up");
         }
         GD.Print($"combat: {battle.Combatants.Count} combatants, {battle.Round} rounds, {attacks} attacks, {damage} damage, "
             + $"{battle.Log.OfType<Fell>().Count()} fell; the log has {_combatLines.Count} lines");

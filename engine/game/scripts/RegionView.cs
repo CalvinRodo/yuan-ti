@@ -233,13 +233,16 @@ public partial class RegionView : Node2D
             }
             if (OS.GetCmdlineUserArgs().Contains("--fight"))
             {
-                // Development: a fight with the nearest creature that fights.
+                // Development: a fight with the nearest creature that fights (--auto: the party fights by itself).
+                _autoParty = OS.GetCmdlineUserArgs().Contains("--auto");
                 Callable.From(() => StartTestFight()).CallDeferred();
             }
             if (OS.GetCmdlineUserArgs().FirstOrDefault(a => a.StartsWith("--screenshot=")) is { } shot)
             {
-                // Development: the screen as a PNG after a few seconds, then quit.
-                GetTree().CreateTimer(5).Timeout += () =>
+                // Development: the screen as a PNG after a few seconds (--screenshot-after=N), then quit.
+                double after = OS.GetCmdlineUserArgs().FirstOrDefault(a => a.StartsWith("--screenshot-after=")) is { } t
+                    && double.TryParse(t["--screenshot-after=".Length..], System.Globalization.CultureInfo.InvariantCulture, out double seconds) ? seconds : 5;
+                GetTree().CreateTimer(after).Timeout += () =>
                 {
                     GetViewport().GetTexture().GetImage().SavePng(shot["--screenshot=".Length..]);
                     GetTree().Quit();
@@ -512,6 +515,7 @@ public partial class RegionView : Node2D
 
         _region = Region.Load(Session.Open(file), [Session.Open("SEGOBJEX.GFF"), Session.Open("GPLDATA.GFF")], Session.Assets);
         var objectData = new GffSet([Session.Open("SEGOBJEX.GFF"), Session.Open("GPLDATA.GFF")]);
+        _objectData = objectData;
         _world = new GameWorld(_region, objectData, Session.ScriptHost.EngineVariables, Session.ScriptHost.PartyMembers, _checking ? 1 : Settings.Difficulty)
         {
             PartyClasses = slot => slot < Session.Party.Count ? Session.Party[slot].ItemClasses : null,
@@ -976,7 +980,7 @@ public partial class RegionView : Node2D
         _clock += delta;
         if (InCombat)
         {
-            AnimateCombat();
+            AnimateCombat(delta);
             CombatProcess(delta);
             Vector2 pan = Input.GetVector(Controls.PanLeft, Controls.PanRight, Controls.PanUp, Controls.PanDown);
             if (pan != Vector2.Zero)

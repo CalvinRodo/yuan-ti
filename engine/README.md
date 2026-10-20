@@ -383,16 +383,22 @@ Fights happen on the region map. FIGHT, or attacking a creature that has no atta
 (`Encounter.Start`): the party members standing, each built from the character sheet
 (`PartyCombatant`: THAC0, saving throws and attacks of the classes in use, armour from what is worn,
 the weapons in hand and missile slot, memorized spells, powers and their ranks), and the creatures of a
-fighting allegiance within 24 cells. The battle plays back step by step: walking, attack rolls,
-damage and healing as numbers rising over the target, effects and conditions, all in a combat log
-(top right). On a party member's turn, click an enemy to attack it (it walks up first if needed;
+fighting allegiance within 24 cells. The battle plays back step by step as DSUN.EXE shows it:
+attackers play their attack animation with its sound, missiles and spell projectiles fly to their
+targets, spells show their graphics over caster and target with their sounds, blows that hurt sound
+the target's cry, damage shows as a number on the original's splash (its look by what hit), and
+lingering fields show their graphic on every cell; a combat log (top right) says it all. On a party member's turn, click an enemy to attack it (it walks up first if needed;
 hovering shows the chance to hit and the number needed), click the ground to move, or use CAST (Q,
 then click a target; hovering shows who the area takes), GUARD (G), WAIT (T), END TURN (E) and AUTO
-(U: the computer fights for that member). A creature that falls leaves its body and gives the party
-its experience; what members used (spells cast, psionic points, ammunition) goes back to their
-sheets. No saving during a fight; leaving the region drops it. `-- --new-game --fight` starts a
-fight with the nearest creature, `--check-combat` plays one through headless, and `--screenshot=FILE`
-saves the screen after five seconds.
+(U: the computer fights for that member). Once a member can't move any more, the original's menu
+pops up by it: "END name's MOVE" with GUARD, WAIT and END TURN. Stepping on a move trigger runs its
+script mid-fight, as in the original. A creature that falls leaves its body and gives the party its
+experience; what members used (spells cast, psionic points, ammunition) goes back to their sheets.
+At the end those down get up with a hit point; if no one was left standing, the original's "your
+party has been defeated" screen leads back to the main menu. No saving during a fight; leaving the
+region drops it. `-- --new-game --fight` starts a fight with the nearest creature (`--auto`: the
+party fights by itself), `--check-combat` plays one through headless, and `--screenshot=FILE` saves
+the screen after five seconds (`--screenshot-after=N` seconds).
 
 `make engine-mod-rules MOD=mods/MyMod` writes all four rule files (`characters.json`,
 `creatures.json`, `combat.json`, `spells.json`) with the original's values to start from, keeping any
