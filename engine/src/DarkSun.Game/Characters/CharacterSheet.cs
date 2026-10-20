@@ -5,8 +5,10 @@ namespace DarkSun.Game.Characters;
 
 /// <summary>
 /// What the character sheet shows that is worked out rather than stored:
-/// armour class and THAC0. DSUN.EXE's own formulas (combat, <c>8E77</c>)
-/// aren't traced; these are AD&amp;D 2nd edition's, which the manual follows:
+/// armour class and THAC0, AD&amp;D 2nd edition's. DSUN.EXE's are now traced
+/// (<c>dsun-exe-reference.md</c> §8): its THAC0 is the same (<c>8E77:0416</c>);
+/// its armour class (<c>612E:2113</c>) also gives gladiators −1 per 5 levels,
+/// ignores shields from behind and lets spells cap the body armour:
 /// <list type="bullet">
 /// <item>armour class: 10, less each worn item's <c>IT1R</c> armour class
 /// (Athas's armour comes in pieces: chest, arms, legs, a shield, a helm;

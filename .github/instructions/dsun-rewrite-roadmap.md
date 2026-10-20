@@ -472,9 +472,18 @@ this milestone brings most of the game's content.
 The largest reverse-engineering task, because its rules live in the
 executable, not in the data.
 
-- [ ] Find and document the combat code (§10): initiative and turn order,
+- [x] Find and document the combat code (§10): initiative and turn order,
       to-hit and damage, armour class, movement points, spells and psionic
-      powers, and saving throws.
+      powers, and saving throws. `dsun-exe-reference.md` §8: the round loop
+      (`612E`), initiative (20 + d10 + Dex, highest first), movement (Move ×
+      10; 10 a step, 14 diagonal), attacks (THAC0 − bonuses − AC, rear and
+      backstab, half-attacks, non-metal weapons), AC, the ability tables,
+      class groups with THAC0, hit dice and saves (`40B1`), the save roll, the
+      spell records (`3CB4`), the psionic power table (`3FB9`, with the
+      manual's scores and costs). Functions named in `symbols.tsv`.
+- [ ] Combat still to trace: the AI (`1A0A:273E`), the speed state's
+      effect on movement, the effect bits (`7D80:1864`), spell damage
+      scaling and durations, the experience award (`8E77:0A8F`).
 - [ ] Monster data from `RDFF` combat objects (`ds1_parsers.py` has a start).
 - [ ] Monster AI: target choice and spell use.
 - [ ] Tactical combat scene on the region map, with clear feedback: hit chance
@@ -541,7 +550,8 @@ name the functions in `tools/ghidra/symbols.tsv`.
 | M3 | What each world-affecting GPL command does | the 114 named `gpl_op_*` handlers and their callees |
 | M4 | `APFM`, `EBOX` formats; what each `WIND` is (`FONT` done) | text-drawing and window code (`2531`, `25EC`); `WIND`/`BUTN`/`ACCL` done (§7) |
 | M5 | Character rules and level tables | character sheet and creation code; `GPLX` tables (`DS:4D7A`, `DS:537A`) |
-| M6 | Combat rules and AI | functions that call `rand` (18 in 9 segments; 6 in `612E`, 3 in `6466`; *unverified* that these are combat) |
+| ~~M6~~ | ~~Combat rules~~ | Done 2026-10-19: `dsun-exe-reference.md` §8 |
+| M6 | Combat AI, effect bits, spell damage scaling | `1A0A:273E`, `612E:1284`, `7D80:1864`, `7D80:1BD3` |
 | M7 | Music and sound selection | callers of the sound driver; segment `0980` has the most port I/O (*unverified*: sound or video driver) |
 | M9 | Original save format | `303C` file-library callers that write files |
 

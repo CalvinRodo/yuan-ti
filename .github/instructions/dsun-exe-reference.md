@@ -1228,3 +1228,216 @@ Wis, Cha; races 1–8 and classes 1–8 in the string table's order), used by
   as above and its animation starts at slot 1 (closed) or 2 (open).
 * **`CREATE_DOOR_TILE/BOX_TRIGGER`:** nothing in DSUN.EXE reads these lists.
 
+
+## 8. Combat
+
+Combat lives in `612E` (rounds, attacks, damage), `80F5` (effects,
+modifiers, saving throws), `6698` (psionics), `6868` (ability tables),
+`8E77` (levels, THAC0, attacks, saves) and `7D80` (spell effects). Every roll
+goes through `rand` (`0000:0822`). `1A0A:2FA9(lo, hi)` is a number in
+lo–hi; `6CCA:1671` takes the same pair packed in a long (0x140001: 1–20). Dice
+are `612E:1F92(n, sides, plus)`.
+
+Records: a combatant is an object of kind 2 (`DS:0C36 + 3·index`) with a
+0x3A-byte combat record (`DS:1665`) and a 0x47-byte character record
+(`DS:1661`, from combat record +4). The fields used here:
+
+* **Combat record:** +0 hit points, +2 psionic strength points, +4 the
+  character record, +0x1B Move, +0x1C status, +0x1D allegiance (& 3:
+  fighting), +0x1F THAC0, +0x21 flags (0x20 computer control, 0x40 locked),
+  +0x22 the six abilities (Str, Dex, Con, Int, Wis, Cha; `6868:04FC(object,
+  n)`, 9 for a non-creature), +0x38 facing (0–7).
+* **Character record:** +0x12 class bits (as items', `6868:0000`), +0x18 race
+  (1 human, 2 dwarf, 3 elf, 4 half-elf, 5 half-giant, 6 halfling, 7 mul,
+  8 thri-kreen), +0x21–0x23 class codes and +0x24–0x26 their levels
+  (`6868:00AF(object, code)` is the level in a code), +0x27 base armour
+  class, +0x2A attacks per round in halves, +0x2B–0x2D, +0x2E–0x30,
+  +0x31–0x33, +0x34–0x36 up to three natural attacks (count, dice, sides,
+  bonus; `80F5:2ACC`), +0x37–0x3B the five saving throws.
+
+### Rounds, initiative and turn order
+
+* **The loop** (`612E:04A7`): `612E:09B6` picks the next combatant; when
+  none is left, `612E:0754` starts a round, and when it returns 0 the fight
+  is over (`612E:281F` finds no enemies; experience follows, `8E77:0A8F`).
+  A party member (index below 4) takes the player's orders (`1587:3866`),
+  others `1A0A:273E`; `612E:0BAD` carries the action out.
+* **A new round** (`612E:0754`): the round clock (`DS:035B` in segment 4781)
+  goes up by 60. Every creature with status 1 (Okay) and an allegiance that
+  fights (& 3), the party or those `612E:0000` finds involved, rolls:
+  * initiative = 20 + d10 (0–9) + Dexterity's reaction adjustment
+    (`6868:033F`) + `80F5:3811` (effects: −2, +2, −2), at `DS:00D9 + 4·n`;
+  * a tie-breaker 0–199 at `DS:00DB + 4·n`;
+  * movement points = Move (+0x1B) × 10, at `DS:022B + 2·n` of segment 47BD;
+  * then `80F5:36CC`'s speed state (0 held, 1 slowed, 2 normal, 4 hasted,
+    5 another effect) adjusts them (its jump table isn't decoded).
+  The action flags (`DS:01D5 + 2·n`) start at 0x3FF: bit 0 may move, bit 1
+  may attack.
+* **Turn order** (`612E:09B6`): the highest initiative acts first, a tie
+  going to the higher tie-breaker. The original's order is the reverse of
+  AD&D's low-goes-first: a high Dexterity acts early.
+* **Movement** (`612E:2446`): a step costs the points at `DS:055C` by
+  direction, 10 straight and 14 diagonal; below 10 left, the move bit
+  clears. A target farther than 24 (`1A0A:2BA5`) can't be attacked.
+
+### Attacks: to-hit and damage
+
+* **Who hits** (`612E:1359`, for each weapon in use, up to three):
+  * the target number is THAC0 (combat record +0x1F), less the attacker's
+    modifiers, less the target's armour class;
+  * from behind (the target's facing is opposite, `612E:1B5E(dir, 4)`):
+    −2 to the target number, and shields don't count;
+  * a thief (class bit 0x400) in melee with a weapon lighter than 41
+    (`IT1R` +4) backstabs: −4 instead, and damage × `612E:2904` = (thief
+    level − 1) / 4 + 2, at most 5 (×2 at levels 1–4 … ×5 from 13);
+  * monsters (index 4 and up) add the difficulty − 1 (`DS:11AE`, 0–3) to
+    their bonus;
+  * the attacker's bonus is the weapon's item bonus (+0x14), plus
+    `6868:0411` (non-metal weapons that aren't magic and have no bonus:
+    wooden −3, bone −1, stone −2, obsidian −2), plus `80F5:3849` (effects,
+    alignment, a halfling's +1 with a sling or thrown weapon, Strength's
+    to-hit in melee or Dexterity's reaction at range), less a second
+    weapon's penalty (`612E:292C`: the Dexterity reaction, not for rangers).
+* **The roll** (`612E:1B7A`): d20 per attack. A 20 always hits, a 1 always
+  misses, otherwise it hits when d20 ≥ the target number.
+* **Attacks per round:** +0x2A holds halves: 2, then 3 from warrior level 1,
+  4 from 7, 5 from 13 (`8E77:038F`; thri-kreen +0x2B 8 natural). Hasted
+  doubles, slowed halves; a round gets (halves + (round & 1)) / 2, so 3
+  halves alternate 1 and 2. Missile weapons are limited by the ammunition
+  in slot 1 (`612E:1FCF`, message 0x5B4 when it runs out); a missile's
+  range is `IT1R` +0x0A.
+* **Damage:** `IT1R` dice (+0x0D) × sides (+0x0C) + damage bonus (+0x0E) +
+  the item's bonus (+0x14) + `6868:0489` (wooden −2, bone, stone, obsidian
+  −1) + ammunition's bonus; at least 1. In melee `80F5:3671` adds
+  Strength's damage (`6868:030D`) and an effect's 10 % per level. With no
+  weapon, the natural attacks (`80F5:2ACC`). Damage is applied by
+  `80F5:0008` / `0079` and `612E:18DA` (see "Items in scripts", DAMAGE).
+
+### Armour class (`612E:2113`)
+
+* An item object is AC 5; a creature starts from its character record's
+  +0x27 (10 for the party).
+* Each worn armour piece (`IT1R` flags 0x80) subtracts its AC (`IT1R`
+  +0x12) and its bonus (+0x14); shields (`IT1R` +0 & 4) not from behind.
+  Pieces on the arms, legs and chest (slots 0, 6, 9) make the body armour,
+  which effects can cap; the rest (shield, helm, …) count on top.
+* A gladiator (class bit 0x40) gets −1 per 5 gladiator levels.
+* `80F5:39B7`: Dexterity's adjustment (`6868:0358`, not from behind), and
+  the effects: Armor caps the body armour at 6, Shield at 4, Spirit Armor at
+  6 − level/4, others at 10 − level; some subtract 2.
+
+### Ability tables (`DS:07A8`–`DS:0843`, 26 bytes each, by score 0–25)
+
+| Table | Getter | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8–14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| Str damage `07A8` | `6868:030D` | −4 | −2 | −1 | −1 | −1 | 0 | 0 | 0 | 0 | +1 | +1 | +4 | +7 | +8 | +9 | +10 | +11 | +12 | +14 |
+| Str to-hit `07C2` | `6868:0326` | −5 | −3 | −3 | −2 | −2 | −1 | −1 | 0 | 0 | 0 | +1 | +2 | +3 | +3 | +4 | +4 | +5 | +6 | +7 |
+| Dex reaction `07DC` | `6868:033F` | −6 | −4 | −3 | −2 | −1 | 0 | 0 | 0 | 0 | +1 | +2 | +2 | +3 | +3 | +4 | +4 | +4 | +5 | +5 |
+| Dex AC `07F6` | `6868:0358` | +5 | +5 | +4 | +3 | +2 | +1 | 0 | 0 | −1 | −2 | −3 | −4 | −4 | −4 | −5 | −5 | −5 | −6 | −6 |
+| Con vs poison `0810` | `6868:0371` | −2 | −1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | +1 | +1 | +2 | +2 | +3 | +3 | +4 |
+| Wis magic defence `082A` | `6868:038A` | −6 | −4 | −3 | −2 | −1 | −1 | −1 | 0 | +1 | +2 | +3 | +4 | +4 | +4 | +4 | +4 | +4 | +4 | +4 |
+
+These are AD&D 2nd edition's, but 18 has no percentile strength (+2 to hit,
++4 damage).
+
+### Classes: groups, THAC0, hit dice and saving throws (segment `40B1`)
+
+* `40B1:0010 + class code` gives the group: codes 1–8 (clerics, druids) and
+  19 priest (0); 9, 10, 13–16 (fighter, gladiator, ranger) warrior (1); 11,
+  18 (preserver, defiler) wizard (2); 12, 17 (psionicist, thief) rogue (3).
+* `40B1:0000 + 4·group`: hit die, the last level that adds one, hit points
+  a level after it, THAC0 factor. Priest d8, 9, +2, 8; warrior d10, 9, +3,
+  12; wizard d4, 10, +1, 4; rogue d6, 9, +2, 6. `8E77:0473` takes the best
+  level in each group (a dual-class human's former class only while the
+  current one's level is lower; `+0x18` = 1).
+* **THAC0** (`8E77:0416`): 20 − the best of (level − 1) × factor / 12 over
+  the groups: 1 a level for warriors, 2 in 3 for priests, 1 in 2 for rogues,
+  1 in 3 for wizards.
+* **Saving throws** (`8E77:059B`): five, in AD&D's order (paralysation,
+  poison and death; rod, staff and wand; petrification and polymorph;
+  breath weapon; spell), at character record +0x37–0x3B. For each group the
+  character has and each save, the save is base − min(max, rate × (level −
+  1) / 100) from `40B1:006C + 15·group + 3·save` (base, rate, max); the
+  lowest over the groups is kept. Dwarves and halflings (race 2, 6) get
+  Con × 2 / 7 off, but the test (`8E77:064D`) is on the *group* counter
+  (`cx` = 1 or 4), so only the warrior group's saves get it, all five; it
+  was likely meant for saves 1 and 4 (rod and spell), as AD&D has it. The
+  bases (level 1):
+
+  | Group | Para./poison | Rod/wand | Petri./poly. | Breath | Spell | Rates (×100) | Max |
+  |---|---|---|---|---|---|---|---|
+  | Priest | 10 | 14 | 13 | 16 | 15 | 45 | 2, 6, 5, 8, 7 |
+  | Warrior | 14 | 16 | 15 | 17 | 17 | 69 (breath 82) | 3, 5, 4, 4, 6 |
+  | Wizard | 14 | 11 | 13 | 15 | 12 | 30, 40, 40, 40, 40 | 8, 3, 5, 7, 4 |
+  | Rogue | 13 | 14 | 12 | 16 | 15 | 25, 50, 25, 25, 50 | 8, 4, 7, 11, 5 |
+
+* **The roll** (`80F5:0ED1`): only for an effect whose record allows one
+  (save byte bit 0). Category = save byte >> 5; 6 means none; the save
+  score is +0x36 + `DS:1E75`[category] (words 1, 1, 1, 2, 3, 3, 4, 5, 5, 5:
+  most spells, category 5, end up at the third save; *unverified* that
+  this is meant). Not for a target in status 3 or with effect bit 4. A
+  natural 1 fails, a 20 succeeds; otherwise d20 (doubled for element flags
+  0x86) + `80F5:119C` + the spell's own modifier (save byte bits 1–4,
+  signed) must reach the score. `80F5:119C`: +1/+3/+1/+1 for some effects,
+  +2/+3/+4 for resistances matching the spell's element bits (+0x13), ±1 by
+  a protecting ally's alignment, +2 for psionicists against some, −Dex AC
+  adjustment against area effects, +Wis magical defence against mind
+  effects, +Con poison adjustment and the dwarf/halfling Con/3.5 against
+  poison; −100 / +100 for effects some creatures can't or always resist.
+
+### Spells in combat (`3CB4:0037 + 0x20 · (spell − 1)`)
+
+* A 32-byte record per spell (index = `SPIN` number − 1; checked against
+  the saves of 18 spells). The fields the code reads:
+
+  | Offset | Read as | Meaning (examples) |
+  |---|---|---|
+  | +0x00 | word | duration base: 60 for most, −9999 permanent (Charm Person, Thought Shield), 0 instant (Magic Missile) |
+  | +0x02 | word | area size: 1, 40 (Burning Hands, Lightning Bolt), 80 (Fireball), 240 (Confusion) |
+  | +0x05 | byte | target: 1 an area, 3 touch, 4 a creature, 6 a cone, 7 self |
+  | +0x09 | byte | projectile (Magic Missile 4, Fireball 1, Lightning 5); 0xFF none |
+  | +0x0A | word | flags: 0x4000 damaging, 0x0200 combat only, 0x8000 no damage if saved (else half), 0x0010 psionic |
+  | +0x0D | word | effect graphic (0x20xx), 0xFFFF none |
+  | +0x10 | byte | animation (×0x12 table) |
+  | +0x12 | byte | condition on a failed save: Armor 2, Charm 10, Confusion 11, Ego Whip 33, Hold 34, Shield 46 |
+  | +0x13 | word | element bits for resistances (fire 0x02, 0x80, 0x200, psionic 0x400) |
+  | +0x15–0x17 | bytes | damage: (32, 1, 6) Fireball and Lightning Bolt (likely 1d6 a level), (33, 2, 20) Magic Missile, (2, 9, 3) Burning Hands (*meaning unverified*) |
+  | +0x18 | byte | save: bit 0 allowed, bits 1–4 modifier (Confusion −2), bits 5–7 category |
+
+* **Applying one** (`80F5:0079`, queued by `80F5:0532` / `057E`, run by
+  `80F5:045A`): immunity (`80F5:14E5`), whether it affects the target
+  (`80F5:1999`), magic resistance (`80F5:161F`: d100 against `80F5:1901`),
+  then the save: a failed save applies the condition (+0x12) for the duration
+  from `7D80:1BD3(spell, level)` (`7D80:1301`); a successful one halves the
+  damage, or cancels it with flag 0x8000. The damage then passes
+  `80F5:1059` (−2 against some armour, ±1 by an ally's alignment, AC for
+  spell 0x8C) and is applied (`80F5:0E61`).
+* Casting needs the caster active ("ONLY ACTIVE CHAR CAN CAST"); being hit
+  interrupts it ("YOU WERE HIT"). The memorized spells per level are
+  `DS:4B08` (wizard) and `DS:4B11` (priest), 0x1E bytes per character.
+
+### Psionic powers (`3FB9:0000 + 8 · (power − 139)`)
+
+* An 8-byte record per power, matching the manual's power list:
+  +0 power score (low 3 bits the ability, Str–Cha; the high 5 a signed
+  modifier: Detonate Con −3, Disintegrate Wis −4), +1 initial cost (18, 40,
+  …), +2 maintenance cost a round (99: none), +3 discipline (low bits 0
+  psychokinesis, 1 psychometabolism, 2 telepathy; 0x40 likely a science,
+  0x80 a defence mode), +4 a range or area (Mass Domination 20), +5 the
+  psionic attack or defence (0–3 Psychic Crush, Ego Whip, Id Insinuation,
+  Psionic Blast; 254 defence modes), +6 its text.
+* **Using one** (`6698:0280`): the cost is +1, except Enhanced Strength
+  ((24 − character record +0x1B) × 2) and the dominations (by the target's
+  level: below 6 3, below 11 8, below 16 13, else 18). Not enough points:
+  message 0x612. The power check (`6698:0CED`): score = ability + modifier
+  + `6698:0137`; d20 ≤ score succeeds (20 always fails, 1 always
+  succeeds); against a target defending with a power, both roll. A failed
+  check costs half; a success the full cost, then `6698:0C54` and the
+  effect (`7D80:0000`, effect 0x8A + power).
+
+### Not traced yet
+
+The AI's choices (`1A0A:273E`, `612E:1284` picks a random target), the speed
+state's switch in `612E:0754`, the effect bitfield's meaning bit by bit
+(`7D80:1864`), spell damage scaling (+0x15–0x17), durations (`7D80:1BD3`),
+the save category table's intent, and the experience award (`8E77:0A8F`).

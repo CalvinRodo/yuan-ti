@@ -462,3 +462,40 @@
 6BB8:0D13	func	door_set_state	object, state (0 open, 1 close, |2 lock), force: both leaves, SCMD slot 2/3, map cells
 6BB8:0FF8	func	door_set_cells	closed: GMAP 0xC0 on the door's cells (size at item +0x0E); open: cleared, hinge cell kept
 217D:0070	func	object_place	screen position = world position - hot spot (y also - byte +0x0D)
+1A0A:2FA9	func	random_between	(lo, hi): lo + rand * (hi - lo + 1) / 0x8000
+612E:04A7	func	combat_loop	next combatant (09B6), new round (0754), orders (player 1587:3866 / AI 1A0A:273E), act (0BAD)
+612E:0754	func	combat_new_round	round clock +60; initiative 20 + d10 + Dex reaction + effects, tiebreak d200; move points = Move x 10
+612E:09B6	func	combat_next	highest initiative, then tiebreak
+612E:1359	func	combat_attack	per weapon: target number THAC0 - bonuses - AC; rear -2, backstab -4; then 1B7A
+612E:1B7A	func	combat_attack_rolls	d20 per attack (20 hits, 1 misses, >= number hits); damage dice; half-attacks per round
+612E:1F92	func	roll_dice	(n, sides, plus)
+612E:1FCF	func	ammunition_left	missile weapon: quantity in the ammunition slot
+612E:2113	func	armor_class	base (char +0x27), armour pieces, shields not from behind, gladiator, effects (80F5:39B7)
+612E:2446	func	combat_step	move points: 10 straight, 14 diagonal (DS:055C)
+612E:2904	func	backstab_multiplier	(thief level - 1) / 4 + 2, at most 5
+612E:292C	func	second_weapon_penalty	Dex reaction, not for rangers
+6698:0280	func	psionic_use	cost (3FB9 table +1, special cases), power check, half cost on failure
+6698:0CED	func	psionic_check	d20 <= ability + modifier (+bonus); contested against a defending target
+6868:00AF	func	class_level	(object, class code): level in that code
+6868:030D	func	str_damage	DS:07A8[Str]
+6868:0326	func	str_to_hit	DS:07C2[Str]
+6868:033F	func	dex_reaction	DS:07DC[Dex]
+6868:0358	func	dex_ac	DS:07F6[Dex]
+6868:0371	func	con_poison_save	DS:0810[Con]
+6868:038A	func	wis_magic_defence	DS:082A[Wis]
+6868:0411	func	weapon_material_to_hit	non-metal, non-magic: wooden -3, bone -1, stone -2, obsidian -2
+6868:0489	func	weapon_material_damage	wooden -2, bone/stone/obsidian -1
+6868:04FC	func	ability	(object, n): combat record +0x22 + n, 9 if not a creature
+80F5:0079	func	apply_effect	immunity, magic resistance, save, condition or damage (half/none on save)
+80F5:0ED1	func	saving_throw	d20 (1 fails, 20 saves) + modifiers + spell's modifier >= save score
+80F5:119C	func	save_modifier	effects, element resistances, Dex/Wis/Con adjustments, dwarf/halfling Con/3.5
+80F5:2ACC	func	natural_attacks	char record +0x2B/+0x2E/+0x31/+0x34: count, dice, sides, bonus
+80F5:3671	func	melee_damage_bonus	Str damage, effect percentage
+80F5:36CC	func	speed_state	0 held, 1 slowed, 2 normal, 4 hasted, 5 other
+80F5:3811	func	initiative_effects	-2 / +2 / -2 by effect bits
+80F5:3849	func	to_hit_bonus	effects, alignment, halfling missile +1, Str to-hit (melee) or Dex reaction (range)
+80F5:39B7	func	ac_effects	Dex AC, Armor caps 6, Shield 4, Spirit Armor 6 - level/4, ...
+8E77:038F	func	attacks_per_round	half-attacks: 2, warrior 3/4/5 from levels 1/7/13; thri-kreen natural 8
+8E77:0416	func	thac0	20 - best (level - 1) * factor / 12 (40B1 table)
+8E77:0473	func	group_levels	best level per class group (40B1:0010 by code)
+8E77:059B	func	saving_throws	per group: base - min(max, rate * (level - 1) / 100) (40B1:006C)
