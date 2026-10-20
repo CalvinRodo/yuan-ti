@@ -1,4 +1,5 @@
 using System.Text.Json;
+using DarkSun.Data.Items;
 using System.Text.RegularExpressions;
 using System.Text.Json.Serialization;
 
@@ -7,8 +8,89 @@ namespace DarkSun.Game.Rules;
 /// <summary>A special ability the AI tries (<c>6466:05EF</c>): ability bit <paramref name="Bit"/> casts spell record <paramref name="Spell"/>.</summary>
 /// <param name="Bit">A bit of a type's mask (<see cref="CreatureRules.AbilityTypes"/>).</param>
 /// <param name="Spell">The spell number cast (a spell record, numbered like <c>SPIN</c>: index + 1;
-/// 176 and up are monster-only records with no <c>SPIN</c> text).</param>
+/// 173 and up are monster-only records with no <c>SPIN</c> text).</param>
 public sealed record CreatureAbility(int Bit, int Spell);
+
+/// <summary>
+/// One entry of a type's resistances (<c>3E45:00D2</c>, <c>80F5:28F2</c>): a
+/// hit or spell with any of <paramref name="Elements"/> affects the creature
+/// <paramref name="Percent"/> % of the time.
+/// </summary>
+public sealed record CreatureResistance(DamageElement Elements, int Percent);
+
+/// <summary>
+/// The bits of a type's ability mask (<see cref="CreatureRules.AbilityTypes"/>,
+/// <c>3E45:0000</c>), named from the code that tests them (<c>84C1:0000</c>'s
+/// callers; <c>dsun-exe-reference.md</c> §8, "Ability bits"). Effects are
+/// spell records, numbered like <c>SPIN</c> (index + 1).
+/// </summary>
+public enum CreatureAbilityBit
+{
+    /// <summary>Unaffected by ranged spells that leave an area behind (clouds, walls, webs, fog; <c>80F5:161F</c>). Bulettes, xorns, fire eels; the name is a guess.</summary>
+    Burrows = 0,
+    /// <summary>Tested exactly like <see cref="Burrows"/>. Wyverns, vrocks, elementals; the name is a guess.</summary>
+    Flies = 1,
+    /// <summary>Its first natural attack also does 2d6 cold (effect 173; <c>80F5:1999</c>).</summary>
+    ColdTouch = 2,
+    /// <summary>Its first natural attack also paralyses for 2d6 rounds (effect 174). Shadows.</summary>
+    ParalysingChill = 3,
+    /// <summary>Its first natural attack also does 2d6 acid (effect 175). Slimes.</summary>
+    AcidTouch = 4,
+    /// <summary>Immune to Charm Person, Charm Monster, Charm Person or Mammal, Hold Person and Hold Monster (spell flag 4; <c>80F5:161F</c>).</summary>
+    NoCharmOrHold = 5,
+    /// <summary>The AI uses Detonate (effect 139).</summary>
+    Detonate = 6,
+    /// <summary>Not tested by any code. Spiders, psurlons, slaves, guards.</summary>
+    Unused7 = 7,
+    /// <summary>Not tested by any code, and no creature has it.</summary>
+    Unused8 = 8,
+    /// <summary>Can't be Stuck (condition 51: webs, entangle; <c>8053:03C0</c>), and unaffected by ranged spells that cover the ground (grease, web, walls, quicksand). Shadows, xorns.</summary>
+    NotStuck = 9,
+    /// <summary>Not tested by any code. Elementals, shadows, slaadi, psurlons.</summary>
+    Unused10 = 10,
+    /// <summary>Not tested by any code. Elementals, vrocks.</summary>
+    Unused11 = 11,
+    /// <summary>The AI throws a web (effect 176: an area that leaves Stuck).</summary>
+    Web = 12,
+    /// <summary>Its last natural attack also does 10 poison, none if saved (effect 177). Spiders.</summary>
+    Poison10 = 13,
+    /// <summary>Its last natural attack also poisons for 30, none if saved (effect 178). Mastyrials.</summary>
+    Poison30 = 14,
+    /// <summary>Its last natural attack also casts Poison (effect 120: death after 10 rounds unless saved or cured). Wyverns.</summary>
+    DeadlyPoison = 15,
+    /// <summary>Its first natural attack also does 20 acid (effect 179). Rampagers.</summary>
+    Acid20 = 16,
+    /// <summary>Regains 3 hit points a round, up to its maximum (<c>8053:0163</c>). Dark spiders, mastyrials, red slaadi.</summary>
+    Regenerates = 17,
+    /// <summary>The AI uses a paralysing touch (effect 180).</summary>
+    ParalysingTouch = 18,
+    /// <summary>The AI shoots a 1d6 missile (effect 181).</summary>
+    Missile = 19,
+    /// <summary>The AI breathes a 6d6 fire cone (effect 182).</summary>
+    FireCone = 20,
+    /// <summary>The AI breathes a paralysing cone (effect 183). Also makes it immune to Wall of Fog (<c>80F5:161F</c>).</summary>
+    ParalysingCone = 21,
+    /// <summary>The AI uses a touch with no damage or condition in its record (effect 184).</summary>
+    Touch = 22,
+    /// <summary>A damaging ranged spell does 1000 more (<c>80F5:0E61</c>). No creature has it.</summary>
+    DiesToRangedSpells = 23,
+    /// <summary>Its first natural attack also casts effects 187 and 188, which have no damage or condition in their records (not traced). Babau.</summary>
+    Babau = 24,
+    /// <summary>Its first natural attack, one hit in 10, also gives a permanent disease (effect 185). Blue slaadi.</summary>
+    Disease = 25,
+    /// <summary>The AI casts Fireball (spell 28).</summary>
+    Fireball = 26,
+    /// <summary>Sees invisible creatures (<c>80F5:31AB</c>, for the armour class and save adjustments). No creature has it.</summary>
+    SeesInvisible = 27,
+    /// <summary>Not tested by any code. Spiders, slaadi, slimes, xorns, vrocks.</summary>
+    Unused28 = 28,
+    /// <summary>The AI casts Fear (spell 44).</summary>
+    Fear = 29,
+    /// <summary>The AI casts Hold Person (spell 31).</summary>
+    HoldPerson = 30,
+    /// <summary>The AI breathes a 3d6 fire cone (effect 186).</summary>
+    SmallFireCone = 31,
+}
 
 /// <summary>
 /// What creatures can do in combat beyond their records: tables that are in
@@ -19,16 +101,25 @@ public sealed record CreatureAbility(int Bit, int Spell);
 /// </summary>
 public sealed partial record CreatureRules
 {
-    private static readonly JsonSerializerOptions Json = new() { WriteIndented = true };
+    private static readonly JsonSerializerOptions Json = new() { WriteIndented = true, Converters = { new JsonStringEnumConverter() } };
 
     /// <summary>
-    /// The special abilities, by combat record +0x16 (<c>3E45:0000</c>, 32-bit
-    /// masks; <c>84C1:0000</c>): the bits each type has. The AI uses those in
-    /// <see cref="Abilities"/>; the others are tested by the damage, save and
-    /// resistance code (<c>80F5</c>, <c>8053:0163</c>, <c>8B7D</c>; not traced).
-    /// A type past the end has none.
+    /// The special abilities, by creature type (combat record +0x16;
+    /// <c>3E45:0000</c>, 42 32-bit masks; <c>84C1:0000</c>): the bits each type
+    /// has, named by <see cref="CreatureAbilityBit"/>. The AI uses those in
+    /// <see cref="Abilities"/>; the damage, save and resistance code tests the
+    /// others. A type past the end (Aposs 128, Maris 129) has none; DSUN.EXE
+    /// reads past the table for them.
     /// </summary>
     public required IReadOnlyList<IReadOnlyList<int>> AbilityTypes { get; init; }
+
+    /// <summary>
+    /// What each creature type resists, by type like <see cref="AbilityTypes"/>
+    /// (<c>3E45:00A8</c> gives each type one of 16 rows at <c>3E45:00D2</c>, 4
+    /// entries each; <c>80F5:28F2</c>). Most are AD&amp;D's "hit only by +1 (or
+    /// +2) weapons": physical elements 0 %, the same with a magic bit 100 %.
+    /// </summary>
+    public required IReadOnlyList<IReadOnlyList<CreatureResistance>> Resistances { get; init; }
 
     /// <summary>The abilities the AI tries, first that the creature has (<c>DS:05D0</c>, <c>DS:05DB</c>).</summary>
     public required IReadOnlyList<CreatureAbility> Abilities { get; init; }
@@ -56,6 +147,19 @@ public sealed partial record CreatureRules
 
     /// <summary>Does a creature of ability type <paramref name="type"/> (+0x16) have <paramref name="bit"/>?</summary>
     public bool HasAbility(int type, int bit) => type >= 0 && type < AbilityTypes.Count && AbilityTypes[type].Contains(bit);
+
+    public bool HasAbility(int type, CreatureAbilityBit bit) => HasAbility(type, (int)bit);
+
+    /// <summary>
+    /// The percent chance a hit or spell of <paramref name="elements"/> affects
+    /// type <paramref name="type"/>: the highest of its resistances that share a
+    /// bit with them, else 100 (<c>80F5:28F2</c>, before the target's
+    /// protection conditions halve it).
+    /// </summary>
+    public int ChanceToAffect(int type, DamageElement elements) =>
+        type >= 0 && type < Resistances.Count && Resistances[type].Where(r => (r.Elements & elements) != 0).ToList() is { Count: > 0 } hits
+            ? hits.Max(r => r.Percent)
+            : 100;
 
     /// <summary>The abilities the AI may use for <paramref name="type"/>, in the order it tries them.</summary>
     public IEnumerable<CreatureAbility> AbilitiesOf(int type) => Abilities.Where(a => HasAbility(type, a.Bit));
@@ -85,15 +189,32 @@ public sealed partial record CreatureRules
         {
             throw new InvalidDataException($"ability bit {bad}: bits are 0–31");
         }
+        if (rules.Resistances.SelectMany(t => t).FirstOrDefault(r => r.Percent is < 0 or > 100) is { } r)
+        {
+            throw new InvalidDataException($"resistance {r.Elements}: percent is 0–100, not {r.Percent}");
+        }
         return rules;
     }
 
-    /// <summary>The rules as JSON, each list of numbers on one line (<c>[5, 7, 17]</c>) so a table reads as one row each.</summary>
-    public string ToJson() => NumberList().Replace(JsonSerializer.Serialize(this, Json),
-        m => "[" + string.Join(", ", m.Groups[1].Value.Split(',', StringSplitOptions.TrimEntries)) + "]");
+    /// <summary>
+    /// The rules as JSON, each list of numbers (<c>[5, 7, 17]</c>) and each
+    /// resistance on one line, so a table reads as one row each.
+    /// </summary>
+    public string ToJson()
+    {
+        string json = NumberList().Replace(JsonSerializer.Serialize(this, Json),
+            m => "[" + string.Join(", ", m.Groups[1].Value.Split(',', StringSplitOptions.TrimEntries)) + "]");
+        return FlatObject().Replace(json, m => "{ " + string.Join(" ", m.Groups[1].Value.Split('\n', StringSplitOptions.TrimEntries).Where(f => f.Length > 0)) + " }");
+    }
 
     [GeneratedRegex(@"\[\s*(-?\d+(?:\s*,\s*-?\d+)*)\s*\]")]
     private static partial Regex NumberList();
+
+    /// <summary>An object of numbers and strings only, one field a line.</summary>
+    [GeneratedRegex(@"\{\s*\n((?:\s*""\w+"": (?:-?\d+|""[^""]*""),?\n)+)\s*\}")]
+    private static partial Regex FlatObject();
+
+    private const DamageElement Physical = DamageElement.Bludgeoning | DamageElement.Slashing | DamageElement.Piercing;
 
     /// <summary>DSUN.EXE's tables.</summary>
     public static CreatureRules Default { get; } = new()
@@ -108,18 +229,46 @@ public sealed partial record CreatureRules
         [1, 11, 28], [1, 15], [0, 9, 28], [10, 27, 28, 29], [28],
         [6], [7], [1, 11], [1, 10], [5, 11, 17, 24, 27, 28],
         [1, 11], [1, 10], [0, 9, 11], [0, 9, 10], [5, 23],
-        [5], [], [17, 24, 25, 27], [8, 24, 26, 27], [0, 1, 3, 17, 24, 25],
-        [1, 3, 8, 9, 11, 26], [8, 9, 11, 16, 17, 19, 24, 27], [8, 10, 16, 17, 18, 27], [8, 10, 11, 25, 26], [],
-        [1, 2, 3, 8, 10, 11, 24, 26, 27], [0, 1, 3, 8, 10, 11, 16, 17, 19], [], [], [],
-        [16], [], [], [26], [],
-        [], [19], [4, 5], [26, 29, 30], [16, 19, 20, 21, 24],
-        [12, 13, 15], [26, 29, 30], [17, 18], [3, 4, 5], [26, 29, 30],
-        [17, 18], [7, 19, 20, 21], [25, 28, 29], [2, 5, 6, 17, 19, 21, 22], [4],
-        [26, 29, 30], [16, 19, 20, 21, 24], [12, 13, 15], [26, 29, 30], [17],
-        [3, 4, 5], [17, 20, 21, 26, 29, 30], [19, 20, 21, 26], [9, 12, 13, 14, 15], [17, 20, 21, 26, 29, 30],
-        [19, 20, 21], [9, 12, 13, 15], [26, 29, 30], [20, 21], [3],
-        [26, 29, 30], [19, 20, 21, 28], [9, 13, 15], [26, 29, 30], [17, 19, 20, 21],
-        [12, 13, 15], [26, 29, 30], [17, 19, 20, 21, 28], [13, 15], [26, 29, 30],
+        [5], [],
+        ],
+        Resistances =
+        [
+        [], [],
+        [new(DamageElement.Psionic, 0)], // 2
+        [new(Physical, 0), new(DamageElement.Magic | DamageElement.Plus1 | DamageElement.Plus2 | DamageElement.Plus3, 100)], // 3 babau
+        [],
+        [new(DamageElement.Poison, 0)], // 5 spiders
+        [],
+        [new(Physical | DamageElement.Plus1, 0), new(DamageElement.Magic | DamageElement.Plus2 | DamageElement.Plus3, 100)], // 7 elementals
+        [new(Physical, 0), new(DamageElement.Magic | DamageElement.Plus1 | DamageElement.Plus2 | DamageElement.Plus3, 100)], // 8 lesser elementals
+        [],
+        [new(DamageElement.Psionic, 0)], // 10
+        [new(DamageElement.Bludgeoning, 0), new(DamageElement.Slashing | DamageElement.Piercing, 100)], // 11 mastyrials
+        [new(Physical | DamageElement.Psionic, 50), new(DamageElement.Magic | DamageElement.Plus1 | DamageElement.Plus2 | DamageElement.Plus3, 100)], // 12 rampager
+        [new(Physical, 0), new(DamageElement.Magic | DamageElement.Plus1 | DamageElement.Plus2 | DamageElement.Plus3, 100)], // 13 shadows
+        [],
+        [new(Physical | DamageElement.Poison | DamageElement.Negative, 0), new(DamageElement.Plus1 | DamageElement.Plus2 | DamageElement.Plus3, 100)], // 15 shadow
+        [],
+        [new(Physical, 0), new(DamageElement.Magic | DamageElement.Plus1 | DamageElement.Plus2 | DamageElement.Plus3, 100)], // 17 blue slaad
+        [new(Physical, 0), new(DamageElement.Magic | DamageElement.Plus1 | DamageElement.Plus2 | DamageElement.Plus3, 100)], // 18
+        [new(DamageElement.Fire, 50), new(Physical, 100)], // 19 ssurrans, tribesmen
+        [],
+        [new(DamageElement.Fire | DamageElement.Cold, 0), new(Physical, 100)], // 21 animated statue
+        [new(DamageElement.Fire | DamageElement.Bludgeoning | DamageElement.Piercing | DamageElement.Acid, 0), new(DamageElement.Slashing, 100)], // 22 slimes
+        [new(Physical | DamageElement.Poison | DamageElement.Negative, 0), new(DamageElement.Plus1 | DamageElement.Plus2 | DamageElement.Plus3, 100)], // 23 psurlons
+        [],
+        [new(Physical | DamageElement.Plus1, 0), new(DamageElement.Magic | DamageElement.Plus2 | DamageElement.Plus3, 100)], // 25 vrock
+        [],
+        [new(DamageElement.Fire | DamageElement.Cold, 0), new(DamageElement.Electricity, 50), new(Physical, 100)], // 27 xorn
+        [], [], [], [],
+        [new(Physical | DamageElement.Fire, 0), new(DamageElement.Plus1 | DamageElement.Plus2 | DamageElement.Plus3, 100)], // 32 fire elemental
+        [new(Physical | DamageElement.Plus1, 0), new(DamageElement.Magic | DamageElement.Plus2 | DamageElement.Plus3, 100)], // 33 lesser fire elemental
+        [],
+        [new(Physical | DamageElement.Plus1, 0), new(DamageElement.Magic | DamageElement.Plus2 | DamageElement.Plus3, 100)], // 35
+        [new(Physical, 0), new(DamageElement.Magic | DamageElement.Plus1 | DamageElement.Plus2 | DamageElement.Plus3, 100)], // 36
+        [new(Physical | DamageElement.Plus1, 0), new(DamageElement.Magic | DamageElement.Plus2 | DamageElement.Plus3, 100)], // 37
+        [new(Physical, 0), new(DamageElement.Magic | DamageElement.Plus1 | DamageElement.Plus2 | DamageElement.Plus3, 100)], // 38
+        [], [], [],
         ],
         Abilities =
         [

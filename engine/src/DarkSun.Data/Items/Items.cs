@@ -37,6 +37,37 @@ public enum WeaponKind : byte
     Thrown = 0x10,
 }
 
+/// <summary>
+/// What a hit or spell is made of, for resistances (<c>80F5:28F2</c>): a
+/// weapon's <c>IT1R</c> +2 (slings bludgeon, swords slash, bows and daggers
+/// pierce) with <see cref="Plus1"/>, <see cref="Plus2"/> and <see cref="Plus3"/>
+/// added for a +1, +2 (both) or +3 (all three) weapon (<c>612E:1359</c>), or a
+/// spell record's +0x13. Named from the spells and weapons that carry them.
+/// </summary>
+[Flags]
+public enum DamageElement : ushort
+{
+    None = 0,
+    Poison = 0x0001,
+    Fire = 0x0002,
+    Cold = 0x0004,
+    Bludgeoning = 0x0008,
+    Slashing = 0x0010,
+    Piercing = 0x0020,
+    Acid = 0x0040,
+    Electricity = 0x0080,
+    /// <summary>The cause-wounds spells, Chill and Vampiric Touch, Slay Living.</summary>
+    Negative = 0x0100,
+    /// <summary>Most damaging wizard and priest spells.</summary>
+    Magic = 0x0200,
+    Psionic = 0x0400,
+    /// <summary>Poison and Slay Living.</summary>
+    Death = 0x0800,
+    Plus1 = 0x1000,
+    Plus2 = 0x2000,
+    Plus3 = 0x8000,
+}
+
 /// <summary>What an item is made of: the low nibble of <c>IT1R</c> +8, named from DSUN.EXE's table at <c>3B68:0000</c> (<c>74F1:23AA</c>).</summary>
 public enum ItemMaterial : byte { Wooden, Bone, Stone, Obsidian, Metal, Leather }
 

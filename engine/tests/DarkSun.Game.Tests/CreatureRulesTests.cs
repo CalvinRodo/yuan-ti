@@ -1,3 +1,4 @@
+using DarkSun.Data.Items;
 using DarkSun.Game.Rules;
 
 namespace DarkSun.Game.Tests;
@@ -9,8 +10,9 @@ public class CreatureRulesTests
     [Fact]
     public void TheDefaultsAreDsunExesTables()
     {
-        // 3E45:0000: 100 types; DS:05D0/05DB: 11 abilities, Fireball (28) first.
-        Assert.Equal(100, Original.AbilityTypes.Count);
+        // 3E45:0000: 42 types (the resistance rows follow at 00A8); DS:05D0/05DB: 11 abilities, Fireball (28) first.
+        Assert.Equal(42, Original.AbilityTypes.Count);
+        Assert.Equal(42, Original.Resistances.Count);
         Assert.Equal([5, 7, 17], Original.AbilityTypes[1]);
         Assert.Equal(11, Original.Abilities.Count);
         Assert.Equal(new CreatureAbility(26, 28), Original.Abilities[0]);
@@ -30,6 +32,29 @@ public class CreatureRulesTests
         Assert.Empty(Original.PowersOf(-1));
         Assert.False(Original.HasAbility(129, 26)); // Maris and Aposs have types past the table
         Assert.Empty(Original.AbilitiesOf(0));
+    }
+
+    [Fact]
+    public void ResistancesAreTheHighestChanceThatMatches()
+    {
+        const DamageElement sword = DamageElement.Slashing, plus1 = DamageElement.Plus1;
+        // Shadows (13): hit only by +1 weapons.
+        Assert.Equal((0, 100), (Original.ChanceToAffect(13, sword), Original.ChanceToAffect(13, sword | plus1)));
+        // Elementals (7) need +2; the rampager (12) takes half from a sword, all from Fireball.
+        Assert.Equal((0, 100), (Original.ChanceToAffect(7, sword | plus1), Original.ChanceToAffect(7, sword | plus1 | DamageElement.Plus2)));
+        Assert.Equal((50, 100), (Original.ChanceToAffect(12, sword), Original.ChanceToAffect(12, DamageElement.Fire | DamageElement.Magic)));
+        // No row, or a type past the table: always.
+        Assert.Equal((100, 100), (Original.ChanceToAffect(0, sword), Original.ChanceToAffect(129, sword)));
+    }
+
+    [Fact]
+    public void AbilityBitsAreNamed()
+    {
+        Assert.True(Original.HasAbility(11, CreatureAbilityBit.Regenerates)); // mastyrials
+        Assert.True(Original.HasAbility(26, CreatureAbilityBit.DeadlyPoison)); // wyverns
+        Assert.Equal([CreatureAbilityBit.ParalysingChill, CreatureAbilityBit.NoCharmOrHold, CreatureAbilityBit.NotStuck, CreatureAbilityBit.Unused10],
+            Original.AbilityTypes[13].Select(b => (CreatureAbilityBit)b)); // shadows
+        Assert.All(Original.Abilities, a => Assert.True(Enum.IsDefined((CreatureAbilityBit)a.Bit)));
     }
 
     [Fact]
@@ -53,8 +78,12 @@ public class CreatureRulesTests
             Assert.Equal(Original.SpellsOf(4), back.SpellsOf(4));
             Assert.Equal(Original.SpellWeights.Count, back.SpellWeights.Count);
             Assert.Equal(json, back.ToJson());
+            Assert.Equal(Original.Resistances[27], back.Resistances[27], (a, b) => a.SequenceEqual(b));
+            Assert.Contains("\"Elements\": \"Bludgeoning, Slashing, Piercing\"", json);
 
             File.WriteAllText(path, json.Replace("\"AbilityChance\": 4", "\"AbilityChance\": 0"));
+            Assert.Throws<InvalidDataException>(() => CreatureRules.Read(path));
+            File.WriteAllText(path, json.Replace("\"Percent\": 50", "\"Percent\": 150"));
             Assert.Throws<InvalidDataException>(() => CreatureRules.Read(path));
             File.WriteAllText(path, "{ \"AbilityTypes\": [] }");
             Assert.Throws<InvalidDataException>(() => CreatureRules.Read(path));

@@ -1445,7 +1445,7 @@ These are AD&D 2nd edition's, but 18 has no percentile strength (+2 to hit,
   |---|---|---|
   | −0x03 | byte | duration dice: low 4 bits count, high 4 sides (Color Spray 0x42: 2d4; Haste 0x13: 3) |
   | −0x02 | word | duration per level (Hold Person 2, Shield 5) |
-  | +0x00 | word | duration unit: 60 (a round) for most, 600 a turn, 3600 an hour, −9999 permanent (Charm Person, Thought Shield), 0 instant (Magic Missile), −1 (Armor, Invisibility, Stoneskin; likely until used up) |
+  | +0x00 | word | duration unit: 60 (a round) for most, 600 a turn, 3600 an hour, −9999 permanent (Charm Person, Thought Shield), 0 instant (Magic Missile), −1 **charges**: the duration is a count of uses, not time (see "Charges") |
   | +0x02 | word | area size: 1, 40 (Burning Hands, Lightning Bolt), 80 (Fireball), 240 (Confusion) |
   | +0x05 | byte | target: 1 an area, 3 touch, 4 a creature, 6 a cone, 7 self |
   | +0x09 | byte | projectile (Magic Missile 4, Fireball 1, Lightning 5); 0xFF none |
@@ -1453,7 +1453,7 @@ These are AD&D 2nd edition's, but 18 has no percentile strength (+2 to hit,
   | +0x0D | word | effect graphic (0x20xx), 0xFFFF none |
   | +0x10 | byte | animation (×0x12 table) |
   | +0x12 | byte | condition on a failed save: Armor 2, Charm 10, Confusion 11, Ego Whip 33, Hold 34, Shield 46 |
-  | +0x13 | word | element bits for resistances (fire 0x02, 0x80, 0x200, psionic 0x400) |
+  | +0x13 | word | element bits for resistances (see "Elements"): poison 0x1, fire 0x2, cold 0x4, acid 0x40, electricity 0x80, negative 0x100, magic 0x200, psionic 0x400 |
   | +0x15 | byte | damage: bits 5–7 dice per step, bits 0–4 flat damage per step |
   | +0x16 | byte | damage: bits 3–7 base dice, bits 0–2 levels per step (0 is read as 1, and written back) |
   | +0x17 | byte | damage: bits 0–3 die sides, bits 4–7 (signed) levels added before dividing |
@@ -1486,6 +1486,36 @@ These are AD&D 2nd edition's, but 18 has no percentile strength (+2 to hit,
   level (−0x02) × (level + (+0x17 >> 4)) / (+0x16 & 7)), at most 32767.
   Hold Person: 60 × 2 × level (2 rounds a level); Confusion: 60 × (2 +
   level); Haste: 60 × (3 + level).
+* **Charges** (unit −1): the duration formula then gives a negative
+  number, and adding the effect (`7D80:1362`) stores its negation as a count
+  at effect +8 instead of setting a timer; −9999 sets neither. `7D80:1723(object,
+  condition)` takes one from the count (`8053:08BB`, always 1) and removes the
+  effect at 0. What spends one: being damaged, Armor (condition 2,
+  `80F5:0E61`; 8 + level hits); attacking or casting at someone,
+  Invisibility and Invisibility to Undead (23, 24; `80F5:0008`); each round,
+  Acid (1, also 2d4 damage) and Poisoned (35, which kills, 1000 damage, when
+  the count runs out; `8053:0163`); and the defences as they turn something
+  aside, Mirror Image (25, 1d4 + level / 3), Stoneskin (48, 1d4 + level / 2),
+  Ironskin (53, 1d6), Minor Spell Turning (44), Negative Plane Protection
+  (42), Cloak of Fear and Bravery (18, 9; `80F5:119C`, `1999`, `161F`).
+  Poison and Cloudkill have 10, the rest 1.
+* **Elements** (spell +0x13; a weapon's `IT1R` +2): poison 0x1, fire 0x2,
+  cold 0x4, bludgeoning 0x8 (slings, Ice Storm, Magical Stone), slashing
+  0x10, piercing 0x20 (bows, daggers, Flame Arrow), acid 0x40, electricity
+  0x80, negative 0x100 (the cause-wounds spells, Chill and Vampiric Touch,
+  Slay Living), magic 0x200 (most damaging spells), psionic 0x400, death
+  0x800 (Poison, Slay Living); a weapon's bonus adds 0x1000 (+1), 0x3000
+  (+2) or 0xB000 (+3) (`612E:1359`). Named from the spells and weapons that
+  carry them. A creature's resistances (`80F5:28F2`) are the 4-entry row
+  `3E45:00D2 + 12·row`, row = `3E45:00A8`[type] (type = combat record
+  +0x16, 42 types, 16 rows): entry i is an element mask (word +2i) and a
+  percent (byte +8 + i). The chance an effect gets through is the highest
+  percent among the entries sharing a bit with its elements, else 100; then
+  the target's protection conditions halve it, and some make it 0. Most rows
+  are AD&D's "hit only by magic weapons": babau, shadows and lesser
+  elementals take physical elements at 0 % and anything with magic or +1 at
+  100 %; elementals and vrocks need +2. Spiders ignore poison, slimes all but
+  slashing, the animated statue and the xorn fire and cold.
 
 ### Conditions
 
@@ -1539,9 +1569,12 @@ Prayer 73).
   6 psionicist (12) 2 200, 4 400, 8 800, 16 500, 30 000, 55 000, 100 000,
   200 000; 7 rangers (13–16) 2 200, 4 500, 9 000 … doubling to 300 000;
   8 thief (17) 1 200, 2 500, 5 000, 10 000, 20 000, 40 000, 70 000,
-  110 000 (AD&D has 1 250). Codes 18 (defiler) and 19 give
-  row 0, which isn't an XP table (100, 25 700, 25 600, 100, …):
-  *unverified* whether a defiler ever reaches this code with it.
+  110 000 (AD&D has 1 250). The row is the low byte of the word (`8E77:093D`
+  reads a byte). Codes 18 (defiler) and 19 (templar) give row 0, which isn't
+  an XP table (25 600, 100, 25 700, …). No party member can have them:
+  character creation offers only the 8 classes 1–17 cover, and only
+  creatures carry 18 (Balkazar, Tara, Wyrmias, the dark spiders, defilers)
+  or 19 (templars, Keldar, Mikquetzl), so the row is never read.
 
 ### Psionic powers (`3FB9:0000 + 8 · (power − 139)`)
 
@@ -1641,8 +1674,9 @@ loop calls the AI again.
      first psionic power), 175 an area that leaves Stuck, 179 a paralysing
      touch, 180 a 1d6 missile (projectile 14), 182 a paralysing cone, 183 a
      touch, 43 Fear (effect = spell record index, 0-based; 172 and up have
-     no `SPIN` text). The creatures with +0x16 set include wyverns, vrocks,
-     babau, slimes, shadows and psurlons. It is cast at `6466:0179`'s cell
+     no `SPIN` text). +0x16 is the creature's type (see "Ability bits");
+     types with abilities include wyverns, vrocks, babau, slimes, shadows and
+     psurlons. It is cast at `6466:0179`'s cell
      (`7D80:21C5`); on success the turn ends.
   * **Area targeting** (`6466:0179(caster, effect, &x, &y)`, spells and
     abilities): for each cell within ±2 of the target, on the map, in sight
@@ -1671,17 +1705,69 @@ loop calls the AI again.
   8. **Missile weapon** (`6466:0AE8`, slot 2): a random enemy in sight
      within its range becomes the target and is attacked.
   9. **Otherwise:** with more than 10 movement points left, forget the
-     target. With flag 0x2, `612E:2514(actor, 1)` sets byte +0x231 for this
-     combatant (*meaning unverified*) and ends the turn; else it just ends.
+     target. With flag 0x2 (it may still attack) it **guards**
+     (`612E:2514(actor, 1)`) and the turn ends; else it just ends.
+* **Guard, Wait, End turn** (`612E:2514(object, mode)`; the player's
+  combat menu GUARD / WAIT / END TURN, `1587:2EAF`, gives modes 1, 2 and
+  `612E:2596(object, 0)`): 1 sets the guard byte `3931:0231`[slot] and
+  leaves the round (`2596(object, 0)`: initiative −1, action flags 0); 2
+  waits: initiative above 10 drops to 10, above 1 by one, and flag 0x10 is
+  set (`2596(object, 0x10)`), so it acts again later in the round. End turn
+  just leaves the round. While an enemy moves (`1A0A:0B0F`), each guard with
+  status 1, of another allegiance, within 1 cell (`1A0A:2BA5` < 2) attacks it
+  (`612E:1359`); the byte is cleared when its attacks run out
+  (`612E:23F2`) and at its next turn (`612E:09B6`, which also clears flag
+  0x10). Message "%Fs GUARDS".
 * The tables this uses that are only in the EXE (ability masks and the 11
-  abilities, spell and psionic sets, spell weights) ship as
+  abilities, resistances, spell and psionic sets, spell weights) ship as
   `DarkSun.Game.Rules.CreatureRules`, generated from `3E45:0000`,
-  `DS:05D0`/`05DB`, `3FB9:0110`, `37F0:001C` and `37E5:0000` (sizes from the
-  segment table: 100 masks, 174 weights; spell sets 0–9, psionic sets 1–9
-  used, the rows after them zero). The other ability bits (not the AI's 11)
-  are tested by `80F5:0E61`, `161F`, `1E07`, `31AB`, `8053:0163` and `8B7D`.
+  `DS:05D0`/`05DB`, `3E45:00A8`/`00D2`, `3FB9:0110`, `37F0:001C` and
+  `37E5:0000` (sizes from the segment table and the layout of `3E45`: 42
+  masks, 16 resistance rows, 174 weights; spell sets 0–9, psionic sets 1–9
+  used, the rows after them zero).
 * **Distance** (`0898:000C`) is in cells: the smallest d with d² ≥ dx² +
   dy², from an octagonal first guess. 999 out of range.
+
+### Ability bits (`3E45:0000`)
+
+Segment `3E45` (0x192 bytes) holds 42 ability masks (dwords, by type =
+combat record +0x16, read as a word), then a resistance row number per type
+at `00A8` and the 16 rows at `00D2` (see "Elements"). Aposs (128) and Maris
+(129) have types past the table; `84C1:0000` reads past it for them. The
+bits, from every caller of `84C1:0000` and every load of segment `3E45`
+(effects numbered as `SPIN`, record index + 1):
+
+| Bit | Effect | Tested by | Types with it |
+|---|---|---|---|
+| 0, 1 | unaffected by a ranged spell (range > 8) whose area template (`3CB4` +0x10, ×0x12 at `3C81:0000`, byte +2 & 0xF ≠ 1) lingers: fog, clouds, walls, webs | `80F5:161F` | 0 bulette, dune reaper, fire eel, rampager, xorn; 1 wyvern, vrock, elementals |
+| 2 | first natural attack also does effect 173 (2d6 cold) | `80F5:1999` | none |
+| 3 | … effect 174 (paralysed 2d6 rounds) | `1999` | shadows |
+| 4 | … effect 175 (2d6 acid) | `1999` | slimes |
+| 5 | immune to spells with flag 4 (Charm Person, Charm Monster, Charm Person or Mammal, Hold Person, Hold Monster) | `161F` | dark spiders, shadows, psurlons, First Folk |
+| 6, 12, 18–22, 26, 29–31 | the AI's 11 (see "The AI") | `6466:05EF` | |
+| 7, 10, 11, 28 | nothing tests them | | spiders, slaves, elementals, shadows, slaadi, slimes, vrocks, xorns |
+| 8 | nothing tests it | | none |
+| 9 | can't be Stuck (condition 51; Free Action also blocks it; `8053:03C0`), and unaffected by ranged ground templates (kind 2: grease, web, solid fog, walls, entangle, quicksand) | `8053:03C0`, `161F` | shadows, xorns |
+| 13 | last natural attack also does effect 177 (10 poison, none if saved) | `1999` | spiders |
+| 14 | … effect 178 (30 poison, none if saved) | `1999` | mastyrials |
+| 15 | … effect 120 (Poison: death when its 10 charges run out) | `1999` | wyverns |
+| 16 | first natural attack also does effect 179 (20 acid) | `1999` | rampager |
+| 17 | regains 3 hit points a round, up to character record +8 (`80F5:307D`) | `8053:0163` | dark spiders, mastyrials, red slaad |
+| 21 | also immune to Wall of Fog (record 11) | `161F` | red slaad |
+| 23 | a damaging ranged spell does 1000 more | `80F5:0E61` | none |
+| 24 | first natural attack also casts effects 187 and 188 (no damage or condition in their records; not traced) | `1999` | babau |
+| 25 | first natural attack, 1 in 10, also gives effect 185 (Diseased, permanent) | `1999` | blue slaad |
+| 27 | sees invisible: `80F5:31AB` (the target is unseen: Blind, or Invisible, or Invisible to Undead against race 9) is false for it; used for AC (−4) and saves (+4 at range < 9) | `80F5:31AB` | none |
+
+The "first" attack is attack index 0 in `1999`, the "last" the creature's
+last natural attack (the highest i with character record +0x2B + i > 0).
+`1999` also gives thri-kreen (race 8) above level 4 effect 190 (paralysed
+2d8 rounds) on their last attack, and does 1000 when a hit involves a
+race-14 creature and Dispelling Evil (condition 52; which side has which is
+not checked). Race 9 is undead
+(`80F5:3280`): immune to mind spells (flags 0x26) and to flags 0x100 and 1.
+`CreatureAbilityBit` names bits 0 and 1 Burrows and Flies, guesses from who
+has them; the code treats them alike.
 
 ### Order modes (`1A0A:0B0F`)
 
@@ -1698,7 +1784,6 @@ loop calls the AI again.
 
 ### Not traced yet
 
-What the mind values 0, 2, 4, 7 and 10 mean outside the AI, the effect at
-`37BD:0231` (`612E:2514`), the ability bits' names (`3E45:0000`), the
-−1 duration unit, the save category table's intent, and the defiler's XP
-row.
+What the mind values 0, 2, 4, 7 and 10 mean outside the AI, the save
+category table's intent, effects 187 and 188 (babau), and why ability bits
+7, 10, 11 and 28 are set when nothing tests them.

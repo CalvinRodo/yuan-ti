@@ -498,9 +498,12 @@ executable, not in the data.
       webs); the speed state (Paralyzed and Stuck 0 movement, Slowed half,
       Hasted double); spell damage and duration formulas; experience
       (per kill, split over the party slots and classes) and the XP tables.
-- [ ] Combat details still open: the effect at `37BD:0231`, the ability
-      bits' names (`3E45:0000`), the −1 duration unit, the defiler's XP row
-      (row 0 isn't an XP table).
+- [x] Combat details (2026-10-20): `612E:2514` is GUARD (a guard attacks
+      the first enemy that moves next to it; the AI guards when it has
+      nothing else to do) and WAIT; the −1 duration unit is a charge count
+      (Armor's hits, Mirror Image's images, Invisibility until it attacks,
+      Poison's 10 rounds); the defiler's XP row is never read, since only
+      creatures have class codes 18 and 19.
 - [x] Monster data from `RDFF` (2026-10-19): `CreatureDefinition` reads a
       creature's whole `RDFF` the way DSUN.EXE's loader does (`7155:0000`;
       load actions 2 and 4 are the items it carries, 479 in 98 creatures),
@@ -514,14 +517,23 @@ executable, not in the data.
       `ds1_parsers.py`.
 - [x] The creature tables that are only in DSUN.EXE ship as rules
       (2026-10-20, `DarkSun.Game.Rules.CreatureRules`): special-ability masks
-      by type (`3E45:0000`, 100 types) and the 11 abilities the AI tries in
+      by type (`3E45:0000`, 42 types) and the 11 abilities the AI tries in
       order (`DS:05D0`/`05DB`), spell sets (`3FB9:0110`), psionic sets
       (`37F0:001C`) and the AI's spell weights (`37E5:0000`), numbered as
       `SPIN`. A mod replaces them with `rules/creatures.json`;
       `make engine-mod-rules` writes it (and `characters.json`) with the
       original's values; `engine-mod-check` validates rule files.
-- [ ] Name the ability bits the AI doesn't use (tested by `80F5`, `8053:0163`,
-      `8B7D`: likely immunities and resistances).
+- [x] The ability bits are named (2026-10-20, `CreatureAbilityBit`;
+      `dsun-exe-reference.md` §8 "Ability bits"): regeneration, poison,
+      acid, cold, paralysis and disease on hit, immunity to charm and hold,
+      to webs and to lingering area spells, seeing invisible. Segment `3E45`
+      held only 42 masks; the rest is resistances by element (AD&D's "hit
+      only by +1 weapons"), now in `CreatureRules.Resistances` with the
+      `DamageElement` bits. Bits 7, 10, 11 and 28 are set but nothing tests
+      them.
+- [ ] Combat effects to port with the AI: charges, guarding and waiting,
+      the on-hit effects and immunities by ability bit, and resistances
+      (`dsun-exe-reference.md` §8).
 - [ ] Monster AI: port `612E:0BAD`'s order of choices as data-driven rules
       (the weapon score, target choice and action order in JSON, so mods can
       change them). Keep the random target pick (`612E:1284`) as the default
@@ -593,7 +605,7 @@ name the functions in `tools/ghidra/symbols.tsv`.
 | ~~M6~~ | ~~Combat rules~~ | Done 2026-10-19: `dsun-exe-reference.md` §8 |
 | ~~M6~~ | ~~Combat AI~~ | Done 2026-10-19: `dsun-exe-reference.md` §8 "The AI" |
 | ~~M6~~ | ~~AI mind states, conditions, special abilities, spell damage and duration, experience~~ | Done 2026-10-19: `dsun-exe-reference.md` §8 |
-| M6 | `37BD:0231`, ability bit names, the defiler XP row | `612E:2514`, `3E45:0000`, `38D4:00CA` |
+| ~~M6~~ | ~~Guard, ability bit names, charges, the defiler XP row~~ | Done 2026-10-20: `dsun-exe-reference.md` §8 |
 | M7 | Music and sound selection | callers of the sound driver; segment `0980` has the most port I/O (*unverified*: sound or video driver) |
 | M9 | Original save format | `303C` file-library callers that write files |
 
