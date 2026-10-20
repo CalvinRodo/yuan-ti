@@ -26,7 +26,7 @@ public class CreatureTests
         BitConverter.GetBytes(1000).CopyTo(character, 0);
         BitConverter.GetBytes(420).CopyTo(character, 4);
         BitConverter.GetBytes((short)30).CopyTo(character, 8);
-        (character[0x18], character[0x21], character[0x24], character[0x27], character[0x2A]) = (1, 9, 6, 10, 2);
+        (character[0x18], character[0x21], character[0x24], character[0x27], character[0x29], character[0x2A]) = (1, 9, 6, 10, 30, 2);
         (character[0x2B], character[0x2E], character[0x31], character[0x34]) = (2, 1, 8, 1);
         (character[0x37], character[0x3E], character[0x46]) = (13, 2, 4);
         b.Byte(character);
@@ -74,7 +74,7 @@ public class CreatureTests
         Assert.Equal((1, 9, 6, 10, 2), (ch.Race, ch.ClassCodes[0], ch.Levels[0], (int)ch.BaseArmorClass, (int)ch.AttackHalves));
         Assert.Equal(new NaturalAttack(2, 1, 8, 1), ch.NaturalAttack(0));
         Assert.False(ch.NaturalAttack(1).Exists);
-        Assert.Equal((13, 2, 4), (ch.Saves[0], ch.SpellSet, ch.PsionicSet));
+        Assert.Equal((13, 2, 4, 30), (ch.Saves[0], ch.SpellSet, ch.PsionicSet, (int)ch.MagicResistance));
     }
 
     [Fact]
@@ -90,11 +90,11 @@ public class CreatureTests
 
         string json = RecordJson.Export("RDFF", original, _ => null);
         byte[] edited = RecordJson.Apply("RDFF", original,
-            """{ "combat": { "mind": 8 }, "character": { "experienceValue": 100000, "psionicSet": 9 } }""");
+            """{ "combat": { "mind": 8 }, "character": { "experienceValue": 100000, "psionicSet": 9, "magicResistance": 70 } }""");
 
         Assert.Contains("\"experienceValue\": 420", json);
         Assert.Equal(original, RecordJson.Apply("RDFF", original, json));
         CreatureDefinition c = CreatureDefinition.FromRdff(edited)!;
-        Assert.Equal((8, 100000, 9, 2), (c.Combat.Mind, c.Character!.ExperienceValue, c.Character.PsionicSet, c.Carried.Count));
+        Assert.Equal((8, 100000, 9, 70, 2), (c.Combat.Mind, c.Character!.ExperienceValue, c.Character.PsionicSet, (int)c.Character.MagicResistance, c.Carried.Count));
     }
 }

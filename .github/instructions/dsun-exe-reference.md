@@ -1739,23 +1739,26 @@ bits, from every caller of `84C1:0000` and every load of segment `3E45`
 
 | Bit | Effect | Tested by | Types with it |
 |---|---|---|---|
-| 0, 1 | unaffected by a ranged spell (range > 8) whose area template (`3CB4` +0x10, ×0x12 at `3C81:0000`, byte +2 & 0xF ≠ 1) lingers: fog, clouds, walls, webs | `80F5:161F` | 0 bulette, dune reaper, fire eel, rampager, xorn; 1 wyvern, vrock, elementals |
+| 0, 1 | burrows (0) and flies (1): off the ground, so unaffected by a ranged spell (range > 8) whose area template (`3CB4` +0x10, ×0x12 at `3C81:0000`, byte +2 & 0xF ≠ 1) lingers: fog, clouds, walls, webs | `80F5:161F` | 0 bulette, dune reaper and fire eel (under the sand, the manual says), xorn, rampager; 1 wyvern, vrock, fire elementals |
 | 2 | first natural attack also does effect 173 (2d6 cold) | `80F5:1999` | none |
 | 3 | … effect 174 (paralysed 2d6 rounds) | `1999` | shadows |
 | 4 | … effect 175 (2d6 acid) | `1999` | slimes |
 | 5 | immune to spells with flag 4 (Charm Person, Charm Monster, Charm Person or Mammal, Hold Person, Hold Monster) | `161F` | dark spiders, shadows, psurlons, First Folk |
-| 6, 12, 18–22, 26, 29–31 | the AI's 11 (see "The AI") | `6466:05EF` | |
-| 7, 10, 11, 28 | nothing tests them | | spiders, slaves, elementals, shadows, slaadi, slimes, vrocks, xorns |
+| 6, 12, 18–22, 26, 29–31 | the AI's 11 (see "The AI"); 22 (effect 184, no damage or condition) is the babau's only, its "gaze … as though touched by a ray of enfeeblement" (clue book) | `6466:05EF` | |
+| 7 | nothing tests it; *guess*: sees in the dark | | dark spiders (subterranean), psurlons (no eyes), Undermountain folk (infravision 120'), magera (caves) and the generic type the magera share |
+| 10 | nothing tests it: "+1 or better weapon to hit" (manual, clue book); the resistance rows enforce it | | babau, shadows, blue slaad, psurlons, lesser elementals |
+| 11 | nothing tests it: "+2 or better weapons" | | elementals, vrock |
+| 28 | nothing tests it; *guess*: can't be surprised (the styr, whose type 21 the animated statue has: "having four heads makes it impossible to be surprised") | | animated statue, xorn, slimes, dark spiders, slaadi, vrock, fire eel |
 | 8 | nothing tests it | | none |
 | 9 | can't be Stuck (condition 51; Free Action also blocks it; `8053:03C0`), and unaffected by ranged ground templates (kind 2: grease, web, solid fog, walls, entangle, quicksand) | `8053:03C0`, `161F` | shadows, xorns |
 | 13 | last natural attack also does effect 177 (10 poison, none if saved) | `1999` | spiders |
 | 14 | … effect 178 (30 poison, none if saved) | `1999` | mastyrials |
 | 15 | … effect 120 (Poison: death when its 10 charges run out) | `1999` | wyverns |
-| 16 | first natural attack also does effect 179 (20 acid) | `1999` | rampager |
+| 16 | first natural attack also does effect 179 (20 acid, and may corrode armour as bit 24) | `1999` | rampager |
 | 17 | regains 3 hit points a round, up to character record +8 (`80F5:307D`) | `8053:0163` | dark spiders, mastyrials, red slaad |
 | 21 | also immune to Wall of Fog (record 11) | `161F` | red slaad |
 | 23 | a damaging ranged spell does 1000 more | `80F5:0E61` | none |
-| 24 | first natural attack also casts effects 187 and 188 (no damage or condition in their records; not traced) | `1999` | babau |
+| 24 | first natural attack also casts effects 187, "Armor is corroded" (`80F5:2024`: the first item worn on the arms, legs or chest, slots 0, 6, 9, is destroyed unless its item record +0x0F v ≥ 1 and 1d20 ≥ 10 − v), and 188, "Weapon is corroded" (`80F5:1EBA`: the weapon in hand, `612E:234A`, unless 1d20 ≥ 8 − its bonus +0x14); the clue book's babau "can also corrode weapons and armor" | `1999` | babau |
 | 25 | first natural attack, 1 in 10, also gives effect 185 (Diseased, permanent) | `1999` | blue slaad |
 | 27 | sees invisible: `80F5:31AB` (the target is unseen: Blind, or Invisible, or Invisible to Undead against race 9) is false for it; used for AC (−4) and saves (+4 at range < 9) | `80F5:31AB` | none |
 
@@ -1766,8 +1769,21 @@ last natural attack (the highest i with character record +0x2B + i > 0).
 race-14 creature and Dispelling Evil (condition 52; which side has which is
 not checked). Race 9 is undead
 (`80F5:3280`): immune to mind spells (flags 0x26) and to flags 0x100 and 1.
-`CreatureAbilityBit` names bits 0 and 1 Burrows and Flies, guesses from who
-has them; the code treats them alike.
+Bits 10 and 11 agree with the clue book ("lesser elementals can only be
+affected by +1 or greater weapons, the regular elementals +2") except that
+the resistance rows of types 32 (fire elemental, bit 11) and 33 (lesser fire
+elemental, bit 10) are swapped: in the original the fire elemental takes +1
+weapons and the lesser one needs +2.
+
+**Effect handlers** (`80F5:05E6`): what a record alone doesn't say is a
+switch on the record index (38 cases at `80F5:0D96`, handlers at `+0x4C`):
+haste and slow, dispel, the cures, Strength, Raise Dead, … and the monster
+effects 179 and 187 (corrode armour, `2024`), 188 (corrode weapon, `1EBA`)
+and 139 Detonate (effect 196 and `1F4B`, which breaks the carried item most
+likely to break). Magic resistance (`80F5:1901`) is character record +0x29
+(vrock 70, babau 50, psurlon 45, blue slaad 40, red slaad and styr 30,
+rampager 25): +75 against mind spells (flags 0x26) with Mind Bar (32),
+halved by Low Resistance (31), less 30 + level for Lower Resistance.
 
 ### Order modes (`1A0A:0B0F`)
 
@@ -1785,5 +1801,5 @@ has them; the code treats them alike.
 ### Not traced yet
 
 What the mind values 0, 2, 4, 7 and 10 mean outside the AI, the save
-category table's intent, effects 187 and 188 (babau), and why ability bits
-7, 10, 11 and 28 are set when nothing tests them.
+category table's intent, the rest of the effect handlers (`80F5:05E6`), and
+whether ability bits 7 and 28 meant what the monster entries suggest.

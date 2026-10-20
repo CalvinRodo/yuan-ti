@@ -21,14 +21,19 @@ public sealed record CreatureResistance(DamageElement Elements, int Percent);
 /// <summary>
 /// The bits of a type's ability mask (<see cref="CreatureRules.AbilityTypes"/>,
 /// <c>3E45:0000</c>), named from the code that tests them (<c>84C1:0000</c>'s
-/// callers; <c>dsun-exe-reference.md</c> §8, "Ability bits"). Effects are
-/// spell records, numbered like <c>SPIN</c> (index + 1).
+/// callers; <c>dsun-exe-reference.md</c> §8, "Ability bits") and, for the
+/// bits nothing tests, from the manual's and clue book's monster entries.
+/// Effects are spell records, numbered like <c>SPIN</c> (index + 1).
 /// </summary>
 public enum CreatureAbilityBit
 {
-    /// <summary>Unaffected by ranged spells that leave an area behind (clouds, walls, webs, fog; <c>80F5:161F</c>). Bulettes, xorns, fire eels; the name is a guess.</summary>
+    /// <summary>
+    /// Under the ground: unaffected by ranged spells that leave an area behind
+    /// (clouds, walls, webs, fog; <c>80F5:161F</c>). Bulettes, dune reapers and
+    /// fire eels (which the manual has under the sand), xorns; also the rampager.
+    /// </summary>
     Burrows = 0,
-    /// <summary>Tested exactly like <see cref="Burrows"/>. Wyverns, vrocks, elementals; the name is a guess.</summary>
+    /// <summary>In the air: tested exactly like <see cref="Burrows"/>. Wyverns, vrocks; also the fire elementals.</summary>
     Flies = 1,
     /// <summary>Its first natural attack also does 2d6 cold (effect 173; <c>80F5:1999</c>).</summary>
     ColdTouch = 2,
@@ -40,16 +45,24 @@ public enum CreatureAbilityBit
     NoCharmOrHold = 5,
     /// <summary>The AI uses Detonate (effect 139).</summary>
     Detonate = 6,
-    /// <summary>Not tested by any code. Spiders, psurlons, slaves, guards.</summary>
-    Unused7 = 7,
+    /// <summary>
+    /// Not tested by any code; a guess: sees in the dark. Dark spiders (subterranean),
+    /// psurlons (no eyes, "some other sense to see"), the Undermountain folk
+    /// (infravision 120'), magera (caves) and the generic type the magera share.
+    /// </summary>
+    SeesInDark = 7,
     /// <summary>Not tested by any code, and no creature has it.</summary>
     Unused8 = 8,
     /// <summary>Can't be Stuck (condition 51: webs, entangle; <c>8053:03C0</c>), and unaffected by ranged spells that cover the ground (grease, web, walls, quicksand). Shadows, xorns.</summary>
     NotStuck = 9,
-    /// <summary>Not tested by any code. Elementals, shadows, slaadi, psurlons.</summary>
-    Unused10 = 10,
-    /// <summary>Not tested by any code. Elementals, vrocks.</summary>
-    Unused11 = 11,
+    /// <summary>
+    /// Not tested by any code: "+1 or better weapon to hit" in the manual and
+    /// clue book (babau, shadows, blue slaad, psurlons, lesser elementals). The
+    /// resistances (<see cref="CreatureRules.Resistances"/>) are what enforce it.
+    /// </summary>
+    NeedsPlus1Weapon = 10,
+    /// <summary>Not tested by any code: "+2 or better weapons" (elementals, vrocks); see <see cref="NeedsPlus1Weapon"/>.</summary>
+    NeedsPlus2Weapon = 11,
     /// <summary>The AI throws a web (effect 176: an area that leaves Stuck).</summary>
     Web = 12,
     /// <summary>Its last natural attack also does 10 poison, none if saved (effect 177). Spiders.</summary>
@@ -58,7 +71,7 @@ public enum CreatureAbilityBit
     Poison30 = 14,
     /// <summary>Its last natural attack also casts Poison (effect 120: death after 10 rounds unless saved or cured). Wyverns.</summary>
     DeadlyPoison = 15,
-    /// <summary>Its first natural attack also does 20 acid (effect 179). Rampagers.</summary>
+    /// <summary>Its first natural attack also does 20 acid and may corrode armour (effect 179, as <see cref="CorrodesGear"/>). Rampagers.</summary>
     Acid20 = 16,
     /// <summary>Regains 3 hit points a round, up to its maximum (<c>8053:0163</c>). Dark spiders, mastyrials, red slaadi.</summary>
     Regenerates = 17,
@@ -70,20 +83,34 @@ public enum CreatureAbilityBit
     FireCone = 20,
     /// <summary>The AI breathes a paralysing cone (effect 183). Also makes it immune to Wall of Fog (<c>80F5:161F</c>).</summary>
     ParalysingCone = 21,
-    /// <summary>The AI uses a touch with no damage or condition in its record (effect 184).</summary>
-    Touch = 22,
+    /// <summary>
+    /// The AI uses effect 184, whose record has no damage or condition. Only
+    /// the babau has it; the clue book's babau has "a gaze attack which may
+    /// affect your character as though touched by a ray of enfeeblement".
+    /// </summary>
+    EnfeeblingGaze = 22,
     /// <summary>A damaging ranged spell does 1000 more (<c>80F5:0E61</c>). No creature has it.</summary>
     DiesToRangedSpells = 23,
-    /// <summary>Its first natural attack also casts effects 187 and 188, which have no damage or condition in their records (not traced). Babau.</summary>
-    Babau = 24,
+    /// <summary>
+    /// Its first natural attack also casts effects 187, "Armor is corroded" (the
+    /// first item on the arms, legs or chest is destroyed unless its item record
+    /// +0x0F v ≥ 1 and 1d20 ≥ 10 − v; <c>80F5:2024</c>), and 188, "Weapon is
+    /// corroded" (the weapon in hand, unless 1d20 ≥ 8 − its bonus; <c>80F5:1EBA</c>). Babau.
+    /// </summary>
+    CorrodesGear = 24,
     /// <summary>Its first natural attack, one hit in 10, also gives a permanent disease (effect 185). Blue slaadi.</summary>
     Disease = 25,
     /// <summary>The AI casts Fireball (spell 28).</summary>
     Fireball = 26,
     /// <summary>Sees invisible creatures (<c>80F5:31AB</c>, for the armour class and save adjustments). No creature has it.</summary>
     SeesInvisible = 27,
-    /// <summary>Not tested by any code. Spiders, slaadi, slimes, xorns, vrocks.</summary>
-    Unused28 = 28,
+    /// <summary>
+    /// Not tested by any code; a guess: can't be surprised or caught from behind.
+    /// The manual's styr (whose type the animated statue has): "having four
+    /// heads makes it impossible to be surprised"; also the xorn, slimes, the
+    /// warrior and mage dark spiders, slaadi, vrocks and fire eels.
+    /// </summary>
+    CantBeSurprised = 28,
     /// <summary>The AI casts Fear (spell 44).</summary>
     Fear = 29,
     /// <summary>The AI casts Hold Person (spell 31).</summary>

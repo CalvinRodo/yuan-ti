@@ -74,7 +74,7 @@ public static class RecordJson
         new("classBits", 0x12, "u16", typeof(ItemClasses)), new("race", 0x18, "u8"),
         new("class1", 0x21, "u8"), new("class2", 0x22, "u8"), new("class3", 0x23, "u8"),
         new("level1", 0x24, "u8"), new("level2", 0x25, "u8"), new("level3", 0x26, "u8"),
-        new("baseAc", 0x27, "s8"), new("attackHalves", 0x2A, "u8"),
+        new("baseAc", 0x27, "s8"), new("magicResistance", 0x29, "s8"), new("attackHalves", 0x2A, "u8"),
         new("natural1Halves", 0x2B, "s8"), new("natural2Halves", 0x2C, "s8"), new("natural3Halves", 0x2D, "s8"),
         new("natural1Dice", 0x2E, "s8"), new("natural2Dice", 0x2F, "s8"), new("natural3Dice", 0x30, "s8"),
         new("natural1Sides", 0x31, "s8"), new("natural2Sides", 0x32, "s8"), new("natural3Sides", 0x33, "s8"),

@@ -56,6 +56,14 @@ public sealed record CharacterRecord(byte Size, ushort DifficultyScaled, byte[] 
     /// <summary>+0x27: armour class before armour and effects (<c>612E:2113</c>).</summary>
     public sbyte BaseArmorClass => (sbyte)Bytes[0x27];
 
+    /// <summary>
+    /// +0x29: magic resistance, % (<c>80F5:1901</c>; vrock 70, babau 50,
+    /// psurlon 45): rolled against before a spell's save, +75 against mind
+    /// spells with Mind Bar, halved by Low Resistance, less 30 + level against
+    /// Lower Resistance.
+    /// </summary>
+    public sbyte MagicResistance => (sbyte)Bytes[0x29];
+
     /// <summary>+0x2A: attacks a round, in halves (3 alternates 1 and 2).</summary>
     public byte AttackHalves => Bytes[0x2A];
 

@@ -52,7 +52,7 @@ public class CreatureRulesTests
     {
         Assert.True(Original.HasAbility(11, CreatureAbilityBit.Regenerates)); // mastyrials
         Assert.True(Original.HasAbility(26, CreatureAbilityBit.DeadlyPoison)); // wyverns
-        Assert.Equal([CreatureAbilityBit.ParalysingChill, CreatureAbilityBit.NoCharmOrHold, CreatureAbilityBit.NotStuck, CreatureAbilityBit.Unused10],
+        Assert.Equal([CreatureAbilityBit.ParalysingChill, CreatureAbilityBit.NoCharmOrHold, CreatureAbilityBit.NotStuck, CreatureAbilityBit.NeedsPlus1Weapon],
             Original.AbilityTypes[13].Select(b => (CreatureAbilityBit)b)); // shadows
         Assert.All(Original.Abilities, a => Assert.True(Enum.IsDefined((CreatureAbilityBit)a.Bit)));
     }

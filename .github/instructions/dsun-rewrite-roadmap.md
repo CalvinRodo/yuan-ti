@@ -525,12 +525,17 @@ executable, not in the data.
       original's values; `engine-mod-check` validates rule files.
 - [x] The ability bits are named (2026-10-20, `CreatureAbilityBit`;
       `dsun-exe-reference.md` §8 "Ability bits"): regeneration, poison,
-      acid, cold, paralysis and disease on hit, immunity to charm and hold,
-      to webs and to lingering area spells, seeing invisible. Segment `3E45`
+      acid, cold, paralysis, disease and the babau's corroding of armour
+      and weapons on hit, immunity to charm and hold, to webs and (burrowing
+      or flying) to lingering area spells, seeing invisible. Segment `3E45`
       held only 42 masks; the rest is resistances by element (AD&D's "hit
       only by +1 weapons"), now in `CreatureRules.Resistances` with the
-      `DamageElement` bits. Bits 7, 10, 11 and 28 are set but nothing tests
-      them.
+      `DamageElement` bits. Nothing tests bits 7, 10, 11 and 28: from the
+      manual and clue book 10 and 11 are "+1/+2 weapon to hit", 7 and 28
+      likely seeing in the dark and not being surprised.
+- [ ] Decide whether to fix the original's swapped resistance rows for
+      the fire elemental and lesser fire elemental (types 32, 33: the
+      lesser one needs +2 weapons, the greater +1).
 - [ ] Combat effects to port with the AI: charges, guarding and waiting,
       the on-hit effects and immunities by ability bit, and resistances
       (`dsun-exe-reference.md` §8).
