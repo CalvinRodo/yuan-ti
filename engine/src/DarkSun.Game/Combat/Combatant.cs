@@ -65,6 +65,12 @@ public sealed class Combatant
     /// <summary>Allegiance (+0x1D): 1 the party's side, 2 its enemies; &amp; 3 fights.</summary>
     public int Side { get; set; }
 
+    /// <summary>
+    /// The allegiance it goes back to when a charm ends (character record +0x3C,
+    /// <c>8053:066F</c>); 0 takes <see cref="Side"/> as the battle starts.
+    /// </summary>
+    public int HomeSide { get; set; }
+
     public Vitals Vitals { get; init; } = new() { Hp = 1, MaxHp = 1 };
 
     public Cell Cell { get; set; }
@@ -89,8 +95,14 @@ public sealed class Combatant
     /// <summary>Move (+0x1B): movement points are this × 10 a round.</summary>
     public int Move { get; init; } = 12;
 
-    /// <summary>Str, Dex, Con, Int, Wis, Cha (+0x22).</summary>
-    public IReadOnlyList<int> Stats { get; init; } = [10, 10, 10, 10, 10, 10];
+    /// <summary>Str, Dex, Con, Int, Wis, Cha (+0x22); Raise Dead takes a point of Con.</summary>
+    public int[] Stats { get; init; } = [10, 10, 10, 10, 10, 10];
+
+    /// <summary>
+    /// Strength with what effects add (<c>80F5:2BB8</c>): Strength, Adrenalin
+    /// Control, Enhanced, Borrowed and Lent Strength, Weakened; 3–25.
+    /// </summary>
+    public int Strength => Math.Clamp(Stats[0] + Effects.Where(e => e.Condition is >= Condition.StrengthEnhanced and <= Condition.Weakened).Sum(e => e.Value), 3, 25);
 
     /// <summary>The creature type (+0x16): its abilities and resistances (<see cref="DarkSun.Game.Rules.CreatureRules"/>).</summary>
     public int Type { get; init; }
@@ -101,8 +113,36 @@ public sealed class Combatant
     /// <summary>The level its spells and abilities are cast at.</summary>
     public int Level { get; init; } = 1;
 
-    /// <summary>Character record +0x18: 9 is undead, 8 thri-kreen.</summary>
+    /// <summary>Character record +0x18: 9 is undead, 8 thri-kreen, 14 a summoned or planar creature (Dismissal, Dispelling Evil).</summary>
     public int Race { get; init; }
+
+    /// <summary>Character record +0x1A, 1–9 (3, 6, 9 evil).</summary>
+    public int Alignment { get; init; }
+
+    /// <summary>Its classes (character record +0x21 codes, +0x24 levels): what its spells per level and some saves go by.</summary>
+    public IReadOnlyList<(int Code, int Level)> Classes { get; init; } = [];
+
+    /// <summary>Its level in class <paramref name="code"/> (<c>6698:0C54</c>), 0 none.</summary>
+    public int LevelIn(int code) => Classes.Where(c => c.Code == code).Select(c => c.Level).DefaultIfEmpty(0).Max();
+
+    /// <summary>Its footprint (character record +0x3D, <c>1A0A:2AB4</c>): x ± (size &amp; 7), y − size / 8 … y.</summary>
+    public int Size { get; init; }
+
+    /// <summary>The cells it stands on.</summary>
+    public IEnumerable<Cell> Footprint
+    {
+        get
+        {
+            int w = Size & 7, h = Size >> 3;
+            for (int dy = -h; dy <= 0; dy++)
+            {
+                for (int dx = -w; dx <= w; dx++)
+                {
+                    yield return new Cell(Cell.X + dx, Cell.Y + dy);
+                }
+            }
+        }
+    }
 
     public int MagicResistance { get; init; }
 
@@ -126,13 +166,30 @@ public sealed class Combatant
     /// <summary>A thief's level, for backstabs (0 for others).</summary>
     public int ThiefLevel { get; init; }
 
-    /// <summary>Spells it can still cast this fight (<c>SPIN</c> numbers, one entry a slot).</summary>
+    /// <summary>
+    /// Spells it can still cast this fight (<c>SPIN</c> numbers, one entry a
+    /// cast). A creature's come from <see cref="SpellSet"/> the first time it
+    /// thinks of casting (<see cref="Battle.CastsFor"/>), unless set here.
+    /// </summary>
     public List<int> Spells { get; init; } = [];
+
+    /// <summary>Its spell set (character record +0x3E), 0 none.</summary>
+    public int SpellSet { get; init; }
+
+    /// <summary>Its casts have been counted (<c>6798:0000</c> keeps them per creature).</summary>
+    internal bool SpellsCounted { get; set; }
 
     public int Psp { get; set; }
 
     /// <summary>Its psionic set (+0x46), 0 none.</summary>
     public int PsionicSet { get; init; }
+
+    /// <summary>
+    /// Powers a party member keeps up (<c>6698:04C7</c>): each round it pays
+    /// their maintenance, or they end. Defence modes kept up shield it from
+    /// psionic attacks (<see cref="Battle.PsionicDefence"/>).
+    /// </summary>
+    public HashSet<int> Maintained { get; } = [];
 
     /// <summary>What it carries; corrosion destroys items here.</summary>
     public List<Item> Items { get; init; } = [];
@@ -183,27 +240,26 @@ public sealed class Combatant
 
     /// <summary>
     /// A region creature as a combatant: its combat record (THAC0, Move, the
-    /// abilities, type, mind, flags), its character record (armour class, level,
-    /// saves, magic resistance, attacks, spell and psionic sets) and the weapons
-    /// it wears (<paramref name="catalog"/> gives their types). Its spells are
-    /// its set's (<paramref name="creatures"/>), each once: DSUN.EXE counts a
-    /// creature's casts in a table (<c>6798:0366</c>) whose starting values
-    /// aren't traced.
+    /// abilities, type, mind, flags), its character record (armour class,
+    /// classes and levels, alignment, size, saves, magic resistance, attacks,
+    /// spell and psionic sets) and the weapons it wears (<paramref name="catalog"/>
+    /// gives their types). Its casts are counted when it first thinks of a spell
+    /// (<see cref="Battle.CastsFor"/>).
     /// </summary>
-    public static Combatant FromCreature(WorldObject obj, ItemCatalog? catalog = null, CreatureRules? creatures = null) =>
+    public static Combatant FromCreature(WorldObject obj, ItemCatalog? catalog = null) =>
         Build(obj.Record, obj.Character, obj.Items, obj.Vitals, obj.Name, obj.Allegiance, obj.Kind == ObjectKind.Party,
-            catalog, creatures, obj, obj.Cell, obj.Facing);
+            catalog, obj, obj.Cell, obj.Facing);
 
     /// <summary>A creature straight from its <c>RDFF</c> (<see cref="CreatureDefinition"/>), carrying its items, with full hit points.</summary>
-    public static Combatant FromDefinition(CreatureDefinition d, ItemCatalog? catalog = null, CreatureRules? creatures = null, Cell cell = default)
+    public static Combatant FromDefinition(CreatureDefinition d, ItemCatalog? catalog = null, Cell cell = default)
     {
         List<Item> items = [.. d.Carried.Select(r => new Item(-r.Id, r, 1, r.Slot < Equipment.Slots ? r.Slot : Equipment.Pack))];
         var vitals = new Vitals { Hp = Math.Max(1, d.HitPoints), MaxHp = Math.Max(1, d.HitPoints) };
-        return Build(d.Combat, d.Character, items, vitals, d.Combat.Name, d.Combat.Allegiance, false, catalog, creatures, null, cell, 0);
+        return Build(d.Combat, d.Character, items, vitals, d.Combat.Name, d.Combat.Allegiance, false, catalog, null, cell, 0);
     }
 
     private static Combatant Build(CombatRecord? r, CharacterRecord? ch, List<Item> carried, Vitals vitals, string name, int side,
-        bool party, ItemCatalog? catalog, CreatureRules? creatures, WorldObject? source, Cell cell, int facing)
+        bool party, ItemCatalog? catalog, WorldObject? source, Cell cell, int facing)
     {
         Weapon? WornIn(int slot) =>
             catalog is null ? null
@@ -224,10 +280,14 @@ public sealed class Combatant
             Thac0 = r?.Thac0 ?? 20,
             Move = r?.Move ?? 12,
             Stats = r is null ? [10, 10, 10, 10, 10, 10] : [.. r.Stats.Select(s => (int)s)],
+            HomeSide = ch is { HomeAllegiance: > 0 } ? ch.HomeAllegiance : side,
             Type = r?.SpecialAttack ?? 0,
             Mind = r?.Mind ?? 2,
             Level = ch is null ? 1 : Math.Max(1, (int)ch.Levels.ToArray().Max()),
             Race = ch?.Race ?? 0,
+            Alignment = ch?.Alignment ?? 0,
+            Classes = ch is null ? [] : [.. Enumerable.Range(0, 3).Where(i => ch.ClassCodes[i] != 0).Select(i => ((int)ch.ClassCodes[i], (int)ch.Levels[i]))],
+            Size = ch?.Size ?? 0,
             MagicResistance = Math.Max(0, (int)(ch?.MagicResistance ?? 0)),
             Saves = ch is null ? [16, 16, 16, 16, 16] : [.. ch.Saves.ToArray().Select(s => (int)s)],
             AttackHalves = ch is { AttackHalves: > 0 } ? ch.AttackHalves : 2,
@@ -236,7 +296,7 @@ public sealed class Combatant
             Weapon = WornIn(3),
             MissileWeapon = WornIn(2),
             Ammunition = ammo?.Quantity ?? 0,
-            Spells = [.. creatures is not null && ch is not null ? creatures.SpellsOf(ch.SpellSet) : []],
+            SpellSet = ch?.SpellSet ?? 0,
             Psp = r?.Psp ?? 0,
             PsionicSet = ch?.PsionicSet ?? 0,
             Items = carried,

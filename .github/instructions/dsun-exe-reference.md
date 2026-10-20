@@ -1296,6 +1296,26 @@ Records: a combatant is an object of kind 2 (`DS:0C36 + 3·index`) with a
   8 those and Blood Flow or Dehydrate. +0x46 its psionic set (see "The
   AI"; 1–9 are filled: 2 Ballistic Attack, Disintegrate, Psionic Blast,
   Detonate, Psychic Crush; 4 the attack modes; 9 Psychic Crush only; …).
+  Also +0x1A alignment (1–9; 3, 6 and 9 are evil to `80F5:377E`) and
+  +0x3C the allegiance a charm's end restores (`8053:066F`).
+* **A creature's casts** (`6798:0000`, `6798:0059`): counted the first time
+  its spells are asked for and kept in a 28-row table (10 bytes: +0 object,
+  +2–8 one byte per set spell, low nibble "has some", high nibble the count,
+  +9 age; `6798:0366` gives a spell's byte, party members use
+  `DS:0168 + 0x8A·member`). For spell levels 1–9 it adds up its classes'
+  slots (`6798:071C`; a human's later classes only while below its first's
+  level), scales them by current ÷ record hit points (×256 >> 8), then deals
+  one cast at a time to the set's spells in order, round and round, while
+  their level has any left. The slots (`6798:0B32`): `DS:0664 + class code`
+  holds up to two row numbers (nibbles), each a word at `DS:0678 + 2·row`
+  (bits 8–11 max, 4–7 offset, 0 parity); a row gives v − (v + parity) / 2 −
+  (spell level + offset − 1), 2 instead of 1 when v's oddness equals the
+  parity, clamped 0 … max, with v the class level for the first row and
+  Wisdom for the second. Codes 1–8 (clerics, druids): rows 3 (max 9) and 4
+  (Wisdom, offset 6, max 3); 11, 18, 19 (preserver, defiler, templar): row 1
+  (max 5); 13–16 (rangers): row 2 (offset 3, parity 1, max 3). A level 5
+  preserver gets 3, 2 and 1 casts of levels 1–3; at half its hit points 1
+  and 1. `CombatRules.SpellSlots` has the rows.
 
 ### Rounds, initiative and turn order
 
@@ -1429,12 +1449,25 @@ These are AD&D 2nd edition's, but 18 has no percentile strength (+2 to hit,
   this is meant). Not for a target in status 3 or with effect bit 4. A
   natural 1 fails, a 20 succeeds; otherwise d20 (doubled for element flags
   0x86) + `80F5:119C` + the spell's own modifier (save byte bits 1–4,
-  signed) must reach the score. `80F5:119C`: +1/+3/+1/+1 for some effects,
-  +2/+3/+4 for resistances matching the spell's element bits (+0x13), ±1 by
-  a protecting ally's alignment, +2 for psionicists against some, −Dex AC
-  adjustment against area effects, +Wis magical defence against mind
-  effects, +Con poison adjustment and the dwarf/halfling Con/3.5 against
-  poison; −100 / +100 for effects some creatures can't or always resist.
+  signed) must reach the score. The save effect 0x86 doubles is fire, cold
+  and electricity. **`80F5:119C`** adds: −1 Save Penalty (45); +3 Spirit
+  Armor (56) except on the first save (paralysation and poison), +1
+  Barkskin (57), +1 Bless (7); +2 Protection from Evil (38) against an evil
+  caster (`80F5:377E`: alignment 3, 6, 9); +4 Protection from Lightning
+  (41), +3 from Cold (36), +3 from Fire (40) against their element; Prayer
+  (73; `7D80:191B`) +1 when its priest shares the target's allegiance, −1
+  when not; +4 against an effect of area below 9 from a caster who can't see
+  the target (`80F5:31AB`); +4 Brave (9) against flag 0x100, spending a
+  charge; +2 for a druid (codes 5–8, `80F5:339B`) against fire or
+  electricity; +2 for a psionicist (code 12) against flags 6; −Dexterity's
+  defensive adjustment (`6868:0358`) against flag 0x40; +Wisdom's magical
+  defence (`6868:038A`) against flags 0x1E; on the first save
+  Constitution's poison adjustment (`6868:0371`) and a dwarf's or halfling's
+  Con × 2 ÷ 7. Then by effect: Chaos (57) −100 without fighter, gladiator or
+  ranger levels (`80F5:3589`), Dismissal (61) + the target's level − the
+  caster's, Cloudkill (58) −100 below level 7, Scare (22) −100 below level 6
+  and +100 from 6. No shipped record sets flags 0x40, 0x80 or 0x100, so the
+  Dexterity, gaze and Brave cases never come up.
 
 ### Spells in combat (`3CB4:0037 + 0x20 · (spell − 1)`)
 
@@ -1454,9 +1487,9 @@ These are AD&D 2nd edition's, but 18 has no percentile strength (+2 to hit,
   | +0x04 | byte | area size per level (Cone of Cold 40) |
   | +0x05 | byte | target: 1 an area, 3 touch, 4 a creature, 6 a cone, 7 self |
   | +0x09 | byte | projectile (Magic Missile 4, Fireball 1, Lightning 5); 0xFF none |
-  | +0x0A | word | flags: 0x4000 damaging, 0x0200 combat only, 0x8000 no damage if saved (else half), 0x0010 psionic |
+  | +0x0A | word | flags: 0x0001 summons, 0x0002 mind, 0x0004 charm or hold (`80F5:2500`), 0x0008 illusion (`2540`), 0x0010 fear and the psionic attacks; 0x26 is "mind" to `80F5:2580` (Wisdom immunity, Mind Bar, the undead), 0x1E adds Wisdom to the save (`2560`), 0x06 a psionicist's +2 (`2520`); 0x0040 Dexterity on the save (`25C7`), 0x0080 a gaze (`25E7`), 0x0100 Brave's +4 (`25A0`), none of them set; 0x0200 combat only, 0x4000 damaging, 0x8000 no damage if saved (else half) |
   | +0x0D | word | effect graphic (0x20xx), 0xFFFF none |
-  | +0x10 | byte | area template (signed, −1 none): `3C81:0000 + 0x12 ·` it; byte +2 & 0xF its kind (1 a burst gone at once, 0 fog, 2 on the ground, 3 a cloud; `80F5:161F`), +5 bits 2–3 its shape (0 a line or wall, 1 a circle, 2 a cone; `8BEB:0000`), +7, +8, +9 its proportions (`8BEB:0393`) |
+  | +0x10 | byte | area template (signed, −1 none): `3C81:0000 + 0x12 ·` it (see "Areas") |
   | +0x12 | byte | condition on a failed save: Armor 2, Charm 10, Confusion 11, Ego Whip 33, Hold 34, Shield 46 |
   | +0x13 | word | element bits for resistances (see "Elements"): poison 0x1, fire 0x2, cold 0x4, acid 0x40, electricity 0x80, negative 0x100, magic 0x200, psionic 0x400 |
   | +0x15 | byte | damage: bits 5–7 dice per step, bits 0–4 flat damage per step |
@@ -1472,6 +1505,14 @@ These are AD&D 2nd edition's, but 18 has no percentile strength (+2 to hit,
   damage, or cancels it with flag 0x8000. The damage then passes
   `80F5:1059` (−2 against some armour, ±1 by an ally's alignment, AC for
   spell 0x8C) and is applied (`80F5:0E61`).
+* **Casting** (`7D80:003B`): with a template that isn't a burst, the area
+  becomes a field (`7D80:05C7`, see "Fields") and nothing is applied now;
+  otherwise every combatant `8BEB:0000` finds (a given target object alone)
+  gets `80F5:0079`. A damaging effect from a party member makes a non-party
+  combatant it reaches allegiance 2. Then Dispel Magic (records 26, 98),
+  effect 195 and any fire (+0x13 & 2) remove the field objects in the same
+  area (`8BEB:0000` with its last argument 1, `7D80:2368`/`2485`/`269C`;
+  fire only those with template +2 & 0x40, `2267:051C`).
 * Casting needs the caster active ("ONLY ACTIVE CHAR CAN CAST"); being hit
   interrupts it ("YOU WERE HIT"). The memorized spells per level are
   `DS:4B08` (wizard) and `DS:4B11` (priest), 0x1E bytes per character.
@@ -1524,6 +1565,106 @@ These are AD&D 2nd edition's, but 18 has no percentile strength (+2 to hit,
   100 %; elementals and vrocks need +2. Spiders ignore poison, slimes all but
   slashing, the animated statue and the xorn fire and cold.
 
+### Areas (`8BEB:0000`, template `3C81:0000 + 0x12·n`)
+
+Coordinates are sixteenths of a cell (object x, y; cell = coordinate ÷ 16),
+distances `1A0A:2DE6` (`0898:000C` on the differences, scaled to ≤ 127
+and back), directions `69CB:09D8` (0–255, 0 north, clockwise; `69CB:0B3A`
+the vector back, `69CB:08AA` a rotation). The template:
+
+| Byte | Meaning |
+|---|---|
+| +0 | word: the record index of the effect a field gives |
+| +2 | low nibble the kind (1 a burst; 0 fog, 2 ground, 3 cloud stay as fields), 0x10 hides (cells get map flag 0x80, `142F:01B1`), 0x20 blocks (map flag 0x40, `142F:0182`), 0x40 burns (fire clears it) |
+| +5 | bits 2–3 the shape: 0 a line or wall, 1 a circle, 2 a cone |
+| +6 | high nibble: sixteenths of a turn added to a line's direction (4 for the walls) |
+| +7, +8 | signed width and length factors (`8BEB:0393`); +9 bits 4–7 offsets (all 1: none) |
+| +0xA, +0xB, +0xC | a field's time: +0xC × (dice (+0xA >> 2) of sides (+0xB & 0xF) + (+0xB >> 4) × level) seconds; +0xC 30000 forever (`7D80:05C7`) |
+
+* **Size** (`8BEB:092D`): for target 2 (the walls) the distance between the
+  two points the player gives (the middle is between them, the direction
+  from one to the other); otherwise the area size (`086F`: +2 + +4 ×
+  level, doubled for a circle), at least 1; targets 3, 4, 5, 7, 8 use 8.
+  The cast's direction is from the caster to the point; a cone starts 4
+  sixteenths out along it.
+* **Width and length** (`0393`) for size s: with +7 > 0, width s and length
+  +8 × s ÷ +7, or −(+8) when +8 is negative; with +7 < 0 (none), −(+7) and s.
+* **Circle** (`612E:2DCC`): within s ÷ 2 of the point. Fireball (80, so
+  160): 5 cells.
+* **Cone** (`612E:2982`): within s ÷ 2 of the apex and inside the angle
+  from direction − h to direction + h, h = `09D8(0, 0, width ÷ 2, −length)`;
+  never the caster. Burning Hands (40, template 5: 10, 15) reaches 20
+  sixteenths, about 18° either side: the cell in front.
+* **Line** (`612E:2A99`): a box around the middle, length ÷ 2 either way
+  along the direction (+ the template's turn) and width ÷ 2 across.
+  Lightning Bolt (40, template 13: 2, 8): 10 cells along the line of fire,
+  centred on the point, 2.5 across. A wall (template 28: 2, −8) is 8
+  sixteenths thick and as long as its ends are apart.
+* Everyone of the allegiance mask (`8BEB:0B43`; the cast uses all) in the
+  shape and in sight of its centre (or apex) counts, up to 64; `8BEB:02DA`
+  then drops those `80F5:1CF7` filters out. The AI's estimate (`034D`) uses
+  the same shapes.
+
+### Fields (`7D80:05C7`, `7D80:0C6E`)
+
+A field is a row of map objects (`69CB:0000` lays the shape out, `078A`
+places one where the cell is open and in sight of the centre) whose object
+byte `+0x66A2` is template + 1 and `+0x66A8` the level (bits 0–4) and a
+value (bits 5–7); it goes when its time is up (`7D80:2782`). Who stands in
+which field is a list at `DS:000A` (3 bytes: object, template; up to 84).
+
+* `7D80:09EA`, as it is made: everyone in it gets its effect and is listed.
+* `7D80:0C6E(object, tick)`, after a move (tick 0: `2267:04D7`,
+  `217D:00E2`, `1DF3:055A`) and at a turn's start (tick 1: `8053:00EB`):
+  entering gives the effect (`7D80:0F9D` mode 0, `1095` →
+  `80F5:0008`); staying (mode 1) gives it again, on a move for ground
+  (kind 2) and on a turn's start for a cloud (3); leaving (mode 2,
+  `7D80:0ED9` → `113A`) ends the entries of that effect on the object. Fog
+  (kind 0) does nothing to those in it.
+* A removed field's occupants are checked again and so leave it.
+
+### Defences (`80F5:14E5`, `80F5:1999`, `80F5:161F`)
+
+* `14E5`, before anything: Protection from Missiles (28) stops missile
+  attacks (and effects saved in category 4, `324C`), and a thri-kreen
+  above level 6 dodges a missile when 1d20 > 8 (`1E5D`); Minor Globe (26)
+  stops spells of level 1–3 (`31FC`) and Disintegrate (record 0x8B);
+  Shield (46) stops Magic Missile (`DS:1607`, 6 entries; the other five do
+  nothing). Blink (5) stops small effects in a state not traced.
+* `1999`: Armor (2) spends a charge and a Cloak of Fear (18) gives the
+  attacker Cause Fear (record 0x4E) at level 6, for any effect (the port: hostile ones). Then
+  for a blow (no spell), an area over 8 or a power: the on-hit abilities;
+  Negative Plane Protection (42) against an undead's effect with element
+  0x100 spends a charge and, if the target saves as against record 0x27
+  (Vampiric Touch, which allows no save), stops it and queues 2d6 magic on
+  the undead (`057E`) — so in the original it never stops anything; and a
+  Dispelling Evil (52) attacker kills a race-14 target. For any other
+  spell: a mirror image (25) takes it 75 in 100; Gaze Reflection (43)
+  turns a gaze (flag 0x80) back; Minor Spell Turning (44) turns a level 1–3
+  spell with no template back, spending a charge. Blows never meet mirror
+  images (`612E:1B7A` passes no spell).
+* `161F`: Stoneskin (48) spends a charge on anything with elements and
+  stops a physical one; Ironskin (53) stops and is spent by a physical one;
+  a cleric of fire (code 3) from level 5 is untouched by fire; the
+  resistance percent at 0; magic resistance (spells below 0x8A); Free
+  Action (21) and Protection from Paralysis (29) against effects whose
+  condition is Paralyzed or Slowed; Wisdom and Intelligence 19+ against
+  mind effects and illusions of level ≤ score − 18 (`3C8E`: the monster
+  effects are level 3); the undead against mind effects and elements 0x100
+  and 0x1; the ability bits; Web (record 0x18) against type 12; Graft
+  Weapon (0x9B) when grafted (49); effect 196 against a carrier of item
+  0x7545.
+* **To hit** (`80F5:3849`): Bless +1, Curse −1, Slow −4, Graft Weapon +1
+  for the attacker, Prayer ±1 as for saves, −2 against Blur (55), a
+  halfling's +1 with some missiles; then Strength or Dexterity.
+* **Armour class** (`80F5:39B7`): from the front Dexterity's adjustment;
+  Spirit Armor caps it at 4, else Armor at 6; Barkskin at 6 − level ÷ 4;
+  Shield at 4 from the front; Magical Vestments (60) at 5 − (level − 5) ÷ 3
+  from level 6; Flesh Armor (59) at 10 − level (`7D80:16AC`: the effects'
+  levels, `88F4:06A6`). Then Displacement (58) −2, Dispelling Evil −7
+  against a race-14 attacker, Blind +4, Slowed +4, Protection from Evil −2
+  against an evil attacker, unseen −4, Biofeedback (4) −1.
+
 ### Conditions
 
 An effect's condition (spell record +0x12; effect list `3BF6:0106`, 10
@@ -1548,6 +1689,21 @@ Borrowed, 65 Strength Lent, 66 Adrenalin Control, 67 Strength,
 72 Shillelagh, 73 Prayer. The spells' +0x12 match (Bless 7, Glitterdust
 8, Charm 10, Confusion 11, Fear 17, Haste 22, Hold 34, Slow 47, Web 51,
 Prayer 73).
+
+When one is added (`8053:03C0`, a table at `8053:0647`): Bless and Curse,
+Haste and Slow, Brave and Afraid cancel each other instead; Charmed (10)
+replaces a charm and sets the allegiance to the caster's (1 without one)
+and forgets the target; Can't Attack (33) clears the attack flag and the
+guard; Paralyzed (34) clears all the action flags; Free Action and
+Protection from Paralysis keep off Slowed, and Paralyzed unless the target
+is Poisoned; Free Action and ability bit 9 keep off Stuck; Paralyzed and
+Stuck clear the move flag. Afraid, Charmed, Berserk and Confused set the
+combat record's computer-control bits (+0x21 |= 0x60) while any of them
+lasts (`8053:066F` clears them). When one ends (`8053:066F`, `8053:08A3`):
+Charmed restores the allegiance from character record +0x3C; Lent
+Strength (65) ends the matching Borrowed Strength; Extra Hit Points (69)
+counts down; the conjured weapons (70–72) go. Berserk's random allegiance
+isn't restored (the port restores it).
 
 ### Experience
 
@@ -1597,10 +1753,26 @@ Prayer 73).
   ((24 − character record +0x1B) × 2) and the dominations (by the target's
   level: below 6 3, below 11 8, below 16 13, else 18). Not enough points:
   message 0x612. The power check (`6698:0CED`): score = ability + modifier
-  + `6698:0137`; d20 ≤ score succeeds (20 always fails, 1 always
-  succeeds); against a target defending with a power, both roll. A failed
-  check costs half; a success the full cost, then `6698:0C54` and the
-  effect (`7D80:0000`, effect 0x8A + power).
+  + `6698:0137` − 1 (`0137`: a party member's power byte >> 3, a monster's
+  1); d20 ≤ score succeeds (20 always fails, 1 always succeeds), and the
+  roll is kept (`DS:47F0:0076`). While anyone has Synaptic Static (30,
+  `7D80:1963`) its holder can use none, and anyone else is blocked
+  (message 0x626) unless its d20 ≤ `0137` and the holder's d20 is over Int
+  + Synaptic Static's modifier or under the user's. A failed check costs
+  half; a success the full cost, then `6698:0C54` and the effect
+  (`7D80:0000`, effect 0x8A + power). A party member's power with a
+  maintenance cost stays up (`DS:0077 + 0x22·member + power`, bit 1):
+  each round `6698:04C7` (from `612E:0754`) casts it again and takes the
+  maintenance, or drops it and ends its effects (`060D`).
+* **Psionic defence** (`6698:0E68`, from the resistances `80F5:28F2` for an
+  effect of element 0x400 alone): the defence is Wis − 7; a party member's
+  best defence mode (+5 = 254) that is up, if 1 + cost ÷ 2 is better and it
+  can pay the cost again now (it does); a monster's first-class level if
+  better; at least 1. Two rolls of 1 … defence both over the attacker's kept
+  roll resist it. So the defence modes work only as kept-up powers, and the
+  attack modes (+5 0–3) are never compared with them.
+* `6698:0C54(object, code)` is the level in class code (a psionicist's at
+  least 1).
 
 ### Active slots (`1A0A:273E`)
 
@@ -1777,19 +1949,50 @@ last natural attack (the highest i with character record +0x2B + i > 0).
 2d8 rounds) on their last attack, and does 1000 when a hit involves a
 race-14 creature and Dispelling Evil (condition 52; which side has which is
 not checked). Race 9 is undead
-(`80F5:3280`): immune to mind spells (flags 0x26) and to flags 0x100 and 1.
+(`80F5:3280`): immune to mind effects (flags 0x26) and to elements 0x100
+(negative) and 0x1 (poison).
 Bits 10 and 11 agree with the clue book ("lesser elementals can only be
 affected by +1 or greater weapons, the regular elementals +2") except that
 the resistance rows of types 32 (fire elemental, bit 11) and 33 (lesser fire
 elemental, bit 10) are swapped: in the original the fire elemental takes +1
 weapons and the lesser one needs +2.
 
-**Effect handlers** (`80F5:05E6`): what a record alone doesn't say is a
-switch on the record index (38 cases at `80F5:0D96`, handlers at `+0x4C`):
-haste and slow, dispel, the cures, Strength, Raise Dead, … and the monster
-effects 179 and 187 (corrode armour, `2024`), 188 (corrode weapon, `1EBA`)
-and 139 Detonate (effect 196 and `1F4B`, which breaks the carried item most
-likely to break). Magic resistance (`80F5:1901`) is character record +0x29
+**Effect handlers** (`80F5:05E6(target, caster, set, record, saved, …,
+level, allegiance, duration)`): what a record alone doesn't say is a switch
+on the record index (38 cases at `80F5:0D96`, handlers at `+0x4C`; by
+`SPIN` number here):
+
+| Effect | Handling |
+|---|---|
+| 30 Haste, 38 Slow | this round's movement points doubled (at most Move × 20) or halved (`80F5:36CC`) |
+| 27, 99 Dispel Magic | each condition but those at `0D6E` (Biofeedback, Diseased, Feeblemind, Synaptic Static, Mind Bar, Poisoned, Graft Weapon, No Spells, Stuck, 54) ends if d100 ≤ 50 + 5 × level − 5 × its effect's level |
+| 195 | ends the conditions at `0D46`: Acid, Berserk, Blind, Confused, Cursed, Afraid, Low Resistance, Can't Attack, Save Penalty, Slowed |
+| 191 Turn Undead | an undead (race 9) is destroyed when d20 ≥ (u − p) × 3 + 10 (22 → 20), u its level (+1 above 4, at most 13), p the priest's (at most 14, −1 above 10, −2 above 12; `80F5:2217`); otherwise `1A0A:0251` |
+| 61 Dismissal, 108 Abjure | a race-14 creature dies when d20 ≥ 11 − level + its level |
+| 133 Insect Plague | No Spells (50) for a round |
+| 21, 106, 118 | end Slowed, and Paralyzed unless Poisoned |
+| 17 Glitterdust | ends Invisible |
+| 148 Absorb Disease | the caster takes the target's disease; then falls into the next case |
+| 24 Strength, 149 Adrenalin Control | Strength (67) or Adrenalin Control (66) with value 1d6 |
+| 158 Share Strength | a = min(24 − target Str, (caster Str − 3) ÷ 2): Borrowed (64) +a, the caster Lent (65) −2a |
+| 104 Remove Curse | Strength back to the record's |
+| 173 (the shadows' touch) | Weakened (68) −1 |
+| 72, 113, 128 | heal 1d8, 2d8 + 1, 3d8 + 3 (`80F5:307D`) |
+| 152 Cell Adjustment | heal 2 |
+| 157 Lend Health | a = min(target's missing hit points, caster's − 5): the target heals a, the caster loses it |
+| 109 Blood Flow | its own side heals 2d6; others, if they fail, Paralyzed |
+| 81 Aid | Extra Hit Points (69) 1d8 for 600 (`80F5:3142`) |
+| 40 Vampiric Touch, 147 Life Draining | (level ÷ 2)d6 or 1d6 damage, the caster gets them as Extra Hit Points (`80F5:316E`) |
+| 170 Psionic Blast | if not saved, down to a fifth of its hit points |
+| 80, 86, 90 | Shillelagh, Flame Blade, Spiritual Hammer: an item (0x7548–0x754A) with the hand free ("Failed: weapon in hand") and condition 72, 70, 71 |
+| 136 Raise Dead | the dead with Con left: Con − 1, 1 hit point, well; else status 8 |
+| 139 Detonate | effect 196 too, then `1F4B` breaks the item most likely to |
+| 179, 187; 188 | corrode armour (`2024`); corrode weapon (`1EBA`) |
+
+Without a save (`0D32`, 5 cases): 4 Chill Touch Weakened −1, 63 Feeblemind
+(stats again), 137 Slay Living 1000 damage, 140 Disintegrate 10 000, 184
+Weakened −5. Then `2BB8` (stats) and `2F8E` (hit points) are recomputed for
+whoever changed. Magic resistance (`80F5:1901`) is character record +0x29
 (vrock 70, babau 50, psurlon 45, blue slaad 40, red slaad and styr 30,
 rampager 25): +75 against mind spells (flags 0x26) with Mind Bar (32),
 halved by Low Resistance (31), less 30 + level for Lower Resistance.
@@ -1810,5 +2013,9 @@ halved by Low Resistance (31), less 30 + level for Lower Resistance.
 ### Not traced yet
 
 What the mind values 0, 2, 4, 7 and 10 mean outside the AI, the save
-category table's intent, the rest of the effect handlers (`80F5:05E6`), and
-whether ability bits 7 and 28 meant what the monster entries suggest.
+category table's intent, whether ability bits 7 and 28 meant what the
+monster entries suggest, Blink's state (`80F5:14E5`, `DS:00D9`), the area
+filter `80F5:1CF7`, the class caster mask at `DS:0118` (`6798:071C`), what
+`1A0A:0251` does to an undead Turn Undead didn't destroy, what a party
+member's power byte (>> 3) counts, and the halfling's missile bonus in
+`80F5:3849`.

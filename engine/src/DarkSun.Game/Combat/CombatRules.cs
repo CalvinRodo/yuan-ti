@@ -53,6 +53,27 @@ public enum TargetChoice
 public sealed record WeaponScoring(int PerDieSide = 1, int DamageBonus = 2, int ItemBonus = 4, int Magic = 10, int Material = 3);
 
 /// <summary>
+/// One row of a creature's spells per level (<c>6798:0B32</c>; the rows at
+/// <c>DS:0678</c>, chosen by class code at <c>DS:0664</c>): for a class in
+/// <paramref name="Classes"/>, with v its level (or Wisdom, with
+/// <paramref name="Wisdom"/>), a spell level s gets v − (v + parity) / 2 −
+/// (s + offset − 1) casts, 2 instead of 1 when v's oddness is
+/// <paramref name="Parity"/>'s, 0 … <paramref name="Max"/>.
+/// </summary>
+public sealed record SpellSlotRow(IReadOnlyList<int> Classes, int Max, int Offset = 0, int Parity = 0, bool Wisdom = false)
+{
+    public int Slots(int value, int spellLevel)
+    {
+        int n = value - (value + Parity) / 2 - (spellLevel + Offset - 1);
+        if (n == 1 && ((value & 1) ^ Parity) == 0)
+        {
+            n = 2;
+        }
+        return Math.Clamp(n, 0, Max);
+    }
+}
+
+/// <summary>
 /// The combat numbers and the AI's choices that DSUN.EXE has in its code, not
 /// its data (<c>dsun-exe-reference.md</c> §8). <see cref="Default"/> is the
 /// original's; a mod can change them with <c>rules/combat.json</c>.
@@ -107,6 +128,24 @@ public sealed record CombatRules
     /// <summary>The chance in 100 that a hit strikes a mirror image instead (<c>80F5:1999</c>).</summary>
     public int MirrorImageChance { get; init; } = 75;
 
+    /// <summary>
+    /// A creature's casts (<c>6798:0059</c>): its spells per level by these rows
+    /// (summed over its classes; a human's later classes only below its first's
+    /// level), times its hit points ÷ its most, dealt out among its set's spells
+    /// a cast at a time. Clerics and druids (codes 1–8) by level and by Wisdom,
+    /// preservers, defilers and templars (11, 18, 19), rangers (13–16).
+    /// </summary>
+    public IReadOnlyList<SpellSlotRow> SpellSlots { get; init; } =
+    [
+        new([1, 2, 3, 4, 5, 6, 7, 8], 9),
+        new([1, 2, 3, 4, 5, 6, 7, 8], 3, Offset: 6, Wisdom: true),
+        new([11, 18, 19], 5),
+        new([13, 14, 15, 16], 3, Offset: 3, Parity: 1),
+    ];
+
+    /// <summary>The chance in 100, + 5 a level the caster has over the effect's, that Dispel Magic ends an effect (<c>80F5:05E6</c>).</summary>
+    public int DispelChance { get; init; } = 50;
+
     public static CombatRules Default { get; } = new();
 
     public static CombatRules Read(string path)
@@ -127,5 +166,5 @@ public sealed record CombatRules
         return rules;
     }
 
-    public string ToJson() => JsonSerializer.Serialize(this, Json);
+    public string ToJson() => SpellRules.Compact(JsonSerializer.Serialize(this, Json));
 }

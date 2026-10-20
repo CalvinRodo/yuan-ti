@@ -43,26 +43,74 @@ public sealed partial class Battle
     /// <summary>
     /// <paramref name="t"/>'s armour class against <paramref name="a"/>
     /// (<c>612E:2113</c>, <c>80F5:39B7</c>): its own, plus Dexterity's adjustment
-    /// unless attacked from behind, without shields from behind; Armor caps it at
-    /// 6, Shield at 4; −4 when the attacker can't see it.
+    /// unless attacked from behind, without shields from behind. Spells cap it:
+    /// Spirit Armor at 4 (else Armor at 6), Barkskin at 6 − level ÷ 4, Shield at
+    /// 4 from the front, Magical Vestments at 5 − (level − 5) ÷ 3 from level 6,
+    /// Flesh Armor at 10 − level. Then Displacement −2, Dispelling Evil −7
+    /// against a summoned creature (race 14), Protection from Evil −2 against an
+    /// evil attacker, Biofeedback −1, −4 when the attacker can't see it; +4 when
+    /// it is blind or slowed.
     /// </summary>
     public int ArmorClassAgainst(Combatant t, Combatant? a)
     {
         bool behind = a is not null && FromBehind(a, t);
-        int ac = t.ArmorClass + (behind ? t.ShieldClass : AbilityTables.DexAc(t.Stats[1]));
-        if (t.Has(Condition.ImprovedAc))
-        {
-            ac = Math.Min(ac, 6);
-        }
-        if (t.Has(Condition.Shielded))
+        int ac = t.ArmorClass + (behind ? t.ShieldClass : 0);
+        int adjust = behind ? 0 : AbilityTables.DexAc(t.Stats[1]);
+        int LevelOf(Condition c) => t.Effects.Where(e => e.Condition == c).Sum(e => e.Level);
+        if (t.Has(Condition.SpiritArmor))
         {
             ac = Math.Min(ac, 4);
         }
+        else if (t.Has(Condition.ImprovedAc))
+        {
+            ac = Math.Min(ac, 6);
+        }
+        if (t.Has(Condition.Barkskin))
+        {
+            ac = Math.Min(ac, 6 - LevelOf(Condition.Barkskin) / 4);
+        }
+        if (!behind && t.Has(Condition.Shielded))
+        {
+            ac = Math.Min(ac, 4);
+        }
+        if (t.Has(Condition.MagicalVestments))
+        {
+            int level = LevelOf(Condition.MagicalVestments);
+            ac = Math.Min(ac, 5 - (level < 6 ? 0 : (level - 5) / 3));
+        }
+        if (t.Has(Condition.FleshArmor))
+        {
+            ac = Math.Min(ac, 10 - LevelOf(Condition.FleshArmor));
+        }
+        if (t.Has(Condition.Displacement))
+        {
+            adjust -= 2;
+        }
+        if (t.Has(Condition.DispellingEvil) && a is { Race: 14 })
+        {
+            adjust -= 7;
+        }
+        if (t.Has(Condition.Blind))
+        {
+            adjust += 4;
+        }
+        if (t.Has(Condition.Slowed))
+        {
+            adjust += 4;
+        }
+        if (t.Has(Condition.ProtectionFromEvil) && a is { Alignment: 3 or 6 or 9 })
+        {
+            adjust -= 2;
+        }
         if (a is not null && CantSee(a, t))
         {
-            ac -= 4;
+            adjust -= 4;
         }
-        return ac;
+        if (t.Has(Condition.Biofeedback))
+        {
+            adjust--;
+        }
+        return ac + adjust;
     }
 
     private bool Backstabs(Combatant a, Combatant t, Weapon? w) =>
@@ -73,14 +121,23 @@ public sealed partial class Battle
     /// (<c>612E:1359</c>): THAC0 less the attacker's bonus, less the target's
     /// armour class. The bonus: the weapon's (its item bonus and material),
     /// Strength's to-hit in melee or Dexterity's reaction at range, difficulty − 1
-    /// for monsters, and 2 from behind (a thief's backstab 4).
+    /// for monsters, and 2 from behind (a thief's backstab 4); and from effects
+    /// (<c>80F5:3849</c>) Bless +1, Curse −1, Slow −4, a grafted weapon +1,
+    /// Prayer +1 when its priest is on the attacker's side and −1 when not, −2
+    /// against a blurred target.
     /// </summary>
     public int ToHitNeeded(Combatant a, Combatant t, Weapon? w)
     {
         bool missile = w is { IsMissile: true };
         int bonus = (w?.Bonus ?? 0) + (w?.MaterialToHit ?? 0)
-            + (missile ? AbilityTables.DexReaction(a.Stats[1]) : AbilityTables.StrToHit(a.Stats[0]))
+            + (missile ? AbilityTables.DexReaction(a.Stats[1]) : AbilityTables.StrToHit(a.Strength))
             + (a.PartyMember ? 0 : Difficulty - 1);
+        bonus += (a.Has(Condition.Blessed) ? 1 : 0) - (a.Has(Condition.Cursed) ? 1 : 0) - (a.Has(Condition.Slowed) ? 4 : 0)
+            + (a.Has(Condition.GraftWeapon) ? 1 : 0) - (t.Has(Condition.Blur) ? 2 : 0);
+        if (a.Effects.FirstOrDefault(e => e.Condition == Condition.Prayer) is { Caster: { } priest })
+        {
+            bonus += priest.Side == a.Side ? 1 : -1;
+        }
         if (FromBehind(a, t))
         {
             bonus += Backstabs(a, t, w) ? Rules.Backstab : Rules.FromBehind;
@@ -160,42 +217,51 @@ public sealed partial class Battle
         }
         if (melee)
         {
-            damage += AbilityTables.StrDamage(a.Stats[0]);
+            damage += AbilityTables.StrDamage(a.Strength);
         }
         damage = Math.Max(1, damage);
         if (Backstabs(a, t, w))
         {
             damage *= Math.Min(5, (a.ThiefLevel - 1) / 4 + 2);
         }
-        Hit(a, t, damage, w?.Elements ?? NaturalElements, first, last && natural is not null);
+        Hit(a, t, damage, w?.Elements ?? NaturalElements, first, last && natural is not null, missile: !melee);
     }
 
     /// <summary>
-    /// A weapon or natural hit landing (<c>80F5:0079</c> with no spell): the
-    /// target's charges (Armor's, a mirror image's, a Cloak of Fear's;
-    /// <c>80F5:1999</c>), the attacker's on-hit abilities, Stoneskin and
-    /// Ironskin, then the damage times the target's resistance percent.
+    /// A weapon or natural hit landing (<c>80F5:0079</c> with no spell): a missile
+    /// can't touch the Protected from Missiles, and a thri-kreen above level 6
+    /// dodges one when 1d20 beats 8 (<c>80F5:14E5</c>); Armor spends a charge, a
+    /// Cloak of Fear gives the attacker Cause Fear at level 6 (<c>80F5:1999</c>);
+    /// the attacker's on-hit abilities; Negative Plane Protection; Dispelling Evil
+    /// slays a summoned attacker's target (race 14); Stoneskin and Ironskin; then
+    /// the damage times the target's resistance percent. (Mirror images only take
+    /// spells in DSUN.EXE: a hit has no spell, and <c>80F5:1999</c> tests them for
+    /// spells alone.)
     /// </summary>
-    public void Hit(Combatant a, Combatant t, int damage, DamageElement elements, bool first = true, bool lastNatural = false)
+    public void Hit(Combatant a, Combatant t, int damage, DamageElement elements, bool first = true, bool lastNatural = false, bool missile = false)
     {
-        UseCharge(t, Condition.ImprovedAc);
-        if (t.Has(Condition.MirrorImages) && Roll(1, 100) <= Rules.MirrorImageChance)
+        if (missile && (t.Has(Condition.ProtectionFromMissiles) || t.Race == 8 && t.Level > 6 && Roll(1, 20) > 8))
         {
-            UseCharge(t, Condition.MirrorImages);
-            Note(new Avoided(a, t, "image"));
+            Note(new Avoided(a, t, "missile"));
             return;
         }
+        UseCharge(t, Condition.ImprovedAc);
         if (t.Has(Condition.CloakOfFear))
         {
             UseCharge(t, Condition.CloakOfFear);
             if (Spells.Effect(CauseFear) is { } fear)
             {
-                Apply(t, a, fear, t.Level);
+                Apply(t, a, fear, CloakOfFearLevel);
             }
         }
         OnHitAbilities(a, t, first, lastNatural);
-        if (!t.Alive)
+        if (!t.Alive || NegativePlaneProtection(a, t, elements))
         {
+            return;
+        }
+        if (a.Has(Condition.DispellingEvil) && t.Race == 14)
+        {
+            Hurt(a, t, 1000);
             return;
         }
         if (Skin(a, t, elements))
@@ -210,6 +276,8 @@ public sealed partial class Battle
         }
         Hurt(a, t, damage * percent / 100);
     }
+
+    private const int CloakOfFearLevel = 6;
 
     /// <summary>Cause Fear, what a Cloak of Fear gives an attacker (<c>80F5:1999</c>: effect 0x4E).</summary>
     public const int CauseFear = 79;

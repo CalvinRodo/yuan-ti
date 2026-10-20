@@ -27,7 +27,9 @@ public enum Condition
 /// entry): from spell record <see cref="Effect"/>, giving <see cref="Condition"/>.
 /// It ends when the round clock passes <see cref="EndsAt"/> or, for an effect
 /// with charges (unit −1), when <see cref="Charges"/> run out (<c>7D80:1362</c>,
-/// <c>7D80:1723</c>); <see cref="Permanent"/> ones last the fight.
+/// <c>7D80:1723</c>); <see cref="Permanent"/> ones last the fight. One from a
+/// field (<see cref="Field"/>) with no time of its own lasts while its holder
+/// stays in the field.
 /// </summary>
 public sealed class ActiveEffect(int effect, Condition condition, int level, Combatant? caster)
 {
@@ -44,6 +46,12 @@ public sealed class ActiveEffect(int effect, Condition condition, int level, Com
 
     /// <summary>Uses left, for an effect with charges.</summary>
     public int Charges { get; set; }
+
+    /// <summary>What it adds (effect entry +9): Strength's d6, Weakened's −1, Aid's hit points.</summary>
+    public int Value { get; init; }
+
+    /// <summary>The field that gave it, if any.</summary>
+    public AreaField? Field { get; init; }
 
     public bool Permanent => EndsAt is null && Charges == 0;
 }

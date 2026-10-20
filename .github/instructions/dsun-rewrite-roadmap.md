@@ -555,13 +555,32 @@ executable, not in the data.
       targeting (Random as in the original; Nearest, Weakest, Casters), the
       weapon score and the round's numbers are `CombatRules`
       (`rules/combat.json`).
-- [ ] Combat still approximate or missing: area shapes (sizes are the
-      original's, the circle / cone / line geometry isn't), lingering areas
-      (clouds and walls act once), psionic attack and defence modes (powers
-      act as spells), a creature's casts per spell (one each; `6798:0366`'s
-      table isn't traced), Charmed changing sides, Negative Plane
-      Protection, the rest of `80F5:05E6`'s handlers and `80F5:119C`'s save
-      bonuses, multi-cell creatures' reach.
+- [x] Combat details traced and ported (2026-10-20): the area shapes
+      (`8BEB:0000`: circle, cone and line in sixteenths of a cell, in sight
+      of the centre); lingering areas as fields (`7D80:0C6E`: entering acts,
+      staying acts on each step on the ground and each turn in a cloud,
+      leaving ends it; walls block, fog hides, fire and dispelling clear
+      them); psionics (the power check with Synaptic Static's contest,
+      `6698:0CED`; the defence a psionic attack meets, `6698:0E68`; kept-up
+      powers' upkeep, `6698:04C7`); a creature's casts from its class slots
+      and health (`6798:0059`, `CombatRules.SpellSlots`); Charmed taking
+      the caster's side and back (`8053:03C0`, `066F`); Negative Plane
+      Protection (which only spends a charge: its save is Vampiric
+      Touch's, which allows none); every handler of `80F5:05E6`; the save
+      bonuses of `80F5:119C`; the defences of `80F5:14E5`, `1999` and
+      `161F`; to-hit and armour class from effects (`80F5:3849`, `39B7`);
+      footprints for reach and standing (`1A0A:2BA5`, `11DB`).
+- [ ] Combat left: Blink (its state isn't traced), the conjured weapons of
+      Shillelagh, Flame Blade and Spiritual Hammer (only the condition),
+      what Turn Undead does to an undead it doesn't destroy (`1A0A:0251`),
+      the area filter `80F5:1CF7`, a party member's power level (`6698:0137`;
+      1 for now), the halfling's missile bonus, walls cast at one cell (the
+      original asks for both ends; one cell gives a wall across the line of
+      fire). Kept as the original has them, open to a QOL fix: Mirror Image
+      takes spells only, Negative Plane Protection never saves, the Brave,
+      gaze and Dexterity save flags are set on no record, Absorb Disease
+      also gives Strength. Changed: Berserk's and Confused's random side
+      ends with them (the original keeps it).
 - [ ] Tactical combat scene on the region map, with clear feedback: hit chance
       shown, a combat log, damage numbers. FIGHT starts a `Battle` from the
       region's creatures (`Combatant.FromCreature`) and the party; the party's

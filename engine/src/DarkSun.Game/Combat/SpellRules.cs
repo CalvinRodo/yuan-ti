@@ -91,28 +91,77 @@ public static class SpellFlags
     public const int Mind = 0x0002;
     /// <summary>The charm and hold spells (<c>80F5:2500</c>).</summary>
     public const int CharmOrHold = 0x0004;
-    /// <summary>Illusions and fear (<c>80F5:2540</c>).</summary>
+    /// <summary>Illusions (<c>80F5:2540</c>): Intelligence 19+ is immune.</summary>
     public const int Illusion = 0x0008;
+    /// <summary>Fear and the psionic attacks.</summary>
     public const int Fear = 0x0010;
+    /// <summary>Wisdom 19+ is immune, Mind Bar adds 75 to magic resistance, the undead are immune (<c>80F5:2580</c>).</summary>
     public const int MindAffecting = 0x0026;
+    /// <summary>Wisdom's magical defence adds to the save (<c>80F5:2560</c>).</summary>
+    public const int WisdomSave = 0x001E;
+    /// <summary>Dexterity's adjustment adds to the save (<c>80F5:25C7</c>); no shipped record sets it.</summary>
+    public const int DexteritySave = 0x0040;
+    /// <summary>A gaze, which Gaze Reflection turns back (<c>80F5:25E7</c>); no shipped record sets it.</summary>
+    public const int Gaze = 0x0080;
+    /// <summary>The Brave save 4 better and spend a charge (<c>80F5:25A0</c>); no shipped record sets it.</summary>
+    public const int BraveSave = 0x0100;
     public const int CombatOnly = 0x0200;
     public const int Damaging = 0x4000;
     public const int NoDamageIfSaved = 0x8000;
 }
 
 /// <summary>
-/// An area template (<c>3C81:0000</c>, 0x12 bytes): <paramref name="Kind"/> (byte
-/// +2 low nibble: 1 a burst that's gone at once, 0 fog, 2 on the ground, 3 a
-/// cloud; <c>80F5:161F</c>) and <paramref name="Shape"/> (byte +5 bits 2–3:
-/// 0 a line or wall, 1 a circle, 2 a cone; <c>8BEB:0000</c>).
+/// An area template (<c>3C81:0000</c>, 0x12 bytes). <paramref name="Kind"/> (byte
+/// +2 low nibble; <c>7D80:0F9D</c>): 1 a burst, gone at once; the others stay
+/// on the map as a field (<see cref="Battle.Fields"/>): 0 fog, which only
+/// hides, 2 on the ground, acting on whoever enters or moves in it, 3 a
+/// cloud, acting on whoever enters it or starts a turn in it.
+/// <paramref name="Shape"/> (+5 bits 2–3; <c>8BEB:0000</c>): 0 a line or wall,
+/// 1 a circle, 2 a cone. <paramref name="Effect"/> (+0): what the field does
+/// (a <c>SPIN</c> number). <paramref name="Flags"/> (+2 high nibble): 0x10 hides
+/// what is behind it, 0x20 blocks movement, 0x40 burns (<c>7D80:003B</c>: fire
+/// clears it). <paramref name="Turn"/> (+6 high nibble): sixteenths of a turn
+/// added to a line's direction (4, a quarter turn, makes a wall across).
+/// <paramref name="Width"/> and <paramref name="Length"/> (+7, +8, signed;
+/// <c>8BEB:0393</c>): with a positive width the area is as wide as its size and
+/// length ÷ width times as long; a negative length is fixed (sixteenths of a
+/// cell). A field lasts <paramref name="DurationUnit"/> (+0xC; 30000
+/// permanent) × (<paramref name="DurationDice"/> d <paramref name="DurationSides"/>
+/// + <paramref name="DurationPerLevel"/> × level) game seconds (+0xA, +0xB; <c>7D80:05C7</c>).
 /// </summary>
-public sealed record AreaTemplate(int Kind, int Shape)
+public sealed record AreaTemplate(int Kind, int Shape, int Effect = 0, int Flags = 0, int Turn = 0, int Width = 1, int Length = 1,
+    int DurationDice = 0, int DurationSides = 0, int DurationPerLevel = 0, int DurationUnit = AreaTemplate.Round)
 {
-    public const int Burst = 1, Ground = 2;
+    public const int Fog = 0, Burst = 1, Ground = 2, Cloud = 3;
     public const int Line = 0, Circle = 1, Cone = 2;
+    public const int HidesFlag = 0x10, BlocksFlag = 0x20, BurnsFlag = 0x40;
+    public const int Round = 60, Permanent = 30000;
 
     [JsonIgnore]
     public bool Lingers => Kind != Burst;
+
+    [JsonIgnore]
+    public bool Hides => (Flags & HidesFlag) != 0;
+
+    [JsonIgnore]
+    public bool Blocks => (Flags & BlocksFlag) != 0;
+
+    [JsonIgnore]
+    public bool Burns => (Flags & BurnsFlag) != 0;
+
+    /// <summary>
+    /// The area's width and length for an area of <paramref name="size"/>
+    /// sixteenths (<c>8BEB:0393</c>).
+    /// </summary>
+    public (int Width, int Length) Proportions(int size)
+    {
+        if (Width < 0)
+        {
+            return (-Width, Length < 0 ? -Length : size);
+        }
+        int w = Math.Max(1, Width);
+        return (size, Length < 0 ? -Length : Length * size / w);
+    }
 }
 
 /// <summary>
@@ -178,13 +227,16 @@ public sealed partial record SpellRules
     }
 
     /// <summary>The rules as JSON, each record on one line.</summary>
-    public string ToJson() => FlatObject().Replace(NumberList().Replace(JsonSerializer.Serialize(this, Json),
+    public string ToJson() => Compact(JsonSerializer.Serialize(this, Json));
+
+    /// <summary>Indented JSON with each list of numbers, and each object of numbers, strings and such lists, on one line.</summary>
+    internal static string Compact(string json) => FlatObject().Replace(NumberList().Replace(json,
             m => "[" + string.Join(", ", m.Groups[1].Value.Split(',', StringSplitOptions.TrimEntries)) + "]"),
         m => "{ " + string.Join(" ", m.Groups[1].Value.Split('\n', StringSplitOptions.TrimEntries).Where(f => f.Length > 0)) + " }");
 
     [GeneratedRegex(@"\[\s*(-?\d+(?:\s*,\s*-?\d+)*)\s*\]")]
     private static partial Regex NumberList();
 
-    [GeneratedRegex(@"\{\s*\n((?:\s*""\w+"": (?:-?\d+|""[^""]*""),?\n)+)\s*\}")]
+    [GeneratedRegex(@"\{\s*\n((?:\s*""\w+"": (?:-?\d+|""[^""]*""|true|false|\[[^\]\n]*\]),?\n)+)\s*\}")]
     private static partial Regex FlatObject();
 }

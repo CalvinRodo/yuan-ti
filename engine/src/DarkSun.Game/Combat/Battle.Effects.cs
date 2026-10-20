@@ -8,21 +8,42 @@ namespace DarkSun.Game.Combat;
 
 public sealed partial class Battle
 {
-    /// <summary>The healing spells (<c>80F5:05E6</c>'s cases 71, 112, 127): Cure Light, Serious and Critical Wounds heal their damage roll.</summary>
+    /// <summary>The healing spells (<c>80F5:05E6</c>): Cure Light (1d8), Serious (2d8 + 1) and Critical Wounds (3d8 + 3).</summary>
     public static IReadOnlySet<int> Healing { get; } = new HashSet<int> { 72, 113, 128 };
 
     /// <summary>Dispel Magic (wizard and priest; <c>80F5:05E6</c> cases 26 and 98).</summary>
     public static IReadOnlySet<int> Dispelling { get; } = new HashSet<int> { 27, 99 };
 
+    /// <summary>Effect 195 (<c>80F5:05E6</c>): ends Acid, Berserk, Blind, Confused, Cursed, Afraid, Low Resistance, Can't Attack, the save penalty and Slowed.</summary>
+    public const int RemoveAfflictions = 195;
+
+    /// <summary>What Dispel Magic leaves alone (<c>80F5:0D6E</c>).</summary>
+    private static readonly HashSet<Condition> Undispellable =
+    [
+        Condition.Biofeedback, Condition.Diseased, Condition.Feebleminded, Condition.SynapticStatic, Condition.MindBar,
+        Condition.Poisoned, Condition.GraftWeapon, Condition.NoSpells, Condition.Stuck, (Condition)54,
+    ];
+
+    /// <summary>What effect 195 ends (<c>80F5:0D46</c>).</summary>
+    private static readonly HashSet<Condition> Afflictions =
+    [
+        Condition.Acid, Condition.Berserk, Condition.Blind, Condition.Confused, Condition.Cursed, Condition.Afraid,
+        Condition.LowResistance, Condition.CantAttack, Condition.SavePenalty, Condition.Slowed,
+    ];
+
     /// <summary>
-    /// Casting (<c>7D80:21C5</c>): <paramref name="effect"/> (a <c>SPIN</c> number)
-    /// at <paramref name="at"/> for a caster of <paramref name="level"/>, on
-    /// everyone in its area (<see cref="AffectedBy"/>). A spell the caster had
-    /// is used up; its turn ends.
+    /// Casting (<c>7D80:003B</c>): <paramref name="effect"/> (a <c>SPIN</c> number)
+    /// at <paramref name="at"/> for a caster of <paramref name="level"/>. An area
+    /// that lingers becomes a field (<see cref="Fields"/>), acting on those in it
+    /// as they enter; any other acts at once on everyone in its area
+    /// (<see cref="AffectedBy"/>). Damage from a party member turns a neutral
+    /// creature hostile. Fire and dispelling clear fields they reach. A spell the
+    /// caster had is used up; its turn ends. <paramref name="end"/> is a wall's
+    /// other end.
     /// </summary>
-    public bool Cast(Combatant caster, int effect, int level, Cell at)
+    public bool Cast(Combatant caster, int effect, int level, Cell at, Cell? end = null)
     {
-        if (Spells.Effect(effect) is not { } e || caster.Has(Condition.NoSpells) && effect <= Spellcasting.FirstPower - 1)
+        if (Spells.Effect(effect) is not { } e || caster.Has(Condition.NoSpells) && effect < Spellcasting.FirstPower)
         {
             return false;
         }
@@ -30,13 +51,26 @@ public sealed partial class Battle
         Note(new Cast(caster, effect, at));
         if (e.Damaging || e.Condition != Condition.None && !OnSide(caster, at))
         {
-            EndCondition(caster, Condition.Invisible);
-            EndCondition(caster, Condition.InvisibleToUndead);
+            UseCharge(caster, Condition.Invisible);
+            UseCharge(caster, Condition.InvisibleToUndead);
         }
-        foreach (Combatant t in AffectedBy(caster, e, level, at))
+        if (Spells.TemplateOf(e) is { Lingers: true } template && !e.SingleTarget)
         {
-            Apply(caster, t, e, level);
+            MakeField(caster, e, template, level, at, end);
         }
+        else
+        {
+            foreach (Combatant t in AffectedBy(caster, e, level, at, end))
+            {
+                Apply(caster, t, e, level);
+                if (e.Damaging && caster.PartyMember && !t.PartyMember && (t.Side & 3) == 0)
+                {
+                    t.Side = 2;
+                    Note(new SideChanged(t, t.Side));
+                }
+            }
+        }
+        ClearFields(caster, e, level, at, end);
         EndTurn(caster);
         return true;
     }
@@ -44,53 +78,42 @@ public sealed partial class Battle
     private bool OnSide(Combatant caster, Cell at) => At(at) is { } t && !caster.IsEnemyOf(t);
 
     /// <summary>
-    /// Who an effect cast at <paramref name="at"/> reaches (<c>8BEB:0000</c>): the
-    /// caster for self spells; one creature for single-target ones; otherwise
-    /// by its template's shape, a circle of the area's size around the cell, a
-    /// cone from the caster toward it (90°, the area's size long), or a line
-    /// (a box half the area's size across). The sizes are DSUN.EXE's; the
-    /// shapes are approximate.
+    /// Who an effect cast at <paramref name="at"/> reaches (<c>8BEB:0000</c>):
+    /// the caster for self spells; one creature for single-target ones;
+    /// otherwise everyone its template's circle, cone or line covers and the
+    /// shape's centre can see (<see cref="ShapeOf"/>).
     /// </summary>
-    public IReadOnlyList<Combatant> AffectedBy(Combatant caster, SpellEffect e, int level, Cell at)
+    public IReadOnlyList<Combatant> AffectedBy(Combatant caster, SpellEffect e, int level, Cell at, Cell? end = null)
     {
         if (e.Target is 7 or 8)
         {
             return [caster];
         }
-        AreaTemplate? template = Spells.TemplateOf(e);
-        if (template is null || e.SingleTarget)
+        if (Spells.TemplateOf(e) is not { } template || e.SingleTarget)
         {
             return At(at) is { } one ? [one] : [];
         }
-        int size = Math.Max(16, e.AreaSize(level));
-        IEnumerable<Combatant> alive = _all.Where(c => c.Alive);
-        return template.Shape switch
-        {
-            AreaTemplate.Circle => [.. alive.Where(c => Distance(c.Cell, at) <= size / 16)],
-            AreaTemplate.Cone => [.. alive.Where(c => c != caster && Distance(caster.Cell, c.Cell) <= Math.Min(Rules.SightRange, size / 16)
-                && InCone(caster.Cell, at, c.Cell))],
-            _ => [.. alive.Where(c => Math.Max(Math.Abs(c.Cell.X - at.X), Math.Abs(c.Cell.Y - at.Y)) <= Math.Max(0, size / 32))],
-        };
-    }
-
-    private static bool InCone(Cell from, Cell toward, Cell c)
-    {
-        double a = Math.Atan2(toward.Y - from.Y, toward.X - from.X), b = Math.Atan2(c.Y - from.Y, c.X - from.X);
-        double d = Math.Abs(Math.IEEERemainder(a - b, 2 * Math.PI));
-        return d <= Math.PI / 4 + 1e-9;
+        Shape shape = ShapeOf(caster, e, template, level, at, end);
+        return [.. _all.Where(c => c.Alive && Covers(shape, c))];
     }
 
     /// <summary>
     /// An effect reaching <paramref name="t"/> (<c>80F5:0079</c>): immunities
-    /// (<see cref="Immune"/>), a spell turned or struck at an image, resistances
-    /// (0 % stops it), magic resistance for spells, the save; on a failed save
-    /// the condition, then the damage (halved on a save, or none), the healing
-    /// and the effect's own handling (<c>80F5:05E6</c>). A caster's effects on
-    /// its own side skip magic resistance and saves.
+    /// (<see cref="Immune"/>); against a spell of small area, a mirror image,
+    /// Gaze Reflection or Spell Turning (<c>80F5:1999</c>); against an undead's
+    /// negative energy, Negative Plane Protection; Stoneskin and Ironskin;
+    /// resistances (0 % stops it); magic resistance for spells; the save. On a
+    /// failed save the condition, then the damage (halved on a save, or none) and
+    /// the effect's own handling (<see cref="Special"/>). Against a hostile
+    /// effect Armor spends a charge and a Cloak of Fear frightens the caster
+    /// (<c>80F5:1999</c>); a psionic attack meets the target's psionic defence
+    /// (<see cref="PsionicDefence"/>). A caster's effects on its own side skip
+    /// the charges, turning, the psionic defence, magic resistance and saves. <paramref name="field"/>
+    /// is the field it comes from, if any.
     /// </summary>
-    public void Apply(Combatant caster, Combatant t, SpellEffect e, int level)
+    public void Apply(Combatant caster, Combatant t, SpellEffect e, int level, AreaField? field = null)
     {
-        if (!t.Alive)
+        if (!t.Alive && e.Number != RaiseDead)
         {
             return;
         }
@@ -100,30 +123,40 @@ public sealed partial class Battle
             return;
         }
         bool friendly = caster == t || !caster.IsEnemyOf(t);
-        if (!friendly && e.SingleTarget && e.Template < 0)
+        if (!friendly)
         {
-            if (t.Has(Condition.SpellTurning) && caster != t)
+            UseCharge(t, Condition.ImprovedAc);
+            if (t.Has(Condition.CloakOfFear) && e.Number != CauseFear)
             {
-                UseCharge(t, Condition.SpellTurning);
-                Note(new Avoided(caster, t, "turned"));
-                Apply(t, caster, e, level);
+                UseCharge(t, Condition.CloakOfFear);
+                if (Spells.Effect(CauseFear) is { } fear)
+                {
+                    Apply(t, caster, fear, CloakOfFearLevel);
+                }
+            }
+            bool small = e.AreaSize(1) <= 8 && e.Number < Spellcasting.FirstPower || e.Number > Spellcasting.LastPower;
+            if (small && Turned(caster, t, e, level))
+            {
                 return;
             }
-            if (e.IsTouch && t.Has(Condition.MirrorImages) && Roll(1, 100) <= Rules.MirrorImageChance)
+            if (!small && NegativePlaneProtection(caster, t, e.Elements))
             {
-                UseCharge(t, Condition.MirrorImages);
-                Note(new Avoided(caster, t, "image"));
                 return;
             }
         }
-        if (e.Damaging && Skin(caster, t, e.Elements))
+        if (e.Elements != DamageElement.None && Skin(caster, t, e.Elements))
         {
             return;
         }
         int percent = DamagePercent(t, e.Elements);
-        if (percent == 0)
+        if (percent == 0 || (e.Elements & DamageElement.Fire) != 0 && t.LevelIn(FireCleric) >= 5)
         {
             Note(new Avoided(caster, t, "immune"));
+            return;
+        }
+        if (!friendly && e.Elements == DamageElement.Psionic && PsionicDefence(t))
+        {
+            Note(new Avoided(caster, t, "mind defended"));
             return;
         }
         if (!friendly && e.Number < Spellcasting.FirstPower && Roll(1, 100) < MagicResistance(t, e, level))
@@ -131,14 +164,14 @@ public sealed partial class Battle
             Note(new Avoided(caster, t, "resisted"));
             return;
         }
-        bool saved = !friendly && Saved(t, e);
+        bool saved = !friendly && Saved(t, e, caster, level);
         if (saved)
         {
             Note(new Avoided(caster, t, "saved"));
         }
         else if (e.Condition != Condition.None)
         {
-            AddCondition(caster, t, e, level);
+            AddCondition(caster, t, e, level, field: field);
         }
         if (e.Damaging && !Healing.Contains(e.Number))
         {
@@ -147,29 +180,98 @@ public sealed partial class Battle
             damage = saved ? (e.SaveCancels ? 0 : damage / 2) : damage;
             Hurt(caster, t, damage * percent / 100);
         }
-        Special(caster, t, e, level);
+        Special(caster, t, e, level, saved);
     }
+
+    /// <summary>Class code 3, a cleric of fire: at level 5 fire can't touch it (<c>80F5:161F</c>).</summary>
+    private const int FireCleric = 3;
+
+    /// <summary>
+    /// A spell of small area aimed at <paramref name="t"/> (<c>80F5:1999</c>): a
+    /// mirror image takes it 75 times in 100; Gaze Reflection turns a gaze back on
+    /// its caster; Spell Turning turns back a spell of level 1–3 with no area and
+    /// spends a charge.
+    /// </summary>
+    private bool Turned(Combatant caster, Combatant t, SpellEffect e, int level)
+    {
+        if (t.Has(Condition.MirrorImages) && Roll(1, 100) <= Rules.MirrorImageChance)
+        {
+            UseCharge(t, Condition.MirrorImages);
+            Note(new Avoided(caster, t, "image"));
+            return true;
+        }
+        if (t.Has(Condition.GazeReflection) && (e.Flags & SpellFlags.Gaze) != 0)
+        {
+            Note(new Avoided(caster, t, "reflected"));
+            Apply(t, caster, e, level);
+            return true;
+        }
+        if (t.Has(Condition.SpellTurning) && LowLevelSpell(e) && e.Template < 0)
+        {
+            UseCharge(t, Condition.SpellTurning);
+            Note(new Avoided(caster, t, "turned"));
+            Apply(t, caster, e, level);
+            return true;
+        }
+        return false;
+    }
+
+    /// <summary>A wizard or priest spell of level 1–3 (<c>80F5:31FC</c>): what Minor Globe and Minor Spell Turning stop.</summary>
+    private static bool LowLevelSpell(SpellEffect e) =>
+        e.Number < Spellcasting.FirstPower && Spellcasting.Get(e.Number) is { Level: >= 1 and <= 3 };
+
+    /// <summary>
+    /// Negative Plane Protection (<c>80F5:1999</c>): an undead's negative-energy
+    /// attack spends a charge; if the target then saves (as against Vampiric
+    /// Touch), the attack is stopped and the undead takes 2d6.
+    /// </summary>
+    private bool NegativePlaneProtection(Combatant a, Combatant t, DamageElement elements)
+    {
+        if (!t.Has(Condition.NegativePlaneProtection) || (elements & DamageElement.Negative) == 0 || !a.IsUndead)
+        {
+            return false;
+        }
+        UseCharge(t, Condition.NegativePlaneProtection);
+        if (Spells.Effect(VampiricTouch) is not { } touch || !Saved(t, touch, a, a.Level))
+        {
+            return false;
+        }
+        Note(new Avoided(a, t, "negative plane protection"));
+        Hurt(t, a, RollDice(2, 6));
+        return true;
+    }
+
+    public const int VampiricTouch = 40, RaiseDead = 136;
 
     /// <summary>
     /// What makes <paramref name="t"/> untouched by <paramref name="e"/>
-    /// (<c>80F5:161F</c>): Wisdom 19+ against mind spells and Intelligence 19+
-    /// against illusions of a low enough level (spell level ≤ score − 18); the
-    /// undead against mind spells and flags 0x100 and 1; ability bit 5 against
-    /// charm and hold, bit 21 against Wall of Fog; bits 0 and 1 (burrowing,
-    /// flying) against lingering areas cast from range, bit 9 against those on
-    /// the ground; type 12 against Web.
+    /// (<c>80F5:14E5</c>, <c>80F5:161F</c>): Minor Globe against spells of level
+    /// 1–3 and Disintegrate; Protection from Missiles against effects saved as
+    /// missiles (category 4); Shield against Magic Missile; Free Action and
+    /// Protection from Paralysis against what paralyses or slows; Wisdom 19+
+    /// against mind effects and Intelligence 19+ against illusions of a low
+    /// enough level (level ≤ score − 18; the monsters' effects count as level 3);
+    /// the undead against mind effects, negative energy and poison; ability
+    /// bit 5 against charm and hold, bit 21 against Wall of Fog; bits 0 and 1
+    /// (burrowing, flying) against lingering areas, bit 9 against those on the
+    /// ground; type 12 against Web; a grafted weapon against Graft Weapon.
     /// </summary>
     public bool Immune(Combatant t, SpellEffect e)
     {
-        bool mind = (e.Flags & SpellFlags.MindAffecting) != 0;
-        if (Spellcasting.Get(e.Number) is { Kind: not SpellKind.Psionic } spell)
+        if (t.Has(Condition.Englobed) && (LowLevelSpell(e) || e.Number == Disintegrate)
+            || t.Has(Condition.ProtectionFromMissiles) && e.SaveCategory == 4
+            || t.Has(Condition.Shielded) && e.Number == MagicMissile
+            || (t.Has(Condition.FreeAction) || t.Has(Condition.ProtectionFromParalysis)) && e.Condition is Condition.Paralyzed or Condition.Slowed)
         {
-            if (mind && spell.Level <= t.Stats[4] - 18 || (e.Flags & SpellFlags.Illusion) != 0 && spell.Level <= t.Stats[3] - 18)
-            {
-                return true;
-            }
+            return true;
         }
-        if (t.IsUndead && (mind || (e.Flags & 0x0100) != 0 || (e.Flags & SpellFlags.Summons) != 0))
+        bool mind = (e.Flags & SpellFlags.MindAffecting) != 0;
+        int spellLevel = e.Number > Spellcasting.LastPower ? 3 : Spellcasting.Get(e.Number) is { Kind: not SpellKind.Psionic } s ? s.Level : 0;
+        if (spellLevel > 0 && (mind && spellLevel <= t.Stats[4] - 18 || (e.Flags & SpellFlags.Illusion) != 0 && spellLevel <= t.Stats[3] - 18))
+        {
+            return true;
+        }
+        if (t.IsUndead && (mind || (e.Elements & (DamageElement.Negative | DamageElement.Poison)) != 0))
         {
             return true;
         }
@@ -186,8 +288,10 @@ public sealed partial class Battle
                 return true;
             }
         }
-        return e.Number == 25 && t.Type == 12;
+        return e.Number == 25 && t.Type == 12 || e.Number == GraftWeapon && t.Has(Condition.GraftWeapon);
     }
+
+    public const int MagicMissile = 9, Disintegrate = 140, GraftWeapon = 156;
 
     /// <summary>
     /// <paramref name="t"/>'s magic resistance against <paramref name="e"/>
@@ -224,12 +328,9 @@ public sealed partial class Battle
     /// for the paralysed or those down. The save is the target's, by the effect's
     /// category (<see cref="SpellRules.SaveCategories"/>). A 1 fails, a 20 saves;
     /// otherwise the d20 (doubled against fire, cold and electricity, as the
-    /// original does) + the bonus + the effect's modifier must reach it. The
-    /// bonus (part of <c>80F5:119C</c>): Wisdom's magical defence against mind
-    /// spells, Dexterity against areas, Constitution against poison (dwarves and
-    /// halflings Con × 2 / 7 more), and 4 against fear for the Brave.
+    /// original does) + the effect's modifier + <see cref="SaveBonus"/> must reach it.
     /// </summary>
-    public bool Saved(Combatant t, SpellEffect e)
+    public bool Saved(Combatant t, SpellEffect e, Combatant? caster = null, int level = 1)
     {
         if (e.SaveAllowed == 0 || e.SaveCategory == 6 || t.Has(Condition.Paralyzed) || t.Vitals.Status == Vitals.Down)
         {
@@ -246,26 +347,113 @@ public sealed partial class Battle
         {
             roll *= 2;
         }
-        int bonus = e.SaveModifier;
-        if ((e.Flags & SpellFlags.MindAffecting) != 0)
+        return (byte)(roll + e.SaveModifier + SaveBonus(t, e, caster, level, save)) >= score;
+    }
+
+    public const int Scare = 22, Chaos = 57, Cloudkill = 58, Dismissal = 61;
+
+    /// <summary>
+    /// What adds to <paramref name="t"/>'s save (<c>80F5:119C</c>): −1 with the
+    /// save penalty; Spirit Armor +3 (not on the paralysation save), Barkskin +1,
+    /// Bless +1; Protection from Evil +2 against an evil caster; Protection from
+    /// Lightning +4, from Cold and from Fire +3 against their element; Prayer +1
+    /// when its priest is on its side, −1 when not; +4 against a small spell from
+    /// a caster who can't see it; Brave +4 against flag 0x100 (spends a charge);
+    /// a druid +2 against fire and electricity; a psionicist +2 against mind and
+    /// charm effects; Dexterity's adjustment against flag 0x40 and Wisdom's
+    /// magical defence against flags 0x1E; on the paralysation save Constitution's
+    /// poison adjustment, and a dwarf's or halfling's Con × 2 ÷ 7. No save
+    /// against Chaos without a warrior's levels, nor against Cloudkill below
+    /// level 7; Dismissal adds the target's level less the caster's; Scare
+    /// can't miss below level 6 and can't land from 6.
+    /// </summary>
+    public int SaveBonus(Combatant t, SpellEffect e, Combatant? caster, int level, int save)
+    {
+        if (e.Number == Scare)
         {
-            bonus += AbilityTables.WisDefence(t.Stats[4]);
+            return t.Level < 6 ? -100 : 100;
         }
-        if (!e.SingleTarget)
+        int b = 0;
+        if (t.Has(Condition.SavePenalty))
         {
-            bonus -= AbilityTables.DexAc(t.Stats[1]);
+            b--;
         }
-        if ((e.Elements & DamageElement.Poison) != 0)
+        if (t.Has(Condition.SpiritArmor) && save != 1)
         {
-            bonus += AbilityTables.ConPoison(t.Stats[2]) + (t.Race is 2 or 6 ? t.Stats[2] * 2 / 7 : 0);
+            b += 3;
         }
-        if ((e.Flags & SpellFlags.Fear) != 0 && t.Has(Condition.Brave))
+        if (t.Has(Condition.Barkskin))
         {
-            bonus += 4;
+            b++;
+        }
+        if (t.Has(Condition.Blessed))
+        {
+            b++;
+        }
+        if (t.Has(Condition.ProtectionFromEvil) && caster is { Alignment: 3 or 6 or 9 })
+        {
+            b += 2;
+        }
+        if ((e.Elements & DamageElement.Electricity) != 0 && t.Has(Condition.ProtectionFromLightning))
+        {
+            b += 4;
+        }
+        if ((e.Elements & DamageElement.Cold) != 0 && t.Has(Condition.ProtectionFromCold))
+        {
+            b += 3;
+        }
+        if ((e.Elements & DamageElement.Fire) != 0 && t.Has(Condition.ProtectionFromFire))
+        {
+            b += 3;
+        }
+        if (t.Effects.FirstOrDefault(x => x.Condition == Condition.Prayer) is { Caster: { } priest })
+        {
+            b += priest.Side == t.Side ? 1 : -1;
+        }
+        if (caster is not null && e.AreaSize(1) < 9 && CantSee(caster, t))
+        {
+            b += 4;
+        }
+        if ((e.Flags & SpellFlags.BraveSave) != 0 && t.Has(Condition.Brave))
+        {
+            b += 4;
             UseCharge(t, Condition.Brave);
         }
-        return (byte)(roll + bonus) >= score;
+        if ((e.Elements & (DamageElement.Fire | DamageElement.Electricity)) != 0 && Enumerable.Range(5, 4).Any(code => t.LevelIn(code) > 0))
+        {
+            b += 2;
+        }
+        if (t.LevelIn(Psionicist) > 0 && (e.Flags & (SpellFlags.Mind | SpellFlags.CharmOrHold)) != 0)
+        {
+            b += 2;
+        }
+        if ((e.Flags & SpellFlags.DexteritySave) != 0)
+        {
+            b -= AbilityTables.DexAc(t.Stats[1]);
+        }
+        if ((e.Flags & SpellFlags.WisdomSave) != 0)
+        {
+            b += AbilityTables.WisDefence(t.Stats[4]);
+        }
+        if (save == 1)
+        {
+            b += AbilityTables.ConPoison(t.Stats[2]) + (t.Race is 2 or 6 ? t.Stats[2] * 2 / 7 : 0);
+        }
+        if (e.Number == Chaos && !Warriors.Any(code => t.LevelIn(code) > 0) || e.Number == Cloudkill && t.Level < 7)
+        {
+            b -= 100;
+        }
+        if (e.Number == Dismissal)
+        {
+            b += t.Level - level;
+        }
+        return b;
     }
+
+    private const int Psionicist = 12;
+
+    /// <summary>Fighters, gladiators and rangers: the classes Chaos allows a save (<c>80F5:3589</c>).</summary>
+    private static readonly int[] Warriors = [9, 10, 13, 14, 15, 16];
 
     // -- conditions, durations and charges ----------------------------------------------------------
 
@@ -288,18 +476,24 @@ public sealed partial class Battle
 
     /// <summary>
     /// A condition on a failed save (<c>7D80:1301</c>, <c>8053:03C0</c>): blocked
-    /// by what prevents it (Free Action against Stuck, Paralyzed and Slowed;
-    /// Protection from Paralysis against Paralyzed; ability bit 9 against Stuck)
-    /// or cancelling its opposite instead (Bless and Curse, Haste and Slow,
-    /// Brave and Afraid). A timed condition replaces the same one; charges
-    /// (unit −1) are counted, not timed. Paralyzed and Stuck stop movement.
+    /// by what prevents it (Free Action and Protection from Paralysis against
+    /// Slowed, and against Paralyzed unless it comes with poison; Free Action and
+    /// ability bit 9 against Stuck) or cancelling its opposite instead (Bless and
+    /// Curse, Haste and Slow, Brave and Afraid). A timed condition replaces the
+    /// same one; charges (unit −1) are counted, not timed. One from a field with
+    /// no time of its own lasts while its holder stays in it. Paralyzed ends the
+    /// holder's turn, Paralyzed and Stuck stop movement, Can't Attack stops
+    /// attacks; Charmed takes it to the caster's side.
     /// </summary>
-    public bool AddCondition(Combatant? caster, Combatant t, SpellEffect e, int level)
+    public bool AddCondition(Combatant? caster, Combatant t, SpellEffect e, int level, int value = 0, AreaField? field = null) =>
+        AddCondition(caster, t, e.Condition, e.Number, level, Duration(e, level), e.UsesCharges, value, field);
+
+    private bool AddCondition(Combatant? caster, Combatant t, Condition c, int number, int level, int duration, bool charges = false,
+        int value = 0, AreaField? field = null)
     {
-        Condition c = e.Condition;
-        if (c == Condition.Stuck && (t.Has(Condition.FreeAction) || Creatures.HasAbility(t.Type, CreatureAbilityBit.NotStuck))
-            || c is Condition.Paralyzed && (t.Has(Condition.FreeAction) || t.Has(Condition.ProtectionFromParalysis))
-            || c is Condition.Slowed && t.Has(Condition.FreeAction))
+        bool freed = t.Has(Condition.FreeAction) || t.Has(Condition.ProtectionFromParalysis);
+        if (c == Condition.Paralyzed && !t.Has(Condition.Poisoned) && freed || c == Condition.Slowed && freed
+            || c == Condition.Stuck && (t.Has(Condition.FreeAction) || Creatures.HasAbility(t.Type, CreatureAbilityBit.NotStuck)))
         {
             Note(new Avoided(caster, t, "free"));
             return false;
@@ -319,16 +513,15 @@ public sealed partial class Battle
             EndCondition(t, o);
             return false;
         }
-        int duration = Duration(e, level);
-        if (duration == 0)
+        if (duration == 0 && field is null)
         {
             return false;
         }
-        if (!e.UsesCharges)
+        if (!charges)
         {
             EndCondition(t, c);
         }
-        var effect = new ActiveEffect(e.Number, c, level, caster);
+        var effect = new ActiveEffect(number, c, level, caster) { Value = value, Field = field };
         if (duration < 0 && duration != SpellEffect.Permanent)
         {
             effect.Charges = -duration;
@@ -338,9 +531,28 @@ public sealed partial class Battle
             effect.EndsAt = Clock + duration;
         }
         t.Effects.Add(effect);
-        if (c is Condition.Paralyzed or Condition.Stuck)
+        switch (c)
         {
-            t.Flags &= ~TurnFlags.MayMove;
+            case Condition.Paralyzed:
+                t.Flags = TurnFlags.None;
+                t.Guarding = false;
+                break;
+            case Condition.Stuck:
+                t.Flags &= ~TurnFlags.MayMove;
+                break;
+            case Condition.CantAttack:
+                t.Flags &= ~TurnFlags.MayAttack;
+                t.Guarding = false;
+                break;
+            case Condition.Charmed:
+                t.Side = caster?.Side ?? 1;
+                t.Target = null;
+                Note(new SideChanged(t, t.Side));
+                break;
+            case Condition.ExtraHitPoints:
+                t.Vitals.MaxHp += value;
+                t.Vitals.Hp += value;
+                break;
         }
         Note(new ConditionGained(t, c));
         return true;
@@ -364,26 +576,55 @@ public sealed partial class Battle
         }
     }
 
+    /// <summary>
+    /// An effect ending (<c>8053:066F</c>): a charm's end takes its holder back to
+    /// its own side; Lent Strength's end ends the Strength it lent; extra hit
+    /// points go. Berserk's and Confused's random side ends with them too (in the
+    /// original it stays).
+    /// </summary>
     private void EndEffect(Combatant t, ActiveEffect e)
     {
-        if (t.Effects.Remove(e))
+        if (!t.Effects.Remove(e))
         {
-            Note(new ConditionEnded(t, e.Condition));
+            return;
+        }
+        Note(new ConditionEnded(t, e.Condition));
+        switch (e.Condition)
+        {
+            case Condition.Charmed or Condition.Berserk or Condition.Confused
+                when !t.Has(Condition.Charmed) && !t.Has(Condition.Berserk) && !t.Has(Condition.Confused) && t.Side != t.HomeSide:
+                t.Side = t.HomeSide;
+                t.Target = null;
+                Note(new SideChanged(t, t.Side));
+                break;
+            case Condition.StrengthLent:
+                foreach (Combatant other in _all)
+                {
+                    if (other.Effects.FirstOrDefault(b => b.Condition == Condition.StrengthBorrowed && b.Caster == t) is { } borrowed)
+                    {
+                        EndEffect(other, borrowed);
+                    }
+                }
+                break;
+            case Condition.ExtraHitPoints:
+                t.Vitals.MaxHp = Math.Max(1, t.Vitals.MaxHp - e.Value);
+                t.Vitals.Hp = Math.Min(t.Vitals.Hp, t.Vitals.MaxHp);
+                break;
         }
     }
 
     /// <summary>
     /// A combatant's effects each round (<c>8053:0163</c>): regeneration (ability
     /// bit 17, up to its most hit points), a Poisoned charge (1000 damage when the
-    /// last goes) and an Acid charge with 2d4 damage.
+    /// last goes), an Acid charge with 2d4 damage, and Protection from Evil 10'
+    /// Radius giving Protection from Evil (effect 122) to its side within 40
+    /// sixteenths.
     /// </summary>
     private void RoundEffects(Combatant c)
     {
         if (Creatures.HasAbility(c.Type, CreatureAbilityBit.Regenerates) && c.Vitals.Hp < c.Vitals.MaxHp)
         {
-            int gain = Math.Min(Rules.Regeneration, c.Vitals.MaxHp - c.Vitals.Hp);
-            c.Vitals.Hp += gain;
-            Note(new Healed(c, gain));
+            Heal(c, Rules.Regeneration);
         }
         if (c.Has(Condition.Poisoned))
         {
@@ -398,7 +639,18 @@ public sealed partial class Battle
             UseCharge(c, Condition.Acid);
             Hurt(null, c, RollDice(2, 4));
         }
+        if (c.Alive && c.Has(Condition.ProtectionFromEvil10) && Spells.Effect(ProtectionFromEvil10) is { } aura)
+        {
+            var (x, y) = Centre(c.Cell);
+            foreach (Combatant ally in _all.Where(a => a.Alive && a != c && (a.Side & c.Side & 7) != 0
+                && Distance16(x, y, Centre(a.Cell).X, Centre(a.Cell).Y) <= 40).ToList())
+            {
+                AddCondition(c, ally, Condition.ProtectionFromEvil, aura.Number, c.Level, SpellEffect.Round);
+            }
+        }
     }
+
+    public const int ProtectionFromEvil10 = 122;
 
     /// <summary>
     /// The mind for this round (<c>8053:000E</c>): Afraid flees (1); Berserk
@@ -414,6 +666,7 @@ public sealed partial class Battle
         int Berserk()
         {
             c.Side = Roll(1, 2);
+            c.Target = null;
             return 7;
         }
         if (c.Has(Condition.Berserk))
@@ -439,26 +692,173 @@ public sealed partial class Battle
         return c.Mind;
     }
 
+    /// <summary>Hit points back, up to its most (<c>80F5:307D</c>).</summary>
+    public void Heal(Combatant t, int amount)
+    {
+        amount = Math.Min(amount, t.Vitals.MaxHp - t.Vitals.Hp);
+        if (amount > 0 && t.Alive)
+        {
+            t.Vitals.Hp += amount;
+            Note(new Healed(t, amount));
+        }
+    }
+
     // -- effects' own handling (80F5:05E6) ----------------------------------------------------------------
 
-    private void Special(Combatant caster, Combatant t, SpellEffect e, int level)
+    /// <summary>
+    /// What a record alone doesn't say (<c>80F5:05E6</c>, by effect): the cures;
+    /// Dispel Magic (each effect, 50 in 100 + 5 a level the caster has over its
+    /// caster); effect 195; Haste and Slow at once on this round's movement;
+    /// Strength and Adrenalin Control (+1d6 Strength), Share Strength, Remove
+    /// Curse (Strength back), the shadows' touch, Chill Touch and effect 184
+    /// (Weakened); Aid (1d8 extra hit points); Vampiric Touch and Life Draining
+    /// (hit points drained to the caster); Cell Adjustment, Lend Health, Blood
+    /// Flow; Absorb Disease; Free Action, Remove Paralysis, Protection from
+    /// Paralysis; Glitterdust (ends invisibility); Insect Plague (no spells for a
+    /// round); Psionic Blast (to a fifth of its hit points); Slay Living and
+    /// Disintegrate; Dismissal and Abjure; Turn Undead; Raise Dead; Detonate and
+    /// the corroding touches.
+    /// </summary>
+    private void Special(Combatant caster, Combatant t, SpellEffect e, int level, bool saved)
     {
+        int duration = Duration(e, level);
         switch (e.Number)
         {
-            case var n when Healing.Contains(n):
-                var (dice, flat) = e.DamageAt(level);
-                int heal = Math.Min(RollDice(dice, e.Sides) + flat, t.Vitals.MaxHp - t.Vitals.Hp);
-                if (heal > 0)
-                {
-                    t.Vitals.Hp += heal;
-                    Note(new Healed(t, heal));
-                }
+            case 72:
+                Heal(t, RollDice(1, 8));
+                break;
+            case 113:
+                Heal(t, RollDice(2, 8) + 1);
+                break;
+            case 128:
+                Heal(t, RollDice(3, 8) + 3);
+                break;
+            case 152:
+                Heal(t, 2);
                 break;
             case var n when Dispelling.Contains(n):
-                foreach (ActiveEffect a in t.Effects.Where(a => !a.Permanent).ToList())
+                foreach (ActiveEffect a in t.Effects.Where(a => !Undispellable.Contains(a.Condition)).ToList())
+                {
+                    if (Roll(1, 100) <= Rules.DispelChance + 5 * level - 5 * a.Level)
+                    {
+                        EndEffect(t, a);
+                    }
+                }
+                break;
+            case RemoveAfflictions:
+                foreach (ActiveEffect a in t.Effects.Where(a => Afflictions.Contains(a.Condition)).ToList())
                 {
                     EndEffect(t, a);
                 }
+                break;
+            case 30 or 38 when t.Has(e.Condition):
+                t.MovementPoints = e.Condition == Condition.Hasted
+                    ? Math.Min(t.MovementPoints * 2, t.Move * Rules.MovementPerMove * 2)
+                    : t.MovementPoints / 2;
+                break;
+            case 133:
+                AddCondition(caster, t, Condition.NoSpells, e.Number, level, SpellEffect.Round);
+                break;
+            case 21 or 106 or 118:
+                EndCondition(t, Condition.Slowed);
+                if (!t.Has(Condition.Poisoned))
+                {
+                    EndCondition(t, Condition.Paralyzed);
+                }
+                break;
+            case 17:
+                EndCondition(t, Condition.Invisible);
+                break;
+            case 148:
+                // Absorb Disease takes the disease, then (falling through, as the
+                // original does) gives Strength's +1d6 as well.
+                if (t.Has(Condition.Diseased))
+                {
+                    AddCondition(t, caster, Condition.Diseased, e.Number, level, duration);
+                    EndCondition(t, Condition.Diseased);
+                }
+                AddCondition(caster, t, Condition.Strength, e.Number, level, duration, value: RollDice(1, 6));
+                break;
+            case 24 or 149:
+                AddCondition(caster, t, e.Number == 149 ? Condition.AdrenalinControl : Condition.Strength, e.Number, level, duration,
+                    value: RollDice(1, 6));
+                break;
+            case 158:
+                int lent = Math.Min(24 - t.Strength, (caster.Strength - 3) / 2);
+                if (lent > 0)
+                {
+                    AddCondition(caster, t, Condition.StrengthBorrowed, e.Number, level, duration, value: lent);
+                    AddCondition(caster, caster, Condition.StrengthLent, e.Number, level, duration, value: -2 * lent);
+                }
+                break;
+            case 104:
+                EndCondition(t, Condition.Weakened);
+                break;
+            case 173:
+                AddCondition(caster, t, Condition.Weakened, e.Number, level, duration, value: -1);
+                break;
+            case 157:
+                int lend = Math.Min(t.Vitals.MaxHp - t.Vitals.Hp, caster.Vitals.Hp - 5);
+                if (lend > 0)
+                {
+                    Heal(t, lend);
+                    caster.Vitals.Hp -= lend;
+                }
+                break;
+            case 109:
+                if (t.Side == caster.Side)
+                {
+                    Heal(t, RollDice(2, 6));
+                }
+                else if (!saved)
+                {
+                    AddCondition(caster, t, Condition.Paralyzed, e.Number, level, duration);
+                }
+                break;
+            case 81:
+                AddCondition(caster, t, Condition.ExtraHitPoints, e.Number, level, 600, value: RollDice(1, 8));
+                break;
+            case VampiricTouch or 147:
+                int drained = Math.Min(t.Vitals.Hp, e.Number == VampiricTouch ? RollDice(Math.Max(1, level / 2), 6) : RollDice(1, 6));
+                Hurt(caster, t, drained);
+                AddCondition(caster, caster, Condition.ExtraHitPoints, e.Number, level, 600, value: drained);
+                break;
+            case 170 when !saved:
+                Hurt(caster, t, t.Vitals.Hp - t.Vitals.MaxHp * 2 / 10);
+                break;
+            case 80 or 86 or 90 when caster.Weapon is null:
+                // The conjured weapon itself (items 0x7548–0x754A) isn't made here.
+                AddCondition(caster, caster, e.Number switch { 80 => Condition.Shillelagh, 86 => Condition.FlameBlade, _ => Condition.SpiritualHammer },
+                    e.Number, level, duration);
+                break;
+            case Dismissal or 108 when t.Race == 14 && Roll(1, 20) >= 11 - level + t.Level:
+                Hurt(caster, t, 1000);
+                break;
+            case TurnUndead when t.IsUndead:
+                if (Roll(1, 20) >= TurnNeeded(t.Level, level))
+                {
+                    Hurt(caster, t, 1000);
+                }
+                break;
+            case RaiseDead when t.Vitals.Status == Vitals.Dead:
+                if (t.Stats[2] > 0)
+                {
+                    t.Stats[2]--;
+                    t.Vitals.Status = Vitals.Well;
+                    t.Vitals.Hp = 1;
+                    Note(new Healed(t, 1));
+                }
+                else
+                {
+                    t.Vitals.Status = Vitals.Destroyed;
+                }
+                break;
+            case 139:
+                if (Spells.Effect(DetonateShrapnel) is { } shrapnel)
+                {
+                    Apply(caster, t, shrapnel, level);
+                }
+                BreakItem(t);
                 break;
             case 179 or 187:
                 CorrodeArmor(t);
@@ -466,10 +866,42 @@ public sealed partial class Battle
             case 188:
                 CorrodeWeapon(t);
                 break;
-            case 139:
-                BreakItem(t);
+        }
+        if (saved || !t.Alive)
+        {
+            return;
+        }
+        switch (e.Number)
+        {
+            case 4:
+                AddCondition(caster, t, Condition.Weakened, e.Number, level, duration, value: -1);
+                break;
+            case 184:
+                AddCondition(caster, t, Condition.Weakened, e.Number, level, duration, value: -5);
+                break;
+            case 137:
+                Hurt(caster, t, 1000);
+                break;
+            case Disintegrate:
+                Hurt(caster, t, 10000);
                 break;
         }
+    }
+
+    public const int TurnUndead = 191, DetonateShrapnel = 196;
+
+    /// <summary>
+    /// What a d20 must reach for Turn Undead to destroy an undead
+    /// (<c>80F5:2217</c>): (its level, +1 above 4, at most 13, less the priest's,
+    /// at most 14, −1 above 10, −2 above 12) × 3 + 10, 22 counting as 20.
+    /// </summary>
+    public static int TurnNeeded(int undeadLevel, int priestLevel)
+    {
+        int u = undeadLevel > 4 ? Math.Min(undeadLevel + 1, 13) : undeadLevel;
+        int p = Math.Min(priestLevel, 14);
+        p = p > 12 ? p - 2 : p > 10 ? p - 1 : p;
+        int needed = (u - p) * 3 + 10;
+        return needed == 22 ? 20 : needed;
     }
 
     /// <summary>

@@ -47,6 +47,9 @@ public sealed record CharacterRecord(byte Size, ushort DifficultyScaled, byte[] 
     /// <summary>+0x18: race (1 human … 8 thri-kreen; creatures use other numbers too).</summary>
     public byte Race => Bytes[0x18];
 
+    /// <summary>+0x1A: alignment, 1–9; 3, 6 and 9 are evil (<c>80F5:377E</c>, Protection from Evil).</summary>
+    public byte Alignment => Bytes[0x1A];
+
     /// <summary>+0x21–0x23: class codes (0 none).</summary>
     public ReadOnlySpan<byte> ClassCodes => Bytes.AsSpan(0x21, 3);
 
@@ -78,6 +81,9 @@ public sealed record CharacterRecord(byte Size, ushort DifficultyScaled, byte[] 
 
     /// <summary>+0x37–0x3B: saving throws (paralysation, rod, petrification, breath, spell).</summary>
     public ReadOnlySpan<byte> Saves => Bytes.AsSpan(0x37, 5);
+
+    /// <summary>+0x3C: its own allegiance, which it goes back to when a charm ends (<c>8053:066F</c>).</summary>
+    public byte HomeAllegiance => Bytes[0x3C];
 
     /// <summary>
     /// +0x3E: the spells a creature casts, 0 none: a row of 7 at <c>3FB9:0110</c>

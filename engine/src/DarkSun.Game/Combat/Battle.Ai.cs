@@ -70,7 +70,7 @@ public sealed partial class Battle
             + w.Bonus * k.ItemBonus + (w.ScoresAsMagic ? k.Magic : 0);
         return w.IsMissile
             ? score * Math.Max(1, (int)w.Type.Attacks)
-            : (score + AbilityTables.StrDamage(c.Stats[0]) + k.Material * w.MaterialDamage) * c.AttackHalves;
+            : (score + AbilityTables.StrDamage(c.Strength) + k.Material * w.MaterialDamage) * c.AttackHalves;
     }
 
     /// <summary>
@@ -160,7 +160,8 @@ public sealed partial class Battle
         {
             TargetChoice.Nearest => enemies.MinBy(e => Distance(c, e)),
             TargetChoice.Weakest => enemies.MinBy(e => (e.Vitals.Hp, Distance(c, e))),
-            TargetChoice.Casters => enemies.Where(e => e.Spells.Count > 0 || e.Psp > 0).MinBy(e => Distance(c, e)) ?? enemies.MinBy(e => Distance(c, e)),
+            TargetChoice.Casters => enemies.Where(e => e.Spells.Count > 0 || e.SpellSet > 0 || e.Psp > 0).MinBy(e => Distance(c, e))
+                ?? enemies.MinBy(e => Distance(c, e)),
             _ => enemies[Roll(0, enemies.Count - 1)],
         };
     }
@@ -184,6 +185,7 @@ public sealed partial class Battle
     private bool TrySpells(Combatant c, Combatant target, out bool goesOn)
     {
         goesOn = false;
+        CastsFor(c);
         if (c.TriedSpells || c.Stats[3] <= Rules.SpellIntelligence || c.CurrentMind == CombatRecord.MindFlees || c.Spells.Count == 0
             || c.Has(Condition.NoSpells))
         {
@@ -248,9 +250,8 @@ public sealed partial class Battle
 
     /// <summary>
     /// Psionics (<c>6466:0453</c>, monsters only): a power drawn at random from
-    /// its set, used on the target in sight and range if it has the points; the
-    /// power check is d20 ≤ ability + modifier (a 20 fails, <c>6698:0CED</c>), and
-    /// the cost is paid either way.
+    /// its set, used on the target in sight and range if it has the points
+    /// (<see cref="UsePower"/>).
     /// </summary>
     private bool TryPsionics(Combatant c, Combatant target)
     {
@@ -270,16 +271,196 @@ public sealed partial class Battle
         {
             return false;
         }
-        c.Psp -= power.Cost;
-        int roll = Roll(1, 20);
-        if (roll == 20 || roll > c.Stats[Math.Clamp(power.Ability, 0, 5)] + power.Modifier)
+        UsePower(c, number, e.Target is 7 or 8 ? c.Cell : target.Cell);
+        return true;
+    }
+
+    /// <summary>
+    /// A psionic power (<c>6698:0280</c>): it costs its record's points (Enhanced
+    /// Strength (24 − Strength) × 2; the dominations 3, 8, 13 or 18 by the
+    /// target's level), and needs a power check (<see cref="PowerCheck"/>). A
+    /// failed check costs half; a success the whole, and the power acts. A party
+    /// member keeps up a power with a maintenance cost (<see cref="KeepUpPowers"/>).
+    /// The turn ends either way. False: not enough points.
+    /// </summary>
+    public bool UsePower(Combatant c, int number, Cell at)
+    {
+        if (Spells.Power(number) is not { } power || Spells.Effect(number) is not { } e)
         {
-            Note(new Avoided(c, target, "power failed"));
+            return false;
+        }
+        int cost = number switch
+        {
+            154 => (24 - c.Strength) * 2,
+            159 or 160 => At(at)?.Level switch { < 6 => 3, < 11 => 8, < 16 => 13, _ => 18 },
+            _ => power.Cost,
+        };
+        if (Math.Max(0, cost) > c.Psp)
+        {
+            return false;
+        }
+        _powerRoll = PowerCheck(c, power);
+        if (_powerRoll <= 0)
+        {
+            Note(new Avoided(c, c, _powerRoll < 0 ? "psionics blocked" : "power failed"));
+            c.Psp -= power.Cost / 2;
             EndTurn(c);
             return true;
         }
-        Cell at = e.Target is 7 or 8 ? c.Cell : target.Cell;
-        return Cast(c, number, c.Level, at);
+        c.Psp -= Math.Max(0, cost);
+        if (c.PartyMember && power.Maintenance != NoMaintenance)
+        {
+            c.Maintained.Add(number);
+        }
+        Cast(c, number, c.Level, at);
+        _powerRoll = 0;
+        return true;
+    }
+
+    private const int NoMaintenance = 99;
+
+    /// <summary>The successful power check's roll, which a psionic defence must beat (<c>DS:47F0:0076</c>).</summary>
+    private int _powerRoll;
+
+    /// <summary>
+    /// The power check (<c>6698:0CED</c>): d20 ≤ the ability + the power's
+    /// modifier succeeds (a 20 always fails, a 1 always succeeds); the result is
+    /// the roll, 0 a failure. While someone else keeps Synaptic Static up,
+    /// psionics are blocked (−1) unless the user beats it: d20 ≤ 1, and the
+    /// holder's d20 over its Intelligence + Synaptic Static's modifier or under
+    /// the user's. The holder itself can use none.
+    /// </summary>
+    public int PowerCheck(Combatant c, PsionicPower power)
+    {
+        if (_all.FirstOrDefault(o => o.Alive && o.Has(Condition.SynapticStatic)) is { } holder)
+        {
+            if (holder == c)
+            {
+                return -1;
+            }
+            int mine = Roll(1, 20), theirs = Roll(1, 20);
+            int static_ = holder.Stats[3] + (Spells.Power(SynapticStatic)?.Modifier ?? 0);
+            if (mine > 1 || theirs <= static_ && theirs >= mine)
+            {
+                return -1;
+            }
+        }
+        int score = c.Stats[Math.Clamp(power.Ability, 0, 5)] + power.Modifier;
+        int roll = Roll(1, 20);
+        return roll == 20 ? 0 : roll <= score || roll == 1 ? roll : 0;
+    }
+
+    public const int SynapticStatic = 171;
+
+    /// <summary>
+    /// A psionic attack on <paramref name="t"/> (effects of the psionic element,
+    /// <c>6698:0E68</c>): its defence is Wisdom − 7; a party member's best defence
+    /// mode kept up (1 + its cost ÷ 2, if better and paid for again now), a
+    /// monster's level if better; at least 1. It holds when two rolls of 1 … the
+    /// defence both beat the attacker's power check.
+    /// </summary>
+    public bool PsionicDefence(Combatant t)
+    {
+        int defence = t.Stats[4] - 7;
+        if (t.PartyMember)
+        {
+            PsionicPower? best = null;
+            foreach (PsionicPower p in t.Maintained.Select(n => Spells.Power(n)).OfType<PsionicPower>().Where(p => p.AttackMode == DefenceMode))
+            {
+                if (1 + p.Cost / 2 > defence && p.Cost <= t.Psp)
+                {
+                    (best, defence) = (p, 1 + p.Cost / 2);
+                }
+            }
+            t.Psp -= best?.Cost ?? 0;
+        }
+        else
+        {
+            defence = Math.Max(defence, t.Level);
+        }
+        defence = Math.Max(1, defence);
+        return _powerRoll < Roll(1, defence) && _powerRoll < Roll(1, defence);
+    }
+
+    /// <summary>Power record +5 for the defence modes (254).</summary>
+    private const int DefenceMode = -2;
+
+    /// <summary>
+    /// Each round, a party member pays for the powers it keeps up (<c>6698:04C7</c>);
+    /// one it can't pay for ends with its effects (<c>6698:060D</c>).
+    /// </summary>
+    private void KeepUpPowers(Combatant c)
+    {
+        foreach (int number in c.Maintained.ToList())
+        {
+            if (Spells.Power(number) is { } p && p.Maintenance <= c.Psp)
+            {
+                c.Psp -= p.Maintenance;
+                continue;
+            }
+            c.Maintained.Remove(number);
+            foreach (ActiveEffect e in c.Effects.Where(e => e.Effect == number).ToList())
+            {
+                EndEffect(c, e);
+            }
+        }
+    }
+
+    /// <summary>
+    /// A creature's casts, counted the first time it thinks of a spell
+    /// (<c>6798:0000</c>, <c>6798:0059</c>): its spells per spell level by
+    /// <see cref="CombatRules.SpellSlots"/>, scaled by its hit points ÷ its most,
+    /// then dealt a cast at a time to the spells of its set (in order, round and
+    /// round) while their levels have any left. A combatant given
+    /// <see cref="Combatant.Spells"/> keeps them.
+    /// </summary>
+    public void CastsFor(Combatant c)
+    {
+        if (c.SpellsCounted)
+        {
+            return;
+        }
+        c.SpellsCounted = true;
+        IReadOnlyList<int> set = Creatures.SpellsOf(c.SpellSet);
+        if (c.Spells.Count > 0 || set.Count == 0)
+        {
+            return;
+        }
+        long health = ((long)c.Vitals.Hp << 8) / Math.Max(1, c.Vitals.MaxHp);
+        int[] left = new int[10];
+        for (int level = 1; level < 10; level++)
+        {
+            int slots = 0;
+            for (int i = 0; i < c.Classes.Count; i++)
+            {
+                var (code, classLevel) = c.Classes[i];
+                if (i > 0 && c.Race == 1 && classLevel >= c.Classes[0].Level)
+                {
+                    continue;
+                }
+                slots += Rules.SpellSlots.Where(r => r.Classes.Contains(code)).Sum(r => r.Slots(r.Wisdom ? c.Stats[4] : classLevel, level));
+            }
+            left[level] = (int)(slots * health >> 8);
+        }
+        int[] casts = new int[set.Count];
+        bool dealt = true;
+        while (dealt)
+        {
+            dealt = false;
+            for (int i = 0; i < set.Count; i++)
+            {
+                if (Spellcasting.Get(set[i]) is { Level: > 0 and < 10 } spell && left[spell.Level] > 0)
+                {
+                    left[spell.Level]--;
+                    casts[i]++;
+                    dealt = true;
+                }
+            }
+        }
+        for (int i = 0; i < set.Count; i++)
+        {
+            c.Spells.AddRange(Enumerable.Repeat(set[i], casts[i]));
+        }
     }
 
     /// <summary>Order mode 0xF: to a free cell next to the target; if it can't move, the nearest enemy it sees becomes the target.</summary>

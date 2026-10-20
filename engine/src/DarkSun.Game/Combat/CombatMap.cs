@@ -78,3 +78,12 @@ public sealed record Waited(Combatant Actor) : CombatEvent;
 
 /// <summary>Down (3), dead (5) or destroyed (8).</summary>
 public sealed record Fell(Combatant Actor, int Status) : CombatEvent;
+
+/// <summary>A lingering area was laid on the map.</summary>
+public sealed record FieldMade(AreaField Field) : CombatEvent;
+
+/// <summary>A lingering area went: its time ran out, or it was dispelled or burnt away.</summary>
+public sealed record FieldEnded(AreaField Field) : CombatEvent;
+
+/// <summary>A charm or Berserk moved a combatant to another side.</summary>
+public sealed record SideChanged(Combatant Actor, int Side) : CombatEvent;

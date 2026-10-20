@@ -364,15 +364,18 @@ replace them with `rules/creatures.json`.
 Combat itself is `DarkSun.Game.Combat.Battle`, a port of DSUN.EXE's rules that knows nothing of the
 screen (`dsun-exe-reference.md` §8): rounds with initiative and movement points, turns in initiative
 order, GUARD, WAIT and END TURN, attacks (THAC0, armour class, from behind, backstabs, natural
-attacks), spells, psionic powers and monster abilities with their areas, saves, magic resistance and
-resistances, and effects that last rounds or a number of charges (Armor's hits, Mirror Image's
-images, Poison's rounds). A creature's abilities ride on its hits by ability bit (a spider's poison,
+attacks), spells, psionic powers and monster abilities with the original's circles, cones and
+lines, saves with their bonuses, magic resistance, psionic defence and resistances, and effects that
+last rounds or a number of charges (Armor's hits, Mirror Image's images, Poison's rounds). Areas that
+linger (fog, webs, clouds, walls) stay on the map as `Battle.Fields`, acting on whoever enters or
+stays in them; walls block and fog hides. A creature's casts come from its classes and health, a
+charm takes it to the caster's side, and larger creatures stand and reach by their footprint. A creature's abilities ride on its hits by ability bit (a spider's poison,
 a babau corroding armour and weapons), and its immunities keep effects off it. `Battle.RunAi` is the
 original AI (`612E:0BAD`): its steps (spells, ability, psionics, attack, move, missile, guard), their
 order, how it picks a target (at random as in the original, or the nearest, the weakest, casters
 first), its weapon score and the round's numbers are `CombatRules` (`rules/combat.json`); what each
-spell, power and monster effect does is `SpellRules` (`rules/spells.json`, DSUN.EXE's 196 records,
-one a line). `Battle.Log` lists what happened for the combat log. The tactical scene that drives it
+spell, power and monster effect does is `SpellRules` (`rules/spells.json`, DSUN.EXE's 196 records
+and 45 area templates, one a line). `Battle.Log` lists what happened for the combat log. The tactical scene that drives it
 is still to come.
 
 `make engine-mod-rules MOD=mods/MyMod` writes all four rule files (`characters.json`,

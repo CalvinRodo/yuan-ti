@@ -71,7 +71,7 @@ public static class RecordJson
     public static readonly IReadOnlyList<RecordField> CharacterFields =
     [
         new("experience", 0, "s32"), new("experienceValue", 4, "s32"), new("hpBeforeDifficulty", 8, "u16"),
-        new("classBits", 0x12, "u16", typeof(ItemClasses)), new("race", 0x18, "u8"),
+        new("classBits", 0x12, "u16", typeof(ItemClasses)), new("race", 0x18, "u8"), new("alignment", 0x1A, "u8"),
         new("class1", 0x21, "u8"), new("class2", 0x22, "u8"), new("class3", 0x23, "u8"),
         new("level1", 0x24, "u8"), new("level2", 0x25, "u8"), new("level3", 0x26, "u8"),
         new("baseAc", 0x27, "s8"), new("magicResistance", 0x29, "s8"), new("attackHalves", 0x2A, "u8"),
@@ -81,7 +81,7 @@ public static class RecordJson
         new("natural1Bonus", 0x34, "s8"), new("natural2Bonus", 0x35, "s8"), new("natural3Bonus", 0x36, "s8"),
         new("saveParalysis", 0x37, "u8"), new("saveRod", 0x38, "u8"), new("savePetrification", 0x39, "u8"),
         new("saveBreath", 0x3A, "u8"), new("saveSpell", 0x3B, "u8"),
-        new("size", 0x3D, "u8"), new("spellSet", 0x3E, "u8"), new("psionicSet", 0x46, "u8"),
+        new("homeAllegiance", 0x3C, "u8"), new("size", 0x3D, "u8"), new("spellSet", 0x3E, "u8"), new("psionicSet", 0x46, "u8"),
     ];
 
     /// <summary><c>RDAT</c> (<c>RegionInfo</c>): colour cycles as first colour, count, and speed × 10.</summary>

@@ -560,3 +560,22 @@
 80F5:3280	func	is_undead	character record race (+0x18) == 9
 8053:0163	func	round_tick	each round: regeneration (bit 17), poison and acid charges, Prot Evil 10'
 8053:03C0	func	condition_allowed	whether a condition can be added: blocks and cancels (Free Action, bit 9 vs Stuck)
+8BEB:0000	func	area_targets	(caster, record, x, y, mask, list, objects): who (or which field objects) a cast's circle, cone or line covers
+8BEB:0393	func	area_proportions	(record, size, &width, &length, &dx, &dy): template +7/+8 scaling
+8BEB:092D	func	area_size	(record, level, caster x, y, x1, y1, x2, y2, &x, &y, &angle): size, centre and direction of a cast
+612E:2DCC	func	combatants_in_circle	(x, y, radius, mask, sight, list)
+612E:2982	func	combatants_in_cone	(x, y, radius, from angle, to angle, mask, sight, list, caster)
+612E:2A99	func	combatants_in_box	(x1, y1, x2, y2, width, caps, sight, mask, list)
+7D80:05C7	func	field_make	lays a lingering template out as map objects with its time
+7D80:0C6E	func	field_check	(object, tick): entering, staying and leaving fields
+7D80:0F9D	func	field_act	(object, template, level, value, mode, tick): 0 enter, 1 stay, 2 leave
+7D80:09EA	func	field_new_occupants	a new field acts on those in it
+6798:0059	func	creature_casts	a creature's casts from class slots × health, dealt round its spell set
+6798:0B32	func	class_spell_slots	(class code, &levels, spell level): DS:0664 rows of DS:0678
+6698:0E68	func	psionic_defence	(target, elements): resists a 0x400 effect when two rolls beat the power check
+6698:04C7	func	psionic_upkeep	each round, kept-up powers recast and paid, or dropped
+80F5:05E6	func	effect_handler	the 38 per-record handlers (0D96) and 5 failed-save ones (0D32)
+8053:066F	func	condition_ended	charm restores allegiance (+0x3C), lent strength, extra hit points, conjured weapons
+80F5:2217	func	turn_undead	destroys an undead on d20 >= (level - priest) * 3 + 10
+1A0A:2DE6	func	int distance16(int x1, int y1, int x2, int y2)	distance in sixteenths, scaled to 127
+69CB:09D8	func	int angle256(int x1, int y1, int x2, int y2)	0 north, clockwise, 256 a turn
