@@ -1095,6 +1095,62 @@ Wis, Cha; races 1–8 and classes 1–8 in the string table's order), used by
 * The names of genders, races, classes, abilities and alignments are one
   string block at linear `0x52062`, with a far-pointer table to them at
   `0x51F5A`. The roster file is `CHARSAVE.GFF`.
+* In View Character's panel (`APFM` 11269) the 35 slots 11213–11247 hold
+  spells: three rows of seven above, two below. The status line's words
+  include TOGGLE SPELLS & PSIONICS, SELECT SPELL LEVEL, SELECT PSIONIC
+  DISCIPLINE, MEMORIZE SPELLS, "%d LEVEL %d SPELL%s TO CAST", ONLY ACTIVE CHAR
+  CAN CAST, YOU NEED TO REST, CAN'T START THAT PSIONIC (`DS:3026`–`DS:3260`).
+  Learning is `WIND` 17500 ("CHOOSE A SPELL", LEARN, EXIT; `8CCC:0211`).
+  Picking a power is 17501 ("PICK A PSIONIC POWER", `8CCC`). 17502 lists
+  the eight classes (17101–17108), probably a level-up choice. The leader
+  and computer-control buttons say "MAKE %Fs LEADER", "%Fs IS LEADER",
+  "COMPUTER CONTROL IS ON / OFF / LOCKED" (`DS:1AA3`–`DS:1B46`).
+* The inventory (`WIND` 13500 over `BMP` 13001) has six more slots,
+  11242–11247, below SELL (13304). With the store's messages (STORE, NO
+  DEAL!, SOLD!, NOT ENOUGH MONEY, "I'll give you %u$", TAKE IT / LEAVE IT, I
+  COULDN'T SELL THAT, `DS:2ED2`–`DS:2F34`) they are the store's selling
+  slots; the store is `74F1:042B`.
+
+### Spells (`DS:019C`)
+
+* One 7-byte record per spell, 1–138: the level (+0); a caster mask (+1,
+  three bytes and a zero); the name, a `DS` offset (+5). It is read as
+  `*(byte*)(n·7 + 0x19C)` and `*(ulong*)(n·7 + 0x19D) & mask` (`6868:0487`,
+  `612E:2574`, `6527:0459`). The file copy is at `DSUN_FLAT.EXE` offset
+  `0x4D87C`.
+* The mask has bit `code + 1` for each class code of `38D4:00ED`: 1–4
+  cleric of air, earth, fire, water; 5–8 druid; 11 preserver; 13–16 ranger.
+  Bits 0 and 19 come with every wizard spell, and 1 and 20 with every
+  priest spell (likely defiler and templar).
+* Wizard spells 1–69 have levels 1–5 (12, 13, 15, 16, 13 spells); priest
+  spells 70–138 too. Most priest spells are everyone's (`0x13C3FE`). The
+  ones with one element have its sphere only: Magical Stone and Conjure
+  Lesser Earth Elemental are earth, Dust Devil air and earth, Flame Blade
+  fire. At levels 4 and 5 the spells of no one sphere are the druids' alone
+  (`0x1003C2`); clerics get their sphere's.
+* A character's spells per level are kept at `DS:4B08` (wizard) and
+  `DS:4B11` (priest), 0x1E bytes per character, indexed by level. These
+  tables aren't traced. The engine's slots, spellbook sizes and psionic
+  strength follow AD&D 2nd edition (`CharacterRules`). `38D4:013B` holds
+  20, 22, … 34, likely a psionicist's strength points by level.
+
+### Game menu and preferences
+
+* GAME MENU is `WIND` 10500 over `BMP` 10000 ("FATAL: Error loading
+  WIND_GAMEMENU"). Its status line names the buttons (`DS:0C4A`): the
+  character screens (10300, 11304–11306), EXIT TO DOS (10301: "EXIT: SAVE
+  GAME?" SAVE / QUIT / CANCEL), LOAD/SAVE GAME (10302: LOAD/RESTART GAME),
+  SET PREFERENCES (10303), OVERHEAD MAP (10305), CENTER ON LEADER (10306),
+  MOVE, LOOK and ATTACK CURSOR (10310–10312), COLLAPSE PARTY (10313), and
+  RETURN TO GAME (10308). END TURN belongs to combat.
+* Preferences are `WIND` 16500 over the same frame (`870B:0708` names the
+  parts by where the pointer is): MUSIC TOGGLE ON/OFF (16300), MUSIC VOLUME
+  (arrows 16304 / 16305), SOUND EFFECTS ON/OFF (16301) and SOUND EFFECT
+  VOLUME (16306 / 16307), GAME DIFFICULTY (16308 / 16309: EASY, BALANCED,
+  HARD, HIDEOUS), ANIMATIONS ON/OFF (16303), ABOUT (16302), GAME MENU
+  (11308), RETURN TO GAME (10308).
+* Questions use `WIND` 14000 over `BMP` 14000: a title (14004), three
+  choices (14001–14003) and return (10308).
 
 ### Doors
 

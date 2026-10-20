@@ -248,6 +248,26 @@ public class ItemTests
     }
 
     [Fact]
+    public void AStoreSellsAtValueAndBuysAtHalf()
+    {
+        var (w, party) = World();
+        WorldObject merchant = TemplarOf(w);
+        w.Give(1, -Boots, merchant.Index, GameWorld.None);
+        Item boots = merchant.Items.Single();
+
+        Assert.Null(Shop.Buy(w, merchant, w[0]!, boots, 299));
+        Assert.Equal(700, Shop.Buy(w, merchant, w[0]!, boots, 1000));
+        Item bought = party[0].Items.Single();
+
+        Assert.Equal(150, Shop.Offer(bought));
+        Assert.Equal(150, Shop.Sell(w, merchant, w[0]!, [bought]));
+        Assert.Empty(party[0].Items);
+        Assert.Contains(bought, merchant.Items);
+        w.Give(5, -Arrows, 0, GameWorld.None);
+        Assert.Equal(0, Shop.Offer(party[0].Items.Single())); // worth 1: not worth buying
+    }
+
+    [Fact]
     public void ADeadCreatureLeavesABodyWithWhatItCarried()
     {
         var (w, party) = World();

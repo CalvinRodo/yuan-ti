@@ -22,6 +22,10 @@ public enum Discipline { Psychokinesis, Psychometabolism, Telepathy }
 /// <summary>The elemental spheres (<c>ICON</c> 2042–2045).</summary>
 public enum Sphere { Air, Earth, Fire, Water }
 
+public sealed record WisdomBonus(int Wisdom, int Level);
+
+public sealed record SpellbookSize(int Intelligence, int Spells);
+
 /// <param name="HitPointFactor">Hit points are multiplied by this (DSUN.EXE doubles half-giants', <c>6ECD:0156</c>).</param>
 public sealed record RaceRules(
     Race Race, string Name, IReadOnlyList<Gender> Genders, IReadOnlyDictionary<Ability, int> Adjustments,
@@ -103,6 +107,54 @@ public sealed record CharacterRules
     public IReadOnlyList<IReadOnlyList<CharacterClass>> Exclusive { get; init; } = [[CharacterClass.Cleric, CharacterClass.Druid]];
 
     public int MaxClasses { get; init; } = 3;
+
+    // -- spells and psionics (Magic.Spellcasting): AD&D 2nd edition's, where DSUN.EXE's aren't traced --
+
+    /// <summary>Wizard spells per day: row n is preserver level n + 1, column m spell level m + 1.</summary>
+    public IReadOnlyList<IReadOnlyList<int>> WizardSlots { get; init; } =
+    [
+        [1], [2], [2, 1], [3, 2], [4, 2, 1], [4, 2, 2], [4, 3, 2, 1], [4, 3, 3, 2], [4, 3, 3, 2, 1], [4, 4, 3, 2, 2],
+        [4, 4, 4, 3, 3], [4, 4, 4, 4, 4],
+    ];
+
+    /// <summary>Priest spells per day by cleric or druid level.</summary>
+    public IReadOnlyList<IReadOnlyList<int>> PriestSlots { get; init; } =
+    [
+        [1], [2], [2, 1], [3, 2], [3, 3, 1], [3, 3, 2], [3, 3, 2, 1], [3, 3, 3, 2], [4, 4, 3, 2, 1], [4, 4, 3, 3, 2],
+        [5, 4, 4, 3, 2], [6, 5, 5, 3, 2],
+    ];
+
+    /// <summary>A ranger's priest spells by ranger level (none before the 8th).</summary>
+    public IReadOnlyList<IReadOnlyList<int>> RangerSlots { get; init; } =
+    [
+        [], [], [], [], [], [], [], [1], [2], [2, 1], [2, 2], [2, 2, 1],
+    ];
+
+    /// <summary>A priest's extra spells for Wisdom: one of <c>Level</c> from <c>Wisdom</c> up (cumulative).</summary>
+    public IReadOnlyList<WisdomBonus> WisdomBonusSpells { get; init; } =
+        [new(13, 1), new(14, 1), new(15, 2), new(16, 2), new(17, 3), new(18, 4), new(19, 1), new(19, 3), new(20, 2), new(20, 4), new(21, 3), new(21, 5)];
+
+    /// <summary>How many spells of each level a preserver's spellbook holds, by Intelligence.</summary>
+    public IReadOnlyList<SpellbookSize> SpellbookSizes { get; init; } =
+        [new(9, 6), new(10, 7), new(13, 9), new(15, 11), new(17, 14), new(18, 18), new(19, 99)];
+
+    /// <summary>
+    /// A psionicist's psionic strength points by level; past the table,
+    /// <see cref="PspPerLevelAfter"/> more each level. (DSUN.EXE's
+    /// <c>38D4:013B</c> holds 20, 22, … 34, likely this; not traced.)
+    /// </summary>
+    public IReadOnlyList<int> PsionicistPsp { get; init; } = [20, 22, 24, 26, 28, 30, 32, 34];
+
+    public int PspPerLevelAfter { get; init; } = 2;
+
+    /// <summary>Psionic strength points of a character who isn't a psionicist (its wild talent).</summary>
+    public int WildTalentPsp { get; init; } = 10;
+
+    /// <summary>The powers a first-level psionicist knows (one more each level; others know one).</summary>
+    public int PowersAtFirstLevel { get; init; } = 3;
+
+    /// <summary>Psionic strength points a power costs.</summary>
+    public int PowerCost { get; init; } = 5;
 
     public RaceRules Race(Race race) => Races.First(r => r.Race == race);
 

@@ -9,9 +9,10 @@ namespace DarkSun.Engine;
 /// window (<see cref="OptionsWindow"/>) changes them; <see cref="Save"/> writes
 /// them back, keeping the file's other keys (the game folder, the SoundFont).
 /// <list type="bullet">
-/// <item><c>[audio]</c> <c>music_volume</c>, <c>sound_volume</c> (0–1);</item>
+/// <item><c>[audio]</c> <c>music_volume</c>, <c>sound_volume</c> (0–1), <c>music_on</c>, <c>sound_on</c>;</item>
 /// <item><c>[display]</c> <c>fullscreen</c>, <c>debug_hud</c> (the region view's information lines);</item>
-/// <item><c>[game]</c> <c>skip_intro</c>, <c>autosave</c> (on entering a region), <c>original_pathfinding</c>;</item>
+/// <item><c>[game]</c> <c>skip_intro</c>, <c>autosave</c> (on entering a region), <c>original_pathfinding</c>,
+/// <c>difficulty</c> (0–3: easy, balanced, hard, hideous), <c>animations</c> (the map's animated things);</item>
 /// <item><c>[keys]</c> an action's keys, as the key help names them (<c>quick_save = "F5"</c>, <c>"Shift+F11"</c>, several with " / ").</item>
 /// </list>
 /// </summary>
@@ -49,6 +50,32 @@ public static class Settings
     {
         get => Math.Clamp(Get("audio", "sound_volume", 1f), 0f, 1f);
         set => Set("audio", "sound_volume", Math.Clamp(value, 0f, 1f));
+    }
+
+    public static bool MusicOn
+    {
+        get => Get("audio", "music_on", true);
+        set => Set("audio", "music_on", value);
+    }
+
+    public static bool SoundOn
+    {
+        get => Get("audio", "sound_on", true);
+        set => Set("audio", "sound_on", value);
+    }
+
+    /// <summary>GAME DIFFICULTY: 0 easy, 1 balanced, 2 hard, 3 hideous (creatures' hit points 50–200 %).</summary>
+    public static int Difficulty
+    {
+        get => Math.Clamp(Get("game", "difficulty", 1), 0, 3);
+        set => Set("game", "difficulty", Math.Clamp(value, 0, 3));
+    }
+
+    /// <summary>ANIMATIONS ON/OFF: the map's animated things move.</summary>
+    public static bool Animations
+    {
+        get => Get("game", "animations", true);
+        set => Set("game", "animations", value);
     }
 
     public static bool Fullscreen
@@ -108,11 +135,11 @@ public static class Settings
     {
         if (Music.Instance is { } music)
         {
-            music.Volume = MusicVolume;
+            music.Volume = MusicOn ? MusicVolume : 0;
         }
         if (Sounds.Instance is { } sounds)
         {
-            sounds.Volume = SoundVolume;
+            sounds.Volume = SoundOn ? SoundVolume : 0;
         }
         Walker.UseOriginalPathfinding = OriginalPathfinding;
         if (DisplayServer.GetName() != "headless")

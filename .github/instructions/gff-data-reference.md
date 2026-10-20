@@ -279,8 +279,10 @@ text = raw.decode('latin-1').strip()
 name, _, desc = text.partition(': ')
 ```
 
-Icon lookup: corresponding ICON resource is at number `SPIN_number + 21000`
-(defined as `SPIN_ICON_OFFSET = 21000` in `server.py`).
+Icon lookup: a spell's ICON is `SPIN_number + 20999` (21000 is spell 1,
+ARMOR; 21008 MAGIC MISSILE; 21137 spell 138), a psionic power's
+`3000 + SPIN_number − 139`. The Python viewer's `spin_icon_offset = 21000`
+(`src/data/spells.toml`) is one too many: the icons are one spell off there.
 
 ```
 GET /api/gff/<name>/spells

@@ -29,14 +29,22 @@ public static class GameText
 }
 
 /// <summary>
-/// A spell's description (<c>SPIN</c> n): <c>"NAME: description"</c>. Its
-/// icon is <c>ICON</c> 21000 + n.
+/// A spell's description (<c>SPIN</c> n): <c>"NAME: description"</c>. A
+/// spell's icon is <c>ICON</c> 20999 + n (21000 is spell 1, Armor; 21008
+/// Magic Missile; to 21137, spell 138); a psionic power's (139–172) is
+/// <c>ICON</c> 3000 + n − 139 (34 icons, as the repository's Python viewer has it).
 /// </summary>
 public sealed record SpellInfo(int Number, string Name, string Description)
 {
-    public const int IconBase = 21000;
+    public const int IconBase = 20999, PowerIconBase = 3000, FirstPower = 139;
 
-    public int Icon => IconBase + Number;
+    /// <summary>The spell's or power's <c>ICON</c>, or null (the potions' and others past 172 have none).</summary>
+    public int? Icon => Number switch
+    {
+        >= 1 and < FirstPower => IconBase + Number,
+        >= FirstPower and <= 172 => PowerIconBase + Number - FirstPower,
+        _ => null,
+    };
 
     /// <summary>Split at the first <c>": "</c> (no separator: all name).</summary>
     public static SpellInfo Parse(int number, ReadOnlySpan<byte> raw)

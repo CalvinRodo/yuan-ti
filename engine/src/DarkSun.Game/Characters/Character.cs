@@ -47,6 +47,24 @@ public sealed record Character
     /// <summary>Has been in a game: only the name can be changed then (the manual's EDIT NAME).</summary>
     public bool Adventured { get; set; }
 
+    /// <summary>A preserver's spellbook: the wizard spells (<c>SPIN</c> numbers) learned (<see cref="Magic.Spellcasting"/>).</summary>
+    public List<int> Spellbook { get; set; } = [];
+
+    /// <summary>The spells memorized, one entry per memorized copy.</summary>
+    public List<int> Memorized { get; set; } = [];
+
+    /// <summary>The memorized spells cast since the last rest (a spell can be cast as often as it is memorized).</summary>
+    public List<int> Cast { get; set; } = [];
+
+    /// <summary>The psionic powers learned (<c>SPIN</c> 139–172).</summary>
+    public List<int> Powers { get; set; } = [];
+
+    /// <summary>Psionic strength points spent since the last rest.</summary>
+    public int PspSpent { get; set; }
+
+    /// <summary>Computer control (DSUN.EXE's button under the leader's): the character fights on its own. Kept for combat, which isn't in yet.</summary>
+    public bool ComputerControl { get; set; }
+
     /// <summary>
     /// The item classes it counts as (DSUN.EXE's character record +0x12,
     /// <c>6868:0000</c>): a cleric by its sphere (all four without one).

@@ -209,7 +209,7 @@ public partial class DialogueWindow : Control
             return;
         }
         _shownVersion = _dialogue.Version;
-        // A shop has a window of its own (ShopWindow).
+        // A shop has a screen of its own (the store, CharacterScreen).
         bool show = !_dialogue.IsEmpty && _dialogue.Prompt is not GplShopPrompt;
         if (!show)
         {

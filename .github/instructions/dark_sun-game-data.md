@@ -78,14 +78,14 @@ current GFF, and spell ICON images are numbered from 21 000 upward.
 | FONT | 1 | The game's font, `FONT` 100 in `RESOURCE.GFF` (the only one): word glyph count (256), word height (9), 4 zero bytes; 256 bytes colour map (pixel value → palette index, identity); 256 words, each character's glyph as an offset; a glyph is a word width (2–7) then height × width pixel bytes: 0 none, 254 the letter, 20 its shadow. Codes 0x80–0xFF are code page 437. The game sets map[254] to the text colour. `DarkSun.Data.Text.GameFont` |
 | GFFI | 15 | GFF index blocks |
 | GSEQ | 23 | Global audio/sync sequences |
-| ICON | 292 | Icon images — spell and item icons. Spell icons are at number `21 000 + SPIN_number`. |
+| ICON | 292 | Icon images — spell and item icons. Spell icons are `ICON` 20 999 + `SPIN` number (21 000 is spell 1, Armor; 21 008 Magic Missile; to 21 137), the psionic powers' 3000 + number − 139 (3000–3033). |
 | LSEQ | 23 | Local audio sequences |
 | MERR | 31 | Error / message text strings (null-terminated latin-1) |
 | MONR | 1 | Monster/monologue record |
 | PAL | 2 | VGA 256-color palettes (primary gameplay palettes) |
 | PSEQ | 23 | Playback sequences |
 | RDAT | 45 | Runtime data blocks — purpose unclear; may be pre-computed lookup tables |
-| SPIN | 180 | Spell information — null-terminated latin-1 text, format `"Spell Name: Description"`. Numbered 0–179. Paired ICON is at `21 000 + number`. |
+| SPIN | 180 | Spell information — null-terminated latin-1 text, format `"Spell Name: Description"`. Numbered 1–172 (spells 1–138, psionic powers 139–172), 249–255 and 1000. Paired ICON: 20 999 + number for a spell, 3000 + number − 139 for a power. |
 | TEXT | 60 | General text strings — null-terminated latin-1 (item descriptions, area names, etc.) |
 | VECT | 1 | Vector resource — likely a UI vector path or polygon table |
 | WIND | 27 | Window resources — UI window layout definitions |

@@ -431,9 +431,20 @@ this milestone brings most of the game's content.
       13200 and 11248–11259 over `BMP` 13002/13003/13005). Click-to-move
       stands in for the original's dragging. Armour class and THAC0 follow
       AD&D 2nd edition (DSUN.EXE's formulas aren't traced).
-- [ ] The spell and psionic screens (the bar's other two icons), the game
-      menu button, leader and computer-control buttons; the 6 slots at
-      `APFM` 11242–11247 and SELL on the inventory (not traced).
+- [x] The spell and psionic pages (View Character's 35 spell slots; the
+      spells' levels and spheres from DSUN.EXE's table at `DS:019C`;
+      `DarkSun.Game.Magic.Spellcasting`: memorize, learn, cast the healing
+      spells outside combat, rest; pick and use powers), the leader and
+      computer-control buttons, the GAME MENU (`WIND` 10500) with
+      preferences (16500) and its questions (14000), and the store on the
+      inventory (SHOP: the merchant's goods, the six selling slots
+      11242–11247, SELL / TAKE IT). See `dsun-exe-reference.md`, "Spells"
+      and "Game menu and preferences".
+- [ ] Spells and powers in combat (all but healing say ONLY IN COMBAT);
+      DSUN.EXE's own spell-slot tables (`DS:4B08`, `DS:4B11`), psionic
+      costs and strength; level-up (`WIND` 17502, probably) and the
+      original's learn and pick windows (17500, 17501); computer control's
+      effect; END TURN; the ABOUT text.
 - [x] Party creation: Create Characters (View Character, `WIND` 11500) and
       Character Generation (`WIND` 3011) screens; the party starts new games
       and is kept in saves; a roster for ADD and DROP.

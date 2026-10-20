@@ -73,7 +73,8 @@ public partial class RegionView : Node2D
     private JournalWindow _journal = null!;
     private OptionsWindow _options = null!;
     private Control _hudPanel = null!;
-    private ShopWindow _shop = null!;
+    private GameMenu _gameMenu = null!;
+    private GameMenu.Cursor _cursor;
 
     /// <summary>Scripts to start once none is paused (the region's after the game-start script, …): see <see cref="WhenScriptsFree"/>.</summary>
     private readonly Queue<Action> _whenFree = new();
@@ -238,6 +239,34 @@ public partial class RegionView : Node2D
             {
                 Callable.From(() => _character.Open(_world, _selected, CharacterScreen.Page.Character)).CallDeferred();
             }
+            if (OS.GetCmdlineUserArgs().Contains("--open-spells") || OS.GetCmdlineUserArgs().Contains("--open-psionics"))
+            {
+                CharacterScreen.Page page = OS.GetCmdlineUserArgs().Contains("--open-spells") ? CharacterScreen.Page.Spells : CharacterScreen.Page.Psionics;
+                int caster = Enumerable.Range(0, Session.Party.Count).FirstOrDefault(i => page == CharacterScreen.Page.Spells
+                    ? new DarkSun.Game.Magic.Spellcasting(Session.Rules).Levels(Session.Party[i]).Any()
+                    : Session.Party[i].Classes.Contains(DarkSun.Game.Characters.CharacterClass.Psionicist), _selected);
+                Callable.From(() => _character.Open(_world, caster, page)).CallDeferred();
+            }
+            if (OS.GetCmdlineUserArgs().Contains("--open-menu"))
+            {
+                Callable.From(() => _gameMenu.Open()).CallDeferred();
+            }
+            if (OS.GetCmdlineUserArgs().Contains("--open-preferences"))
+            {
+                Callable.From(() =>
+                {
+                    _gameMenu.Open();
+                    _gameMenu.Press(10303);
+                }).CallDeferred();
+            }
+            if (OS.GetCmdlineUserArgs().Contains("--open-store") && _world.Objects.FirstOrDefault(o => o.Kind == ObjectKind.Creature && !o.Hidden) is { } merchant)
+            {
+                // Testing: the first creature keeps a store of water, boots and arrows.
+                _world.Give(3, -1095, merchant.Index, GameWorld.None);
+                _world.Give(1, -1051, merchant.Index, GameWorld.None);
+                _world.Give(20, -1070, merchant.Index, GameWorld.None);
+                Callable.From(() => _character.Open(_world, _selected, CharacterScreen.Page.Items, store: merchant)).CallDeferred();
+            }
             if (OS.GetCmdlineUserArgs().Contains("--open-body") && _world.Objects.FirstOrDefault(o => o.Kind == ObjectKind.Creature && !o.Hidden) is { } victim)
             {
                 // Testing: the first creature dies carrying water and boots; its body is opened.
@@ -342,30 +371,40 @@ public partial class RegionView : Node2D
         layer.AddChild(_journal);
         _options = new OptionsWindow { Closed = () => _hudPanel.Visible = Settings.DebugHud };
         layer.AddChild(_options);
-        _shop = new ShopWindow
-        {
-            Money = () => Session.ScriptHost.Money,
-            SetMoney = money => Session.ScriptHost.Money = money,
-            Did = text => AddScriptLine($"    {text}"),
-            Closed = () =>
-            {
-                if (Session.ScriptHost.Dialogue.Prompt is GplShopPrompt && Session.Scripts.IsSuspended && Session.Scripts.PausedFor is null)
-                {
-                    ReportScript("shop closed", Session.Scripts.Resume(0));
-                }
-            },
-        };
-        layer.AddChild(_shop);
         _character = new CharacterScreen
         {
             CharacterOf = slot => slot < Session.Party.Count ? Session.Party[slot] : null,
             MemberName = MemberName,
             ItemIcon = ItemIcon,
             Money = () => Session.ScriptHost.Money,
+            SetMoney = money => Session.ScriptHost.Money = money,
             SpellName = Session.SpellName,
             Did = text => AddScriptLine($"> {text}"),
+            Leader = () => _selected,
+            SetLeader = MakeLeader,
+            OpenGameMenu = () => _gameMenu.Open(),
+            Closed = () =>
+            {
+                // A store's script waits for it to close.
+                if (Session.ScriptHost.Dialogue.Prompt is GplShopPrompt && Session.Scripts.IsSuspended && Session.Scripts.PausedFor is null)
+                {
+                    ReportScript("store closed", Session.Scripts.Resume(0));
+                }
+            },
         };
         layer.AddChild(_character);
+        _gameMenu = new GameMenu
+        {
+            ShowCharacter = page => _character.Open(_world, _selected, page),
+            SaveGame = () => Save($"save-{DateTime.Now:yyyyMMdd-HHmmss}", $"{_region.Number}: {DateTime.Now:g}"),
+            LoadGame = () => GetTree().CallDeferred(SceneTree.MethodName.ChangeSceneToFile, SavesView.ScenePath),
+            ExitGame = () => GetTree().CallDeferred(SceneTree.MethodName.ChangeSceneToFile, MainMenu.ScenePath),
+            OverheadMap = OverheadMap,
+            CenterOnLeader = () => _follow = true,
+            CollapseParty = CollapseParty,
+            CursorChanged = SetCursor,
+        };
+        layer.AddChild(_gameMenu);
         _prompt = new Label { Visible = false, HorizontalAlignment = HorizontalAlignment.Center };
         _prompt.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.CenterTop);
         _prompt.GrowHorizontal = Control.GrowDirection.Both;
@@ -452,9 +491,16 @@ public partial class RegionView : Node2D
 
         _region = Region.Load(Session.Open(file), [Session.Open("SEGOBJEX.GFF"), Session.Open("GPLDATA.GFF")], Session.Assets);
         var objectData = new GffSet([Session.Open("SEGOBJEX.GFF"), Session.Open("GPLDATA.GFF")]);
-        _world = new GameWorld(_region, objectData, Session.ScriptHost.EngineVariables, Session.ScriptHost.PartyMembers)
+        _world = new GameWorld(_region, objectData, Session.ScriptHost.EngineVariables, Session.ScriptHost.PartyMembers, _checking ? 1 : Settings.Difficulty)
         {
             PartyClasses = slot => slot < Session.Party.Count ? Session.Party[slot].ItemClasses : null,
+        };
+        _world.Rested += () =>
+        {
+            foreach (DarkSun.Game.Characters.Character c in Session.Party)
+            {
+                DarkSun.Game.Magic.Spellcasting.Rest(c);
+            }
         };
         // Back in a region visited before: as the party left it (before its script runs, as in DSUN.EXE).
         IReadOnlyList<WorldObject>? restored = _checking ? null : Session.Regions.Recall(_world);
@@ -565,6 +611,67 @@ public partial class RegionView : Node2D
 
     /// <summary>The character screens are showing (the key help lists theirs).</summary>
     public bool CharacterScreenOpen => _character?.IsOpen == true;
+
+    /// <summary>The game menu is showing.</summary>
+    public bool GameMenuOpen => _gameMenu?.IsOpen == true;
+
+    /// <summary>The leader button: <paramref name="slot"/> leads (the selected character, <c>gname[5]</c>).</summary>
+    private void MakeLeader(int slot)
+    {
+        if (slot < 0 || slot >= _party.Count)
+        {
+            return;
+        }
+        _selected = slot;
+        _world.ActiveMember = slot;
+        _follow = true;
+        UpdateHud();
+    }
+
+    /// <summary>OVERHEAD MAP: the whole region in view (again: back to where it was).</summary>
+    private void OverheadMap()
+    {
+        _zoomLevel = _zoomLevel == 0 ? Array.IndexOf(ZoomLevels, 1f) : 0;
+        _camera.Zoom = Vector2.One * ZoomLevels[_zoomLevel];
+        _follow = _zoomLevel != 0;
+        if (!_follow)
+        {
+            _camera.Position = _mapSize / 2;
+        }
+        ClampCamera();
+    }
+
+    /// <summary>COLLAPSE PARTY: everyone walks to the leader.</summary>
+    private void CollapseParty()
+    {
+        if (Selected is { } leader)
+        {
+            Cell at = leader.Walker.Cell;
+            foreach (PartyMember member in _party.Where(m => m != leader))
+            {
+                member.Walker.WalkTo(at, _region.IsBlocked);
+            }
+            _follow = true;
+        }
+    }
+
+    /// <summary>The MOVE, LOOK and ATTACK cursors.</summary>
+    private void SetCursor(GameMenu.Cursor cursor)
+    {
+        _cursor = cursor;
+        Input.SetDefaultCursorShape(cursor switch
+        {
+            GameMenu.Cursor.Look => Input.CursorShape.Help,
+            GameMenu.Cursor.Attack => Input.CursorShape.Cross,
+            _ => Input.CursorShape.Arrow,
+        });
+        Notice(cursor switch
+        {
+            GameMenu.Cursor.Look => "LOOK CURSOR: a click looks (Esc: back to moving)",
+            GameMenu.Cursor.Attack => "ATTACK CURSOR: a click attacks (Esc: back to moving)",
+            _ => "MOVE CURSOR",
+        });
+    }
 
     /// <summary>
     /// An object's animation, hanging from <paramref name="hotX"/>, <paramref name="hotY"/>
@@ -728,7 +835,7 @@ public partial class RegionView : Node2D
     private void Animate()
     {
         long now = Now;
-        foreach (AnimatedObject animated in _animated)
+        foreach (AnimatedObject animated in Settings.Animations || _checking ? _animated : [])
         {
             (Sprite2D sprite, RegionObject obj, ScmdAnimator animator) = (animated.Sprite, animated.Object, animated.Animator);
             if (!animator.Update(now))
@@ -844,10 +951,10 @@ public partial class RegionView : Node2D
         _clock += delta;
         Animate();
         FinishApproach();
-        if (Session.ScriptHost.Dialogue.Prompt is GplShopPrompt shop && !_shop.IsOpen && _world[shop.Merchant] is { } merchant
+        if (Session.ScriptHost.Dialogue.Prompt is GplShopPrompt shop && !_character.IsOpen && _world[shop.Merchant] is { } merchant
             && _world[_selected] is { } who)
         {
-            _shop.Open(_world, merchant, who);
+            _character.Open(_world, who.Index, CharacterScreen.Page.Items, store: merchant);
         }
 
         Vector2 direction = Input.GetVector(Controls.PanLeft, Controls.PanRight, Controls.PanUp, Controls.PanDown);
@@ -903,9 +1010,13 @@ public partial class RegionView : Node2D
                 StartVerb(second, Verb.UseWith, first);
             }
         }
-        else if (e.IsActionPressed(Controls.Back))
+        else if (e.IsActionPressed(Controls.Back) && _cursor != GameMenu.Cursor.Move)
         {
-            GetTree().ChangeSceneToFile(MainMenu.ScenePath);
+            _gameMenu.ResetCursor();
+        }
+        else if (e.IsActionPressed(Controls.Back) && !_gameMenu.IsOpen && !_character.IsOpen)
+        {
+            _gameMenu.Open();
         }
         else if (e.IsActionPressed(Controls.ToggleMapFlags))
         {
@@ -973,7 +1084,15 @@ public partial class RegionView : Node2D
         else if (e is InputEventMouseButton { ButtonIndex: MouseButton.Left, Pressed: true } click)
         {
             Vector2 at = GetGlobalMousePosition();
-            WalkTo(new Cell((int)Math.Floor(at.X / Region.TileSize), (int)Math.Floor(at.Y / Region.TileSize)), click.ShiftPressed);
+            if (_cursor != GameMenu.Cursor.Move && ObjectAt(at) is { } target)
+            {
+                // The LOOK and ATTACK cursors: the click looks at or attacks what is under it.
+                StartVerb(target, _cursor == GameMenu.Cursor.Look ? Verb.Look : Verb.Attack, null);
+            }
+            else
+            {
+                WalkTo(new Cell((int)Math.Floor(at.X / Region.TileSize), (int)Math.Floor(at.Y / Region.TileSize)), click.ShiftPressed);
+            }
         }
         else if (e is InputEventMouseButton { ButtonIndex: MouseButton.Right, Pressed: true } right)
         {
@@ -1588,15 +1707,15 @@ public partial class RegionView : Node2D
     private Tween? _noticeTween;
 
     /// <summary>
-    /// Save to <paramref name="file"/> in the saves folder. Not while a script
+    /// Save to <paramref name="file"/> in the saves folder (true if saved). Not while a script
     /// waits for the player or the party is between regions: the save would
     /// have to capture a script half run.
     /// </summary>
-    private void Save(string file, string name, bool quiet = false)
+    private bool Save(string file, string name, bool quiet = false)
     {
         if (_checking)
         {
-            return;
+            return false;
         }
         if (Session.Scripts.IsSuspended || _transitioning || _world.PendingRegion is not null)
         {
@@ -1606,7 +1725,7 @@ public partial class RegionView : Node2D
                     ? "Can't save now: a script is paused in the debugger (F8 continues)."
                     : "Can't save now: finish the conversation first.");
             }
-            return;
+            return false;
         }
         try
         {
@@ -1620,10 +1739,12 @@ public partial class RegionView : Node2D
             {
                 Notice($"{name}: saved.");
             }
+            return true;
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
             Notice($"Couldn't save: {e.Message}");
+            return false;
         }
     }
 
@@ -2056,10 +2177,134 @@ public partial class RegionView : Node2D
         screen.Press(10308);
         Expect(!screen.IsOpen, "Return closes it");
 
+        CheckMagicAndMenus(Expect);
+
         GD.Print(problems.Count == 0
-            ? "character: wore and took off, refused by class, gave, split, looted a body, turned to the sheet: OK"
+            ? "character: wore and took off, refused by class, gave, split, looted a body, turned to the sheet; "
+              + "memorized, cast, rested, learned, picked a power, leader, computer control, game menu, preferences, store: OK"
             : "character: " + string.Join("; ", problems));
         GetTree().Quit(problems.Count > 0 ? 1 : 0);
+    }
+
+    /// <summary>
+    /// The rest of <c>--check-character</c>, with characters of its own (the
+    /// party's are put back after): a water cleric memorizes Cure Light Wounds
+    /// and heals the next member; a preserver learns Magic Missile; a
+    /// psionicist picks Detonate; the leader and computer-control buttons; the
+    /// game menu, its preferences and questions; a store.
+    /// </summary>
+    private void CheckMagicAndMenus(Action<bool, string> Expect)
+    {
+        const int Above = 0, CureLight = 72, MagicMissile = 9, Detonate = 139;
+        var keep = Session.Party.ToList();
+        var cleric = new DarkSun.Game.Characters.Character { Name = "Cleric", Classes = [DarkSun.Game.Characters.CharacterClass.Cleric], Sphere = DarkSun.Game.Characters.Sphere.Water, Rolled = [12, 12, 12, 12, 16, 12], Experience = 3000 };
+        var preserver = new DarkSun.Game.Characters.Character { Name = "Preserver", Classes = [DarkSun.Game.Characters.CharacterClass.Preserver], Rolled = [12, 12, 12, 16, 12, 12], Experience = 3000 };
+        var psionicist = new DarkSun.Game.Characters.Character { Name = "Psionicist", Classes = [DarkSun.Game.Characters.CharacterClass.Psionicist], Disciplines = [.. Enum.GetValues<DarkSun.Game.Characters.Discipline>()], Rolled = [12, 12, 12, 12, 12, 12], Experience = 3000 };
+        Session.Party.Clear();
+        Session.Party.AddRange([cleric, preserver, psionicist]);
+        while (_party.Count < 3 && AddCharacter(_world[0]!.Cell) is not null)
+        {
+        }
+        CharacterScreen screen = _character;
+        int SlotOf(bool ready, int spell) => Enumerable.Range(0, 21).FirstOrDefault(i => screen.SpellAt(ready, i) == spell, -1);
+        try
+        {
+            // The cleric: memorize, then cast on the hurt second member.
+            screen.Open(_world, 0, CharacterScreen.Page.Spells);
+            Expect(SlotOf(false, CureLight) >= 0, $"a water cleric may memorize Cure Light Wounds ({screen.Status})");
+            screen.ClickSpell(false, SlotOf(false, CureLight));
+            Expect(cleric.Memorized.Contains(CureLight) && SlotOf(true, CureLight) >= 0, $"clicking it memorizes it ({screen.Status})");
+            Vitals hurt = _world[1]!.Vitals;
+            (hurt.MaxHp, hurt.Hp, hurt.Status) = (20, 5, Vitals.Well);
+            screen.ClickSpell(true, SlotOf(true, CureLight));
+            Expect(screen.PickedSpell == CureLight, "clicking the ready spell picks it to cast");
+            screen.ClickBox(1);
+            Expect(hurt.Hp > 5 && cleric.Cast.Contains(CureLight), $"then the second member's box heals them ({hurt.Hp} hit points; {screen.Status})");
+            screen.ClickSpell(true, SlotOf(true, CureLight));
+            Expect(screen.PickedSpell is null && screen.Status.Contains("REST"), $"cast already: rest first ({screen.Status})");
+            _world.Rest(raiseDead: false);
+            Expect(cleric.Cast.Count == 0, "resting makes it ready again");
+
+            // The preserver: learn, then memorize.
+            screen.ClickBox(1);
+            screen.Press(11320);
+            Expect(SlotOf(false, MagicMissile) >= 0, "LEARN shows Magic Missile");
+            screen.ClickSpell(false, SlotOf(false, MagicMissile));
+            Expect(preserver.Spellbook.Contains(MagicMissile), $"clicking it learns it ({screen.Status})");
+            screen.Press(11320);
+            screen.ClickSpell(false, SlotOf(false, MagicMissile));
+            Expect(preserver.Memorized.Contains(MagicMissile), "and it can be memorized");
+
+            // The psionicist: pick a power.
+            screen.Press(11306);
+            screen.ClickBox(2);
+            Expect(SlotOf(false, Detonate) >= 0, "the psionicist's psychokinesis shows Detonate");
+            screen.ClickSpell(false, SlotOf(false, Detonate));
+            Expect(psionicist.Powers.Contains(Detonate), $"clicking it picks it ({screen.Status})");
+
+            // Leader and computer control.
+            screen.Press(11310);
+            Expect(_selected == 1 && screen.Status.Contains("IS LEADER"), $"the second leader button makes it leader ({screen.Status})");
+            screen.Press(11313);
+            Expect(cleric.ComputerControl && screen.Status == "COMPUTER CONTROL IS ON", $"computer control turns on ({screen.Status})");
+            screen.Press(11313);
+            Expect(!cleric.ComputerControl, "and off");
+
+            // The game menu, from the wide button.
+            screen.Press(11308);
+            Expect(!screen.IsOpen && _gameMenu.Showing == "menu", $"the wide button opens the game menu ({_gameMenu.Showing})");
+            int difficulty = Settings.Difficulty;
+            _gameMenu.Press(10303);
+            Expect(_gameMenu.Showing == "preferences", "SET PREFERENCES");
+            _gameMenu.Press(difficulty < 3 ? 16308 : 16309);
+            Expect(Settings.Difficulty != difficulty, $"the difficulty arrows change it ({_gameMenu.Difficulty})");
+            Settings.Difficulty = difficulty;
+            Settings.Save();
+            _gameMenu.Press(11308);
+            _gameMenu.Press(10302);
+            Expect(_gameMenu.Showing == "ask: LOAD/SAVE GAME", $"LOAD/SAVE GAME asks ({_gameMenu.Showing})");
+            _gameMenu.Press(10308);
+            _gameMenu.Press(10311);
+            Expect(!_gameMenu.IsOpen && _cursor == GameMenu.Cursor.Look, "the eye is the LOOK cursor");
+            _gameMenu.ResetCursor();
+            _gameMenu.Open();
+            _gameMenu.Press(11304);
+            Expect(screen.IsOpen && screen.Showing == CharacterScreen.Page.Items, "VIEW INVENTORY opens the items");
+            screen.Close();
+
+            // A store: buy, then sell.
+            if (_world.Objects.FirstOrDefault(o => o.Kind == ObjectKind.Creature && !o.Hidden) is { } merchant)
+            {
+                const int Boots = 1051, Water = 1095;
+                _world.Give(1, -Boots, merchant.Index, GameWorld.None);
+                _world[0]!.Items.Clear();
+                _world.Give(1, -Water, 0, GameWorld.None);
+                Session.ScriptHost.Money = 1000;
+                screen.Open(_world, 0, CharacterScreen.Page.Items, store: merchant);
+                Item goods = Enumerable.Range(0, 12).Select(i => screen.ItemAt(2, i)).OfType<Item>().First(i => i.Rdff == Boots);
+                int index = Enumerable.Range(0, 12).First(i => screen.ItemAt(2, i) == goods);
+                screen.Click(2, index);
+                screen.Click(1, 11);
+                int paid = 1000 - Session.ScriptHost.Money;
+                Expect(_world[0]!.Items.Any(i => i.Rdff == Boots) && paid == goods.Record.Value, $"buying boots costs their value ({paid})");
+                Item pot = _world[0]!.Items.First(i => i.Rdff == Water);
+                int before = Session.ScriptHost.Money;
+                screen.Click(1, Enumerable.Range(0, 12).First(i => screen.ItemAt(1, i) == pot));
+                screen.Click(3, 0);
+                Expect(screen.ItemAt(3, 0) == pot, "the pot goes in a sell slot");
+                screen.Press(13304);
+                Expect(screen.Info.Contains("give you") || screen.Info.Contains("COULDN'T"), $"SELL: the merchant's offer ({screen.Info.Replace('\n', ' ')})");
+                screen.Press(13304);
+                Expect(Shop.Offer(pot) == 0 || (merchant.Items.Contains(pot) && Session.ScriptHost.Money == before + Shop.Offer(pot)),
+                    $"TAKE IT: sold ({Session.ScriptHost.Money - before})");
+                screen.Close();
+            }
+        }
+        finally
+        {
+            Session.Party.Clear();
+            Session.Party.AddRange(keep);
+        }
     }
 
     /// <summary>

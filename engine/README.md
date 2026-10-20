@@ -135,7 +135,7 @@ queries read the world (`DarkSun.Game.World`). Combat and a few
 REQUEST codes are still only logged: F2 shows the script log, F6 the script debugger (see Mods).
 Items: party members, creatures and containers carry items that scripts give, take, drop and search
 for; Get picks an item up; a script's
-SHOP opens a shop (buy at an item's value, sell at half) and waits for it to close; the party's money
+SHOP opens a store (below) and waits for it to close; the party's money
 is `gname[10]`. AWARD gives experience to the party's characters, DAMAGE and PHYS_DAMAGE hurt and kill,
 REQUEST 1 and 4 rest the party. Party items and hit points are saved; regions remember what their
 creatures carry and items left on the ground. `-- --new-game --give=1051,1095` hands out items by
@@ -148,8 +148,18 @@ experience, psionics), I the items (`WIND` 13500: the body with its 14 equipment
 and SPLIT), and the bottom icons switch between them. Click a thing, then where it goes (a slot to
 wear it, the pack, another member's box to give it); double-click wears or takes off; right-click
 describes it. Open on a chest, a bag or a body shows its contents in place of the body, to take or
-put in. `--open-sheet`, `--open-items` and `--open-body` (kills the first creature and opens its
-body) open them for testing; `--check-character` clicks through them.
+put in. The bar's other icons are spells and psionics, on View Character's panel: memorize a spell
+by clicking it, cast one by clicking it below and then a member's box (outside combat only the
+healing ones work); a preserver LEARNs spells into the spellbook, a psionicist picks powers; a rest
+(REQUEST 1 or 4) makes every spell ready again. The small buttons by each box make that member leader
+and turn computer control on or off. A script's SHOP opens the items as a store: click the goods then
+the pack to buy (at the item's value), put things in the six slots by SELL to sell (at half).
+Esc on the map, or the wide button, opens the original GAME MENU: the character screens, exit, save
+and load, preferences (music and sound, GAME DIFFICULTY scaling creatures' hit points, animations),
+the overhead map, centre on the leader, the move, look and attack cursors, and collapse party.
+`--open-sheet`, `--open-items`, `--open-spells`, `--open-psionics`, `--open-store`, `--open-menu`,
+`--open-preferences` and `--open-body` (kills the first creature and opens its body) open them for
+testing; `--check-character` clicks through them.
 The original screens (main menu, View Character, Character Generation, the text windows) are built
 from their windows' data (`UiWindowView`): each control where its `WIND` puts it, with its own art,
 so a mod's `WIND/n.json` moves them. The engine's own changes to the original layouts are the same

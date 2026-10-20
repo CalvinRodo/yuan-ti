@@ -19,7 +19,9 @@ public class TextTests
         var spell = SpellInfo.Parse(1, Encoding.Latin1.GetBytes("ARMOR: Creates a shield: AC6.\r\n"));
 
         Assert.Equal(new SpellInfo(1, "ARMOR", "Creates a shield: AC6."), spell);
-        Assert.Equal(21001, spell.Icon);
+        Assert.Equal(21000, spell.Icon); // ICON 21000 is Armor's
+        Assert.Equal(3000, SpellInfo.Parse(139, "DETONATE\r\n"u8).Icon); // the powers' are 3000–3033
+        Assert.Null(SpellInfo.Parse(249, "RESTORE\r\n"u8).Icon);
         Assert.Equal("ODD", SpellInfo.Parse(2, "ODD\r\n"u8).Name);
     }
 

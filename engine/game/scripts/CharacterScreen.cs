@@ -25,16 +25,25 @@ namespace DarkSun.Engine;
 /// the body (<c>APFM</c> 13200 and 11248–11259) over a chest, a bag or a
 /// parchment (<c>BMP</c> 13002, 13003, 13005).</item>
 /// </list>
+/// <item><b>Spells</b> and <b>Psionics</b>: View Character again, its panel
+/// holding the slots DSUN.EXE draws spells into (<c>APFM</c> 11213–11247;
+/// <see cref="CharacterScreen"/>'s other part).</item>
+/// <item>A <b>store</b> (SHOP): the items page with the merchant's goods in
+/// the container's place and the six slots by SELL (<c>APFM</c> 11242–11247)
+/// for what the party offers.</item>
+/// </list>
 /// Items move by clicking one, then where it goes: an equipment slot (worn,
 /// if the slot and the class allow), the pack (taken off, or out of the
 /// container), the container (put in), another member's box (given).
 /// Double-click wears, takes off or takes; right-click describes. DSUN.EXE
-/// drags items with the pointer instead; its spell and psionic screens
-/// (the other two icons) aren't ported.
+/// drags items with the pointer instead. Each box has the leader button
+/// (<c>BUTN</c> 11309–11312: "MAKE %s LEADER") and computer control
+/// (11313–11316: "COMPUTER CONTROL IS ON / OFF / LOCKED"); the wide button
+/// (11308) opens the game menu.
 /// </summary>
 public partial class CharacterScreen : RetroScreen
 {
-    public enum Page { Character, Items }
+    public enum Page { Character, Items, Spells, Psionics }
 
     private const int PaletteNumber = 1001;
     private const int SheetWindow = 11500, SheetBackdrop = 11000, ItemsWindow = 13500, ItemsBackdrop = 13001;
@@ -43,13 +52,14 @@ public partial class CharacterScreen : RetroScreen
     private const int SheetArea = 11269, SheetDivider = 104, FirstText = 11319, SecondText = 11320;
     private const int DropButton = 13300, SplitButton = 13302, MoreButton = 13303, SellButton = 13304;
     private const int FirstWorn = 11216, FirstPackSlot = 11230, PackSlots = 12, ContainerArea = 13200, FirstInside = 11248, InsideSlots = 12;
+    private const int FirstSellSlot = 11242, SellSlots = 6;
     private const int SlotArt = 13007, EmptyFrame = 0, SelectedFrame = 4, CantFrame = 6, FirstSilhouette = 9;
     private const int Body = 13004, ChestArt = 13002, BagArt = 13003, ParchmentArt = 13005;
 
     private static readonly Color Ink = new(0.95f, 0.9f, 0.75f);
     private static readonly Color Gold = new(1f, 0.9f, 0.5f);
 
-    private enum Where { Worn, Pack, Inside }
+    private enum Where { Worn, Pack, Inside, Sell }
 
     /// <summary>One item slot: an <c>APFM</c> drawn into.</summary>
     private sealed class ItemSlot
@@ -77,7 +87,7 @@ public partial class CharacterScreen : RetroScreen
     private GffFile _resources = null!;
     private Palette _palette = null!;
     private PageView _sheetPage = null!, _itemsPage = null!;
-    private Label _sheet = null!, _sheetMore = null!, _info = null!;
+    private Label _sheet = null!, _sheetMore = null!, _info = null!, _status = null!;
     private TextureRect _body = null!, _containerArt = null!;
     private readonly List<ItemSlot> _slots = [];
     private readonly Dictionary<int, Texture2D?> _slotArt = [];
@@ -86,7 +96,7 @@ public partial class CharacterScreen : RetroScreen
     private GameWorld? _world;
     private int _member;
     private Page _page;
-    private WorldObject? _container;
+    private WorldObject? _container, _store;
     private (Item Item, WorldObject Holder)? _picked;
     private int _packPage, _insidePage;
 
@@ -107,6 +117,21 @@ public partial class CharacterScreen : RetroScreen
 
     /// <summary>Something happened worth logging (an item worn, given, dropped).</summary>
     public Action<string>? Did { get; set; }
+
+    /// <summary>The party's leader (the selected character, <c>gname[5]</c>).</summary>
+    public Func<int> Leader { get; set; } = () => 0;
+
+    /// <summary>Make a member the leader.</summary>
+    public Action<int>? SetLeader { get; set; }
+
+    /// <summary>The wide button: the game menu (the screens close first).</summary>
+    public Action? OpenGameMenu { get; set; }
+
+    /// <summary>The screens closed (a store's script goes on).</summary>
+    public Action? Closed { get; set; }
+
+    /// <summary>Change the party's money (a store).</summary>
+    public Action<int>? SetMoney { get; set; }
 
     public bool IsOpen => Visible;
 
@@ -130,13 +155,10 @@ public partial class CharacterScreen : RetroScreen
         _sheetMore = Text(sheet, new Vector2(area.Position.X + 3, SheetDivider + 3), area.Size.X - 5, "");
         _sheetMore.Size = new Vector2(area.Size.X - 5, area.End.Y - SheetDivider - 3);
         _sheetMore.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-        foreach (int n in new[] { FirstText, SecondText })
-        {
-            if (sheet.Button(n) is { } b)
-            {
-                b.Visible = false;
-            }
-        }
+        // The status line: BMP 11000's bar under the window.
+        _status = Text(sheet, new Vector2(74, 175), 172, "", HorizontalAlignment.Center);
+        _status.ClipText = true;
+        BuildMagic(sheet);
 
         // The items: the body (or an open container), the slots, the details on the right.
         UiWindowView items = _itemsPage.Window;
@@ -159,17 +181,19 @@ public partial class CharacterScreen : RetroScreen
         {
             AddSlot(items, Where.Inside, n, FirstInside + n);
         }
+        for (int n = 0; n < SellSlots; n++)
+        {
+            AddSlot(items, Where.Sell, n, FirstSellSlot + n);
+        }
         _info = Text(items, new Vector2(228, 18), 88, "");
         _info.Size = new Vector2(88, 140);
         _info.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-        if (items.Button(SellButton) is { } sell)
-        {
-            sell.Visible = false; // selling is the shop's (SHOP)
-        }
+        items.Button(SellButton)!.Pressed += SellPressed;
+        items.Button(SellButton)!.TooltipText = "Sell what is in the six slots below";
         items.Button(DropButton)!.Pressed += DropPicked;
         items.Button(SplitButton)!.Pressed += SplitPicked;
         items.Button(MoreButton)!.Pressed += () => TurnPack(+1);
-        foreach (int n in new[] { DropButton, SplitButton, MoreButton })
+        foreach (int n in new[] { DropButton, SplitButton, MoreButton, SellButton })
         {
             if (items.ButtonText(n) is { } t)
             {
@@ -235,26 +259,31 @@ public partial class CharacterScreen : RetroScreen
             Label name = Text(window, new Vector2(box.Position.X + (box.Size.X - width) / 2, box.Position.Y + box.Size.Y + 1), width, "", HorizontalAlignment.Center);
             name.ClipText = true;
             page.Names.Add(name);
-            foreach (int n in new[] { FirstLeader + i, FirstComputerControl + i })
+            if (window.Button(FirstLeader + i) is { } leader)
             {
-                if (window.Button(n) is { } b)
-                {
-                    b.MouseFilter = MouseFilterEnum.Ignore; // the leader and computer control: shown, not working yet
-                }
+                leader.ToggleMode = true;
+                leader.Pressed += () => LeaderPressed(slot);
+            }
+            if (window.Button(FirstComputerControl + i) is { } computer)
+            {
+                computer.ToggleMode = true;
+                computer.Pressed += () => ComputerPressed(slot);
             }
         }
         window.Button(CharacterButton)!.Pressed += () => Show(Page.Character);
         window.Button(CharacterButton)!.TooltipText = "Character (C)";
         window.Button(ItemsButton)!.Pressed += () => Show(Page.Items);
         window.Button(ItemsButton)!.TooltipText = "Items (I)";
-        foreach (int n in new[] { SpellsButton, PsionicsButton, MenuButton })
+        window.Button(SpellsButton)!.Pressed += () => Show(Page.Spells);
+        window.Button(SpellsButton)!.TooltipText = "Spells: memorize and cast";
+        window.Button(PsionicsButton)!.Pressed += () => Show(Page.Psionics);
+        window.Button(PsionicsButton)!.TooltipText = "Psionics: pick and use powers";
+        window.Button(MenuButton)!.Pressed += () =>
         {
-            if (window.Button(n) is { } b)
-            {
-                b.Modulate = new Color(1, 1, 1, 0.45f);
-                b.MouseFilter = MouseFilterEnum.Ignore;
-            }
-        }
+            Close();
+            OpenGameMenu?.Invoke();
+        };
+        window.Button(MenuButton)!.TooltipText = "Game menu";
         window.Button(ReturnButton)!.Pressed += Close;
         window.Button(ReturnButton)!.TooltipText = "Return (Esc)";
         return page;
@@ -318,30 +347,48 @@ public partial class CharacterScreen : RetroScreen
 
     // -- opening and closing --------------------------------------------------------------
 
-    /// <summary>Show <paramref name="page"/> for party member <paramref name="member"/>, with <paramref name="container"/> open on the items page.</summary>
-    public void Open(GameWorld world, int member, Page page, WorldObject? container = null)
+    /// <summary>
+    /// Show <paramref name="page"/> for party member <paramref name="member"/>,
+    /// with <paramref name="container"/> open on the items page, or
+    /// <paramref name="store"/>'s goods (a merchant: SHOP).
+    /// </summary>
+    public void Open(GameWorld world, int member, Page page, WorldObject? container = null, WorldObject? store = null)
     {
         _world = world;
         _member = world[member] is { Kind: ObjectKind.Party } ? member : world.Party.FirstOrDefault()?.Index ?? 0;
-        _container = container;
+        _store = store;
+        _container = container ?? store;
         (_picked, _packPage, _insidePage) = (null, 0, 0);
+        ResetMagic();
+        ResetStore();
+        _status.Text = "";
         Visible = true;
-        Show(container is not null ? Page.Items : page);
+        Show(_container is not null ? Page.Items : page);
     }
 
     public void Close()
     {
+        if (!Visible)
+        {
+            return;
+        }
         Visible = false;
-        (_container, _picked) = (null, null);
+        (_container, _store, _picked) = (null, null, null);
+        ResetStore();
+        Closed?.Invoke();
     }
 
     private void Show(Page page)
     {
         _page = page;
-        _sheetPage.Window.Visible = page == Page.Character;
+        _sheetPage.Window.Visible = page != Page.Items;
         _itemsPage.Window.Visible = page == Page.Items;
+        _sheet.Visible = _sheetMore.Visible = page == Page.Character;
+        ShowMagic(page);
         Refresh();
     }
+
+    private PageView Current => _page == Page.Items ? _itemsPage : _sheetPage;
 
     public override void _Input(InputEvent e)
     {
@@ -351,9 +398,9 @@ public partial class CharacterScreen : RetroScreen
         }
         if (e.IsActionPressed(Controls.Back))
         {
-            if (_picked is not null)
+            if (_picked is not null || _pickedSpell is not null)
             {
-                _picked = null;
+                (_picked, _pickedSpell) = (null, null);
                 Refresh();
             }
             else
@@ -402,22 +449,39 @@ public partial class CharacterScreen : RetroScreen
         {
             return;
         }
-        PageView page = _page == Page.Character ? _sheetPage : _itemsPage;
+        PageView page = Current;
+        int leader = Leader();
         for (int i = 0; i < GameWorld.PartySize; i++)
         {
             bool there = _world[i] is { Kind: ObjectKind.Party };
             page.Pictures[i].Texture = there && CharacterOf(i) is { } c ? Portrait(c) : null;
             page.Names[i].Text = there ? MemberName(i) : "";
             page.Names[i].Modulate = i == _member ? Gold : Colors.White;
+            if (page.Window.Button(FirstLeader + i) is { } l)
+            {
+                l.Visible = there;
+                l.SetPressedNoSignal(i == leader);
+                l.TooltipText = i == leader ? $"{MemberName(i)} is leader" : $"Make {MemberName(i)} leader";
+            }
+            if (page.Window.Button(FirstComputerControl + i) is { } cc)
+            {
+                cc.Visible = there;
+                cc.SetPressedNoSignal(CharacterOf(i)?.ComputerControl == true);
+                cc.TooltipText = $"Computer control is {(CharacterOf(i) is null ? "locked" : CharacterOf(i)!.ComputerControl ? "on" : "off")}";
+            }
         }
         page.Name.Text = MemberName(_member);
-        if (_page == Page.Character)
+        switch (_page)
         {
-            (_sheet.Text, _sheetMore.Text) = SheetText();
-        }
-        else
-        {
-            RefreshItems();
+            case Page.Character:
+                (_sheet.Text, _sheetMore.Text) = SheetText();
+                break;
+            case Page.Items:
+                RefreshItems();
+                break;
+            default:
+                RefreshMagic();
+                break;
         }
     }
 
@@ -449,7 +513,7 @@ public partial class CharacterScreen : RetroScreen
             + $"{Abil(Ability.Str)}   {Abil(Ability.Int)}\n{Abil(Ability.Dex)}   {Abil(Ability.Wis)}\n{Abil(Ability.Con)}   {Abil(Ability.Cha)}";
         string more = $"HP {v.Hp}/{v.MaxHp}  AC {ac}  THAC0 {CharacterSheet.Thac0(c, levels)}\n"
             + $"EXP {c.Experience}   {Spaced(c.Alignment.ToString())}\n"
-            + $"PSI: {string.Join(", ", c.Disciplines.Select(d => d.ToString().ToUpperInvariant()))}"
+            + $"PSI {_magic.Psp(c)}/{_magic.MaxPsp(c)}: {string.Join(", ", c.Disciplines.Select(d => d.ToString().ToUpperInvariant()))}"
             + (c.Sphere is { } sphere ? $"\nSPHERE: {sphere.ToString().ToUpperInvariant()}" : "")
             + (status.Length > 0 ? $"\n{status}" : "");
         return (who, more);
@@ -458,7 +522,7 @@ public partial class CharacterScreen : RetroScreen
     private static string Spaced(string pascal) =>
         string.Concat(pascal.Select((ch, i) => i > 0 && char.IsUpper(ch) ? " " + ch : ch.ToString())).ToUpperInvariant();
 
-    private List<Item> Pack => Member?.Items.Where(i => !i.Equipped).ToList() ?? [];
+    private List<Item> Pack => Member?.Items.Where(i => !i.Equipped && !_offered.Contains(i)).ToList() ?? [];
 
     private void RefreshItems()
     {
@@ -479,9 +543,15 @@ public partial class CharacterScreen : RetroScreen
             {
                 Where.Worn => member?.Items.FirstOrDefault(i => i.Slot == slot.Index),
                 Where.Pack => pack.ElementAtOrDefault(_packPage * PackSlots + slot.Index),
+                Where.Sell => _offered.ElementAtOrDefault(slot.Index),
                 _ => inside.ElementAtOrDefault(_insidePage * InsideSlots + slot.Index),
             };
-            bool shown = slot.Where != Where.Inside || _container is not null;
+            bool shown = slot.Where switch
+            {
+                Where.Inside => _container is not null,
+                Where.Sell => _store is not null,
+                _ => true,
+            };
             slot.Control.Visible = shown;
             slot.Back.Texture = slot.Where == Where.Worn && slot.Item is null ? SlotArtFrame(FirstSilhouette + slot.Index) : SlotArtFrame(EmptyFrame);
             slot.Icon.Texture = slot.Item is { } item ? ItemIcon(item.Rdff) : null;
@@ -496,6 +566,12 @@ public partial class CharacterScreen : RetroScreen
         Enable(items.Button(SplitButton)!, stack);
         Enable(items.Button(DropButton)!, _picked is { } d && d.Holder == member);
         Enable(items.Button(MoreButton)!, pack.Count > PackSlots);
+        items.Button(SellButton)!.Visible = _store is not null;
+        if (_store is not null)
+        {
+            Enable(items.Button(SellButton)!, _offered.Count > 0);
+            items.ButtonText(SellButton)!.Text = _offer is null ? "SELL" : "TAKE IT";
+        }
         if (_picked is null)
         {
             ShowInfo(null);
@@ -527,10 +603,21 @@ public partial class CharacterScreen : RetroScreen
         {
             return;
         }
+        // In a store the panel stops above SELL and its six slots.
+        _info.Size = new Vector2(88, _store is null ? 140 : 40);
         string text;
-        if (item is not null)
+        if (item is not null && _store is not null)
+        {
+            text = $"{ItemText.Name(_world, item)}\n" + (holder == _store ? $"PRICE {Shop.Price(item)}$" : Shop.Offer(item) > 0 ? $"WORTH {Shop.Offer(item)}$" : "I COULDN'T SELL THAT");
+            _itemsPage.Window.Button(SellButton)!.TooltipText = ItemText.Describe(_world, item, Member, MemberName(_member), SpellName);
+        }
+        else if (item is not null)
         {
             text = ItemText.Describe(_world, item, holder ?? Member, MemberName(_member), SpellName);
+        }
+        else if (_store is not null)
+        {
+            text = StoreText();
         }
         else
         {
@@ -539,7 +626,8 @@ public partial class CharacterScreen : RetroScreen
                 + (_container is { } c ? $"\n\n{(c.Name.Length > 0 ? c.Name.ToUpperInvariant() : "CONTAINER")}: {c.Items.Count}" : "")
                 + "\n\nClick a thing, then where it goes. Right-click: what it is.";
         }
-        _info.Text = note is null ? text : $"{note}\n\n{text}";
+        _info.ClipText = _store is not null;
+        _info.Text = note is null ? text : _store is not null ? $"{note}\n{text}" : $"{note}\n\n{text}";
     }
 
     private Texture2D? Portrait(Character c)
@@ -573,12 +661,29 @@ public partial class CharacterScreen : RetroScreen
 
     /// <summary>Click party member <paramref name="slot"/>'s box.</summary>
     public void ClickBox(int slot) =>
-        (_page == Page.Character ? _sheetPage : _itemsPage).Window.Button(FirstBox + slot)!
+        Current.Window.Button(FirstBox + slot)!
             .EmitSignal(Control.SignalName.GuiInput, new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = true });
 
-    /// <summary>Press <c>BUTN</c> <paramref name="number"/> of the page showing (10300 Character, 11304 Items, 13300 DROP, 13302 SPLIT, 13303 MORE, 10308 Return).</summary>
-    public void Press(int number) =>
-        (_page == Page.Character ? _sheetPage : _itemsPage).Window.Button(number)?.EmitSignal(BaseButton.SignalName.Pressed);
+    /// <summary>
+    /// Press <c>BUTN</c> <paramref name="number"/> of the page showing (10300
+    /// Character, 11304 Items, 11305 Spells, 11306 Psionics, 11308 the game
+    /// menu, 11309+ leader, 11313+ computer control, 11319 / 11320 the text
+    /// buttons, 13300 DROP, 13302 SPLIT, 13303 MORE, 13304 SELL, 10308 Return).
+    /// </summary>
+    public void Press(int number)
+    {
+        if (Current.Window.Button(number) is { } b)
+        {
+            if (b.ToggleMode)
+            {
+                b.SetPressedNoSignal(!b.ButtonPressed);
+            }
+            b.EmitSignal(BaseButton.SignalName.Pressed);
+        }
+    }
+
+    /// <summary>The page's status line (the spells, psionics and leader messages).</summary>
+    public string Status => _status.Text;
 
     /// <summary>The item in a slot, as <see cref="Click"/> numbers them.</summary>
     public Item? ItemAt(int where, int index) => _slots.FirstOrDefault(s => (int)s.Where == where && s.Index == index)?.Item;
@@ -592,6 +697,41 @@ public partial class CharacterScreen : RetroScreen
     // -- clicks ---------------------------------------------------------------------------
 
     private WorldObject? HolderOf(ItemSlot slot) => slot.Where == Where.Inside ? _container : Member;
+
+    // -- leader and computer control --------------------------------------------------------
+
+    private void LeaderPressed(int slot)
+    {
+        if (_world?[slot] is not { Kind: ObjectKind.Party })
+        {
+            return;
+        }
+        SetLeader?.Invoke(slot);
+        Refresh();
+        Say($"{MemberName(slot).ToUpperInvariant()} IS LEADER");
+    }
+
+    private void ComputerPressed(int slot)
+    {
+        string message = "COMPUTER CONTROL IS LOCKED";
+        if (CharacterOf(slot) is { } c)
+        {
+            c.ComputerControl = !c.ComputerControl;
+            message = $"COMPUTER CONTROL IS {(c.ComputerControl ? "ON" : "OFF")}";
+        }
+        Refresh();
+        Say(message);
+    }
+
+    /// <summary>A message: the status line, and on the items page the right-hand panel.</summary>
+    private void Say(string message)
+    {
+        _status.Text = message;
+        if (_page == Page.Items)
+        {
+            ShowInfo(null, null, message);
+        }
+    }
 
     private void SlotInput(ItemSlot slot, InputEvent e)
     {
@@ -647,6 +787,7 @@ public partial class CharacterScreen : RetroScreen
         {
             Where.Worn => WearIn(picked, slot.Index),
             Where.Pack => ToPack(picked, slot),
+            Where.Sell => OfferPicked(picked),
             _ => PutIn(picked, slot),
         };
         RefreshItems();
@@ -666,7 +807,12 @@ public partial class CharacterScreen : RetroScreen
         string? note = null;
         if (slot.Where == Where.Inside)
         {
-            note = Take(item) ? null : $"{MemberName(_member)} can't carry any more.";
+            note = Take(item);
+        }
+        else if (slot.Where == Where.Sell)
+        {
+            _offered.Remove(item);
+            _offer = null;
         }
         else if (item.Equipped)
         {
@@ -704,9 +850,13 @@ public partial class CharacterScreen : RetroScreen
         {
             return null;
         }
-        if (picked.Holder != member && !Take(picked.Item))
+        if (picked.Holder != member && Take(picked.Item) is { } refused)
         {
-            return $"{MemberName(_member)} can't carry any more.";
+            return refused;
+        }
+        if (_offered.Remove(picked.Item))
+        {
+            _offer = null;
         }
         EquipResult r = _world.EquipAt(member, picked.Item, slot);
         if (r == EquipResult.Worn)
@@ -731,7 +881,13 @@ public partial class CharacterScreen : RetroScreen
         if (picked.Holder != member)
         {
             _picked = null;
-            return Take(picked.Item) ? null : $"{MemberName(_member)} can't carry any more.";
+            return Take(picked.Item);
+        }
+        if (_offered.Remove(picked.Item))
+        {
+            _picked = null;
+            _offer = null;
+            return null;
         }
         if (picked.Item.Equipped)
         {
@@ -759,6 +915,10 @@ public partial class CharacterScreen : RetroScreen
             _picked = slot.Item is { } other ? (other, container) : null;
             return null;
         }
+        if (_store is not null)
+        {
+            return "Put what you would sell in the six slots below SELL.";
+        }
         _picked = null;
         if (!_world.MoveItem(picked.Holder, container, picked.Item))
         {
@@ -768,14 +928,23 @@ public partial class CharacterScreen : RetroScreen
         return null;
     }
 
-    private bool Take(Item item)
+    /// <summary>Take <paramref name="item"/> out of the open container (from a store: buy it). Null if done, else why not.</summary>
+    private string? Take(Item item)
     {
-        if (_container is not { } container || Member is not { } member || !_world!.MoveItem(container, member, item))
+        if (_container is not { } container || Member is not { } member || _world is null)
         {
-            return false;
+            return null;
+        }
+        if (_store is not null)
+        {
+            return Buy(item);
+        }
+        if (!_world.MoveItem(container, member, item))
+        {
+            return $"{MemberName(_member)} can't carry any more.";
         }
         Did?.Invoke($"{MemberName(_member)} takes {ItemText.Name(_world, item)} from {container.Name}");
-        return true;
+        return null;
     }
 
     /// <summary>A box: with an item picked, give it to that member; otherwise show them.</summary>
@@ -783,6 +952,11 @@ public partial class CharacterScreen : RetroScreen
     {
         if (_world?[slot] is not { Kind: ObjectKind.Party } to)
         {
+            return;
+        }
+        if (_page is Page.Spells or Page.Psionics && _pickedSpell is int spell)
+        {
+            CastAt(slot, spell);
             return;
         }
         if (_page == Page.Items && _picked is { } picked && slot != _member)

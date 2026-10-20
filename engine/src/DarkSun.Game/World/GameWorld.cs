@@ -204,9 +204,11 @@ public sealed partial class GameWorld
     /// <param name="objectData"><c>SEGOBJEX.GFF</c> (and <c>GPLDATA.GFF</c>): <c>RDFF</c> and <c>SCMD</c> resources.</param>
     /// <param name="engine">The engine variables (<c>gname[0–14]</c>), kept across regions; a new set if null.</param>
     /// <param name="party">What the party members carry and how they are, kept across regions; new ones if null.</param>
-    public GameWorld(Region region, IResourceSource objectData, int[]? engine = null, IReadOnlyList<PartyMemberState>? party = null)
+    /// <param name="difficulty">GAME DIFFICULTY (<see cref="Difficulty"/>).</param>
+    public GameWorld(Region region, IResourceSource objectData, int[]? engine = null, IReadOnlyList<PartyMemberState>? party = null, int difficulty = 1)
     {
         Region = region;
+        Difficulty = Math.Clamp(difficulty, 0, 3);
         _party = party ?? [.. Enumerable.Range(0, PartySize).Select(_ => new PartyMemberState())];
         _objectData = objectData;
         _engine = engine ?? new int[15];
@@ -251,7 +253,7 @@ public sealed partial class GameWorld
             Character = character,
             Name = record?.Name ?? (item is not null ? Items.NameOf(item) : ""),
             Allegiance = record?.Allegiance ?? 0,
-            Vitals = new Vitals { Hp = record?.Hp ?? 0, MaxHp = record?.Hp ?? 0, Status = record?.Status ?? 0 },
+            Vitals = new Vitals { Hp = Scaled(record?.Hp ?? 0), MaxHp = Scaled(record?.Hp ?? 0), Status = record?.Status ?? 0 },
             FixedCell = new Cell(source.EtabX / Region.TileSize, Math.Max(0, source.EtabY - 1) / Region.TileSize),
         };
 
@@ -268,6 +270,16 @@ public sealed partial class GameWorld
     }
 
     public Region Region { get; }
+
+    /// <summary>
+    /// GAME DIFFICULTY, 0–3 (easy, balanced, hard, hideous). DSUN.EXE scales a
+    /// word of a creature's character record by (difficulty − 1) × 50 + 100 %
+    /// when it loads one (<see cref="CharacterRecord"/>, likely its hit points);
+    /// here creatures' hit points get 50, 100, 150 or 200 %.
+    /// </summary>
+    public int Difficulty { get; }
+
+    private int Scaled(int hp) => Math.Max(hp > 0 ? 1 : 0, hp * (Difficulty * 50 + 50) / 100);
 
     /// <summary>Item types and names (<c>IT1R</c>, <c>NAME</c>), for naming and describing items.</summary>
     public ItemCatalog Items { get; }

@@ -183,7 +183,8 @@ public partial class KeyHelp : CanvasLayer
     /// <summary>The screen's name and its keys.</summary>
     public static (string Title, IReadOnlyList<HelpSection> Sections) For(Node? scene) => scene switch
     {
-        RegionView { CharacterScreenOpen: true } => ("the character screens", [CharacterScreenSection, Everywhere]),
+        RegionView { CharacterScreenOpen: true } => ("the character screens", [CharacterScreenSection, MagicSection, Everywhere]),
+        RegionView { GameMenuOpen: true } => ("the game menu", [GameMenuSection, Everywhere]),
         RegionView => ("the map", [.. RegionSections, Everywhere]),
         MainMenu => ("main menu", [MainMenuSection, Buttons, Everywhere]),
         PartyView => ("View Character", [PartySection, Everywhere]),
@@ -234,7 +235,25 @@ public partial class KeyHelp : CanvasLayer
         HelpLine.For(Controls.ToggleCharacter, "The character sheet (again: close)"),
         HelpLine.For(Controls.ToggleInventory, "The items (again: close)"),
         HelpLine.For(Controls.NextCharacter, "The next member"),
+        new HelpLine("Small buttons by a box", "Make that member leader; computer control on or off"),
+        new HelpLine("In a store", "Click goods then the pack to buy; put things in the six slots, SELL, then TAKE IT"),
         HelpLine.For(Controls.Back, "Put the chosen thing back, or close", "Esc"));
+
+    private static HelpSection MagicSection => new("Spells and psionics",
+        new HelpLine("Click above", "Memorize a copy of that spell (LEARN: add it to the spellbook; psionics: pick a power)"),
+        new HelpLine("Right-click above", "Forget a copy"),
+        new HelpLine("Click below, then a box", "Cast that spell on the member (use the power); double-click: on yourself"),
+        new HelpLine("WIZ / PRI n, KINET…", "The next spell level or psionic discipline"));
+
+    private static HelpSection GameMenuSection => new("Game menu",
+        new HelpLine("Click an icon", "Its name shows on the bar below"),
+        new HelpLine("Character icons", "View character, inventory, spells, psionics"),
+        new HelpLine("Exit, disk", "Leave the game (save first?), save or load"),
+        new HelpLine("Sliders", "Preferences: music, sound, difficulty, animations"),
+        new HelpLine("Map, centre", "The overhead map; centre on the leader"),
+        new HelpLine("Arrow, eye, swords", "What a left click on the map does: move, look, attack"),
+        new HelpLine("The party", "Collapse the party onto the leader"),
+        HelpLine.For(Controls.Back, "Close (from the preferences: back to the menu)", "Esc"));
 
     private static HelpSection CharacterGenSection => new("Character Generation",
         new HelpLine("Click the body", "Next race and gender (right-click: previous)"),
@@ -282,7 +301,7 @@ public partial class KeyHelp : CanvasLayer
             HelpLine.For(Controls.QuickLoad, "Load the quick save"),
             HelpLine.For(Controls.ToggleJournal, "Journal: quests, conversations, events"),
             HelpLine.For(Controls.ToggleOptions, "Options: volume, screen, keys"),
-            HelpLine.For(Controls.Back, "Back to the main menu", "Esc")),
+            HelpLine.For(Controls.Back, "The game menu (with the LOOK or ATTACK cursor: back to moving)", "Esc")),
         new HelpSection("Debugging",
             HelpLine.For(Controls.ToggleMapFlags, "Map flags: blocked, line of sight, occupied, triggers"),
             HelpLine.For(Controls.ToggleScriptLog, "Script log"),
@@ -303,7 +322,7 @@ public partial class KeyHelp : CanvasLayer
     /// <summary>Every screen's sections, for <c>--check-help</c>.</summary>
     public static IEnumerable<HelpSection> AllSections =>
     [
-        .. RegionSections, MainMenuSection, PartySection, CharacterGenSection, CharacterScreenSection, Buttons, Everywhere, SavesSection, ModsSection,
+        .. RegionSections, MainMenuSection, PartySection, CharacterGenSection, CharacterScreenSection, MagicSection, GameMenuSection, Buttons, Everywhere, SavesSection, ModsSection,
     ];
 
     /// <summary>Actions in <see cref="Controls.All"/> no screen's help lists.</summary>

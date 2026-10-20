@@ -489,6 +489,9 @@ public sealed partial class GameWorld
     /// <paramref name="raiseDead"/> (REQUEST 1) the dead too. Those standing
     /// are healed to full (the original's spell and healing details aren't traced).
     /// </summary>
+    /// <summary>The party has rested (<see cref="Rest"/>): spells and psionic strength come back.</summary>
+    public event Action? Rested;
+
     public void Rest(bool raiseDead)
     {
         foreach (WorldObject member in Party)
@@ -503,6 +506,7 @@ public sealed partial class GameWorld
                 v.Hp = v.MaxHp;
             }
         }
+        Rested?.Invoke();
     }
 
     /// <summary>

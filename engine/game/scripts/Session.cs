@@ -335,15 +335,16 @@ public static class Session
         Install is null ? [] : Mods.Verify(Install.GffFiles.Select(n => (n, GffFile.Open(Install.FindFile(n)!))));
 
     /// <summary>A GFF file from the install, opened on first use.</summary>
-    private static Dictionary<int, string>? _spellNames;
+    private static Dictionary<int, SpellInfo>? _spells;
+
+    private static Dictionary<int, SpellInfo> Spells => _spells ??= SpellInfo.ReadAll(Open("RESOURCE.GFF")).ToDictionary(s => s.Number);
 
     /// <summary>A spell's or psionic power's name (<c>SPIN</c> n in <c>RESOURCE.GFF</c>, as "Magic Missile"), or null.</summary>
-    public static string? SpellName(int number)
-    {
-        _spellNames ??= SpellInfo.ReadAll(Open("RESOURCE.GFF"))
-            .ToDictionary(s => s.Number, s => System.Globalization.CultureInfo.InvariantCulture.TextInfo.ToTitleCase(s.Name.ToLowerInvariant()));
-        return _spellNames.GetValueOrDefault(number);
-    }
+    public static string? SpellName(int number) =>
+        Spells.TryGetValue(number, out SpellInfo? s) ? System.Globalization.CultureInfo.InvariantCulture.TextInfo.ToTitleCase(s.Name.ToLowerInvariant()) : null;
+
+    /// <summary>What a spell or power does (<c>SPIN</c> n after its name), or "".</summary>
+    public static string SpellDescription(int number) => Spells.TryGetValue(number, out SpellInfo? s) ? s.Description : "";
 
     public static GffFile Open(string name)
     {
