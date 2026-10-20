@@ -134,15 +134,22 @@ no-orders and line-of-sight scripts; RANGE, GETXY, GET_LOS and the other
 queries read the world (`DarkSun.Game.World`). Combat and a few
 REQUEST codes are still only logged: F2 shows the script log, F6 the script debugger (see Mods).
 Items: party members, creatures and containers carry items that scripts give, take, drop and search
-for; Get picks an item up; I opens the party's items (wear, give to the next member, drop); a script's
+for; Get picks an item up; a script's
 SHOP opens a shop (buy at an item's value, sell at half) and waits for it to close; the party's money
 is `gname[10]`. AWARD gives experience to the party's characters, DAMAGE and PHYS_DAMAGE hurt and kill,
 REQUEST 1 and 4 rest the party. Party items and hit points are saved; regions remember what their
 creatures carry and items left on the ground. `-- --new-game --give=1051,1095` hands out items by
-`RDFF` number, `--open-items` opens the items window; `--check-items` checks it all with the game's items.
+`RDFF` number; `--check-items` checks it all with the game's items.
 Items can only be worn by the classes their type allows. A creature that dies leaves a dead body
-holding what it carried. Open on a chest, a bag or a body shows what is in it, to take or put in
-(`--open-body` kills the first creature and opens its body, for testing).
+holding what it carried.
+The character screens (`CharacterScreen`) are the original's windows and art: C shows the
+character sheet (View Character, `WIND` 11500: abilities, hit points, armour class, THAC0,
+experience, psionics), I the items (`WIND` 13500: the body with its 14 equipment slots, the pack, DROP
+and SPLIT), and the bottom icons switch between them. Click a thing, then where it goes (a slot to
+wear it, the pack, another member's box to give it); double-click wears or takes off; right-click
+describes it. Open on a chest, a bag or a body shows its contents in place of the body, to take or
+put in. `--open-sheet`, `--open-items` and `--open-body` (kills the first creature and opens its
+body) open them for testing; `--check-character` clicks through them.
 The original screens (main menu, View Character, Character Generation, the text windows) are built
 from their windows' data (`UiWindowView`): each control where its `WIND` puts it, with its own art,
 so a mod's `WIND/n.json` moves them. The engine's own changes to the original layouts are the same

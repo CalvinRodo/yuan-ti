@@ -29,15 +29,15 @@ public partial class OptionsWindow : PanelContainer
         GrowHorizontal = GrowDirection.Both;
         GrowVertical = GrowDirection.Both;
         CustomMinimumSize = new Vector2(440, 330);
-        AddThemeStyleboxOverride("panel", InventoryWindow.Panel());
+        AddThemeStyleboxOverride("panel", Panels.Panel());
         var column = new VBoxContainer();
         column.AddThemeConstantOverride("separation", 3);
         AddChild(column);
         var top = new HBoxContainer();
         column.AddChild(top);
-        top.AddChild(InventoryWindow.Text("Options", Heading));
+        top.AddChild(Panels.Text("Options", Heading));
         top.AddChild(new Control { SizeFlagsHorizontal = SizeFlags.ExpandFill });
-        top.AddChild(InventoryWindow.Text("O or Esc closes", Dim));
+        top.AddChild(Panels.Text("O or Esc closes", Dim));
 
         var general = new GridContainer { Columns = 2 };
         general.AddThemeConstantOverride("h_separation", 10);
@@ -50,25 +50,25 @@ public partial class OptionsWindow : PanelContainer
         Check(general, "Show the map's information lines", Settings.DebugHud, v => Settings.DebugHud = v);
         Check(general, "Walk as the original plans paths", Settings.OriginalPathfinding, v => Settings.OriginalPathfinding = v);
 
-        column.AddChild(InventoryWindow.Text("Keys (click one, then press the new key)", Heading));
+        column.AddChild(Panels.Text("Keys (click one, then press the new key)", Heading));
         var scroll = new ScrollContainer { SizeFlagsVertical = SizeFlags.ExpandFill, CustomMinimumSize = new Vector2(0, 120), HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled };
         column.AddChild(scroll);
         _keys = new GridContainer { Columns = 2, SizeFlagsHorizontal = SizeFlags.ExpandFill };
         _keys.AddThemeConstantOverride("h_separation", 10);
         _keys.AddThemeConstantOverride("v_separation", 1);
         scroll.AddChild(_keys);
-        _note = InventoryWindow.Text("", Dim);
+        _note = Panels.Text("", Dim);
         column.AddChild(_note);
         var buttons = new HBoxContainer();
         column.AddChild(buttons);
-        InventoryWindow.AddButton(buttons, "Default keys", () =>
+        Panels.AddButton(buttons, "Default keys", () =>
         {
             Controls.ResetKeys();
             _note.Text = "Every key is back to its default.";
             ShowKeys();
         });
         buttons.AddChild(new Control { SizeFlagsHorizontal = SizeFlags.ExpandFill });
-        InventoryWindow.AddButton(buttons, "Close", Close);
+        Panels.AddButton(buttons, "Close", Close);
         ShowKeys();
     }
 
@@ -93,7 +93,7 @@ public partial class OptionsWindow : PanelContainer
 
     private static void Slider(GridContainer grid, string label, float value, Action<float> set)
     {
-        grid.AddChild(InventoryWindow.Text(label));
+        grid.AddChild(Panels.Text(label));
         var slider = new HSlider { MinValue = 0, MaxValue = 100, Step = 5, Value = value * 100, CustomMinimumSize = new Vector2(160, 0), FocusMode = FocusModeEnum.None };
         slider.ValueChanged += v =>
         {
@@ -105,9 +105,9 @@ public partial class OptionsWindow : PanelContainer
 
     private static void Check(GridContainer grid, string label, bool value, Action<bool> set)
     {
-        grid.AddChild(InventoryWindow.Text(label));
+        grid.AddChild(Panels.Text(label));
         // An on/off button: plainer to see on the dark panel than a check box.
-        var box = InventoryWindow.Small(new Button { ToggleMode = true, ButtonPressed = value, Text = value ? "On" : "Off", FocusMode = FocusModeEnum.None, CustomMinimumSize = new Vector2(50, 0) });
+        var box = Panels.Small(new Button { ToggleMode = true, ButtonPressed = value, Text = value ? "On" : "Off", FocusMode = FocusModeEnum.None, CustomMinimumSize = new Vector2(50, 0) });
         box.Toggled += on =>
         {
             box.Text = on ? "On" : "Off";
@@ -128,9 +128,9 @@ public partial class OptionsWindow : PanelContainer
             .GroupBy(l => l.Action!).ToDictionary(g => g.Key, g => g.First().What);
         foreach (string action in Controls.Rebindable)
         {
-            _keys.AddChild(InventoryWindow.Text(what.GetValueOrDefault(action, action)));
+            _keys.AddChild(Panels.Text(what.GetValueOrDefault(action, action)));
             string keys = KeyHelp.Keys(action);
-            var button = InventoryWindow.AddButton(_keys, keys.Length > 0 ? keys : "(none)", () => { });
+            var button = Panels.AddButton(_keys, keys.Length > 0 ? keys : "(none)", () => { });
             button.CustomMinimumSize = new Vector2(110, 0);
             string a = action;
             button.Pressed += () => Wait(a, button);

@@ -183,6 +183,7 @@ public partial class KeyHelp : CanvasLayer
     /// <summary>The screen's name and its keys.</summary>
     public static (string Title, IReadOnlyList<HelpSection> Sections) For(Node? scene) => scene switch
     {
+        RegionView { CharacterScreenOpen: true } => ("the character screens", [CharacterScreenSection, Everywhere]),
         RegionView => ("the map", [.. RegionSections, Everywhere]),
         MainMenu => ("main menu", [MainMenuSection, Buttons, Everywhere]),
         PartyView => ("View Character", [PartySection, Everywhere]),
@@ -223,6 +224,18 @@ public partial class KeyHelp : CanvasLayer
         new HelpLine("Click ADD, DROP", "Bring back a character made before, or take one out"),
         HelpLine.For(Controls.Back, "Keep the party and go back (also RETURN)", "Esc"));
 
+    private static HelpSection CharacterScreenSection => new("Character and items",
+        new HelpLine("Click a box", "Show that member (with a thing chosen: give it to them)"),
+        new HelpLine("Click a thing", "Choose it; click where it goes: a slot to wear it, the pack, the open container"),
+        new HelpLine("Double-click", "Wear it, take it off, or take it out of the container"),
+        new HelpLine("Right-click", "What it is: damage, armour, the spell it casts, who may use it"),
+        new HelpLine("Wheel, MORE", "The rest of the pack (the wheel over a container: the rest of it)"),
+        new HelpLine("DROP, SPLIT", "Put the chosen thing on the ground; split a stack in two"),
+        HelpLine.For(Controls.ToggleCharacter, "The character sheet (again: close)"),
+        HelpLine.For(Controls.ToggleInventory, "The items (again: close)"),
+        HelpLine.For(Controls.NextCharacter, "The next member"),
+        HelpLine.For(Controls.Back, "Put the chosen thing back, or close", "Esc"));
+
     private static HelpSection CharacterGenSection => new("Character Generation",
         new HelpLine("Click the body", "Next race and gender (right-click: previous)"),
         new HelpLine("Click an ability", "Raise it (right-click: lower)"),
@@ -242,6 +255,7 @@ public partial class KeyHelp : CanvasLayer
             new HelpLine("Shift+click", "The whole party walks there"),
             new HelpLine("Right-click", "What can be done with the thing under the pointer (done at once if only one)"),
             HelpLine.For(Controls.NextCharacter, "Select the next character"),
+            HelpLine.For(Controls.ToggleCharacter, "The character sheet"),
             HelpLine.For(Controls.ToggleInventory, "The party's items: wear, give, drop"),
             HelpLine.For(Controls.AddCharacter, "Add a character (testing)"),
             HelpLine.For(Controls.ChangeSprite, "Change the selected character's sprite (testing)")),
@@ -289,7 +303,7 @@ public partial class KeyHelp : CanvasLayer
     /// <summary>Every screen's sections, for <c>--check-help</c>.</summary>
     public static IEnumerable<HelpSection> AllSections =>
     [
-        .. RegionSections, MainMenuSection, PartySection, CharacterGenSection, Buttons, Everywhere, SavesSection, ModsSection,
+        .. RegionSections, MainMenuSection, PartySection, CharacterGenSection, CharacterScreenSection, Buttons, Everywhere, SavesSection, ModsSection,
     ];
 
     /// <summary>Actions in <see cref="Controls.All"/> no screen's help lists.</summary>

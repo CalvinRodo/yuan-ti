@@ -423,7 +423,17 @@ this milestone brings most of the game's content.
 - [ ] Items still to do: casting from items (charges used up; needs
       spells), breakage in combat (`80F5:1F4B`), bags' contents in a pack,
       and the type flags 4 and 0x10.
-- [ ] Character sheet and inventory screens.
+- [x] Character sheet and inventory screens (`CharacterScreen`): View
+      Character (`WIND` 11500 over `BMP` 11000) with the member's sheet, and
+      the inventory (`WIND` 13500 over `BMP` 13001: the body `BMP` 13004,
+      equipment slot n at `APFM` 11216 + n with its silhouette `BMP` 13007
+      frame 9 + n, the pack at 11230–11241, a container's contents at
+      13200 and 11248–11259 over `BMP` 13002/13003/13005). Click-to-move
+      stands in for the original's dragging. Armour class and THAC0 follow
+      AD&D 2nd edition (DSUN.EXE's formulas aren't traced).
+- [ ] The spell and psionic screens (the bar's other two icons), the game
+      menu button, leader and computer-control buttons; the 6 slots at
+      `APFM` 11242–11247 and SELL on the inventory (not traced).
 - [x] Party creation: Create Characters (View Character, `WIND` 11500) and
       Character Generation (`WIND` 3011) screens; the party starts new games
       and is kept in saves; a roster for ADD and DROP.

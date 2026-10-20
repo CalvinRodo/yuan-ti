@@ -39,15 +39,15 @@ public partial class JournalWindow : PanelContainer
         GrowHorizontal = GrowDirection.Both;
         GrowVertical = GrowDirection.Both;
         CustomMinimumSize = new Vector2(520, 320);
-        AddThemeStyleboxOverride("panel", InventoryWindow.Panel());
+        AddThemeStyleboxOverride("panel", Panels.Panel());
         var column = new VBoxContainer();
         AddChild(column);
         var top = new HBoxContainer();
         column.AddChild(top);
-        top.AddChild(InventoryWindow.Text("Journal", Heading));
+        top.AddChild(Panels.Text("Journal", Heading));
         top.AddChild(new Control { SizeFlagsHorizontal = SizeFlags.ExpandFill });
-        top.AddChild(InventoryWindow.Text("J or Esc closes", Dim));
-        _tabs = InventoryWindow.Small(new TabContainer { SizeFlagsVertical = SizeFlags.ExpandFill });
+        top.AddChild(Panels.Text("J or Esc closes", Dim));
+        _tabs = Panels.Small(new TabContainer { SizeFlagsVertical = SizeFlags.ExpandFill });
         column.AddChild(_tabs);
         _quests = Rich("Quests");
         _tabs.AddChild(_quests);
@@ -150,7 +150,7 @@ public partial class JournalWindow : PanelContainer
         }
         if (journal.Conversations.Count == 0)
         {
-            _conversations.AddChild(InventoryWindow.Text("No conversations yet.", Dim));
+            _conversations.AddChild(Panels.Text("No conversations yet.", Dim));
         }
 
         // Events, newest first.

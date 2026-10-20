@@ -42,16 +42,16 @@ public partial class ShopWindow : PanelContainer
         GrowHorizontal = GrowDirection.Both;
         GrowVertical = GrowDirection.Both;
         CustomMinimumSize = new Vector2(440, 240);
-        AddThemeStyleboxOverride("panel", InventoryWindow.Panel());
+        AddThemeStyleboxOverride("panel", Panels.Panel());
         var column = new VBoxContainer();
         column.AddThemeConstantOverride("separation", 3);
         AddChild(column);
         var top = new HBoxContainer();
         column.AddChild(top);
-        _title = InventoryWindow.Text("", new Color(0.95f, 0.8f, 0.55f));
+        _title = Panels.Text("", new Color(0.95f, 0.8f, 0.55f));
         top.AddChild(_title);
         top.AddChild(new Control { SizeFlagsHorizontal = SizeFlags.ExpandFill });
-        _money = InventoryWindow.Text("", new Color(0.7f, 0.65f, 0.6f));
+        _money = Panels.Text("", new Color(0.7f, 0.65f, 0.6f));
         top.AddChild(_money);
         var lists = new HBoxContainer { SizeFlagsVertical = SizeFlags.ExpandFill };
         column.AddChild(lists);
@@ -59,22 +59,22 @@ public partial class ShopWindow : PanelContainer
         _left.ItemActivated += _ => Buy();
         _right = List(lists, "Yours");
         _right.ItemActivated += _ => Sell();
-        _status = InventoryWindow.Text("Double-click to buy or sell.", new Color(0.7f, 0.65f, 0.6f));
+        _status = Panels.Text("Double-click to buy or sell.", new Color(0.7f, 0.65f, 0.6f));
         column.AddChild(_status);
         var buttons = new HBoxContainer();
         column.AddChild(buttons);
-        InventoryWindow.AddButton(buttons, "Buy", Buy);
-        InventoryWindow.AddButton(buttons, "Sell", Sell);
+        Panels.AddButton(buttons, "Buy", Buy);
+        Panels.AddButton(buttons, "Sell", Sell);
         buttons.AddChild(new Control { SizeFlagsHorizontal = SizeFlags.ExpandFill });
-        InventoryWindow.AddButton(buttons, "Done", Close);
+        Panels.AddButton(buttons, "Done", Close);
     }
 
     private static ItemList List(Container parent, string title)
     {
         var box = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         parent.AddChild(box);
-        box.AddChild(InventoryWindow.Text(title));
-        var list = InventoryWindow.Small(new ItemList { SizeFlagsVertical = SizeFlags.ExpandFill, CustomMinimumSize = new Vector2(0, 150) });
+        box.AddChild(Panels.Text(title));
+        var list = Panels.Small(new ItemList { SizeFlagsVertical = SizeFlags.ExpandFill, CustomMinimumSize = new Vector2(0, 150) });
         box.AddChild(list);
         return list;
     }

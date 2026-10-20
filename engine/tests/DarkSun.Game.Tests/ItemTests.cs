@@ -218,6 +218,36 @@ public class ItemTests
     }
 
     [Fact]
+    public void EquipAtWearsInThatSlotOnlyAndSwapsWhatWasThere()
+    {
+        var (w, party) = World();
+        w.Give(2, -Boots, 0, GameWorld.None);
+        Item first = party[0].Items[0], second = party[0].Items[1];
+        const int Feet = 13;
+
+        Assert.Equal(EquipResult.NotWearable, w.EquipAt(w[0]!, first, 0)); // slot 0 is the arms
+        Assert.Equal(EquipResult.Worn, w.EquipAt(w[0]!, first, Feet));
+        Assert.Equal(EquipResult.Worn, w.EquipAt(w[0]!, second, Feet));
+        Assert.Equal((Equipment.Pack, Feet), (first.Slot, second.Slot)); // the first went back to the pack
+    }
+
+    [Fact]
+    public void SplitTakesPartOfAStackIntoItsOwnEntry()
+    {
+        var (w, party) = World();
+        w.Give(9, -Arrows, 0, GameWorld.None);
+        w.Give(1, -Torch, 0, GameWorld.None);
+        Item arrows = party[0].Items[0];
+
+        Item part = w.Split(w[0]!, arrows, 4)!;
+
+        Assert.Equal([(Arrows, 5), (Arrows, 4), (Torch, 1)], party[0].Items.Select(i => (i.Rdff, i.Quantity)));
+        Assert.Same(part, party[0].Items[1]);
+        Assert.Null(w.Split(w[0]!, arrows, 5)); // not all of it
+        Assert.Null(w.Split(w[0]!, party[0].Items[2], 1)); // torches don't stack
+    }
+
+    [Fact]
     public void ADeadCreatureLeavesABodyWithWhatItCarried()
     {
         var (w, party) = World();

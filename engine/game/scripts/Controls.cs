@@ -26,6 +26,7 @@ public static class Controls
     public const string QuickLoad = "quick_load";
     public const string ToggleObjectNumbers = "debug_toggle_object_numbers";
     public const string ToggleInventory = "inventory";
+    public const string ToggleCharacter = "character";
     public const string ToggleScriptDebugger = "debug_toggle_script_debugger";
     public const string DebugContinue = "debug_continue";
     public const string DebugStepOver = "debug_step_over";
@@ -40,7 +41,7 @@ public static class Controls
     [
         PanLeft, PanRight, PanUp, PanDown, ZoomIn, ZoomOut, NextRegion, PreviousRegion, ToggleMapFlags, NextCharacter,
         AddCharacter, ChangeSprite, ToggleScriptLog, ToggleGrid, QuickSave, QuickLoad, ToggleObjectNumbers,
-        ToggleInventory, ToggleJournal, ToggleOptions, ToggleScriptDebugger, DebugContinue, DebugStepOver, DebugStepInto,
+        ToggleInventory, ToggleCharacter, ToggleJournal, ToggleOptions, ToggleScriptDebugger, DebugContinue, DebugStepOver, DebugStepInto,
         DebugStepOut, Back,
     ];
 
@@ -58,13 +59,14 @@ public static class Controls
         [ToggleMapFlags] = Keys(Key.F1),
         [NextCharacter] = Keys(Key.Tab),
         [AddCharacter] = Keys(Key.N),
-        [ChangeSprite] = Keys(Key.C),
+        [ChangeSprite] = [new InputEventKey { PhysicalKeycode = Key.C, ShiftPressed = true }],
         [ToggleScriptLog] = Keys(Key.F2),
         [ToggleGrid] = Keys(Key.F3),
         [QuickSave] = Keys(Key.F5),
         [QuickLoad] = Keys(Key.F9),
         [ToggleObjectNumbers] = Keys(Key.F4),
         [ToggleInventory] = Keys(Key.I),
+        [ToggleCharacter] = Keys(Key.C),
         [ToggleJournal] = Keys(Key.J),
         [ToggleOptions] = Keys(Key.O),
         [ToggleScriptDebugger] = Keys(Key.F6),

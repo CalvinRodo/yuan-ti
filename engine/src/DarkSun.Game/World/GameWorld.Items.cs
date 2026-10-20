@@ -270,6 +270,47 @@ public sealed partial class GameWorld
         return EquipResult.Worn;
     }
 
+    /// <summary>
+    /// Wear <paramref name="item"/> in equipment slot <paramref name="slot"/>,
+    /// which must take its placement (<see cref="Equipment.Placements"/>);
+    /// what was there goes back to the pack.
+    /// </summary>
+    public EquipResult EquipAt(WorldObject holder, Item item, int slot)
+    {
+        if (Items.TypeOf(item.Record) is not { Placement: not ItemPlacement.None } type
+            || slot is < 0 or >= Equipment.Slots || Equipment.Placements[slot] != type.Placement)
+        {
+            return EquipResult.NotWearable;
+        }
+        if (!CanUse(holder, item))
+        {
+            return EquipResult.WrongClass;
+        }
+        foreach (Item there in holder.Items.Where(i => i.Slot == slot && i != item))
+        {
+            there.Slot = Equipment.Pack;
+        }
+        item.Slot = slot;
+        return EquipResult.Worn;
+    }
+
+    /// <summary>
+    /// Take <paramref name="count"/> off a stack into an entry of its own in
+    /// <paramref name="holder"/>'s pack. Null if it isn't a stack of more, or
+    /// the pack is full.
+    /// </summary>
+    public Item? Split(WorldObject holder, Item item, int count)
+    {
+        if (!Stacks(item.Record) || count < 1 || count >= item.Quantity || holder.Items.Count >= Equipment.Capacity
+            || NewItem(item.Rdff, count) is not { } part)
+        {
+            return null;
+        }
+        item.Quantity -= count;
+        holder.Items.Insert(holder.Items.IndexOf(item) + 1, part);
+        return part;
+    }
+
     // -- containers -----------------------------------------------------------------------
 
     /// <summary>

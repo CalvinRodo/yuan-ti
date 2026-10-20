@@ -68,12 +68,12 @@ public partial class RegionView : Node2D
     private Node2D _sorted = null!;
     private DebugOverlay _overlay = null!;
     private ScriptDebugger _debugger = null!;
-    private InventoryWindow _inventory = null!;
+    private CharacterScreen _character = null!;
+    private readonly Dictionary<int, Texture2D?> _itemIcons = [];
     private JournalWindow _journal = null!;
     private OptionsWindow _options = null!;
     private Control _hudPanel = null!;
     private ShopWindow _shop = null!;
-    private ContainerWindow _container = null!;
 
     /// <summary>Scripts to start once none is paused (the region's after the game-start script, …): see <see cref="WhenScriptsFree"/>.</summary>
     private readonly Queue<Action> _whenFree = new();
@@ -232,8 +232,11 @@ public partial class RegionView : Node2D
             }
             if (OS.GetCmdlineUserArgs().Contains("--open-items"))
             {
-                _inventory.World = _world;
-                _inventory.CallDeferred(InventoryWindow.MethodName.Open, _selected);
+                Callable.From(() => _character.Open(_world, _selected, CharacterScreen.Page.Items)).CallDeferred();
+            }
+            if (OS.GetCmdlineUserArgs().Contains("--open-sheet"))
+            {
+                Callable.From(() => _character.Open(_world, _selected, CharacterScreen.Page.Character)).CallDeferred();
             }
             if (OS.GetCmdlineUserArgs().Contains("--open-body") && _world.Objects.FirstOrDefault(o => o.Kind == ObjectKind.Creature && !o.Hidden) is { } victim)
             {
@@ -243,7 +246,7 @@ public partial class RegionView : Node2D
                 _world.Hurt(victim, victim.Vitals.Hp + 1);
                 if (_world.First(-GameWorld.DeadBody) is { } body)
                 {
-                    Callable.From(() => _container.Open(_world, body, _selected)).CallDeferred();
+                    Callable.From(() => _character.Open(_world, _selected, CharacterScreen.Page.Items, body)).CallDeferred();
                 }
             }
             if (OS.GetCmdlineUserArgs().Contains("--check-journal"))
@@ -255,6 +258,11 @@ public partial class RegionView : Node2D
             if (OS.GetCmdlineUserArgs().Contains("--check-dialogue"))
             {
                 CheckDialogue();
+                return;
+            }
+            if (OS.GetCmdlineUserArgs().Contains("--check-character"))
+            {
+                CheckCharacter();
                 return;
             }
             if (OS.GetCmdlineUserArgs().Contains("--check-items"))
@@ -330,20 +338,6 @@ public partial class RegionView : Node2D
             Default = () => _region is null ? null : new GplEntry(_region.Number, 0, GplFileKind.Mas),
         };
         layer.AddChild(_debugger);
-        _inventory = new InventoryWindow
-        {
-            MemberName = slot => _world?[slot]?.Name ?? $"Character {slot + 1}",
-            Money = () => Session.ScriptHost.Money,
-            SpellName = Session.SpellName,
-            Did = text => AddScriptLine($"> {text}"),
-        };
-        layer.AddChild(_inventory);
-        _container = new ContainerWindow
-        {
-            MemberName = slot => _world?[slot]?.Name ?? $"Character {slot + 1}",
-            Did = text => AddScriptLine($"> {text}"),
-        };
-        layer.AddChild(_container);
         _journal = new JournalWindow { Portraits = n => Portrait(n) };
         layer.AddChild(_journal);
         _options = new OptionsWindow { Closed = () => _hudPanel.Visible = Settings.DebugHud };
@@ -362,6 +356,16 @@ public partial class RegionView : Node2D
             },
         };
         layer.AddChild(_shop);
+        _character = new CharacterScreen
+        {
+            CharacterOf = slot => slot < Session.Party.Count ? Session.Party[slot] : null,
+            MemberName = MemberName,
+            ItemIcon = ItemIcon,
+            Money = () => Session.ScriptHost.Money,
+            SpellName = Session.SpellName,
+            Did = text => AddScriptLine($"> {text}"),
+        };
+        layer.AddChild(_character);
         _prompt = new Label { Visible = false, HorizontalAlignment = HorizontalAlignment.Center };
         _prompt.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.CenterTop);
         _prompt.GrowHorizontal = Control.GrowDirection.Both;
@@ -461,6 +465,7 @@ public partial class RegionView : Node2D
         {
             _worldObjects[o.Source!] = o;
         }
+        _itemIcons.Clear();
         _palette = _region.LoadPalette(Session.Open("GPLDATA.GFF"), Session.Open("RESOURCE.GFF"), Session.Assets);
 
         // The region's music (RDAT +0x2F), changed with the original's 5-second fades.
@@ -541,6 +546,25 @@ public partial class RegionView : Node2D
     }
 
     private Texture2D TextureFor(ImageFrame frame) => Textures.ToTexture(frame, _palette);
+
+    /// <summary>A party member's name: their character's, or the map object's.</summary>
+    private string MemberName(int slot) =>
+        slot < Session.Party.Count && Session.Party[slot].Name.Length > 0 ? Session.Party[slot].Name : _world?[slot]?.Name ?? $"Character {slot + 1}";
+
+    /// <summary>An item's picture for the character screens: its map sprite (<c>OJFF</c> = <c>RDFF</c>) in the region's palette.</summary>
+    private Texture2D? ItemIcon(int rdff)
+    {
+        if (!_itemIcons.TryGetValue(rdff, out Texture2D? icon))
+        {
+            var objectData = new GffSet([Session.Open("SEGOBJEX.GFF"), Session.Open("GPLDATA.GFF")]);
+            icon = Region.MakeObject(objectData, rdff, 0, 0, d => Session.Assets.Frames(d)) is { Frames: [var frame, ..] } ? TextureFor(frame) : null;
+            _itemIcons[rdff] = icon;
+        }
+        return icon;
+    }
+
+    /// <summary>The character screens are showing (the key help lists theirs).</summary>
+    public bool CharacterScreenOpen => _character?.IsOpen == true;
 
     /// <summary>
     /// An object's animation, hanging from <paramref name="hotX"/>, <paramref name="hotY"/>
@@ -955,9 +979,13 @@ public partial class RegionView : Node2D
         {
             OpenVerbMenu(GetGlobalMousePosition(), right.Position);
         }
-        else if (e.IsActionPressed(Controls.ToggleInventory) && !_inventory.Visible && !Session.Scripts.IsSuspended)
+        else if (e.IsActionPressed(Controls.ToggleInventory) && !_character.IsOpen && !Session.Scripts.IsSuspended)
         {
-            _inventory.Open(_world, _selected);
+            _character.Open(_world, _selected, CharacterScreen.Page.Items);
+        }
+        else if (e.IsActionPressed(Controls.ToggleCharacter) && !_character.IsOpen && !Session.Scripts.IsSuspended)
+        {
+            _character.Open(_world, _selected, CharacterScreen.Page.Character);
         }
         else if (e.IsActionPressed(Controls.ToggleJournal) && !_journal.Visible)
         {
@@ -1196,7 +1224,7 @@ public partial class RegionView : Node2D
             AddScriptLine($"> {opener.Name} opens {Describe(target)}");
             if (!_checking)
             {
-                _container.Open(_world, target, actor);
+                _character.Open(_world, actor, CharacterScreen.Page.Items, target);
             }
             return;
         }
@@ -1930,6 +1958,107 @@ public partial class RegionView : Node2D
         GD.Print(problems.Count == 0
             ? $"items: made, dropped, picked up, worn, refused by class, searched, left and found, transformed, hurt, looted from a body, rested, saved and loaded ({carried[0]}; {carried[1]})"
             : "items: " + string.Join("; ", problems));
+        GetTree().Quit(problems.Count > 0 ? 1 : 0);
+    }
+
+    /// <summary>
+    /// <c>--check-character</c>: the character screens, clicked as the player
+    /// would: wear boots by clicking them then the feet, take them off with a
+    /// double-click, be refused the Helm of Might as a thief, give a pot to
+    /// the next member through their box, split a stack of arrows, loot a dead
+    /// body, and turn to the character sheet.
+    /// </summary>
+    private void CheckCharacter()
+    {
+        AnswerForThePlayer();
+        var problems = new List<string>();
+        void Expect(bool ok, string what)
+        {
+            if (!ok)
+            {
+                problems.Add(what);
+            }
+        }
+        const int Water = 1095, Boots = 1051, Helm = 1519, Arrows = 1070, Feet = 13, Head = 7;
+        const int Worn = 0, Pack = 1, Inside = 2;
+        if (_world.Party.Count() < 2)
+        {
+            AddCharacter(_world[0]!.Cell);
+        }
+        WorldObject me = _world[0]!, next = _world.Party.First(p => p.Index != 0);
+        me.Items.Clear();
+        _world.Give(1, -Boots, 0, GameWorld.None);
+        _world.Give(1, -Helm, 0, GameWorld.None);
+        _world.Give(1, -Water, 0, GameWorld.None);
+        _world.Give(20, -Arrows, 0, GameWorld.None);
+        Item boots = me.Items.First(i => i.Rdff == Boots), helm = me.Items.First(i => i.Rdff == Helm);
+        Item pot = me.Items.First(i => i.Rdff == Water), arrows = me.Items.First(i => i.Rdff == Arrows);
+        CharacterScreen screen = _character;
+        screen.Open(_world, 0, CharacterScreen.Page.Items);
+        int PackIndex(Item item) => Enumerable.Range(0, 12).First(n => screen.ItemAt(Pack, n) == item);
+
+        screen.Click(Pack, PackIndex(boots));
+        Expect(screen.Picked == boots && screen.Info.Contains("Boots"), "clicking the boots picks them and describes them");
+        screen.Click(Worn, Feet);
+        Expect(boots.Slot == Feet && screen.ItemAt(Worn, Feet) == boots && screen.Picked is null, "clicking the feet wears them");
+        screen.Click(Worn, Feet, doubleClick: true);
+        Expect(!boots.Equipped, "a double-click takes them off");
+
+        Func<int, ItemClasses?> classes = _world.PartyClasses;
+        _world.PartyClasses = _ => ItemClasses.Thief;
+        screen.Click(Pack, PackIndex(helm));
+        screen.Click(Worn, Head);
+        Expect(!helm.Equipped && screen.Info.Contains("can't use"), $"a thief is refused the Helm of Might ({screen.Info.Split('\n')[0]})");
+        _world.PartyClasses = _ => ItemClasses.Fighter;
+        screen.Click(Worn, Head);
+        Expect(helm.Slot == Head, "a fighter wears it");
+        screen.Click(Pack, PackIndex(boots));
+        screen.Click(Worn, Head);
+        Expect(!boots.Equipped && helm.Slot == Head, "boots don't go on the head");
+        _world.PartyClasses = classes;
+        screen.Click(Pack, PackIndex(boots)); // put them back down
+        screen.Click(Pack, PackIndex(boots));
+
+        screen.Click(Pack, PackIndex(pot));
+        screen.ClickBox(next.Index);
+        Expect(next.Items.Contains(pot) && !me.Items.Contains(pot), "clicking another member's box gives them the pot");
+
+        screen.Click(Pack, PackIndex(arrows));
+        screen.Press(13302);
+        Expect(me.Items.Count(i => i.Rdff == Arrows) == 2 && me.Items.Where(i => i.Rdff == Arrows).Sum(i => i.Quantity) == 20, "SPLIT makes two stacks of 10 arrows");
+
+        // A dead body, opened: take what is in it.
+        if (_world.Objects.FirstOrDefault(o => o.Kind == ObjectKind.Creature && !o.Hidden) is { } victim)
+        {
+            _world.Give(1, -Water, victim.Index, GameWorld.None);
+            _world.Hurt(victim, victim.Vitals.Hp + 1);
+            if (_world.First(-GameWorld.DeadBody) is { } body)
+            {
+                screen.Open(_world, 0, CharacterScreen.Page.Items, body);
+                Item inBody = body.Items[0];
+                screen.Click(Inside, 0);
+                screen.Click(Pack, 11);
+                Expect(body.Items.Count == 0 && me.Items.Contains(inBody), "clicking the body's pot, then the pack, takes it");
+                screen.Click(Pack, PackIndex(inBody));
+                screen.Click(Inside, 5);
+                Expect(body.Items.Contains(inBody), "and clicking it then the body puts it back");
+                screen.Click(Inside, 0, doubleClick: true);
+                Expect(me.Items.Contains(inBody), "a double-click takes it again");
+            }
+            else
+            {
+                problems.Add("no body");
+            }
+        }
+
+        screen.Press(10300);
+        Expect(screen.Showing == CharacterScreen.Page.Character && screen.Sheet.Contains("HP"), "the Character icon turns to the sheet");
+        screen.Press(10308);
+        Expect(!screen.IsOpen, "Return closes it");
+
+        GD.Print(problems.Count == 0
+            ? "character: wore and took off, refused by class, gave, split, looted a body, turned to the sheet: OK"
+            : "character: " + string.Join("; ", problems));
         GetTree().Quit(problems.Count > 0 ? 1 : 0);
     }
 
