@@ -140,6 +140,14 @@ public partial class CharacterScreen : RetroScreen
 
     public Page Showing => _page;
 
+    /// <summary>
+    /// Party member <paramref name="slot"/>'s portrait on the page showing, in
+    /// viewport pixels (where a fight shows the member's damage while this
+    /// screen covers the map, <c>896E:0ED3</c>), or null.
+    /// </summary>
+    public Rect2? PortraitRect(int slot) =>
+        IsOpen && slot >= 0 && slot < Current.Pictures.Count && Current.Pictures[slot].IsVisibleInTree() ? Current.Pictures[slot].GetGlobalRect() : null;
+
     public override void _Ready()
     {
         base._Ready();
@@ -458,6 +466,15 @@ public partial class CharacterScreen : RetroScreen
     // -- showing --------------------------------------------------------------------------
 
     private WorldObject? Member => _world?[_member];
+
+    /// <summary>Show the party's hit points and status again (a fight goes on while the screen is open).</summary>
+    public void ShowVitals()
+    {
+        if (IsOpen)
+        {
+            Refresh();
+        }
+    }
 
     private void Refresh()
     {

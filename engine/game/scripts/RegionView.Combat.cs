@@ -235,6 +235,7 @@ public partial class RegionView
         {
             return;
         }
+        _combatPanel.Visible = !_checking && !_character.IsOpen; // the character screen covers the map, with its own controls
         for (int guard = 0; guard < 64; guard++)
         {
             if (_combatWait > 0)
@@ -385,8 +386,8 @@ public partial class RegionView
             case Cast c:
                 Log($"{Who(c.Actor)} {(c.Effect is >= DarkSun.Game.Magic.Spellcasting.FirstPower and <= DarkSun.Game.Magic.Spellcasting.LastPower ? "uses" : "casts")} [color=#c0a0ff]{EffectName(c.Effect)}[/color]");
                 Float(c.Actor, EffectName(c.Effect), new Color(0.8f, 0.65f, 1f));
-                LookOfCast(c);
-                _combatWait = fast ? 0 : CastPause;
+                double look = LookOfCast(c);
+                _combatWait = fast ? 0 : Math.Max(CastPause, look);
                 return;
             case ConditionGained g:
                 Log($"{Who(g.Target)} is {Words(g.Condition)}");
@@ -515,7 +516,7 @@ public partial class RegionView
             return;
         }
         Combatant? c = PlayerTurn;
-        _combatPanel.Visible = !_checking;
+        _combatPanel.Visible = !_checking && !_character.IsOpen;
         _castButton.Disabled = c is null || c.Spells.Count == 0 && (c.Powers.Count == 0 || c.Psp <= 0);
         _autoButton.Disabled = c is null;
         if (c is null)

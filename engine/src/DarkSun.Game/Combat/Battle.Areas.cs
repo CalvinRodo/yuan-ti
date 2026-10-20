@@ -185,6 +185,13 @@ public sealed partial class Battle
         return cells;
     }
 
+    /// <summary>
+    /// The cells <paramref name="e"/>'s area covers cast at <paramref name="at"/>
+    /// (what <c>7D80:200D</c> draws a burst over); none for single targets.
+    /// </summary>
+    public IReadOnlySet<Cell> AreaCells(Combatant caster, SpellEffect e, int level, Cell at, Cell? end = null) =>
+        Spells.TemplateOf(e) is { } t && !e.SingleTarget ? CellsOf(ShapeOf(caster, e, t, level, at, end)) : new HashSet<Cell>();
+
     // -- fields: lingering areas (7D80:0C6E) ------------------------------------------------------------
 
     /// <summary>

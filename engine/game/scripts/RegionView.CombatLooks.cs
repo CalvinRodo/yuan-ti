@@ -174,24 +174,38 @@ public partial class RegionView
         _castLook = null;
     }
 
-    /// <summary>A cast (<c>7D80:003B</c>): its sound, its graphic over the caster, its projectile to the point.</summary>
-    private void LookOfCast(Cast c)
+    /// <summary>
+    /// A cast (<c>7D80:003B</c>): its sound, its graphic over the caster, its
+    /// projectile to the point, a burst's animation where it lands. The seconds
+    /// the playback should give it.
+    /// </summary>
+    private double LookOfCast(Cast c)
     {
         _lastAttack = null;
         if (_battle is not { } battle || battle.Spells.LookOf(c.Effect) is not { } look)
         {
             _castLook = null;
-            return;
+            return 0;
         }
         int template = battle.Spells.Effect(c.Effect) is { } e && battle.Spells.TemplateOf(e) is { } t ? t.Graphic : -1;
         _castLook = (c.Actor, look, template, []);
         Play(look.CastSound);
         ShowGraphic(look.CastGraphic, Feet(c.Actor.Cell));
-        if (battle.Spells.ProjectileOf(look) is int projectile)
+        if (battle.Spells.ProjectileOf(look) is int projectile && ShowGraphic(projectile, Middle(c.Actor.Cell), Middle(c.At), blocks: true) is { } flying)
         {
+            // The burst plays where the projectile lands (7D80:003B, then 7D80:05C7).
             Play(look.FlightSound);
-            ShowGraphic(projectile, Middle(c.Actor.Cell), Middle(c.At), blocks: true);
+            double flight = Middle(c.Actor.Cell).DistanceTo(Middle(c.At)) / ProjectileSpeed;
+            GetTree().CreateTimer(flight).Timeout += () =>
+            {
+                if (InCombat)
+                {
+                    Burst(c.Actor, c.Effect, c.At);
+                }
+            };
+            return flight + BurstSeconds;
         }
+        return Burst(c.Actor, c.Effect, c.At) ? BurstSeconds : 0;
     }
 
     /// <summary>A spell reaching someone without hurting them (<c>80F5:0079</c>): its hit graphic and sound, once each.</summary>
@@ -231,6 +245,12 @@ public partial class RegionView
         {
             return;
         }
+        if (MapCovered && c.PartyMember && c.Source is { Kind: ObjectKind.Party } member)
+        {
+            _character.ShowVitals();
+            PortraitSplash(member.Index);
+            return;
+        }
         int frame = ((int)elements & 0x86) != 0 ? 4 : ((int)elements & 0x41) != 0 ? 2 : ((int)elements & 0x200) != 0 ? 3 : amount < 15 ? 0 : 1;
         _splashFrames ??= Session.Open("RESOURCE.GFF").TryRead("BMP ", DamageSplash, out var data) ? Session.Assets.Frames(data) : [];
         var holder = new Node2D { Position = Middle(c.Cell), ZIndex = 100 };
@@ -251,6 +271,89 @@ public partial class RegionView
         tween.Parallel().TweenProperty(holder, "modulate:a", 0f, 0.6);
         tween.TweenCallback(Callable.From(holder.QueueFree));
     }
+
+    /// <summary>
+    /// A window covers the map (DSUN.EXE's display mode <c>DS:0BC9</c> = 2, set by
+    /// <c>1587:22BA</c> for the character screens, messages and popups).
+    /// </summary>
+    private bool MapCovered => _character.IsOpen || _dialogueWindow.Visible || _gameMenu.IsOpen || _combatMenu is { Visible: true };
+
+    /// <summary>
+    /// Damage to a party member while a window covers the map
+    /// (<c>896E:0ED3</c>): <c>BMP</c> 5014's frame 4, no number, for 40 ticks,
+    /// over the member's portrait: on the character screen where it shows it
+    /// (the original's inventory column at x 37, y 48 × member + 30), else at
+    /// the 2 × 2 boxes' places, (78, 54), (129, 54), (78, 114), (129, 114) of
+    /// the 320 × 200 screen.
+    /// </summary>
+    private void PortraitSplash(int slot)
+    {
+        _splashFrames ??= Session.Open("RESOURCE.GFF").TryRead("BMP ", DamageSplash, out var data) ? Session.Assets.Frames(data) : [];
+        if (slot is < 0 or > 3 || _splashFrames.Count <= PortraitFrame || _splashFrames[PortraitFrame] is not { Width: > 1 } image)
+        {
+            return;
+        }
+        float scale = Math.Max(1f, MathF.Floor(Math.Min(GetViewportRect().Size.X / RetroScreen.Width, GetViewportRect().Size.Y / RetroScreen.Height)));
+        Vector2 origin = ((GetViewportRect().Size - new Vector2(RetroScreen.Width, RetroScreen.Height) * scale) / 2).Floor();
+        (int X, int Y)[] boxes = [(78, 54), (129, 54), (78, 114), (129, 114)];
+        Vector2 centre = _character.PortraitRect(slot) is { } rect ? rect.GetCenter() : origin + new Vector2(boxes[slot].X - 10, boxes[slot].Y) * scale;
+        var splash = new TextureRect
+        {
+            Texture = TextureFor(image),
+            Scale = new Vector2(scale, scale),
+            Position = (centre - new Vector2(image.Width, image.Height) * scale / 2).Floor(),
+            MouseFilter = Control.MouseFilterEnum.Ignore,
+            ZIndex = 100,
+        };
+        _combatLayer.AddChild(splash);
+        GetTree().CreateTimer(PortraitSplashTicks / (double)ScmdAnimator.TicksPerSecond).Timeout += splash.QueueFree;
+    }
+
+    /// <summary>The portrait splash's frame and how long it stays (<c>896E:0ED3</c>: frame 4, 0x28 ticks).</summary>
+    private const int PortraitFrame = 4, PortraitSplashTicks = 40;
+
+    /// <summary>
+    /// A burst's animation (<c>7D80:200D</c>): its template's graphic on every
+    /// point of the area, then a shrinking share of them (6/8 … 1/8 of the
+    /// points, a step at a time), then none. Played as the spell is cast,
+    /// before its effects.
+    /// </summary>
+    private bool Burst(Combatant caster, int effect, Cell at)
+    {
+        if (_checking || _battle is not { } battle || battle.Spells.Effect(effect) is not { } e
+            || battle.Spells.TemplateOf(e) is not { Kind: AreaTemplate.Burst, Graphic: > 0 } template)
+        {
+            return false;
+        }
+        List<CombatGraphic> shown = [.. battle.AreaCells(caster, e, caster.Level, at).OrderBy(c => Battle.Distance(c, at))
+            .Select(cell => ShowGraphic(template.Graphic, Feet(cell), lasts: true, blocks: true)).OfType<CombatGraphic>()];
+        if (shown.Count == 0)
+        {
+            return false;
+        }
+        Tween tween = CreateTween();
+        tween.TweenInterval(BurstStep * 2);
+        for (int step = 6; step >= 0; step--)
+        {
+            int keep = shown.Count * step / 8;
+            tween.TweenCallback(Callable.From(() =>
+            {
+                foreach (CombatGraphic g in shown.Skip(keep).Where(_graphics.Contains).ToList())
+                {
+                    g.Sprite.QueueFree();
+                    _graphics.Remove(g);
+                }
+            }));
+            tween.TweenInterval(BurstStep);
+        }
+        return true;
+    }
+
+    /// <summary>How long a burst plays: two steps whole, then seven shrinking.</summary>
+    private const double BurstSeconds = BurstStep * 9;
+
+    /// <summary>A step of a burst's animation (DSUN.EXE: a frame each, <c>0980:5814</c>).</summary>
+    private const double BurstStep = 0.07;
 
     /// <summary>A field laid (<c>7D80:2782</c>): its template's graphic on each of its cells while it lasts.</summary>
     private void LookOfField(AreaField f)

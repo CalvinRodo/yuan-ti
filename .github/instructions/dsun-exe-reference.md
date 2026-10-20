@@ -2058,7 +2058,20 @@ halved by Low Resistance (31), less 30 + level for Lower Resistance.
 * **Damage** (`80F5:0E61` → `896E:0A0E`): the number over the target on a
   splash, `BMP` 5014's frame 4 for fire, cold or electricity (0x86), 2
   poison or acid (0x41), 3 magic (0x200), else 0 under 15 and 1 from 15.
-  `0E61` also adds 1000 for ability bit 23 against an area over 8.
+  `0E61` also adds 1000 for ability bit 23 against an area over 8. That is
+  while the map shows (display mode `DS:0BC9` = 1: 1 the map, set by
+  `1587:1F83` and `2459`; 2 a window over it, `1587:22BA`, which every
+  popup, message and character screen calls; 4 changing region, `26E5`; 0
+  the menus, `2631`). With a window over the map, damage to a party member
+  (`896E:0ED3`) shows frame 4 alone, no number, for 0x28 ticks over its
+  portrait: with the inventory screen open (`3B6A:003C`) at x 37, y 48 ×
+  member + 30 (the portrait column); otherwise at the 2 × 2 boxes, (78, 54),
+  (129, 54), (78, 114), (129, 114) less 10 in x (centres).
+* **A burst** (`7D80:05C7` → `7D80:200D`, a template of kind 1): after the
+  projectile lands, the template's +3 `OJFF` is drawn at every point
+  `69CB:0000` lays the shape out at, then over six steps (a frame each,
+  `0980:5814`) only the first 6/8, 5/8 … 1/8 of the points, then none;
+  then the effects are applied.
 * **The fight's end** (`612E:04A7` when `612E:0754` finds no enemies):
   `87B3:11AC`, `612E:3199` (kept-up powers end), `8053:0914`, `896E:09D6`,
   `612E:3060`: each party member's Paralyzed ends, its orders clear; one with

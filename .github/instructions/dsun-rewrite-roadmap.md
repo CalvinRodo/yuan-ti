@@ -617,9 +617,12 @@ executable, not in the data.
       (template +3); getting up at the end (`Battle.Finish`) and the game
       over (`WIND` 3004, `BMP` 10004); move triggers mid-fight; the
       thri-kreen's claws and bite and Move 15, everyone else's 1d1 blows.
-- [ ] Combat looks, left: a burst area's own animation over its cells
-      (`7D80:200D`, not traced), and `896E:0ED3`, what the damage code shows
-      instead of the splash in another mode (`DS:0BC9` ≠ 1, not traced).
+- [x] Combat looks, the rest (2026-10-20): a burst's animation (`7D80:200D`:
+      the template's graphic on every cell of the area where the projectile
+      lands, shrinking away over six steps, `Battle.AreaCells`); damage to
+      a party member while a window covers the map (`896E:0ED3`: the splash
+      on its portrait, no number). The burst uses the area's cells for
+      `69CB:0000`'s layout points.
 - [ ] Keep the rules in data (JSON tables) wherever possible, so they're easy to
       tune and mod.
 
