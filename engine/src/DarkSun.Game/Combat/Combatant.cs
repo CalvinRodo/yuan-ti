@@ -174,6 +174,18 @@ public sealed class Combatant
     /// </summary>
     public List<int> Spells { get; init; } = [];
 
+    /// <summary>A party member's psionic powers (a creature's come from <see cref="PsionicSet"/>).</summary>
+    public IReadOnlyList<int> Powers { get; init; } = [];
+
+    /// <summary>A party member's character sheet, which the fight's end updates (<see cref="Battle.SyncSheets"/>).</summary>
+    public Character? Sheet { get; init; }
+
+    /// <summary>The spells it came with (for what the fight used up).</summary>
+    internal IReadOnlyList<int> SpellsAtStart { get; set; } = [];
+
+    /// <summary>Its psionic points when the fight began.</summary>
+    internal int PspAtStart { get; set; }
+
     /// <summary>Its spell set (character record +0x3E), 0 none.</summary>
     public int SpellSet { get; init; }
 

@@ -231,6 +231,20 @@ public partial class RegionView : Node2D
                 // Development: talk to the first object that has a talk trigger (to see dialogue).
                 WhenScriptsFree(() => Act(talker, _selected, Verb.Talk));
             }
+            if (OS.GetCmdlineUserArgs().Contains("--fight"))
+            {
+                // Development: a fight with the nearest creature that fights.
+                Callable.From(() => StartTestFight()).CallDeferred();
+            }
+            if (OS.GetCmdlineUserArgs().FirstOrDefault(a => a.StartsWith("--screenshot=")) is { } shot)
+            {
+                // Development: the screen as a PNG after a few seconds, then quit.
+                GetTree().CreateTimer(5).Timeout += () =>
+                {
+                    GetViewport().GetTexture().GetImage().SavePng(shot["--screenshot=".Length..]);
+                    GetTree().Quit();
+                };
+            }
             if (OS.GetCmdlineUserArgs().Contains("--open-items"))
             {
                 Callable.From(() => _character.Open(_world, _selected, CharacterScreen.Page.Items)).CallDeferred();
@@ -287,6 +301,11 @@ public partial class RegionView : Node2D
             if (OS.GetCmdlineUserArgs().Contains("--check-dialogue"))
             {
                 CheckDialogue();
+                return;
+            }
+            if (OS.GetCmdlineUserArgs().Contains("--check-combat"))
+            {
+                CheckCombat();
                 return;
             }
             if (OS.GetCmdlineUserArgs().Contains("--check-character"))
@@ -413,6 +432,7 @@ public partial class RegionView : Node2D
         _prompt.AddThemeColorOverride("font_outline_color", Colors.Black);
         _prompt.AddThemeConstantOverride("outline_size", 4);
         layer.AddChild(_prompt);
+        BuildCombatHud(layer);
         return layer;
     }
 
@@ -425,6 +445,7 @@ public partial class RegionView : Node2D
         _verbMenu.Close();
         SetUseWith(null);
         _whenFree.Clear();
+        AbandonCombat();
         if (Session.Scripts.IsSuspended)
         {
             // Leaving (PgUp/PgDn, or the debugger paused a script mid-way): what it had left to do is dropped.
@@ -953,6 +974,19 @@ public partial class RegionView : Node2D
             return; // fading to the next region
         }
         _clock += delta;
+        if (InCombat)
+        {
+            AnimateCombat();
+            CombatProcess(delta);
+            Vector2 pan = Input.GetVector(Controls.PanLeft, Controls.PanRight, Controls.PanUp, Controls.PanDown);
+            if (pan != Vector2.Zero)
+            {
+                _follow = false;
+                _camera.Position += pan * PanSpeed * (float)delta / _camera.Zoom.X;
+            }
+            FollowCharacter();
+            return;
+        }
         Animate();
         FinishApproach();
         if (Session.ScriptHost.Dialogue.Prompt is GplShopPrompt shop && !_character.IsOpen && _world[shop.Merchant] is { } merchant
@@ -1000,6 +1034,10 @@ public partial class RegionView : Node2D
 
     public override void _UnhandledInput(InputEvent e)
     {
+        if (CombatInput(e))
+        {
+            return;
+        }
         if (_useWith is not null && e.IsActionPressed(Controls.Back))
         {
             SetUseWith(null);
@@ -1380,7 +1418,14 @@ public partial class RegionView : Node2D
                 Say(what, $"{Called(target)} can't be picked up.");
                 break;
             case Verb.Attack:
-                Say(what, "Combat isn't in the engine yet.");
+                if (_checkingVerbs)
+                {
+                    AddScriptLine($"> {what}: would start a fight"); // the verb check is about scripts: no fight, no hostile creature
+                }
+                else if (!StartCombat(target, what))
+                {
+                    Say(what, $"{Called(target)} won't fight.");
+                }
                 break;
             default:
                 Say(what, "Nothing happens.");
@@ -1470,7 +1515,11 @@ public partial class RegionView : Node2D
         if (Session.ScriptHost.PendingFight is { } fight)
         {
             Session.ScriptHost.PendingFight = null;
-            AddScriptLine($"    combat at ({fight.X},{fight.Y}) (not modelled yet)");
+            AddScriptLine($"    FIGHT at ({fight.X},{fight.Y})");
+            if (!_checkingVerbs)
+            {
+                StartCombat(null, "FIGHT");
+            }
         }
         if (_checking)
         {
@@ -1719,6 +1768,14 @@ public partial class RegionView : Node2D
     {
         if (_checking)
         {
+            return false;
+        }
+        if (InCombat)
+        {
+            if (!quiet)
+            {
+                Notice("Can't save in a fight.");
+            }
             return false;
         }
         if (Session.Scripts.IsSuspended || _transitioning || _world.PendingRegion is not null)

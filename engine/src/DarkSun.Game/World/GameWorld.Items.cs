@@ -509,10 +509,21 @@ public sealed partial class GameWorld
         }
         v.Status = damage < v.Hp + 10 ? Vitals.Down : damage < 10000 ? Vitals.Dead : Vitals.Destroyed;
         v.Hp = 0;
-        if (target.Kind != ObjectKind.Party && v.Status >= Vitals.Down)
+        Fell(target);
+    }
+
+    /// <summary>
+    /// <paramref name="target"/>'s hit points are gone (here or in a battle): a
+    /// creature down, dead or destroyed counts as defeated (experience,
+    /// <see cref="Defeated"/>) and leaves the map, its body with what it carried
+    /// unless destroyed; a party member stays where it fell.
+    /// </summary>
+    public void Fell(WorldObject target)
+    {
+        if (target.Kind != ObjectKind.Party && target.Vitals.Status >= Vitals.Down && _objects[target.Index] == target)
         {
             Defeated?.Invoke(target);
-            if (v.Status < Vitals.Destroyed)
+            if (target.Vitals.Status < Vitals.Destroyed)
             {
                 LeaveBody(target);
             }

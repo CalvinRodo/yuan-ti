@@ -34,6 +34,11 @@ public static class Controls
     public const string DebugStepOut = "debug_step_out";
     public const string ToggleJournal = "journal";
     public const string ToggleOptions = "options";
+    public const string CombatEndTurn = "combat_end_turn";
+    public const string CombatGuard = "combat_guard";
+    public const string CombatWait = "combat_wait";
+    public const string CombatCast = "combat_cast";
+    public const string CombatAuto = "combat_auto";
     public const string Back = "ui_cancel";
 
     /// <summary>Every action above (the key help lists them all).</summary>
@@ -42,7 +47,7 @@ public static class Controls
         PanLeft, PanRight, PanUp, PanDown, ZoomIn, ZoomOut, NextRegion, PreviousRegion, ToggleMapFlags, NextCharacter,
         AddCharacter, ChangeSprite, ToggleScriptLog, ToggleGrid, QuickSave, QuickLoad, ToggleObjectNumbers,
         ToggleInventory, ToggleCharacter, ToggleJournal, ToggleOptions, ToggleScriptDebugger, DebugContinue, DebugStepOver, DebugStepInto,
-        DebugStepOut, Back,
+        DebugStepOut, CombatEndTurn, CombatGuard, CombatWait, CombatCast, CombatAuto, Back,
     ];
 
     /// <summary>The default keys of the actions this game adds (<c>ui_cancel</c>, Esc, is Godot's own).</summary>
@@ -74,6 +79,11 @@ public static class Controls
         [DebugStepOver] = Keys(Key.F10),
         [DebugStepInto] = Keys(Key.F11),
         [DebugStepOut] = [new InputEventKey { PhysicalKeycode = Key.F11, ShiftPressed = true }],
+        [CombatEndTurn] = Keys(Key.E),
+        [CombatGuard] = Keys(Key.G),
+        [CombatWait] = Keys(Key.T),
+        [CombatCast] = Keys(Key.Q),
+        [CombatAuto] = Keys(Key.U),
     };
 
     private static InputEventKey[] Keys(params Key[] keys) => [.. keys.Select(k => new InputEventKey { PhysicalKeycode = k })];

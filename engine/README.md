@@ -377,8 +377,22 @@ original AI (`612E:0BAD`): its steps (spells, ability, psionics, attack, move, m
 order, how it picks a target (at random as in the original, or the nearest, the weakest, casters
 first), its weapon score and the round's numbers are `CombatRules` (`rules/combat.json`); what each
 spell, power and monster effect does is `SpellRules` (`rules/spells.json`, DSUN.EXE's 196 records
-and 45 area templates, one a line). `Battle.Log` lists what happened for the combat log. The tactical scene that drives it
-is still to come.
+and 45 area templates, one a line). `Battle.Log` lists what happened for the combat log.
+
+Fights happen on the region map. FIGHT, or attacking a creature that has no attack trigger, starts one
+(`Encounter.Start`): the party members standing, each built from the character sheet
+(`PartyCombatant`: THAC0, saving throws and attacks of the classes in use, armour from what is worn,
+the weapons in hand and missile slot, memorized spells, powers and their ranks), and the creatures of a
+fighting allegiance within 24 cells. The battle plays back step by step: walking, attack rolls,
+damage and healing as numbers rising over the target, effects and conditions, all in a combat log
+(top right). On a party member's turn, click an enemy to attack it (it walks up first if needed;
+hovering shows the chance to hit and the number needed), click the ground to move, or use CAST (Q,
+then click a target; hovering shows who the area takes), GUARD (G), WAIT (T), END TURN (E) and AUTO
+(U: the computer fights for that member). A creature that falls leaves its body and gives the party
+its experience; what members used (spells cast, psionic points, ammunition) goes back to their
+sheets. No saving during a fight; leaving the region drops it. `-- --new-game --fight` starts a
+fight with the nearest creature, `--check-combat` plays one through headless, and `--screenshot=FILE`
+saves the screen after five seconds.
 
 `make engine-mod-rules MOD=mods/MyMod` writes all four rule files (`characters.json`,
 `creatures.json`, `combat.json`, `spells.json`) with the original's values to start from, keeping any

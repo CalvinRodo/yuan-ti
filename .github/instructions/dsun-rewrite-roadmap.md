@@ -593,12 +593,25 @@ executable, not in the data.
       learned at rank 1 or raised a rank (to 30), the item used up.
       `Combatant.PowerRanksOf` gives a party combatant its ranks.
 - [ ] An inventory USE action that calls `GameWorld.LearnFrom` (no USE
-      exists in the inventory screen yet), and the FIGHT wiring passing
-      `Combatant.PowerRanksOf` and `GameWorld.NewItem` (`Battle.NewItem`).
-- [ ] Tactical combat scene on the region map, with clear feedback: hit chance
-      shown, a combat log, damage numbers. FIGHT starts a `Battle` from the
-      region's creatures (`Combatant.FromCreature`) and the party; the party's
-      combatants come from their character sheets.
+      exists in the inventory screen yet).
+- [x] Tactical combat scene on the region map (2026-10-20,
+      `RegionView.Combat.cs`): FIGHT or an attack without a trigger starts a
+      `Battle` (`Encounter.Start`) from the party, built from their sheets
+      (`PartyCombatant`: THAC0, saves, attacks, armour, weapons, spells,
+      powers and ranks; `CharacterSheet.Saves`, `AttackHalves`), and the
+      creatures of a fighting allegiance within 24 cells. Events play back
+      one at a time: steps walked, rolls with the number needed, damage and
+      healing numbers rising over the target, a combat log. The player's
+      turn: click to attack (hit chance on hover) or move, CAST with area
+      preview, GUARD, WAIT, END TURN, AUTO. Fallen creatures leave bodies and
+      experience (`GameWorld.Fell`); spells, PSP and ammunition used go back
+      to the sheets. `--fight`, `--check-combat`, `--screenshot`.
+- [ ] Combat scene, still to do: the original's combat screen (its icons and
+      menu, `1587:2EAF`), sounds and attack animations, missiles and spell
+      effects drawn in flight, party members who are down getting up after
+      the fight, a game-over when the whole party falls, move triggers while
+      fighting (they don't fire), and a thri-kreen's natural attacks (the
+      dice are AD&D's, not traced).
 - [ ] Keep the rules in data (JSON tables) wherever possible, so they're easy to
       tune and mod.
 

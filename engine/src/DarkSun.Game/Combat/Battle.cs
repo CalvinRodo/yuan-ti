@@ -247,6 +247,35 @@ public sealed partial class Battle
         }
     }
 
+    /// <summary>
+    /// After a fight, what the party members used goes back to their sheets:
+    /// the spells cast (<see cref="Characters.Character.Cast"/>), the psionic
+    /// points spent, the ammunition shot.
+    /// </summary>
+    public void SyncSheets()
+    {
+        foreach (Combatant c in _all.Where(c => c.Sheet is not null))
+        {
+            List<int> used = [.. c.SpellsAtStart];
+            foreach (int left in c.Spells)
+            {
+                used.Remove(left);
+            }
+            c.Sheet!.Cast.AddRange(used);
+            c.Sheet.PspSpent += Math.Max(0, c.PspAtStart - c.Psp);
+            if (c.Items.FirstOrDefault(i => i.Slot == 1) is { } ammo && ammo.Quantity != c.Ammunition)
+            {
+                ammo.Quantity = Math.Max(0, c.Ammunition);
+                if (ammo.Quantity == 0)
+                {
+                    c.Items.Remove(ammo);
+                }
+            }
+            c.SpellsAtStart = [.. c.Spells];
+            c.PspAtStart = c.Psp;
+        }
+    }
+
     // -- the map ---------------------------------------------------------------------------------------
 
     /// <summary>Distance in cells (<c>0898:000C</c>).</summary>

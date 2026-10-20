@@ -48,7 +48,7 @@ public class GameWorldTests
     /// A 20×10 open region with a creature (<c>OJFF</c> 100, which walks) at
     /// cell (10, 5), a thing (<c>OJFF</c> 200) at (2, 2), and the party at (1, 8).
     /// </summary>
-    private static GameWorld World(byte[]? flags = null, byte? size = null)
+    internal static GameWorld World(byte[]? flags = null, byte? size = null)
     {
         var resources = new Resources();
         resources.Data[("RDFF", 100)] = CombatRecord(100, 3, 1, "Templar");

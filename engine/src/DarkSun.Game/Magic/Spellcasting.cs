@@ -79,25 +79,34 @@ public sealed class Spellcasting(CharacterRules rules)
     public int Level(Character c, CharacterClass k) =>
         Creation.ActiveLevels(c).Where(a => a.Class == k).Select(a => a.Level).DefaultIfEmpty(0).Max();
 
+    /// <summary>
+    /// A class's code (<c>38D4:00ED</c>, character record +0x21): 1–4 cleric of
+    /// air, earth, fire, water; 5–8 druid; 9 fighter; 10 gladiator; 11
+    /// preserver; 12 psionicist; 13–16 ranger; 17 thief.
+    /// </summary>
+    public static int ClassCode(CharacterClass k, Sphere? sphere)
+    {
+        int s = (int)(sphere ?? Sphere.Air);
+        return k switch
+        {
+            CharacterClass.Cleric => 1 + s,
+            CharacterClass.Druid => 5 + s,
+            CharacterClass.Fighter => 9,
+            CharacterClass.Gladiator => 10,
+            CharacterClass.Preserver => 11,
+            CharacterClass.Psionicist => 12,
+            CharacterClass.Ranger => 13 + s,
+            _ => 17,
+        };
+    }
+
     /// <summary>The caster bits of the character's classes (bit <c>code + 1</c>).</summary>
     public static uint CasterBits(Character c)
     {
         uint bits = 0;
-        int sphere = (int)(c.Sphere ?? Sphere.Air);
         foreach (CharacterClass k in c.Classes.Concat(c.Former.Select(f => f.Class)))
         {
-            int code = k switch
-            {
-                CharacterClass.Cleric => 1 + sphere,
-                CharacterClass.Druid => 5 + sphere,
-                CharacterClass.Fighter => 9,
-                CharacterClass.Gladiator => 10,
-                CharacterClass.Preserver => 11,
-                CharacterClass.Psionicist => 12,
-                CharacterClass.Ranger => 13 + sphere,
-                _ => 17,
-            };
-            bits |= 1u << (code + 1);
+            bits |= 1u << (ClassCode(k, c.Sphere) + 1);
         }
         return bits;
     }
