@@ -851,7 +851,7 @@ public sealed class GplMachine
             case GplVariable v:
                 return new Result(Memory.Read(v), null, GplMemory.Locate(v));
             case GplObjectRef r:
-                return new Result(_host.ReadField(this, r), null, new GplFieldLocation(r));
+                return new Result(_host.ReadField(this, r), _host.ReadFieldText(this, r), new GplFieldLocation(r));
             case GplEmbedded e:
                 Execute(e.Instruction);
                 return new Result(Accumulator, null, null);

@@ -537,15 +537,66 @@ public sealed partial class GameWorld
     }
 
     /// <summary>
+    /// REQUEST(14) (<c>87B3:0FE9</c>), the arena's opening bout, which the party
+    /// watches: from <paramref name="who"/> (region 42's gate) at (x, y), the
+    /// mage Celgor (<c>OJFF</c> 296) at (x − 3, y + 18) on the party's side
+    /// (allegiance 1), the rampager (171) at (x + 3, y + 18) and two more
+    /// (269) at (x + 3, y + 16) and (x + 3, y + 20), each made as CLONE makes
+    /// one (<c>7372:0A44</c>, within 6 cells) with field 0x4A 1 or 2; the
+    /// party's allegiance becomes 4, which keeps it out of the fight. Returns
+    /// Celgor, where FIGHT starts (<c>7372:030B</c>) and the view centres
+    /// (<c>191F:01FF</c>), or null if the gate isn't there. (DSUN.EXE also sets
+    /// Celgor's combat record +0x23 and character record +0x1C to 0x19 and +0x27
+    /// to 0xFD; what they mean isn't known.)
+    /// </summary>
+    public WorldObject? StageArenaBout(int who)
+    {
+        if ((who >= 0 ? this[who] : First(who)) is not { } gate)
+        {
+            return null;
+        }
+        WorldObject? Make(int ojff, int dx, int dy, int field74)
+        {
+            Cell at = new(gate.Cell.X + dx, gate.Cell.Y + dy);
+            if (NearestCell(at, c => Fits(c, Footprint.OneCell) && GplGeometry.Distance(c.X, c.Y, at.X, at.Y) <= 6) is not { } cell
+                || Spawn(ojff, cell) is not { } made)
+            {
+                return null;
+            }
+            made.WriteField(0x4A, field74);
+            return made;
+        }
+        WorldObject? celgor = Make(296, -3, 18, 1);
+        if (celgor is { Kind: ObjectKind.Creature })
+        {
+            celgor.Allegiance = 1;
+        }
+        Make(171, 3, 18, 2);
+        Make(269, 3, 16, 2);
+        Make(269, 3, 20, 2);
+        foreach (WorldObject member in Party)
+        {
+            member.Allegiance = WatchingAllegiance;
+        }
+        return celgor;
+    }
+
+    /// <summary>A party member with this allegiance (no fighting bits, <c>&amp; 3</c>) sits a fight out: REQUEST(14)'s.</summary>
+    public const int WatchingAllegiance = 4;
+
+    /// <summary>
     /// CLONE (<c>043D:3457</c>, <c>7372:0A44</c>): <paramref name="count"/>
     /// copies of the object named <paramref name="name"/> near (x, y). Returns
-    /// how many were made.
+    /// how many were made. DSUN.EXE loads each copy from the <c>RDFF</c>
+    /// (−name), so one need not be on the map: then each is made afresh
+    /// (<see cref="Spawn"/>).
     /// </summary>
     public int Clone(int name, int count, int x, int y)
     {
         if (First(name) is not { } original)
         {
-            return 0;
+            return name < 0 ? Enumerable.Range(0, Math.Max(0, count)).Count(_ =>
+                NearestCell(new Cell(x, y), c => Fits(c, Footprint.OneCell)) is { } cell && Spawn(-name, cell) is not null) : 0;
         }
         int made = 0;
         for (int i = 0; i < count; i++)
@@ -981,7 +1032,7 @@ public sealed partial class GameWorld
     /// <summary>
     /// Carry out orders, step the creatures (not the party) to tick
     /// <paramref name="now"/>, and queue the scripts creatures should
-    /// run: no-orders scripts for idle creatures, and line-of-sight scripts
+    /// run: no-orders scripts for idle objects, and line-of-sight scripts
     /// (kind 1 in sight of the active member within range, kind 2 not).
     /// Returns the objects whose picture changed.
     /// </summary>
@@ -1061,12 +1112,19 @@ public sealed partial class GameWorld
         }
     }
 
+    /// <summary>
+    /// The creature scripts due (<c>1A0A:0A77</c>). Any object a script gave
+    /// one to takes part, not only creatures: DSUN.EXE moves it into the
+    /// creature slots (<c>1A0A:273E</c>, from <c>1A0A:0554</c>) and runs its
+    /// no-orders script whenever it has no order. Region 42's door
+    /// (<c>name(-2059)</c>) is how the arena's opening scene starts.
+    /// </summary>
     private void QueueCreatureScripts(GplCreatureScripts scripts)
     {
         WorldObject? active = this[ActiveMember];
-        foreach (WorldObject obj in Objects.Where(o => o.Kind == ObjectKind.Creature && !o.Hidden && o.Index >= PartySize))
+        foreach (WorldObject obj in Objects.Where(o => o.Kind != ObjectKind.Party && !o.Hidden && o.Index >= PartySize))
         {
-            if (obj.Order.Mode == OrderMode.None && obj.Walker is { IsWalking: false }
+            if (obj.Order.Mode == OrderMode.None && obj.Walker is not { IsWalking: true }
                 && scripts.NoOrders.TryGetValue(obj.Id, out GplEntry idle) && idle.File != 0)
             {
                 PendingScripts.Enqueue((idle, obj.Index, $"{obj.Name} has no orders"));

@@ -317,7 +317,10 @@ this milestone brings most of the game's content.
       queues them (idle creatures; kind 1 when the active member is in
       sight within range, kind 2 when not), checked every half second; the
       view runs a few per frame with the creature as actor
-      (`GplMachine.RunFor`). The original's timing is not traced.
+      (`GplMachine.RunFor`). The original's timing is not traced. Any
+      object given one takes part, not only creatures (`1A0A:0554` moves it
+      into the creature slots, `1A0A:273E`): region 42's gate is how the
+      arena opening starts (2026-10-20).
 - [x] **Golden tests**: `make engine-compare` checks that the C# decoder lists
       every script exactly as `gpl_parser.py` does (69 741 lines).
 - [x] Script debugger in the engine (F6, `ScriptDebugger`): the script as
@@ -641,6 +644,17 @@ executable, not in the data.
       Dispelling Evil, Dismissal), the effects' own handlers (`80F5:05E6`),
       the AI's steps' logic, and `Spellcasting.Table` (spell levels and
       casters, a static table the UI reads before any rules are loaded).
+- [x] The arena opening (2026-10-20): the gate's no-orders script (GPL 2)
+      has the announcer speak, then `REQUEST(14)` (`87B3:0FE9`) stages the
+      bout the party watches: Celgor (`OJFF` 296) on the party's side, the
+      rampager (171) and two sligs (269) against him, the party's allegiance
+      4 so it stays out; the fight's range is from the party's whole side
+      (`612E:281F`). The fight starts once the announcement is read, the
+      view follows Celgor, and the script goes on when it ends ("Gladiators:
+      Step forward"). A fight the party only watched isn't a defeat. Not
+      known: what Celgor's combat record +0x23 and character record +0x1C
+      and +0x27 (set to 0x19, 0x19, 0xFD) do, and where the party's
+      allegiance goes back to 1 (here: when the fight ends).
 
 ---
 

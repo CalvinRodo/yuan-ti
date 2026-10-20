@@ -10,8 +10,10 @@ namespace DarkSun.Game.Combat;
 /// a creature): the party members still standing, each as its character sheet
 /// makes it (<see cref="PartyCombatant"/>), and the creatures of a fighting
 /// allegiance (&amp; 3) within <see cref="CombatRules.SightRange"/> of one of
-/// them (<c>612E:0000</c>), as <see cref="Combatant.FromCreature"/> reads them.
-/// A creature attacked that wasn't fighting turns hostile (allegiance 2).
+/// the party's side (<c>612E:281F</c>, <c>612E:0000</c>: the party members
+/// and creatures of allegiance &amp; 1), as <see cref="Combatant.FromCreature"/>
+/// reads them. Party members a script set watching (<see cref="Watching"/>,
+/// REQUEST 14's arena bout) stay out. A creature attacked that wasn't fighting turns hostile (allegiance 2).
 /// </summary>
 public static class Encounter
 {
@@ -30,7 +32,7 @@ public static class Encounter
         }
         List<Combatant> all = [];
         List<WorldObject> party = [.. world.Party.Where(p => !p.Hidden && p.Vitals.Alive)];
-        foreach (WorldObject member in party)
+        foreach (WorldObject member in party.Where(m => !Watching(m)))
         {
             Combatant c = sheets(member.Index) is { } sheet
                 ? PartyCombatant.From(sheet, member, world.Items, characterRules)
@@ -39,8 +41,11 @@ public static class Encounter
             c.HomeSide = 1;
             all.Add(c);
         }
+        // 612E:281F: the range is from each of the party's side, party members and creatures of allegiance & 1 alike.
+        List<WorldObject> anchors = [.. party.Where(m => !Watching(m)),
+            .. world.Objects.Where(o => o.Kind == ObjectKind.Creature && !o.Hidden && o.Vitals.Alive && (o.Allegiance & 1) != 0)];
         foreach (WorldObject o in world.Objects.Where(o => o.Kind == ObjectKind.Creature && !o.Hidden && o.Vitals.Alive
-            && (o.Allegiance & 3) != 0 && (o == attacked || party.Any(p => Battle.Distance(p.Cell, o.Cell) <= rules.SightRange))))
+            && (o.Allegiance & 3) != 0 && (o == attacked || anchors.Any(p => Battle.Distance(p.Cell, o.Cell) <= rules.SightRange))))
         {
             Combatant c = Combatant.FromCreature(o, world.Items);
             c.Side = o.Allegiance;
@@ -68,13 +73,28 @@ public static class Encounter
     }
 
     /// <summary>
-    /// After the fight: the party members' sheets get what they used
-    /// (<see cref="Battle.SyncSheets"/>) and the party gets up
-    /// (<see cref="Battle.Finish"/>). True: the party has fallen.
+    /// A party member a script took out of fights (allegiance without the
+    /// fighting bits: REQUEST 14's 4). The party's allegiance is otherwise
+    /// left 0 here, standing for the original's 1.
     /// </summary>
-    public static bool End(Battle battle)
+    public static bool Watching(WorldObject member) => member.Allegiance != 0 && (member.Allegiance & 3) == 0;
+
+    /// <summary>
+    /// After the fight: the party members' sheets get what they used
+    /// (<see cref="Battle.SyncSheets"/>), those who watched it may fight again,
+    /// and the party gets up (<see cref="Battle.Finish"/>). True: the party
+    /// fought and has fallen.
+    /// </summary>
+    public static bool End(Battle battle, GameWorld? world = null)
     {
         battle.SyncSheets();
+        foreach (WorldObject member in world?.Party ?? [])
+        {
+            if (Watching(member))
+            {
+                member.Allegiance = 0; // back in the party's fights (the original's reset isn't traced)
+            }
+        }
         return battle.Finish();
     }
 }

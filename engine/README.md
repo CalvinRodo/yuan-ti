@@ -92,7 +92,10 @@ menu. The start screen only appears when the game files can't be found.
 
 The region viewer starts a new game where DSUN.EXE does: region 42
 (`RGN2A.GFF`), the party at pixel (488, 152), after the game-start script
-(`MAS 99`). PgUp/PgDn browse the other regions, with the party in the middle
+(`MAS 99`). There the arena's gate runs the opening: the announcer speaks,
+then the party watches the mage Celgor fight a rampager and two sligs
+(`REQUEST(14)`), and once it is over the gladiators are called into the arena.
+PgUp/PgDn browse the other regions, with the party in the middle
 of the map. The party is four placeholder sprites (any object whose `SCMD`
 can walk). Entering a region
 runs its script (and, once, the game-start script); characters reaching a

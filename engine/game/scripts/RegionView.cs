@@ -918,6 +918,7 @@ public partial class RegionView : Node2D
             Sounds.Instance?.Play(sound);
         }
         RunCreatureScripts();
+        StartWatchedFight();
         if (_overlay.Visible)
         {
             _overlay.QueueRedraw();
@@ -957,7 +958,11 @@ public partial class RegionView : Node2D
 
     private void FollowCharacter()
     {
-        if (_follow && Selected is { } member)
+        if (_battle is not null && Session.ScriptHost.WatchedFight is { Walker: { } watched })
+        {
+            _camera.Position = new Vector2(watched.Feet.X, watched.Feet.Y); // 191F:01FF: the view on the bout
+        }
+        else if (_follow && Selected is { } member)
         {
             _camera.Position = new Vector2(member.Walker.Feet.X, member.Walker.Feet.Y);
         }
@@ -1520,7 +1525,11 @@ public partial class RegionView : Node2D
         {
             Session.ScriptHost.PendingFight = null;
             AddScriptLine($"    FIGHT at ({fight.X},{fight.Y})");
-            if (!_checkingVerbs)
+            if (Session.ScriptHost.WatchedFight is not null)
+            {
+                _watchedFightPending = true; // once the announcement is read (StartWatchedFight)
+            }
+            else if (!_checkingVerbs)
             {
                 StartCombat(null, "FIGHT");
             }

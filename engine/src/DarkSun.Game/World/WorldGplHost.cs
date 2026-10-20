@@ -11,8 +11,9 @@ namespace DarkSun.Game.World;
 /// GET_STATUS, GETPARTY), TELEPORT, CLONE, items (GIVE, TAKE, DROP, SEARCH,
 /// SHOP, CHANGE_MONEY), experience (AWARD), damage (DAMAGE, PHYS_DAMAGE)
 /// and the REQUEST codes that are traced. Engine variables and object
-/// fields live in the world. Combat (FIGHT) and REQUEST 3, 7, 8 and 14 are
-/// logged only.
+/// fields live in the world. FIGHT and REQUEST 14 (the arena's watched bout)
+/// leave the fight to the view (<see cref="PendingFight"/>); REQUEST 3, 7
+/// and 8 are logged only.
 /// </summary>
 public sealed class WorldGplHost : DialogueGplHost
 {
@@ -71,6 +72,13 @@ public sealed class WorldGplHost : DialogueGplHost
     /// <summary>FIGHT: combat was asked for at this cell (<c>gname[1]</c>, <c>[2]</c>); combat is not modelled yet.</summary>
     public (int X, int Y)? PendingFight { get; set; }
 
+    /// <summary>
+    /// REQUEST(14)'s bout, which the party watches (<see cref="GameWorld.StageArenaBout"/>):
+    /// the view centres on this combatant, and the script, suspended meanwhile,
+    /// resumes when the fight ends.
+    /// </summary>
+    public WorldObject? WatchedFight { get; set; }
+
     public override int? Execute(GplMachine machine, GplCommand command)
     {
         if (Map is not { } world)
@@ -97,7 +105,7 @@ public sealed class WorldGplHost : DialogueGplHost
             "GETPARTY" => NextPartyMember(world, v[0]),
             "TELEPORT" => Teleport(world, v),
             "CLONE" => world.Clone(v[0], v[1], v[2], v[3]),
-            "REQUEST" => Request(world, v),
+            "REQUEST" => Request(machine, world, v),
             "FIGHT" => Fight(world),
             "GIVE" => Noted(world.Give(v[0], v[1], v[2], v[3]), n => Gained(world, n, v[1], v[2], v[3])),
             "TAKE" => Noted(world.Take(v[0], v[1], v[2], v[3]), n => Lost(world, n, v[1], v[2], v[3])),
@@ -269,11 +277,24 @@ public sealed class WorldGplHost : DialogueGplHost
     }
 
     /// <summary>REQUEST(code, who, a, b): <c>87B3:0000</c>; see <c>dsun-exe-reference.md</c> §4.</summary>
-    private int? Request(GameWorld world, IReadOnlyList<int> v)
+    private int? Request(GplMachine machine, GameWorld world, IReadOnlyList<int> v)
     {
         (int code, int who, int a, int b) = (v[0], v[1], v[2], v[3]);
         switch (code)
         {
+            case 14:
+                // 87B3:0FE9: the bout is fought inside the request; the script goes on once it is over.
+                if (machine.TryTakeAnswer(out _))
+                {
+                    break;
+                }
+                if (world.StageArenaBout(who) is { } celgor)
+                {
+                    PendingFight = (celgor.Cell.X, celgor.Cell.Y);
+                    WatchedFight = celgor;
+                    machine.Suspend();
+                }
+                break;
             case 2: // 87B3: 6BB8:0D13(object, a, 1) for each match: open (0) or close (1) a door
                 foreach (WorldObject door in world.Select(who).ToList())
                 {
@@ -318,6 +339,10 @@ public sealed class WorldGplHost : DialogueGplHost
 
     public override int ReadField(GplMachine machine, GplObjectRef field) =>
         Map is { } world && Locate(world, field) is var (obj, f) ? obj.ReadField(f) : base.ReadField(machine, field);
+
+    /// <summary>Field 19 is the object's name (the arena's "Do not worry, <c>obj_special(0x25).19</c>": the active member's).</summary>
+    public override string? ReadFieldText(GplMachine machine, GplObjectRef field) =>
+        Map is { } world && Locate(world, field) is var (obj, f) && f == 19 ? obj.Name : null;
 
     public override void WriteField(GplMachine machine, GplObjectRef field, int value)
     {

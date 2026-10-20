@@ -43,6 +43,9 @@ public interface IGplHost
     /// <summary>An object field (<c>obj(id).f.g</c>, or a special object when the id has its top bit set).</summary>
     int ReadField(GplMachine machine, GplObjectRef field);
 
+    /// <summary>The field as text, where it is one (field 19, an object's name: <c>PRINT_STRING(obj.19)</c>); null otherwise.</summary>
+    string? ReadFieldText(GplMachine machine, GplObjectRef field);
+
     void WriteField(GplMachine machine, GplObjectRef field, int value);
 
     /// <summary>The name shown for a speaker-name string (kind 1).</summary>

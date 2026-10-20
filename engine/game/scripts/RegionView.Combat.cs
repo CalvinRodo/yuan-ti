@@ -163,16 +163,53 @@ public partial class RegionView
         _combatEvents.Clear();
         battle.Happened += e => _combatEvents.Enqueue(e);
         int enemies = battle.Combatants.Count(c => !c.PartyMember && battle.Combatants.Any(p => p.PartyMember && p.IsEnemyOf(c)));
-        Log($"[color=#ffd080]Combat! {enemies} {(enemies == 1 ? "enemy" : "enemies")}[/color]");
+        Log(battle.Combatants.Any(c => c.PartyMember)
+            ? $"[color=#ffd080]Combat! {enemies} {(enemies == 1 ? "enemy" : "enemies")}[/color]"
+            : $"[color=#ffd080]The party watches: {string.Join(" against ", battle.Combatants.GroupBy(c => c.Side).Select(g => string.Join(", ", g.Select(c => c.Name))))}[/color]");
         AddScriptLine($"> {why}: combat, {battle.Combatants.Count} combatants");
         _combatPanel.Visible = !_checking;
         _combatLogPanel.Visible = !_checking;
         return true;
     }
 
+    /// <summary>REQUEST(14) staged a bout for the party to watch; it starts once the announcer's text is put away.</summary>
+    private bool _watchedFightPending;
+
+    private void StartWatchedFight()
+    {
+        if (!_watchedFightPending || _dialogueWindow.Visible || !Session.ScriptHost.Dialogue.IsEmpty || InCombat)
+        {
+            return;
+        }
+        _watchedFightPending = false;
+        if (_checkingVerbs || !StartCombat(null, "the arena bout"))
+        {
+            ResumeAfterWatchedFight();
+        }
+    }
+
+    /// <summary>The only script suspended is REQUEST 14's, waiting for the bout to end (nothing asks the player).</summary>
+    private bool WaitingOnTheBout => Session.ScriptHost.WatchedFight is not null && Session.ScriptHost.Dialogue.Prompt is null;
+
+    /// <summary>The script that staged the bout goes on (REQUEST 14 returns).</summary>
+    private void ResumeAfterWatchedFight()
+    {
+        if (Session.ScriptHost.WatchedFight is null)
+        {
+            return;
+        }
+        Session.ScriptHost.WatchedFight = null;
+        if (Session.Scripts.IsSuspended && Session.Scripts.PausedFor is null)
+        {
+            ReportScript("the bout is over", Session.Scripts.Resume());
+        }
+    }
+
     /// <summary>The fight is dropped as it stands (the region is left, or a check only wanted to see it start).</summary>
     private void AbandonCombat()
     {
+        _watchedFightPending = false;
+        Session.ScriptHost.WatchedFight = null;
         if (_battle is null)
         {
             return;
@@ -191,7 +228,7 @@ public partial class RegionView
         {
             return;
         }
-        bool fallen = Encounter.End(battle);
+        bool fallen = Encounter.End(battle, _world);
         bool won = !fallen;
         Log(won ? "[color=#a0ffa0]The fight is over.[/color]" : "[color=#ff8080]The party has fallen.[/color]");
         AddScriptLine($"> combat over after {battle.Round} rounds: {(won ? "won" : "lost")}");
@@ -220,6 +257,7 @@ public partial class RegionView
             }
         }
         _partyFell = fallen;
+        ResumeAfterWatchedFight();
     }
 
     // -- each frame -----------------------------------------------------------------------------------
@@ -249,7 +287,7 @@ public partial class RegionView
                 return;
             }
             _graphicsWait = 0;
-            if (Session.Scripts.IsSuspended || _transitioning || !InCombat)
+            if (Session.Scripts.IsSuspended && !WaitingOnTheBout || _transitioning || !InCombat)
             {
                 return; // a move trigger's script is talking to the player, or the party is leaving
             }

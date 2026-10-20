@@ -258,11 +258,12 @@ public sealed partial class Battle
     /// member is no longer Paralyzed and drops the powers it kept up; one down
     /// or hurt but alive (status 1–3) gets up, with 1 hit point if it had none.
     /// True when no member was standing with hit points left: the party has
-    /// fallen (DSUN.EXE's game over, <c>85FE:02C9</c>), even if some only went down.
+    /// fallen (DSUN.EXE's game over, <c>85FE:02C9</c>), even if some only went down;
+    /// false when no member fought (a bout the party watched).
     /// </summary>
     public bool Finish()
     {
-        bool fallen = true;
+        bool fallen = _all.Any(c => c.PartyMember); // a fight the party only watched isn't lost
         foreach (Combatant c in _all.Where(c => c.PartyMember))
         {
             EndCondition(c, Condition.Paralyzed);

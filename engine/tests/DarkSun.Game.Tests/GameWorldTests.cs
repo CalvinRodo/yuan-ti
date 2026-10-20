@@ -48,9 +48,11 @@ public class GameWorldTests
     /// A 20×10 open region with a creature (<c>OJFF</c> 100, which walks) at
     /// cell (10, 5), a thing (<c>OJFF</c> 200) at (2, 2), and the party at (1, 8).
     /// </summary>
-    internal static GameWorld World(byte[]? flags = null, byte? size = null)
+    internal static GameWorld World(byte[]? flags = null, byte? size = null, int width = Width, int height = Height,
+        Action<Dictionary<(string, int), byte[]>>? more = null)
     {
         var resources = new Resources();
+        more?.Invoke(resources.Data);
         resources.Data[("RDFF", 100)] = CombatRecord(100, 3, 1, "Templar");
         if (size is { } s)
         {
@@ -76,7 +78,7 @@ public class GameWorldTests
             new(0, 100, 10 * 16 + 8, 6 * 16 - 1, 0, 0, false, [Frame, Frame, Frame], 7),
             new(1, 200, 2 * 16 + 8, 3 * 16 - 1, 0, 0, false, [Frame], 0),
         ];
-        var world = new GameWorld(Region.Create(5, Width, Height, flags ?? new byte[Width * Height], objects), resources);
+        var world = new GameWorld(Region.Create(5, width, height, flags ?? new byte[width * height], objects), resources);
         var spec = new CharacterSpec(WalkerTests.Script(), [(10, 20), (12, 22), (14, 24)]);
         for (int i = 0; i < GameWorld.PartySize; i++)
         {
@@ -268,6 +270,93 @@ public class GameWorldTests
         var (entry, actor, _) = Assert.Single(world.PendingScripts);
         Assert.Equal(12, entry.File);
         Assert.Equal(4, actor);
+    }
+
+    [Fact]
+    public void ThingsGivenANoOrdersScriptRunItToo()
+    {
+        // 1A0A:0554 moves any object given one into the creature slots: region 42's gate starts the arena this way.
+        GameWorld world = World();
+        var scripts = new GplCreatureScripts();
+        scripts.SetNoOrders(-200, new GplEntry(2, 1));
+
+        world.Update(0, scripts);
+
+        var (entry, actor, _) = Assert.Single(world.PendingScripts);
+        Assert.Equal((2, 1), (entry.File, (int)entry.Address));
+        Assert.Equal(world.First(-200)!.Index, actor);
+    }
+
+    /// <summary>A 40×40 region with what REQUEST 14 makes: the mage (296), the rampager (171) and sligs (269), all hostile in their records.</summary>
+    internal static GameWorld Arena() => World(width: 40, height: 40, more: data =>
+    {
+        foreach (var (ojff, name) in new[] { (296, "Defiler"), (171, "Rampager"), (269, "Slig") })
+        {
+            data[("RDFF", ojff)] = CombatRecord(ojff, 3, 2, name);
+            data[("OJFF", ojff)] = [0, 0, 8, 0, 15, 0, 0, 0, 0, 0, 0, 0, 7, 0, 0, 0]; // anchor (8, 15), BMP 7
+        }
+        data[("BMP ", 7)] = CinematicPlayerTests.Screen(3);
+    });
+
+    [Fact]
+    public void TheArenaBoutPutsTheMageOnThePartysSideAndThePartyOut()
+    {
+        GameWorld world = Arena();
+        WorldObject gate = world.First(-200)!; // at (2, 2)
+
+        WorldObject celgor = world.StageArenaBout(gate.Index)!;
+
+        Assert.Equal("Defiler", celgor.Name);
+        Assert.Equal(1, celgor.Allegiance);
+        Assert.Equal(1, celgor.ReadField(0x4A));
+        Assert.True(GplGeometry.Distance(celgor.Cell.X, celgor.Cell.Y, 0, 20) <= 6); // (2 − 3, 2 + 18), off the map's edge
+        WorldObject rampager = world.First(-171)!;
+        Assert.Equal((2, 2), (rampager.Allegiance, rampager.ReadField(0x4A)));
+        Assert.Equal(2, world.Select(-269).Count());
+        Assert.All(world.Party, p => Assert.Equal(GameWorld.WatchingAllegiance, p.Allegiance));
+        Assert.Null(world.StageArenaBout(-999));
+    }
+
+    [Fact]
+    public void Request14WaitsForTheBoutThenGoesOn()
+    {
+        GameWorld world = Arena();
+        var host = new WorldGplHost { Map = world };
+        int gate = world.First(-200)!.Index;
+        // REQUEST(14, gate, 0, 0); gnum[3] = 1: the script goes on only once the bout is over (87B3:0FE9 fights it inside).
+        byte[] code = new Asm().Op(0x22).Num(14).Num(gate).Num(0).Num(0).Set(GplVarType.GlobalNum, 3, 1).Op(0x31).ToArray();
+        var machine = new GplMachine(new SingleScript(code), host, [], new BorlandRandom(1));
+        var gnum3 = new GplVariable(GplVarType.GlobalNum, 3);
+
+        GplRunResult run = machine.Run(new GplEntry(1, 0));
+
+        Assert.True(run.Suspended);
+        Assert.Equal("Defiler", host.WatchedFight!.Name);
+        Assert.Equal((host.WatchedFight.Cell.X, host.WatchedFight.Cell.Y), host.PendingFight);
+        Assert.Equal(0, machine.Memory.Read(gnum3));
+        Assert.Null(machine.Resume().Error);
+        Assert.Equal(1, machine.Memory.Read(gnum3));
+        Assert.Single(world.Select(-296)); // not staged twice
+    }
+
+    [Fact]
+    public void AnObjectsNameFieldPrintsAsItsName()
+    {
+        GameWorld world = World();
+        var host = new WorldGplHost { Map = world };
+        var machine = new GplMachine(new SingleScript([GplOpcodes.EndFunction, 0x31]), host, [], new BorlandRandom(1));
+        world[0]!.Name = "Barek";
+        Assert.Equal("Barek", host.ReadFieldText(machine, new GplObjectRef(0, [19])));
+        Assert.Null(host.ReadFieldText(machine, new GplObjectRef(0, [75])));
+    }
+
+    [Fact]
+    public void CloneMakesAnObjectThatIsntOnTheMapFromItsRecord()
+    {
+        GameWorld world = Arena();
+        Assert.Equal(2, world.Clone(-269, 2, 20, 20)); // 7372:0A44 loads the RDFF
+        Assert.Equal(2, world.Select(-269).Count());
+        Assert.Equal(0, world.Clone(-999, 1, 20, 20));
     }
 
     [Fact]

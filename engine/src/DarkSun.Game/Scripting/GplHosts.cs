@@ -69,6 +69,8 @@ public class LoggingGplHost : IGplHost
 
     public virtual int ReadField(GplMachine machine, GplObjectRef field) => _fields.GetValueOrDefault(Key(field));
 
+    public virtual string? ReadFieldText(GplMachine machine, GplObjectRef field) => null;
+
     public virtual void WriteField(GplMachine machine, GplObjectRef field, int value) => _fields[Key(field)] = value;
 
     public virtual string SpeakerName(GplMachine machine) => Speaker;

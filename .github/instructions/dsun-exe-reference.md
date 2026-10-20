@@ -573,7 +573,13 @@ the others are creatures), filled by:
 * `CREATE_NOORDERS_TRIGGER` (6F) (address, file, object) via
   `creature_set_noorders` (`1A0A:053E`): `+04` address, `+08` file. Run when a
   non-party creature has no current order (`+00` = 0). A creature with neither
-  script falls back to `creature_default_idle` (`1A0A:0743`).
+  script falls back to `creature_default_idle` (`1A0A:0743`). The setter
+  (`1A0A:0554`) takes every object named (`1A0A:0922`) and, if its index is
+  48 or more, moves it into a free creature slot first (`1A0A:273E`: its
+  0x20-byte record, the `+0xC36` entry, the script context indexes), then
+  links it into the list `run_noorders_scripts` walks (`1A0A:06F3`, head
+  `577D:0B08`, next at `+0x0E`). So a thing can have one: region 42's gate
+  (`name(-2059)`, GPL 2) runs the arena opening this way.
 * `CREATE_INLOS_TRIGGER` (1B) and `CREATE_NOTINLOS_TRIGGER` (1C) (address,
   file, object, range) via `creature_set_los` (`1A0A:0525`, kind 1 or 2):
   `+02` kind, `+06` address, `+0A` file, `+0C` range. Kind 1 runs when the
@@ -687,7 +693,10 @@ From the handlers (2026-10-18); the engine's model is `DarkSun.Game.World`.
   * GET_STATUS(who) is the combat record's status (+0x1C) for |who| 1–50,
     else 8. BITSNOOP(a, b) is (a & b) == b, computed in the VM.
 * **FIGHT** starts combat at (`gname[1]`, `gname[2]`) (`7372:030B`) and ends
-  the script. **CLONE**(name, count, x, y, radius, flag) makes copies near
+  the script. It starts only if `612E:281F` finds, for one of objects 0–47 that
+  is a creature with allegiance bit 1 (the party's side: party members and
+  allies), an enemy within 24 cells (`612E:0000`), and either a party member
+  stands (status below 3) or the actor's allegiance has bit 4. **CLONE**(name, count, x, y, radius, flag) makes copies near
   (x, y) (`7372:0A44`) and returns how many it made.
 * **REQUEST(code, who, a, b)** dispatches at `87B3:0000`, with a jump table at
   `87B3:0177`:
@@ -707,7 +716,7 @@ From the handlers (2026-10-18); the engine's model is `DarkSun.Game.World`.
   | 7 | `0AE1(who, x, y)`: makes object −who at cell (x, y); an item there sets off an area effect (a party check `028D(party, 2)`, damage to creatures around), then the object is removed. A trap or blast; combat |
   | 8 | `0CB4(a, b)`: a random monster from the region's `MONR` table (42-byte records); combat |
   | 9 | `0F1C(who, ojff, b)` (each match when who ≤ 0): remove the object and make `OJFF` a where it stood (b ≠ 0: at its saved start), with its facing; the new one becomes "other" (`37B7:0003`) |
-  | 14 | `0FE9`: an ambush: makes objects around the active member, sets allegiances and starts combat there |
+  | 14 | `0FE9`: the arena bout (GPL 2, region 42), around object *who* (the gate) at cell (x, y): closes the text windows (`84C9:0A25`); CLONEs (`87B3:1295` → `7372:0A44`, one within 6 cells, then field 0x4A of the copy = 1 or 2) `OJFF` 296 (Celgor) at (x − 3, y + 18) with field 1, and if it is a creature its combat record +0x1D (allegiance) = 1, +0x23 = 0x19 and its character record +0x1C = 0x19, +0x27 = 0xFD; 171 (the rampager) at (x + 3, y + 18) and 269 twice at (x + 3, y + 16) and (x + 3, y + 20), field 2; the party's allegiance = 4; centres the view on Celgor (`191F:01FF`); FIGHT at his cell (`7372:030B`). The fight is over when the request returns |
   | 15 | `1587:2927(1)`: sets `577D:09B5` and `DS:11B8` and calls `191F:0A99(1)`; not identified |
   | 16 | `6BB8:0FA9(a)`: if sound is on and a ≠ `DS:0D9A`, `361A:0000(a)` sets the music's intensity level (an XMIDI section, at most the track's byte at `DS:1675 + 3·track`) |
   | 20 | `13B9(a)`: how many objects 5–319 are creatures (kind 2) whose allegiance has a bit of a (all with a = 0) |

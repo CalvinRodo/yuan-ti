@@ -377,6 +377,16 @@
 1A0A:0A77	func	void run_noorders_scripts(void)	runs the no-orders script of every idle creature in the list
 1A0A:1897	func	void creature_noorders(int creature)	runs its no-orders script if it has no order (creatures 4 and up)
 1A0A:1914	func	void creature_check_los(int creature)	runs its in-LOS (kind 1) or not-in-LOS (kind 2) script
+1A0A:0554	func	creature_set_script	sets a no-orders (kind 0) or LOS (kind 1) script for every object named; moves each into the creature slots (object_make_active) and links it into the script list
+1A0A:06F3	func	void creature_script_link(int creature)	links a creature into the script list (head 577D:0B08, next at +0x0E)
+1A0A:0922	func	int object_find_named(int *from, int name)	the next object (from *from, up to 320) whose field 0x48 is name; a name >= 0 is the index itself
+612E:281F	func	int fight_can_start(void)	an enemy within 24 cells of a creature of allegiance bit 1 (objects 0-47), and a party member standing or the actor's allegiance bit 4
+191F:01FF	func	void view_centre_on(int object, int redraw)	scrolls the map view to put the object in the middle
+7372:030B	func	void gpl_fight(int x, int y)	FIGHT: starts combat at the cell if fight_can_start
+7372:0A44	func	int gpl_clone(int name, int x, int y, int radius, int flag)	CLONE one: loads RDFF -name into a new object near (x, y); the new one becomes "other"
+84C9:0A25	func	void windows_close_all(void)	puts away the portrait, text and button windows
+87B3:0FE9	func	void request_arena_bout(void)	REQUEST 14: the arena's watched bout (Celgor, a rampager, two sligs), the party allegiance 4, then FIGHT
+87B3:1295	func	int request_place(int name, int x, int y, int field)	clones one object near (x, y) and sets its field 0x4A
 # Data
 4356:117C	data	current_region	region number; 42 (RGN2A) at a new game
 4356:117E	data	start_position	x, y in pixels at a new game (488, 152)

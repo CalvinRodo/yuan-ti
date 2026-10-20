@@ -32,6 +32,37 @@ public class EncounterTests
     }
 
     [Fact]
+    public void TheArenaBoutIsFoughtWithoutTheParty()
+    {
+        GameWorld world = GameWorldTests.Arena();
+        foreach (WorldObject o in world.Objects.Where(o => o.Kind != ObjectKind.Thing))
+        {
+            o.Vitals.Hp = o.Vitals.MaxHp = 20;
+            o.Vitals.Status = Vitals.Well;
+        }
+        world.First(-100)!.Allegiance = 0; // the templar stays out of it
+        WorldObject celgor = world.StageArenaBout(world.First(-200)!.Index)!;
+        celgor.Vitals.Hp = celgor.Vitals.MaxHp = 20;
+        foreach (WorldObject o in world.Objects.Where(o => o.Allegiance == 2))
+        {
+            o.Vitals.Hp = o.Vitals.MaxHp = 20;
+            o.Vitals.Status = Vitals.Well;
+        }
+        celgor.Vitals.Status = Vitals.Well;
+
+        // 612E:281F: the range is from the mage, 12 cells and more from the party.
+        Battle b = Encounter.Start(world, i => Fighter($"P{i}"), new ScriptedDice(), Rules)!;
+
+        Assert.NotNull(b);
+        Assert.DoesNotContain(b.Combatants, c => c.PartyMember);
+        Assert.Equal(["Defiler", "Rampager", "Slig", "Slig"], b.Combatants.Select(c => c.Name).Order());
+        Assert.True(b.Combatants.Single(c => c.Name == "Defiler").IsEnemyOf(b.Combatants.Single(c => c.Name == "Rampager")));
+
+        Assert.False(Encounter.End(b, world)); // watched, not lost
+        Assert.All(world.Party, p => Assert.Equal(0, p.Allegiance));
+    }
+
+    [Fact]
     public void NoEnemyNoFight()
     {
         var (world, _) = Hostile(1);
