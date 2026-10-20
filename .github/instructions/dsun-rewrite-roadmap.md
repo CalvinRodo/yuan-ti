@@ -321,6 +321,29 @@ this milestone brings most of the game's content.
       object given one takes part, not only creatures (`1A0A:0554` moves it
       into the creature slots, `1A0A:273E`): region 42's gate is how the
       arena opening starts (2026-10-20).
+- [x] Scripting checked against the OpenDS and Obsidian Edition notes
+      (2026-10-20). Object fields follow `GPLX` 1 (`GplFieldMap`: field →
+      offset in the item, combat, name, character and item-type records,
+      with types and pointers): 73 is the status, 74 the allegiance and 75
+      what the AI does (we had 75 as the allegiance, and 73, 74 read 0, so
+      no creature looked dead or hostile to a script); `obj.71.f` reaches the
+      character record, a party member's from its sheet (the magic pool's
+      new abilities and most hit points reach it). GETPARTY makes the member
+      "other" (the arena gate's check read the gate itself). The game clock
+      runs (`gname[9]`: 1.5 s a real second on the map, a minute a combat
+      round, PASS_TIME); it was 0, so timed scripts never moved on. Done
+      from the EXE: STAT_ROLL; the thief skills (`REQUEST(3)`, tables in
+      `characters.json`; the party check's slot-0 bug as
+      `PartySkillCheckBest`); traps (`REQUEST(7)`); SETTHING and the
+      "thing"; STRING_COMPARE; INPUT_STRING (a text box: the manual-word
+      check, any case); item charges. OpenDS's script repairs (Darkhold's
+      dead triggers, the Lava Rifts ranger, Linara) apply as the scripts
+      load (`GplRepairs`, `script_repairs`, on); the final battle's gate
+      repair is there but off (with the clock running the gate waits its
+      window out). Not yet: conditions outside fights (the skills' and
+      traps' Detect Traps), SKILLROLL (no script uses it), JOINPARTY and
+      LEAVEPARTY, the LOG text, where the clock stops (`DS:11B8`,
+      `DS:0BC9`: the Look pointer, by Obsidian Edition's notes).
 - [x] **Golden tests**: `make engine-compare` checks that the C# decoder lists
       every script exactly as `gpl_parser.py` does (69 741 lines).
 - [x] Script debugger in the engine (F6, `ScriptDebugger`): the script as

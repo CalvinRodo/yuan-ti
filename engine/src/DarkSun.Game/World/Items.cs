@@ -16,6 +16,7 @@ public sealed class Item
         Record = record;
         Quantity = quantity;
         Slot = slot;
+        Charges = record.Charges;
     }
 
     /// <summary>The <c>RDFF</c> (and <c>OJFF</c>) number.</summary>
@@ -34,23 +35,27 @@ public sealed class Item
 
     public bool Equipped => Slot < Equipment.Slots;
 
-    /// <summary>A field as SEARCH reads it: 72 id, 82 quantity, 85 slot; others 0 (not traced).</summary>
+    /// <summary>Field 86, record +0x0E: charges (a wand's), which scripts read and set; at first the record's.</summary>
+    public int Charges { get; set; }
+
+    /// <summary>A field as SEARCH reads it (<c>GPLX</c> group 0): 72 id, 82 quantity, 85 slot, 86 charges; others 0.</summary>
     public int Field(int field) => field switch
     {
         72 => Id,
         82 => Quantity,
         85 => Slot,
+        86 => Charges,
         _ => 0,
     };
 
-    public ItemState Save() => new(Rdff, Quantity, Slot);
+    public ItemState Save() => new(Rdff, Quantity, Slot, Charges == Record.Charges ? null : Charges);
 }
 
 /// <summary>What came of <see cref="GameWorld.Equip"/>.</summary>
 public enum EquipResult { Worn, NotWearable, WrongClass, NoFreeSlot }
 
 /// <summary>An item as saved: its <c>RDFF</c> number, quantity and slot.</summary>
-public sealed record ItemState(int Rdff, int Quantity, int Slot);
+public sealed record ItemState(int Rdff, int Quantity, int Slot, int? Charges = null);
 
 /// <summary>
 /// Equipment slots (<c>6466:0854</c>): 14 slots, each taking items of one

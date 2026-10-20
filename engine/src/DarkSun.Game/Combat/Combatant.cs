@@ -315,7 +315,7 @@ public sealed class Combatant
             Stats = r is null ? [10, 10, 10, 10, 10, 10] : [.. r.Stats.Select(s => (int)s)],
             HomeSide = ch is { HomeAllegiance: > 0 } ? ch.HomeAllegiance : side,
             Type = r?.SpecialAttack ?? 0,
-            Mind = r?.Mind ?? 2,
+            Mind = source?.Mind ?? r?.Mind ?? 2,
             Level = ch is null ? 1 : Math.Max(1, (int)ch.Levels.ToArray().Max()),
             Race = ch?.Race ?? 0,
             Alignment = ch?.Alignment ?? 0,

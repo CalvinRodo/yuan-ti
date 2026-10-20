@@ -51,6 +51,9 @@ public sealed record CombatRecord(
     /// </summary>
     public byte Mind { get; init; }
 
+    /// <summary>The 58 bytes as the <c>RDFF</c> has them, for the fields scripts read that aren't parsed (<c>GPLX</c> group 1).</summary>
+    public byte[] Bytes { get; init; } = [];
+
     /// <summary>+0x21 &amp; 0x20: the AI plays it in combat (<c>612E:04A7</c>).</summary>
     public bool ComputerControlled => (Flags & 0x20) != 0;
 
@@ -76,6 +79,7 @@ public sealed record CombatRecord(
             SpecialAttack = r[0x16],
             SpecialDefense = r[0x17],
             Mind = r[0x1E],
+            Bytes = r.ToArray(),
         };
     }
 }

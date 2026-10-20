@@ -31,11 +31,22 @@ public sealed record SpellbookSize(int Intelligence, int Spells);
 /// <param name="Move">Movement in a fight (character record +0x28, combat record +0x1B; <c>6ECD:1344</c>): 12, a thri-kreen 15.</param>
 /// <param name="NaturalAttacks">Its attacks without a weapon (+0x2B …): a thri-kreen's claws and bite; null: <see cref="CharacterRules.UnarmedDice"/>.</param>
 /// <param name="ConstitutionSaves">Saves Con × 2 ÷ 7 better (<c>8E77:059B</c>: dwarves and halflings).</param>
+/// <param name="ThiefSkills">Its adjustment to each of the eight thief skills (<c>3FAA:0008 + 8 · race</c>; <see cref="CharacterRules.ThiefSkills"/>); null: none.</param>
 public sealed record RaceRules(
     Race Race, string Name, IReadOnlyList<Gender> Genders, IReadOnlyDictionary<Ability, int> Adjustments,
     IReadOnlyList<CharacterClass> Classes, bool MultiClass, int HitPointFactor = 1, int Move = 12,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<DarkSun.Data.Regions.NaturalAttack>? NaturalAttacks = null,
-    bool ConstitutionSaves = false);
+    bool ConstitutionSaves = false,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<int>? ThiefSkills = null);
+
+/// <summary>
+/// A thief skill (<c>3FAA:0000</c>, read by <c>87B3:030B</c>): <paramref name="Base"/>
+/// + 4 a thief level + the race's adjustment; Dexterity below
+/// <paramref name="DexBelow"/> −5 a point, above <paramref name="DexAbove"/> +5
+/// a point, above <paramref name="DexWellAbove"/> −3 a point; less
+/// <paramref name="GearPenalty"/> with anything in <see cref="CharacterRules.GearSlots"/>.
+/// </summary>
+public sealed record ThiefSkill(string Name, int Base, int DexBelow, int DexAbove, int DexWellAbove, int GearPenalty);
 
 /// <summary>
 /// A saving throw of a class (<c>40B1:006C + 15·group + 3·save</c>): <paramref name="Base"/>
@@ -219,6 +230,53 @@ public sealed record CharacterRules
     /// </summary>
     public bool ConstitutionSavesWarriorsOnly { get; init; } = true;
 
+    /// <summary>
+    /// The thief skills, in AD&amp;D's order (pick pockets, open locks, find/remove
+    /// traps, move silently, hide in shadows, hear noise, climb walls, read
+    /// languages; <c>REQUEST(3)</c>'s numbers 0–7), DSUN.EXE's (<c>3FAA:0000</c>).
+    /// </summary>
+    public IReadOnlyList<ThiefSkill> ThiefSkills { get; init; } =
+    [
+        new("Pick pockets", 28, 12, 16, 21, 5),
+        new("Open locks", 18, 11, 15, 20, 0),
+        new("Find/remove traps", 13, 12, 17, 21, 0),
+        new("Move silently", 28, 13, 16, 19, 10),
+        new("Hide in shadows", 18, 11, 16, 19, 5),
+        new("Hear noise", 23, 0, 25, 25, 0),
+        new("Climb walls", 78, 0, 25, 25, 10),
+        new("Read languages", -4, 0, 25, 25, 0),
+    ];
+
+    public int ThiefSkillPerLevel { get; init; } = 4;
+
+    /// <summary>
+    /// Anything worn in these slots costs <see cref="ThiefSkill.GearPenalty"/>
+    /// (<c>3FB7:0000</c>: legs, ammunition, either hand); what the item is
+    /// doesn't matter (<c>87B3:0672</c>).
+    /// </summary>
+    public IReadOnlyList<int> GearSlots { get; init; } = [6, 1, 10, 3];
+
+    /// <summary>Anything worn here makes hearing noise impossible (<c>3FB6:0000</c>: the legs slot).</summary>
+    public IReadOnlyList<int> NoHearingSlots { get; init; } = [6];
+
+    /// <summary>
+    /// A party skill check (<c>REQUEST(3, 32766, …)</c>, <c>87B3:028D</c>) rolls for
+    /// the member with the best chance. DSUN.EXE means to, but its search starts
+    /// from 0 and keeps a lower one, so it always rolls for the first slot;
+    /// false: as the original.
+    /// </summary>
+    public bool PartySkillCheckBest { get; init; }
+
+    /// <summary>
+    /// Item 2005 worn on the legs makes moving silently certain and hearing noise
+    /// impossible. DSUN.EXE passes its slot and item lists the wrong way round
+    /// (<c>87B3:04F5</c>), so it never applies; false: as the original.
+    /// </summary>
+    public bool SilentItemWorks { get; init; }
+
+    /// <summary>STAT_ROLL's difficulties 0–3 (<c>3971:0004</c>): added to the ability the d20 must come under.</summary>
+    public IReadOnlyList<int> StatRollModifiers { get; init; } = [5, 0, -5, -10];
+
     /// <summary>A save with no class to give one.</summary>
     public int NoClassSave { get; init; } = 20;
 
@@ -295,13 +353,16 @@ public sealed record CharacterRules
             new(Characters.Race.Dwarf, "Dwarf", [Gender.Male, Gender.Female],
                 A((Ability.Con, 2), (Ability.Str, 1), (Ability.Dex, -1), (Ability.Cha, -2)),
                 [CharacterClass.Cleric, CharacterClass.Fighter, CharacterClass.Gladiator, CharacterClass.Psionicist, CharacterClass.Thief], true,
-                ConstitutionSaves: true),
+                ConstitutionSaves: true,
+                ThiefSkills: [0, 10, 15, 0, 0, 0, -10, -5]),
             new(Characters.Race.Elf, "Elf", [Gender.Male, Gender.Female],
                 A((Ability.Dex, 2), (Ability.Int, 1), (Ability.Wis, -1), (Ability.Con, -2)),
-                [CharacterClass.Cleric, CharacterClass.Fighter, CharacterClass.Gladiator, CharacterClass.Preserver, CharacterClass.Psionicist, CharacterClass.Ranger, CharacterClass.Thief], true),
+                [CharacterClass.Cleric, CharacterClass.Fighter, CharacterClass.Gladiator, CharacterClass.Preserver, CharacterClass.Psionicist, CharacterClass.Ranger, CharacterClass.Thief], true,
+                ThiefSkills: [5, -5, 0, 5, 10, 5, 0, 0]),
             new(Characters.Race.HalfElf, "Half-elf", [Gender.Male, Gender.Female],
                 A((Ability.Dex, 1), (Ability.Con, -1)),
-                All, true),
+                All, true,
+                ThiefSkills: [10, 0, 0, 0, 5, 0, 0, 0]),
             new(Characters.Race.HalfGiant, "Half-giant", [Gender.Male, Gender.Female],
                 // DSUN.EXE's (38D4:016B); the manual has Str +4, Con +2, Int −2, Wis −2, Cha −2.
                 A((Ability.Str, 4), (Ability.Dex, -5), (Ability.Con, 2), (Ability.Int, -5), (Ability.Wis, -3), (Ability.Cha, -3)),
@@ -309,10 +370,12 @@ public sealed record CharacterRules
             new(Characters.Race.Halfling, "Halfling", [Gender.Male, Gender.Female],
                 A((Ability.Dex, 2), (Ability.Wis, 2), (Ability.Con, -1), (Ability.Cha, -1), (Ability.Str, -2)),
                 [CharacterClass.Cleric, CharacterClass.Druid, CharacterClass.Fighter, CharacterClass.Gladiator, CharacterClass.Psionicist, CharacterClass.Ranger, CharacterClass.Thief], true,
-                ConstitutionSaves: true),
+                ConstitutionSaves: true,
+                ThiefSkills: [5, 5, 5, 10, 15, 5, -15, -5]),
             new(Characters.Race.Mul, "Mul", [Gender.Male],
                 A((Ability.Str, 2), (Ability.Con, 1), (Ability.Int, -1), (Ability.Cha, -2)),
-                [CharacterClass.Cleric, CharacterClass.Fighter, CharacterClass.Gladiator, CharacterClass.Psionicist, CharacterClass.Thief], true),
+                [CharacterClass.Cleric, CharacterClass.Fighter, CharacterClass.Gladiator, CharacterClass.Psionicist, CharacterClass.Thief], true,
+                ThiefSkills: [0, -5, 0, 5, 0, 0, 5, -5]),
             new(Characters.Race.ThriKreen, "Thri-kreen", [Gender.Female],
                 A((Ability.Dex, 2), (Ability.Wis, 1), (Ability.Int, -1), (Ability.Cha, -2)),
                 [CharacterClass.Cleric, CharacterClass.Fighter, CharacterClass.Gladiator, CharacterClass.Psionicist, CharacterClass.Ranger], true,

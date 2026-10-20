@@ -64,6 +64,12 @@ public partial class DialogueWindow : Control
     /// <summary>Resume the paused script with the player's answer.</summary>
     public Action<int>? Answer { get; set; }
 
+    /// <summary>Resume a script waiting at INPUT_STRING with what the player typed.</summary>
+    public Action<string>? AnswerText { get; set; }
+
+    /// <summary>Where the player types for INPUT_STRING, over the text window's bottom line.</summary>
+    private LineEdit _input = null!;
+
     public override void _Ready()
     {
         Visible = false;
@@ -82,6 +88,14 @@ public partial class DialogueWindow : Control
         _text.GuiInput += TextInput;
         _portrait = new TextureRect { Size = new Vector2(32, 32), MouseFilter = MouseFilterEnum.Ignore };
         _title = new Label { Position = new Vector2(6, 1), Size = new Vector2(296, 11), ClipText = true, MouseFilter = MouseFilterEnum.Ignore };
+        _input = new LineEdit { Visible = false, Size = new Vector2(200, 12), PlaceholderText = "Type, then Enter" };
+        _input.AddThemeFontSizeOverride("font_size", FontSize);
+        _input.TextSubmitted += text =>
+        {
+            _input.Visible = false;
+            AnswerText?.Invoke(text);
+        };
+        AddChild(_input);
         Resized += Fit;
         Fit();
     }
@@ -92,6 +106,11 @@ public partial class DialogueWindow : Control
         float scale = Math.Max(1f, MathF.Floor(Math.Min(Size.X / RetroScreen.Width, Size.Y / RetroScreen.Height)));
         _panel.Scale = new Vector2(scale, scale);
         _panel.Position = new Vector2(MathF.Floor((Size.X - Width * scale) / 2), Size.Y - Height * scale);
+        if (_input is not null)
+        {
+            _input.Scale = _panel.Scale;
+            _input.Position = _panel.Position + new Vector2(60, Height - 14) * scale;
+        }
     }
 
     /// <param name="portraits">The texture of a <c>PORT</c> number, or null.</param>
@@ -239,6 +258,18 @@ public partial class DialogueWindow : Control
             GplMenuPrompt menu => [.. menu.Options.Select((o, i) => (o.Text.Trim(), i, o.Enabled)).Where(o => o.Enabled).Select(o => (o.Item1, o.i))],
             _ => [],
         };
+        bool typing = _dialogue.Prompt is GplTextPrompt;
+        if (typing && !_input.Visible)
+        {
+            _input.MaxLength = ((GplTextPrompt)_dialogue.Prompt!).MaxLength;
+            _input.Text = "";
+            _input.Visible = true;
+            _input.CallDeferred(Control.MethodName.GrabFocus);
+        }
+        else if (!typing)
+        {
+            _input.Visible = false;
+        }
         _title.Text = _dialogue.Prompt switch
         {
             GplYesNoPrompt => "Answer Yes or No",

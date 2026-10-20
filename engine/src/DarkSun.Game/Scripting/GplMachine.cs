@@ -65,6 +65,7 @@ public sealed class GplMachine
     private GplEntry _runEntry;
     private int _runCount;
     private int? _answer;
+    private string? _text;
     private readonly int[] _frameFile = new int[MaxFrames + 1];
     private bool _skipPause;
     private int _stepFrame;
@@ -359,6 +360,22 @@ public sealed class GplMachine
     /// gets <paramref name="answer"/> (ASK_YES_NO: 1 yes, 0 no; MENU: the
     /// option's index or −1; CONTINUE: anything).
     /// </summary>
+    /// <summary>Continue a script suspended at INPUT_STRING with what the player typed.</summary>
+    public GplRunResult ResumeWith(string text)
+    {
+        _text = text;
+        return Resume();
+    }
+
+    /// <summary>The text the script is being resumed with, once (see <see cref="TryTakeAnswer"/>).</summary>
+    public bool TryTakeText(out string text)
+    {
+        text = _text ?? "";
+        bool had = _text is not null;
+        _text = null;
+        return had;
+    }
+
     public GplRunResult Resume(int answer = 0)
     {
         if (!IsSuspended)
@@ -605,6 +622,15 @@ public sealed class GplMachine
             case 0x06: Modify(a[0], 2, v => v + 1); break;
             case 0x07: Modify(a[0], 4, v => v + 1); break;
             case 0x0A: CopyString(a[0], a[1], i); break;
+            case 0x42: // INPUT_STRING: up to 40 characters into the variable; none into the accumulator (043D:19AA)
+                if (a[0].Location is GplMemoryLocation input && _host.InputText(this, MaxInput) is { } typed)
+                {
+                    Memory.WriteString(input, typed);
+                }
+                break;
+            case 0x5A: // STRING_COMPARE: 1 when the two strings are the same (_fstrcmp: case counts); 0 if either isn't one
+                Accumulator = a[0].Text is { } left && a[1].Text is { } right && string.Equals(left, right, StringComparison.Ordinal) ? 1 : 0;
+                break;
             case 0x0E: Accumulator = Accumulator == 0 ? 1 : 0; break;
             case 0x1E or 0x1F: Accumulator = unchecked(-V(0)); break; // NAMETONUM, NUMTONAME: acc = −value
             case 0x11: Modify(a[0], 4, v => unchecked(v * V(1))); break;
@@ -715,6 +741,9 @@ public sealed class GplMachine
                 break;
         }
     }
+
+    /// <summary>INPUT_STRING's most characters (<c>043D:19AA</c>: 0x28).</summary>
+    private const int MaxInput = 40;
 
     /// <summary>Triggers made by <c>MAS 99</c> are global: they survive region changes.</summary>
     private bool InGameStartScript => _loaded == (GameStartFile, GplFileKind.Mas);

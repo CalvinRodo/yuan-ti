@@ -75,6 +75,9 @@ public class LoggingGplHost : IGplHost
 
     public virtual string SpeakerName(GplMachine machine) => Speaker;
 
+    /// <summary>With no player: nothing typed.</summary>
+    public virtual string? InputText(GplMachine machine, int maxLength) => "";
+
     public virtual int ChooseMenu(GplMachine machine, string title, IReadOnlyList<GplMenuOption> options) =>
         MenuChoice(title, options);
 

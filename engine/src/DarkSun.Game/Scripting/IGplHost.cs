@@ -54,6 +54,9 @@ public interface IGplHost
     /// <summary>MENU: the chosen option's index, or −1 for none.</summary>
     int ChooseMenu(GplMachine machine, string title, IReadOnlyList<GplMenuOption> options);
 
+    /// <summary>INPUT_STRING: what the player types, up to <paramref name="maxLength"/> characters; null while the script waits for it.</summary>
+    string? InputText(GplMachine machine, int maxLength);
+
     /// <summary>The id object triggers match for an object (DSUN.EXE: object field 0x48).</summary>
     int TriggerId(GplMachine machine, int obj) => obj;
 

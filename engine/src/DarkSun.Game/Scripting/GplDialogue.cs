@@ -12,6 +12,9 @@ public sealed record GplYesNoPrompt : GplPrompt;
 /// <summary>MENU: the options in script order; disabled ones are not offered. The answer is an option's index.</summary>
 public sealed record GplMenuPrompt(string Title, IReadOnlyList<GplMenuOption> Options) : GplPrompt;
 
+/// <summary>INPUT_STRING (<c>043D:19AA</c>, <c>7372:11FD</c>): the player types up to <paramref name="MaxLength"/> characters.</summary>
+public sealed record GplTextPrompt(int MaxLength) : GplPrompt;
+
 /// <summary>SHOP (<c>7372:08D2</c>): the shop of <paramref name="Merchant"/> (an object index) is open; the script goes on when it closes.</summary>
 public sealed record GplShopPrompt(int Merchant) : GplPrompt;
 
@@ -172,6 +175,19 @@ public class DialogueGplHost : LoggingGplHost
     /// <summary>Object fields: the world's value where it has one, else the stored one.</summary>
     public override int ReadField(GplMachine machine, GplObjectRef field) =>
         World?.ReadField(field) ?? base.ReadField(machine, field);
+
+    public override string? InputText(GplMachine machine, int maxLength)
+    {
+        if (machine.TryTakeText(out string text))
+        {
+            Journal.Replied(text);
+            Dialogue.Answered();
+            return text.Length > maxLength ? text[..maxLength] : text;
+        }
+        Dialogue.Ask(new GplTextPrompt(maxLength));
+        machine.Suspend();
+        return null;
+    }
 
     public override int ChooseMenu(GplMachine machine, string title, IReadOnlyList<GplMenuOption> options) =>
         Wait(machine, new GplMenuPrompt(title, options), out int choice) ? choice : -1;

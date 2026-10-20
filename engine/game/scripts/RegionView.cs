@@ -359,6 +359,8 @@ public partial class RegionView : Node2D
         _dialogueWindow = new DialogueWindow
         {
             Answer = answer => ReportScript("answer", Session.Scripts.Resume(answer)),
+            // The one INPUT_STRING (GPL 20, the manual's word) has lower-case answers: any case does.
+            AnswerText = text => ReportScript("answer", Session.Scripts.ResumeWith(text.Trim().ToLowerInvariant())),
         };
         layer.AddChild(_dialogueWindow);
 
@@ -1877,7 +1879,7 @@ public partial class RegionView : Node2D
         _transitioning = false;
         _fade?.Set("color", new Color(0, 0, 0, 0));
         ShowRegion(index, saved: save);
-        save.RestoreParty(Session.ScriptHost.PartyMembers, i => _world.NewItem(i.Rdff, i.Quantity, i.Slot));
+        save.RestoreParty(Session.ScriptHost.PartyMembers, i => _world.NewItem(i));
         Session.ScriptHost.Journal.Load(save.Journal);
         _scriptLogSeen = Session.ScriptHost.Log.Count;
         var missing = save.Mods.Except(Session.Mods.Mods.Select(m => m.Name)).ToList();
@@ -2900,7 +2902,9 @@ public partial class RegionView : Node2D
                 _ => 0,
             };
             _answered++;
-            ReportScript("auto answer", Session.Scripts.Resume(answer));
+            ReportScript("auto answer", Session.ScriptHost.Dialogue.Prompt is GplTextPrompt
+                ? Session.Scripts.ResumeWith("")
+                : Session.Scripts.Resume(answer));
         }
         Session.ScriptHost.Dialogue.Clear();
     }

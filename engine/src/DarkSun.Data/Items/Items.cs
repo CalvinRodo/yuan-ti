@@ -173,7 +173,13 @@ public sealed record ItemType(
     public static ItemType Parse(int number, ReadOnlySpan<byte> r) => new(
         number, (WeaponKind)r[0], r[1], BinaryPrimitives.ReadUInt16LittleEndian(r[2..]), r[4],
         BinaryPrimitives.ReadUInt16LittleEndian(r[5..]), r[7], r[8], (ItemPlacement)r[9], r[10], r[11], r[12], r[13],
-        (sbyte)r[14], r[15], BinaryPrimitives.ReadUInt16LittleEndian(r[16..]), (sbyte)r[18], r[19]);
+        (sbyte)r[14], r[15], BinaryPrimitives.ReadUInt16LittleEndian(r[16..]), (sbyte)r[18], r[19])
+    {
+        Bytes = r.ToArray(),
+    };
+
+    /// <summary>The 20 bytes as <c>IT1R</c> has them (<c>GPLX</c> group 4, for scripts).</summary>
+    public byte[] Bytes { get; init; } = [];
 
     /// <summary>Every record of an <c>IT1R</c> resource.</summary>
     public static IReadOnlyList<ItemType> ParseAll(ReadOnlySpan<byte> data)

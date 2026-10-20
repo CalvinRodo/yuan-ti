@@ -49,6 +49,7 @@ public partial class OptionsWindow : PanelContainer
         Check(general, "Autosave on entering a region", Settings.Autosave, v => Settings.Autosave = v);
         Check(general, "Show the map's information lines", Settings.DebugHud, v => Settings.DebugHud = v);
         Check(general, "Walk as the original plans paths", Settings.OriginalPathfinding, v => Settings.OriginalPathfinding = v);
+        Check(general, "Repair the shipped scripts' known bugs (from the next launch)", Settings.ScriptRepairs, v => Settings.ScriptRepairs = v);
 
         column.AddChild(Panels.Text("Keys (click one, then press the new key)", Heading));
         var scroll = new ScrollContainer { SizeFlagsVertical = SizeFlags.ExpandFill, CustomMinimumSize = new Vector2(0, 120), HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled };

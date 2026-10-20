@@ -116,7 +116,7 @@ public sealed class WorldObject
     /// <summary>Where its animation starts when the region is loaded (an <c>SCMD</c> record), e.g. a door's closed or open state.</summary>
     public int AnimationStart { get; set; }
 
-    /// <summary>Combat record allegiance (<c>+0x1D</c>), set by <c>REQUEST(18)</c>; also field 75 (inferred).</summary>
+    /// <summary>Combat record allegiance (<c>+0x1D</c>), set by <c>REQUEST(18)</c>; field 74 (<c>GPLX</c>).</summary>
     public int Allegiance { get; set; }
 
     /// <summary>Combat record status (<c>+0x1C</c>), read by GET_STATUS (see <see cref="Vitals"/>).</summary>
@@ -137,24 +137,65 @@ public sealed class WorldObject
 
     public bool CanTakeOrders => Index < GameWorld.MaxCreatures && Walker is not null && Kind != ObjectKind.Party;
 
-    /// <summary>Script-visible fields; 19, 72, 75 and 95 are modelled, the rest stored as written.</summary>
+    /// <summary>
+    /// What the AI does when no condition overrides it (combat record +0x1E,
+    /// field 75; <see cref="CombatRecord.Mind"/>): scripts set it to 2 (fight)
+    /// after making a creature hostile with <c>REQUEST(18)</c>. Kept with the
+    /// stored fields, so a region's state keeps it.
+    /// </summary>
+    public int Mind
+    {
+        get => _fields.TryGetValue(FieldMind, out int m) ? m : Record?.Mind ?? 0;
+        set => _fields[FieldMind] = value;
+    }
+
+    /// <summary>The combat record fields this models (<c>GPLX</c> group 1): +0 hit points, +6 id, +0x1C status, +0x1D allegiance, +0x1E mind, +0x38 facing.</summary>
+    public const int FieldHp = 67, FieldId = 72, FieldStatus = 73, FieldAllegiance = 74, FieldMind = 75, FieldFacing = 95;
+
+    /// <summary>Field 0 of an item, record +0x0F: a door's state (<see cref="DoorFlags"/>).</summary>
+    public const int FieldItemFlags = 0;
+
+    /// <summary>
+    /// Script-visible fields: those modelled (hit points, id, status,
+    /// allegiance — a party member's 0 reads as 1, the party's side — mind,
+    /// facing, a door's state), else what a script stored, else 0.
+    /// <see cref="WorldGplHost"/> reads the rest from the records.
+    /// </summary>
     public int ReadField(int field) => field switch
     {
-        72 => Id,
-        75 => Allegiance,
-        95 => Facing,
+        FieldHp when Kind != ObjectKind.Thing => Vitals.Hp,
+        FieldId => Id,
+        FieldStatus when Kind != ObjectKind.Thing => Status,
+        FieldAllegiance when Kind != ObjectKind.Thing => Kind == ObjectKind.Party && Allegiance == 0 ? 1 : Allegiance,
+        FieldFacing => Facing,
+        FieldItemFlags when IsDoor => DoorFlags,
         _ => _fields.GetValueOrDefault(field),
     };
+
+    /// <summary>Whether <see cref="ReadField"/> answers <paramref name="field"/> itself (modelled, or written by a script).</summary>
+    public bool Knows(int field) => _fields.ContainsKey(field) || field is FieldId or FieldFacing
+        || Kind != ObjectKind.Thing && field is FieldHp or FieldStatus or FieldAllegiance
+        || IsDoor && field == FieldItemFlags;
 
     public void WriteField(int field, int value)
     {
         switch (field)
         {
-            case 72: Id = value; break;
-            case 75: Allegiance = value; break;
+            case FieldHp when Kind != ObjectKind.Thing: Vitals.Hp = value; break;
+            case FieldId: Id = value; break;
+            case FieldStatus when Kind != ObjectKind.Thing: Status = value; break;
+            case FieldAllegiance when Kind != ObjectKind.Thing: Allegiance = value; break;
+            case FieldItemFlags when IsDoor: DoorFlags = value; break;
             default: _fields[field] = value; break;
         }
     }
+
+    /// <summary>A field of the creature's character record a script wrote (<c>obj.71.f</c>), kept with the stored fields under 1000 + f.</summary>
+    public int? SheetField(int field) => _fields.TryGetValue(SheetFields + field, out int v) ? v : null;
+
+    public void WriteSheetField(int field, int value) => _fields[SheetFields + field] = value;
+
+    private const int SheetFields = 1000;
 
     /// <summary>The fields scripts wrote that aren't modelled (for <see cref="RegionState"/>).</summary>
     public IReadOnlyDictionary<int, int> StoredFields => _fields;
@@ -538,20 +579,20 @@ public sealed partial class GameWorld
 
     /// <summary>
     /// REQUEST(14) (<c>87B3:0FE9</c>), the arena's opening bout, which the party
-    /// watches: from <paramref name="who"/> (region 42's gate) at (x, y), the
-    /// mage Celgor (<c>OJFF</c> 296) at (x − 3, y + 18) on the party's side
+    /// watches: from the active member (<c>gname[5]</c>; the request's object,
+    /// region 42's gate, isn't read) at (x, y), the mage Celgor (<c>OJFF</c> 296) at (x − 3, y + 18) on the party's side
     /// (allegiance 1), the rampager (171) at (x + 3, y + 18) and two more
     /// (269) at (x + 3, y + 16) and (x + 3, y + 20), each made as CLONE makes
     /// one (<c>7372:0A44</c>, within 6 cells) with field 0x4A 1 or 2; the
     /// party's allegiance becomes 4, which keeps it out of the fight. Returns
     /// Celgor, where FIGHT starts (<c>7372:030B</c>) and the view centres
-    /// (<c>191F:01FF</c>), or null if the gate isn't there. (DSUN.EXE also sets
+    /// (<c>191F:01FF</c>), or null with no active member. (DSUN.EXE also sets
     /// Celgor's combat record +0x23 and character record +0x1C to 0x19 and +0x27
     /// to 0xFD; what they mean isn't known.)
     /// </summary>
-    public WorldObject? StageArenaBout(int who)
+    public WorldObject? StageArenaBout()
     {
-        if ((who >= 0 ? this[who] : First(who)) is not { } gate)
+        if (this[ActiveMember] is not { } gate)
         {
             return null;
         }
@@ -580,6 +621,24 @@ public sealed partial class GameWorld
         }
         return celgor;
     }
+
+    /// <summary>
+    /// The game clock (<c>gname[9]</c>, <c>3781:035B</c>), in seconds: one more
+    /// every <see cref="ClockTicks"/> ticks of the 96 Hz timer while the map
+    /// runs (<c>1DF3:29E8</c>, not in combat), a minute a combat round after
+    /// the first (<c>612E:0754</c>), PASS_TIME's minutes (<c>8053:0A02</c>).
+    /// </summary>
+    public int Clock
+    {
+        get => _engine[9];
+        set => _engine[9] = value;
+    }
+
+    public const int ClockTicks = 64;
+
+    private long _clockFrom = -1;
+
+    public void PassTime(int seconds) => Clock = unchecked(Clock + seconds);
 
     /// <summary>A party member with this allegiance (no fighting bits, <c>&amp; 3</c>) sits a fight out: REQUEST(14)'s.</summary>
     public const int WatchingAllegiance = 4;
@@ -947,7 +1006,7 @@ public sealed partial class GameWorld
                 obj.Vitals.Load(vitals);
             }
             obj.Status = o.Status;
-            obj.Items = [.. (o.Items ?? []).Select(i => NewItem(i.Rdff, i.Quantity, i.Slot)).OfType<Item>()];
+            obj.Items = [.. (o.Items ?? []).Select(i => NewItem(i)).OfType<Item>()];
             obj.SecondState = o.SecondState;
             obj.RestoreFields(o.Fields);
             if (obj.Walker is { } walker)
@@ -1050,6 +1109,14 @@ public sealed partial class GameWorld
             {
                 changed.Add(obj);
             }
+        }
+        if (_clockFrom < 0 || now < _clockFrom)
+        {
+            _clockFrom = now;
+        }
+        for (; now - _clockFrom >= ClockTicks; _clockFrom += ClockTicks)
+        {
+            PassTime(1);
         }
         if (now >= _nextScriptCheck)
         {

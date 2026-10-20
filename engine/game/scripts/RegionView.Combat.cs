@@ -315,6 +315,10 @@ public partial class RegionView
             {
                 if (battle.NextTurn() is null)
                 {
+                    if (battle.Round > 0)
+                    {
+                        _world.PassTime(60); // 612E:0754: a minute a round, not for the first
+                    }
                     battle.StartRound();
                 }
                 continue;

@@ -323,7 +323,6 @@
 1DF3:1BEF	func	object_apply_scmd_record	applies one 8-byte SCMD record: frame, delay, hot spot, move, sound, flags
 1DF3:22B2	func	object_start_scmd	loads an SCMD into an object and starts it at a record index
 1DF3:23A9	func	object_animate_step	steps an object's SCMD when its delay has elapsed on the 96 Hz tick DS:11D6
-1DF3:29E8	func	void timer_tick(void)	96 Hz timer callback: DS:11D6++
 191F:0A6F	func	void play_sound_effect(char id)	skipped when sound is off or id is -1 (probably)
 # Data
 4356:0556	data	gmap	far ptr: region map flags, 128 x 98 bytes
@@ -387,6 +386,16 @@
 84C9:0A25	func	void windows_close_all(void)	puts away the portrait, text and button windows
 87B3:0FE9	func	void request_arena_bout(void)	REQUEST 14: the arena's watched bout (Celgor, a rampager, two sligs), the party allegiance 4, then FIGHT
 87B3:1295	func	int request_place(int name, int x, int y, int field)	clones one object near (x, y) and sets its field 0x4A
+87B3:028D	func	int request_skill_check(int who, int skill, int situation)	REQUEST 3: a thief skill check; for the party it means the best member but always takes slot 0
+87B3:030B	func	int skill_chance(int who, int skill, int *situation)	base + race + 4/level + DEX - gear (tables at 3FAA:0000), 0 without thief levels or not Okay
+87B3:0488	func	int skill_roll(int who, int skill, int situation)	rand() % 100 under skill_chance + situation
+87B3:04F5	func	void skill_situation(int who, byte *conditions, int skill, long *situation)	conditions rule skills out (-1000) or make them certain (+1000); Enlarge scales hiding and climbing
+87B3:0672	func	int wears_in_slots(int who, int *slots, int *items)	anything (or one of the items) worn in one of the slots
+87B3:0AE1	func	int request_trap(int who, int x, int y)	REQUEST 7: makes trap item -who; party find traps or Detect Traps avoid it, else its +0x0F dice hit the party's side nearby
+7372:063C	func	int gpl_skillroll(int who, int situation, int skill)	SKILLROLL's roll (skill_roll)
+7372:067D	func	int gpl_statroll(int who, int difficulty, int ability)	d20 (19 fails) under the ability + 3971:0004[difficulty]
+1A0A:261E	func	int gpl_setthing(int who, int n)	the next of who's items becomes the thing (3781:035F); 9999 starts again
+8053:0A02	func	void pass_time(int minutes)	PASS_TIME: the game clock + 60 a minute
 # Data
 4356:117C	data	current_region	region number; 42 (RGN2A) at a new game
 4356:117E	data	start_position	x, y in pixels at a new game (488, 152)

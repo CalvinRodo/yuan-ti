@@ -15,7 +15,7 @@ namespace DarkSun.Game.World;
 /// leave the fight to the view (<see cref="PendingFight"/>); REQUEST 3, 7
 /// and 8 are logged only.
 /// </summary>
-public sealed class WorldGplHost : DialogueGplHost
+public sealed partial class WorldGplHost : DialogueGplHost
 {
     /// <summary>
     /// Engine variables (<c>gname[0–14]</c>), kept across regions: pass them
@@ -102,7 +102,7 @@ public sealed class WorldGplHost : DialogueGplHost
             "GET_LOS" => world.InSight(v[0], v[1], v[2]) ? 1 : 0,
             "SET_OTHER" => SetOther(world, v[0]),
             "GET_STATUS" => world.Status(-Math.Abs(v[0])),
-            "GETPARTY" => NextPartyMember(world, v[0]),
+            "GETPARTY" => Other(world, NextPartyMember(world, v[0])),
             "TELEPORT" => Teleport(world, v),
             "CLONE" => world.Clone(v[0], v[1], v[2], v[3]),
             "REQUEST" => Request(machine, world, v),
@@ -122,12 +122,15 @@ public sealed class WorldGplHost : DialogueGplHost
                 }
             }),
             "SHOP" => Shop(machine, world, v[0]),
+            "STAT_ROLL" => StatRoll(machine, world, v[0], v[1], v[2]),
+            "SETTHING" => SetThing(world, v[0], v[1]),
+            "PASS_TIME" => Do(() => world.PassTime(v[0] * 60)),
             _ => null,
         };
         return command.Mnemonic is "HUNT" or "GO" or "FETCH" or "FOLLOW" or "GOXY" or "WAIT" or "FLEE" or "READORDERS"
             or "GETXY" or "RANGE" or "NEXTTO" or "GET_LOS" or "SET_OTHER" or "GET_STATUS" or "GETPARTY" or "TELEPORT"
             or "CLONE" or "REQUEST" or "FIGHT" or "GIVE" or "TAKE" or "DROP" or "DAMAGE" or "PHYS_DAMAGE" or "AWARD"
-            or "CHANGE_MONEY" or "SHOP"
+            or "CHANGE_MONEY" or "SHOP" or "STAT_ROLL" or "SETTHING" or "PASS_TIME"
             ? Logged(command, result)
             : base.Execute(machine, command);
     }
@@ -263,6 +266,13 @@ public sealed class WorldGplHost : DialogueGplHost
         return 0;
     }
 
+    /// <summary>GETPARTY (<c>043D:1468</c>) also makes the member it returns "other" (<c>gname[8]</c>, <c>3781:0363</c>), which the scripts then read: <c>GETXY(gname[8])</c>.</summary>
+    private static int Other(GameWorld world, int index)
+    {
+        world.SetEngineVariable(0x28, index);
+        return index;
+    }
+
     private static int NextPartyMember(GameWorld world, int after)
     {
         var party = world.Party.Where(p => !p.Hidden).Select(p => p.Index).ToList();
@@ -288,7 +298,7 @@ public sealed class WorldGplHost : DialogueGplHost
                 {
                     break;
                 }
-                if (world.StageArenaBout(who) is { } celgor)
+                if (world.StageArenaBout() is { } celgor)
                 {
                     PendingFight = (celgor.Cell.X, celgor.Cell.Y);
                     WatchedFight = celgor;
@@ -301,7 +311,9 @@ public sealed class WorldGplHost : DialogueGplHost
                     world.SetDoor(door, a, force: true);
                 }
                 break;
+            case 3: return SkillCheck(machine, world, who, a, b);
             case 5: world.ToggleState(who); break;
+            case 7 when who < 0: return SetOffTrap(machine, world, who, a, b);
             case 10: world.SetCellFlags(a, b, CellFlags.Blocked, true); break;
             case 11: world.SetCellFlags(a, b, CellFlags.Blocked, false); break;
             case 12: world.SetCellFlags(a, b, CellFlags.BlocksSight, true); break;
@@ -338,17 +350,17 @@ public sealed class WorldGplHost : DialogueGplHost
     }
 
     public override int ReadField(GplMachine machine, GplObjectRef field) =>
-        Map is { } world && Locate(world, field) is var (obj, f) ? obj.ReadField(f) : base.ReadField(machine, field);
+        Map is { } world && Record(world, field, out int f) is { } record ? record.Read(f) : base.ReadField(machine, field);
 
-    /// <summary>Field 19 is the object's name (the arena's "Do not worry, <c>obj_special(0x25).19</c>": the active member's).</summary>
+    /// <summary>A text field: field 19 a creature's name (the arena's "Do not worry, <c>obj_special(0x25).19</c>": the active member's), 94 an item's (<c>.2.94</c>).</summary>
     public override string? ReadFieldText(GplMachine machine, GplObjectRef field) =>
-        Map is { } world && Locate(world, field) is var (obj, f) && f == 19 ? obj.Name : null;
+        Map is { } world && Record(world, field, out int f) is { } record ? record.Text(f) : null;
 
     public override void WriteField(GplMachine machine, GplObjectRef field, int value)
     {
-        if (Map is { } world && Locate(world, field) is var (obj, f))
+        if (Map is { } world && Record(world, field, out int f) is { } record)
         {
-            obj.WriteField(f, value);
+            record.Write(f, value);
         }
         else
         {
@@ -363,25 +375,4 @@ public sealed class WorldGplHost : DialogueGplHost
     public override string SpeakerName(GplMachine machine) =>
         Map?[Map.ActiveMember] is { Name: { Length: > 0 } name } ? name : base.SpeakerName(machine);
 
-    /// <summary>
-    /// The object and field a reference names. Every field of the path but
-    /// the last is taken to hold an object index (an inference: the shipped
-    /// scripts use one-field paths).
-    /// </summary>
-    private static (WorldObject Object, int Field)? Locate(GameWorld world, GplObjectRef field)
-    {
-        if (field.Path.Length == 0 || world.Resolve(field.Id) is not { } obj)
-        {
-            return null;
-        }
-        foreach (byte f in field.Path[..^1])
-        {
-            if (world[obj.ReadField(f)] is not { } next)
-            {
-                return null;
-            }
-            obj = next;
-        }
-        return (obj, field.Path[^1]);
-    }
 }

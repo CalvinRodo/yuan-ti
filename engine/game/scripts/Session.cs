@@ -40,7 +40,11 @@ public static class Session
             {
                 GffFile gpl = Open("GPLDATA.GFF");
                 byte[] fieldTypes = gpl.TryRead("GPLX", 1, out var gplx) ? GplDecoder.FieldTypes(gplx.Span) : [];
-                _scripts = new GplMachine(new GffScripts(gpl), ScriptHost, fieldTypes, BorlandRandom.FromTime(DateTimeOffset.Now))
+                // [game] script_repairs in user://settings.cfg (Options): the shipped scripts' known bugs repaired (GplRepairs).
+                IGplScripts scripts = Settings.ScriptRepairs
+                    ? new RepairedScripts(new GffScripts(gpl), [.. GplRepairs.All.Where(r => r.OnByDefault)])
+                    : new GffScripts(gpl);
+                _scripts = new GplMachine(scripts, ScriptHost, fieldTypes, BorlandRandom.FromTime(DateTimeOffset.Now))
                 {
                     Breakpoints = Breakpoints,
                 };
@@ -339,7 +343,12 @@ public static class Session
     /// </summary>
     private static WorldGplHost NewHost()
     {
-        var host = new WorldGplHost { PartyCharacter = slot => slot < Party.Count ? Party[slot] : null };
+        var host = new WorldGplHost
+        {
+            PartyCharacter = slot => slot < Party.Count ? Party[slot] : null,
+            Rules = Rules,
+            Fields = Open("GPLDATA.GFF").TryRead("GPLX", 1, out var gplx) ? GplFieldMap.Parse(gplx.Span) : GplFieldMap.Empty,
+        };
         for (int slot = 0; slot < host.PartyMembers.Count; slot++)
         {
             if (slot < Party.Count && Party[slot].Hp > 0)

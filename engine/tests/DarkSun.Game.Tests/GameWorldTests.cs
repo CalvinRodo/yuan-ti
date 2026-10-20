@@ -29,7 +29,7 @@ public class GameWorldTests
     }
 
     /// <summary>An <c>RDFF</c> combat record (type 2) with a status, an allegiance and a name.</summary>
-    private static byte[] CombatRecord(int ojff, byte status, byte allegiance, string name)
+    internal static byte[] CombatRecord(int ojff, byte status, byte allegiance, string name)
     {
         var data = new byte[DarkSun.Data.Regions.CombatRecord.HeaderSize + DarkSun.Data.Regions.CombatRecord.Size];
         (data[0], data[2], data[8]) = (1, 2, DarkSun.Data.Regions.CombatRecord.Size); // inline, combat record, 58 bytes
@@ -255,7 +255,7 @@ public class GameWorldTests
         Assert.Equal(8, world.Status(-200));
 
         world.SetAllegiance(-100, 2);
-        Assert.Equal(2, world.First(-100)!.ReadField(75));
+        Assert.Equal(2, world.First(-100)!.ReadField(74)); // GPLX: field 74 is combat record +0x1D
     }
 
     [Fact]
@@ -302,19 +302,20 @@ public class GameWorldTests
     public void TheArenaBoutPutsTheMageOnThePartysSideAndThePartyOut()
     {
         GameWorld world = Arena();
-        WorldObject gate = world.First(-200)!; // at (2, 2)
+        world.ActiveMember = 0; // the party at (1, 8)
 
-        WorldObject celgor = world.StageArenaBout(gate.Index)!;
+        WorldObject celgor = world.StageArenaBout()!;
 
         Assert.Equal("Defiler", celgor.Name);
         Assert.Equal(1, celgor.Allegiance);
         Assert.Equal(1, celgor.ReadField(0x4A));
-        Assert.True(GplGeometry.Distance(celgor.Cell.X, celgor.Cell.Y, 0, 20) <= 6); // (2 − 3, 2 + 18), off the map's edge
+        Assert.True(GplGeometry.Distance(celgor.Cell.X, celgor.Cell.Y, 0, 26) <= 6); // (1 − 3, 8 + 18), off the map's edge
         WorldObject rampager = world.First(-171)!;
         Assert.Equal((2, 2), (rampager.Allegiance, rampager.ReadField(0x4A)));
         Assert.Equal(2, world.Select(-269).Count());
         Assert.All(world.Party, p => Assert.Equal(GameWorld.WatchingAllegiance, p.Allegiance));
-        Assert.Null(world.StageArenaBout(-999));
+        world.ActiveMember = 30;
+        Assert.Null(world.StageArenaBout());
     }
 
     [Fact]

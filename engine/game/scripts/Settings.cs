@@ -102,6 +102,13 @@ public static class Settings
         set => Set("game", "autosave", value);
     }
 
+    /// <summary>Repair the shipped scripts' known bugs as they load (<c>GplRepairs</c>: dead triggers in Darkhold, the Lava Rifts ranger, Linara).</summary>
+    public static bool ScriptRepairs
+    {
+        get => Get("game", "script_repairs", true);
+        set => Set("game", "script_repairs", value);
+    }
+
     public static bool OriginalPathfinding
     {
         get => Get("game", "original_pathfinding", false);

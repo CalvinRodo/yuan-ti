@@ -41,7 +41,7 @@ public class EncounterTests
             o.Vitals.Status = Vitals.Well;
         }
         world.First(-100)!.Allegiance = 0; // the templar stays out of it
-        WorldObject celgor = world.StageArenaBout(world.First(-200)!.Index)!;
+        WorldObject celgor = world.StageArenaBout()!;
         celgor.Vitals.Hp = celgor.Vitals.MaxHp = 20;
         foreach (WorldObject o in world.Objects.Where(o => o.Allegiance == 2))
         {

@@ -22,6 +22,17 @@ public sealed partial class GameWorld
     public const int WholeParty = DialogueGplHost.WholeParty;
 
     /// <summary>A new item from item <c>RDFF</c> <paramref name="rdff"/>, or null if it isn't one.</summary>
+    /// <summary>An item as saved (<see cref="Item.Save"/>), its charges included.</summary>
+    public Item? NewItem(ItemState s) => NewItem(s.Rdff, s.Quantity, s.Slot) is { } item
+        ? (s.Charges is int charges ? WithCharges(item, charges) : item)
+        : null;
+
+    private static Item WithCharges(Item item, int charges)
+    {
+        item.Charges = charges;
+        return item;
+    }
+
     public Item? NewItem(int rdff, int quantity = 1, int slot = Equipment.Pack) =>
         _objectData.TryRead("RDFF", Math.Abs(rdff), out var data) && ItemRecord.FromRdff(data) is { } record
             ? new Item(Math.Abs(rdff), record, quantity, slot)

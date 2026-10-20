@@ -565,6 +565,68 @@ set when the trigger was created by `MAS 99` (`377C:0012` = 99 and `377C:0014`
 = 2), so the game-start script's object triggers survive region changes.
 Registering a trigger with the same key as an existing one replaces it.
 
+### Object fields (`GPLX` 1)
+
+`obj(id).f` and `obj_special(n).f` read field f of a record: `GPLX` 1 holds
+five groups of 99 words, the field's offset in the item (21 bytes), combat
+(58), name (25), character (71) and item-type (20) records (−1: none), then
+at `0x3DE` a type byte per field, then the five sizes. Types: 16 signed byte,
+18 object id, 19 / 22 word, 20 long, 21 unsigned word; 3, 4 and 5 point into
+the name, character and item-type records (so `obj.71.43` is the most hit
+points on the sheet the combat record's +4 names, and `obj.2.94` an item's
+name); 0x80 and up a string in place. The ones scripts use most:
+
+| Field | Record | Offset | Meaning |
+|---|---|---|---|
+| 19 | combat | +0x28 | name (18 bytes) |
+| 23–28 | combat | +0x22–0x27 | Str, Dex, Con, Int, Wis, Cha |
+| 67 / 68 | combat | +0 / +2 | hit points / psionic points |
+| 71 | combat | +4 | the character record (a pointer) |
+| 72 | item, combat | +0, +6 | id, what `name(-n)` matches |
+| 73 | combat | +0x1C | status (`.73 > 2`: down or dead) |
+| 74 | combat | +0x1D | allegiance (`REQUEST(18)` sets it) |
+| 75 | combat | +0x1E | what the AI does (`SETRECORD .75 = 2` after `REQUEST(18, …, 2)`: fight) |
+| 95 | combat | +0x38 | facing |
+| 0 / 82 / 85 / 86 | item | +0x0F / +2 / +0x11 / +0x0E | flags (a door's state) / quantity / slot / charges |
+| 20 / 21 / 22 | character | +0x18 / +0x19 / +0x1A | race / sex / alignment |
+| 29–34 | character | +0x1B–0x20 | the six abilities |
+| 35–40 | character | +0x21–0x26 | classes, levels |
+| 43 / 45 | character | +8 / +0x0C | most hit points / psionic points |
+| 62–66 | character | +0x37–0x3B | saves |
+
+GETPARTY sets "other" (`gname[8]`, `043D:1468`) to the member it returns;
+SETTHING (`1A0A:261E`) walks an object's items, making each the "thing"
+(`gname[11]`), from the first again when n is 9999 or the owner changes.
+
+### Thief skills (`87B3:030B`, `04F5`, `0488`)
+
+The chance is 0 without thief levels (class code 17; unless finding traps
+under Detect Traps), not Okay (status 1), or hearing noise with anything in
+slot 6 (`3FB6:0000`). Else: the base (`3FAA:0000`: 28, 18, 13, 28, 18, 23,
+78, −4) + the race's row (`3FAA:0008 + 8 · race`; dwarf 0, 10, 15, 0, 0, 0,
+−10, −5; elf 5, −5, 0, 5, 10, 5, 0, 0; half-elf 10, 0, 0, 0, 5, 0, 0, 0;
+halfling 5, 5, 5, 10, 15, 5, −15, −5; mul 0, −5, 0, 5, 0, 0, 5, −5) + 4 a
+level; Dexterity under `+0x90` (12, 11, 12, 13, 11) −5 a point, over `+0x98`
+(16, 15, 17, 16, 16) +5, over `+0xA0` (21, 20, 21, 19, 19) −3; less `+0xA8`
+(5, 0, 0, 10, 5, 0, 10, 0) with anything in slots 6, 1, 10 or 3
+(`3FB7:0000`). The situation then changes by condition (byte n/8, bit n%8 of
+the effect list, `7D80:1864`): Berserk, Confused, Afraid, Paralyzed −1000;
+Slowed −1000 to pick pockets only (not "all but", as Obsidian Edition's notes
+have it); Blind all but hear noise; Mirror Image hiding; Fire Shield pick
+pockets and hiding; Graft Weapon pick pockets, open locks, climbing;
+Feeblemind read languages; Enlarge divides hiding's by (100 + 10 level) % and
+multiplies climbing's; Detect Traps +1000 to find traps, Invisible to hiding.
+Item 2005 on the legs would make moving silently certain and hearing
+impossible, but `05FF` passes the slot and item lists swapped, so it never
+applies. The roll: `rand() % 100` under chance + situation; with chance 0 the
+situation is as the script gave it.
+
+STAT_ROLL(who, difficulty, ability) (`7372:067D`): a d20 = rand × 20 / 32768;
+19 fails, else success under the combat record's ability (+0x22 + ability) +
+`3971:0004`[difficulty] (5, 0, −5, −10). 32766: each member until one
+succeeds. SKILLROLL is the same shape around the thief skill roll (no script
+uses it).
+
 ### Per-creature scripts
 
 A table at `3972:08AA`, 0x13 bytes per object (indexes 0–3 are the party;
@@ -711,12 +773,12 @@ From the handlers (2026-10-18); the engine's model is `DarkSun.Game.World`.
   | 19 | `DS:116A` = 1 (reload) |
   | 1 / 4 | the party rests (`073D(1, a)` / `073D(0, a)`): "THE PARTY RESTS"; members with status 2 or 3 (with 1: any) get status 1, then healing and spells (not traced further) |
   | 2 | a door: `6BB8:0D13(object, a, 1)` (see Doors) |
-  | 3 | `028D(who, a, b)`: for the party, the member with the lowest `030B` score, then `caseD_e`; a check used in conditions (13 uses), not traced |
+  | 3 | a thief skill check, skill a, situation b (13 uses: open locks, find/remove traps, climb walls, pick pockets, hear noise; see "Thief skills"). For the party (32766) `028D` means to pick the best member but starts from 0 with an unsigned "keep the lower" test, so it always rolls for slot 0 |
   | 6 | play cinematic a (`0AC7`) |
-  | 7 | `0AE1(who, x, y)`: makes object −who at cell (x, y); an item there sets off an area effect (a party check `028D(party, 2)`, damage to creatures around), then the object is removed. A trap or blast; combat |
+  | 7 | a trap (50 uses; `OJFF` 2030–2040): makes item −who at cell (x, y); the party's find/remove traps check (situation 0), or Detect Traps on the active member unless the item's +0x0F has 0x80, avoids it (the item stays, returns 1). Otherwise its +0x0F sets it off: bits 0–2 d6s (`612E:1F92`) to everyone of allegiance bit 1 and status below 3 within bits 3–4 cells in sight (`612E:0000`), bits 5–6 the element (`DS:251C`: poison, fire, slashing, electricity); the item goes. The shipped traps are 4d6 (1d6 for 2034) on their cell |
   | 8 | `0CB4(a, b)`: a random monster from the region's `MONR` table (42-byte records); combat |
   | 9 | `0F1C(who, ojff, b)` (each match when who ≤ 0): remove the object and make `OJFF` a where it stood (b ≠ 0: at its saved start), with its facing; the new one becomes "other" (`37B7:0003`) |
-  | 14 | `0FE9`: the arena bout (GPL 2, region 42), around object *who* (the gate) at cell (x, y): closes the text windows (`84C9:0A25`); CLONEs (`87B3:1295` → `7372:0A44`, one within 6 cells, then field 0x4A of the copy = 1 or 2) `OJFF` 296 (Celgor) at (x − 3, y + 18) with field 1, and if it is a creature its combat record +0x1D (allegiance) = 1, +0x23 = 0x19 and its character record +0x1C = 0x19, +0x27 = 0xFD; 171 (the rampager) at (x + 3, y + 18) and 269 twice at (x + 3, y + 16) and (x + 3, y + 20), field 2; the party's allegiance = 4; centres the view on Celgor (`191F:01FF`); FIGHT at his cell (`7372:030B`). The fight is over when the request returns |
+  | 14 | `0FE9`: the arena bout (GPL 2, region 42), around the active member (`47B7:0009` = `3781:0369`, `gname[5]`; *who*, the gate, isn't read) at cell (x, y): closes the text windows (`84C9:0A25`); CLONEs (`87B3:1295` → `7372:0A44`, one within 6 cells, then field 0x4A of the copy = 1 or 2) `OJFF` 296 (Celgor) at (x − 3, y + 18) with field 1, and if it is a creature its combat record +0x1D (allegiance) = 1, +0x23 = 0x19 and its character record +0x1C = 0x19, +0x27 = 0xFD; 171 (the rampager) at (x + 3, y + 18) and 269 twice at (x + 3, y + 16) and (x + 3, y + 20), field 2; the party's allegiance = 4; centres the view on Celgor (`191F:01FF`); FIGHT at his cell (`7372:030B`). The fight is over when the request returns |
   | 15 | `1587:2927(1)`: sets `577D:09B5` and `DS:11B8` and calls `191F:0A99(1)`; not identified |
   | 16 | `6BB8:0FA9(a)`: if sound is on and a ≠ `DS:0D9A`, `361A:0000(a)` sets the music's intensity level (an XMIDI section, at most the track's byte at `DS:1675 + 3·track`) |
   | 20 | `13B9(a)`: how many objects 5–319 are creatures (kind 2) whose allegiance has a bit of a (all with a = 0) |
@@ -734,9 +796,9 @@ From the handlers (2026-10-18); the engine's model is `DarkSun.Game.World`.
   | 6 | `0367` | actor |
   | 7 | `0365` | target |
   | 8 | `0363` | other |
-  | 9 | `035B` | game clock (int32) |
+  | 9 | `035B` | game clock (int32, seconds): +1 every 64 ticks of the 96 Hz timer (`1DF3:29E8`, registered at `1DF3:00A6` with `33A5:0992(handle, 0x60)`) while `DS:11B8` = 1, not in combat and `DS:0BC9` ≠ 2; +60 a combat round after the first (`612E:0754`, `DS:055A`); PASS_TIME n: +60 n (`8053:0A02`) |
   | 10 | `0357` | the party's money (int32; CHANGE_MONEY adds to it) |
-  | 11 | `035F` | unknown |
+  | 11 | `035F` | the "thing": SETTHING's current item (`obj_special(0x2b)`) |
   | 12 | `0361` | SET_OTHER |
 
   `obj_special(n)` is the object whose index is in raw variable n, so 0x25
@@ -757,8 +819,8 @@ From the handlers (2026-10-18); the engine's model is `DarkSun.Game.World`.
 ## 6. Open questions
 
 * `OP_28` (expr, expr, string; sets the trace flag like SOURCE_TRACE) is unnamed.
-* Engine variable 11 (`3781:035F`); object fields other than
-  19, 72, 75 (allegiance, inferred) and 95.
+* The object fields are in `GPLX` 1 (see "Object fields"); what most of the
+  character record's fields mean is still unknown.
 * The order handlers themselves (how GO, FOLLOW, HUNT and FLEE move a
   creature, and when no-orders and line-of-sight scripts run); the engine
   approximates them.
