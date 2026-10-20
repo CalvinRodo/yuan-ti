@@ -481,11 +481,24 @@ executable, not in the data.
       class groups with THAC0, hit dice and saves (`40B1`), the save roll, the
       spell records (`3CB4`), the psionic power table (`3FB9`, with the
       manual's scores and costs). Functions named in `symbols.tsv`.
-- [ ] Combat still to trace: the AI (`1A0A:273E`), the speed state's
-      effect on movement, the effect bits (`7D80:1864`), spell damage
+- [x] Trace the combat AI (2026-10-19, `dsun-exe-reference.md` §8 "The
+      AI"): `612E:0BAD` runs for combatants under computer control.
+      `1A0A:273E`, once listed as the AI, only gives an object one of the 48
+      active slots. Each turn the AI keeps its target or picks a random
+      enemy within 24, scores its weapons, then takes the first that applies:
+      a spell (once, Int > 9), the +0x16 ability, a random psionic power
+      (monsters), an attack, an adjacent enemy, a move next to the target,
+      the missile weapon, or ends the turn. A mind state (`8053:000E`) can
+      make it skip the turn or only move.
+- [ ] Combat still to trace: the mind states' effect bits (`8053:000E`,
+      `7D80:1864`), order mode 1 in `1A0A:0B0F`, the +0x16 ability
+      (`6466:067E`), the speed state's effect on movement, spell damage
       scaling and durations, the experience award (`8E77:0A8F`).
 - [ ] Monster data from `RDFF` combat objects (`ds1_parsers.py` has a start).
-- [ ] Monster AI: target choice and spell use.
+- [ ] Monster AI: port `612E:0BAD`'s order of choices as data-driven rules
+      (the weapon score, target choice and action order in JSON, so mods can
+      change them). Keep the random target pick (`612E:1284`) as the default
+      for fidelity; offer smarter targeting as an option.
 - [ ] Tactical combat scene on the region map, with clear feedback: hit chance
       shown, a combat log, damage numbers.
 - [ ] Keep the rules in data (JSON tables) wherever possible, so they're easy to
@@ -551,7 +564,8 @@ name the functions in `tools/ghidra/symbols.tsv`.
 | M4 | `APFM`, `EBOX` formats; what each `WIND` is (`FONT` done) | text-drawing and window code (`2531`, `25EC`); `WIND`/`BUTN`/`ACCL` done (§7) |
 | M5 | Character rules and level tables | character sheet and creation code; `GPLX` tables (`DS:4D7A`, `DS:537A`) |
 | ~~M6~~ | ~~Combat rules~~ | Done 2026-10-19: `dsun-exe-reference.md` §8 |
-| M6 | Combat AI, effect bits, spell damage scaling | `1A0A:273E`, `612E:1284`, `7D80:1864`, `7D80:1BD3` |
+| ~~M6~~ | ~~Combat AI~~ | Done 2026-10-19: `dsun-exe-reference.md` §8 "The AI" |
+| M6 | AI mind states and effect bits, order mode 1, the +0x16 ability, spell damage scaling | `8053:000E`, `7D80:1864`, `1A0A:0B0F`, `6466:067E`, `7D80:1BD3` |
 | M7 | Music and sound selection | callers of the sound driver; segment `0980` has the most port I/O (*unverified*: sound or video driver) |
 | M9 | Original save format | `303C` file-library callers that write files |
 

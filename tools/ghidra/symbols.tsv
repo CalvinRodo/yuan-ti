@@ -463,7 +463,7 @@
 6BB8:0FF8	func	door_set_cells	closed: GMAP 0xC0 on the door's cells (size at item +0x0E); open: cleared, hinge cell kept
 217D:0070	func	object_place	screen position = world position - hot spot (y also - byte +0x0D)
 1A0A:2FA9	func	random_between	(lo, hi): lo + rand * (hi - lo + 1) / 0x8000
-612E:04A7	func	combat_loop	next combatant (09B6), new round (0754), orders (player 1587:3866 / AI 1A0A:273E), act (0BAD)
+612E:04A7	func	combat_loop	next combatant (09B6), new round (0754), active slot (1A0A:273E), party: active member (1587:3866); computer control (+0x21 & 0x20): AI (0BAD)
 612E:0754	func	combat_new_round	round clock +60; initiative 20 + d10 + Dex reaction + effects, tiebreak d200; move points = Move x 10
 612E:09B6	func	combat_next	highest initiative, then tiebreak
 612E:1359	func	combat_attack	per weapon: target number THAC0 - bonuses - AC; rear -2, backstab -4; then 1B7A
@@ -474,6 +474,26 @@
 612E:2446	func	combat_step	move points: 10 straight, 14 diagonal (DS:055C)
 612E:2904	func	backstab_multiplier	(thief level - 1) / 4 + 2, at most 5
 612E:292C	func	second_weapon_penalty	Dex reaction, not for rangers
+1A0A:273E	func	int object_make_active(int object)	move an object >= 48 into a free slot 0-47 (order records); retargets references; returns new index, or the old one if none free
+1A0A:07DE	func	int slot_pop(int *list)	pop a free object slot (list heads 477D:0B00 / 0B02 / 0B04), 9999 if empty
+1A0A:0005	func	void object_free(int object)	clear its order record (< 48) and return the slot to its free list
+1A0A:31D5	func	void retarget_orders(int old, int new)	order targets (not mode 0xF) and the active member 3781:0369
+1A0A:32EF	func	int combatant_records(int object, int far *combat, int far *character)	kind 2 with combat record < 0x2A and character record < 0x11
+1A0A:2BA5	func	int footprint_distance(int a, int b)	smallest distance between their footprint cells (999 none)
+0898:000C	func	distance	cells: smallest d with d*d >= dx*dx + dy*dy; 999 out of range
+612E:0000	func	int enemies_near(int x, int y, int allegiance_mask, int range, void *list, int need_los)	status < 3, distance from the cell; sorted by distance (01BF)
+612E:00E2	func	int enemies_in_sight(int actor, int allegiance_mask, int range, void *list)	footprint distance (1A0A:2BA5) and line of sight
+612E:01BF	func	sorted_insert	(count, list, object, distance): 4-byte entries by distance
+612E:0252	func	ai_pick_weapon	best-scoring weapon (0350) in the inventory list; equipped only (slots 3, 10, 2) when the last argument is 1
+612E:0350	func	ai_weapon_score	dice x sides + 2 dmg + 4 bonus (+10 magic); missile x IT1R +0x0B; melee (+Str dmg + 3 material) x attack halves
+612E:0BAD	func	int combat_ai(int actor)	the AI's turn: target, weapon, spells, special, psionics, attack, move; 2 done, 3 acting
+612E:1284	func	ai_pick_target	(actor, combat, &target, item, range, los): if no target, a random enemy in range (0000 / 00E2)
+612E:23F2	func	combat_action_flags	action flags while in the initiative list, else 0
+612E:2514	func	combat_end_turn_guard	(actor, 1): byte +0x231 = 1, end turn; (actor, 2): initiative capped to 10 / -1
+612E:2596	func	combat_end_turn	(object, flags): 0 removes it from this round's order, else ORs flags into its action flags
+6466:0453	func	ai_psionics	monsters: random power of the character record's +0x46 set, if in sight, in range and PSP allow
+6466:0AE8	func	ai_missile_weapon	first inventory item in slot 2 (missile weapon), -1 none
+8053:000E	func	ai_mind	once a round: from effect bits 1 move-only, 0, 7 (random allegiance) or combat record +0x1E; 8 skips the turn
 6698:0280	func	psionic_use	cost (3FB9 table +1, special cases), power check, half cost on failure
 6698:0CED	func	psionic_check	d20 <= ability + modifier (+bonus); contested against a defending target
 6868:00AF	func	class_level	(object, class code): level in that code

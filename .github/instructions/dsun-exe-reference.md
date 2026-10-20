@@ -1260,8 +1260,12 @@ Records: a combatant is an object of kind 2 (`DS:0C36 + 3·index`) with a
 * **The loop** (`612E:04A7`): `612E:09B6` picks the next combatant; when
   none is left, `612E:0754` starts a round, and when it returns 0 the fight
   is over (`612E:281F` finds no enemies; experience follows, `8E77:0A8F`).
-  A party member (index below 4) takes the player's orders (`1587:3866`),
-  others `1A0A:273E`; `612E:0BAD` carries the action out.
+  The combatant first needs one of the 48 active slots (`1A0A:273E`, see
+  "Active slots"); if none is free it leaves the round (`612E:2596(it,
+  0)`). A party member (index below 4) becomes the active member
+  (`3781:0369`, `1587:3866`). Then a combatant under computer control
+  (combat record +0x21 & 0x20) runs the AI, `612E:0BAD` (see "The AI"),
+  and `612E:1AE1` follows; any other returns 2 and waits for the player.
 * **A new round** (`612E:0754`): the round clock (`DS:035B` in segment 4781)
   goes up by 60. Every creature with status 1 (Okay) and an allegiance that
   fights (& 3), the party or those `612E:0000` finds involved, rolls:
@@ -1435,9 +1439,96 @@ These are AD&D 2nd edition's, but 18 has no percentile strength (+2 to hit,
   check costs half; a success the full cost, then `6698:0C54` and the
   effect (`7D80:0000`, effect 0x8A + power).
 
+### Active slots (`1A0A:273E`)
+
+Only objects 0–47 have order records (`3972:08A6 + 0x13·n`: +0 target
+object or x, +2 y, +4 order mode) and movement state (`3972:0377 +
+0x1C·n`, 0xFF when not moving). Free slots are a list headed at
+`477D:0B00`, linked through the object table's index word (`1A0A:07DE`
+pops one); `1A0A:0005` frees a slot back to its list (0–47 `0B00`,
+0x140–0x207 `0B02`, else `0B04`).
+
+`1A0A:273E(object)` returns the object unchanged if it is below 48 or no
+slot is free (callers test ≥ 48 for failure). Otherwise it moves the object
+to the free slot and returns the new index: it copies the 32-byte record
+(`477D:2424 + 32·n`) and the 3-byte object entry (`3972:0C36`), points the
+render-list entry back at it (`*477D:2420` + 8·record+1, field +6), and
+fills the old record with 0xFF. Then it updates every reference to the old
+index: `gname[12..15]` (`3781:0361`–`0367`); order targets and the active
+member (`1A0A:31D5`, skipping orders in mode 0xF, whose target is a cell);
+effects and their table (`7D80:2256`, re-sorted by object). Last, it frees
+the old slot (`1A0A:0005`). Callers: giving orders (`1A0A:03CA`, `04DC`,
+`0554`), planning a move (`0B0F`), the combat loop and `7372:1763`.
+
+### The AI (`612E:0BAD`)
+
+Per-combatant state, indexed by combat record n: action flags
+`37BD:01D5` (bit 0 may move, 1 may attack, 0x40 re-equip, 0x80 may use
+psionics, 0x100 new round, 0x200 may use the +0x16 ability), movement
+points `37BD:022B`, has-target `37BD:0085` (−1 none, 1 yes), tried-spells
+`37BD:00AF`, remembered target `3931:01DD`. The return value is 2 when the
+turn is over and 3 while a move or attack is still under way, after which the
+loop calls the AI again.
+
+* **Mind** (`DS:4946`): set once a round, when flag 0x100 is up, by
+  `8053:000E`, which clears the flag. From the effect bitfield (`7D80:1864`):
+  one bit gives 1; a confusion-like bit rolls d10: 1 gives 1, 2–6 give 0,
+  7–9 or another bit re-roll the allegiance (+0x1D = d2) and give 7;
+  otherwise it is combat record +0x1E. 8 skips the turn. 1 is
+  move-only: no spells, no psionics, no attacks; the AI walks at its target
+  (order mode 1). Which conditions set those bits isn't traced.
+* **Target:** the remembered one, while it is still a combatant with status
+  ≤ 2. Otherwise `612E:1284` picks one at **random** (not the nearest) from
+  the enemies (allegiance & (3 − own)) with status below 3 within 24,
+  measured from the actor's cell with no line-of-sight test (`612E:0000`).
+  With none, the turn ends.
+* **Weapon** (`612E:0252` → `612E:0350`): the best weapon in a hand or the
+  missile slot (slots 3, 10, 2) with ammunition left. Its score is dice ×
+  sides + 2 × damage bonus + 4 × item bonus, plus 10 if magic (bonus > 0,
+  item +0x0F, or `IT1R` +8 & 4). A missile weapon (`IT1R` range +0x0A > 1)
+  multiplies that by `IT1R` +0x0B. A melee weapon adds Strength damage and
+  3 × the material modifier, then multiplies by attacks per round (halves).
+  Reach is the weapon's range, or 1 with no weapon. Flag 0x40 re-equips
+  first (`6466:0854`).
+* Then, in order, the first that applies:
+  1. **Too far:** a target more than 24 away (`1A0A:2BA5`, nearest footprint
+     cells) ends the turn.
+  2. **Spells**, once (until `00AF` is set), with Intelligence (combat
+     record +0x25) above 9 and mind ≠ 1: `6798:046B(actor, list, 3, −1)` lists
+     castable spells (`DS:019C`, 7 bytes per spell). Within 5 of the target,
+     with points to move (flag 0x1, > 10), it first moves with order mode 1
+     (`1A0A:0B0F(actor, 1)`; returns 3 while moving). `6466:0000` casts; on
+     success the turn ends, otherwise `00AF` is set and the target dropped.
+  3. **The +0x16 ability** (flag 0x200, combat record +0x16 ≠ 0):
+     `6466:067E` picks it (`6466:05EF`) and a cell (`6466:0179`) and
+     applies it (`7D80:21C5`); on success the turn ends. *Unidentified*.
+  4. **Psionics** (flag 0x80, monsters only, until `00AF`): `6466:0453`
+     takes character record +0x46 as a power set (1-based) and draws one of
+     its 10 powers at random (`DS:001C + 10·(set − 1)`, power = byte + 0x8A);
+     it is used if the target is in line of sight, within range
+     (`8BEB:0850`) and the cost (`6698:0C2A`) is no more than the PSP
+     (+2), which pay it.
+  5. **Attack** when the target is within reach and in line of sight
+     (`0898:00A4`): order mode 0, `combat_attack` (`612E:1359`), then 3
+     while attacks remain (`612E:23F2`), else 2.
+  6. **An adjacent enemy** in line of sight (`1284` with range 1) becomes
+     the target and is attacked.
+  7. **Move** (flag 0x1): `1A0A:2E99` finds a free cell next to the target,
+     order mode 0xF to that cell, `1A0A:0B0F`; 3 while moving. When it can't
+     move, the nearest enemy in sight within 24 (`612E:0000`, sorted by
+     `612E:01BF`) becomes the target and it tries again.
+  8. **Missile weapon** (`6466:0AE8`, slot 2): a random enemy in sight
+     within its range becomes the target and is attacked.
+  9. **Otherwise:** with more than 10 movement points left, forget the
+     target. With flag 0x2, `612E:2514(actor, 1)` sets byte +0x231 for this
+     combatant (*meaning unverified*) and ends the turn; else it just ends.
+* **Distance** (`0898:000C`) is in cells: the smallest d with d² ≥ dx² +
+  dy², from an octagonal first guess. 999 out of range.
+
 ### Not traced yet
 
-The AI's choices (`1A0A:273E`, `612E:1284` picks a random target), the speed
+The AI's mind values and the effect bits behind them (`8053:000E`), what
+order mode 1 does in `1A0A:0B0F`, the speed
 state's switch in `612E:0754`, the effect bitfield's meaning bit by bit
 (`7D80:1864`), spell damage scaling (+0x15–0x17), durations (`7D80:1BD3`),
 the save category table's intent, and the experience award (`8E77:0A8F`).
