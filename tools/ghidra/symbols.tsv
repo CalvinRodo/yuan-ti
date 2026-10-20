@@ -493,7 +493,29 @@
 612E:2596	func	combat_end_turn	(object, flags): 0 removes it from this round's order, else ORs flags into its action flags
 6466:0453	func	ai_psionics	monsters: random power of the character record's +0x46 set, if in sight, in range and PSP allow
 6466:0AE8	func	ai_missile_weapon	first inventory item in slot 2 (missile weapon), -1 none
-8053:000E	func	ai_mind	once a round: from effect bits 1 move-only, 0, 7 (random allegiance) or combat record +0x1E; 8 skips the turn
+8053:000E	func	ai_mind	once a round: Afraid 1 (flee), Berserk 7 (random side), Confused d10, else combat record +0x1E; 8 skips the turn
+7D80:1864	func	void effect_bits(int object, void *bits)	10-byte bitfield, bit n = condition n of the object's effects
+7D80:1BD3	func	int spell_duration(int spell, unsigned char level)	unit x (dice + per-level x (level + adj) / div); -9999 permanent
+7D80:1CC2	func	int spell_damage(int spell, unsigned char level, int *max)	level <= 10; steps = (level + adj) / div; dice and flat per step
+6CCA:1671	func	int roll_ndx(int n, int sides)	n dice of sides
+1A0A:2C86	func	void flee_cell(int x, int y, int *gx, int *gy)	free cell near (x, y) farthest from (*gx, *gy)
+1A0A:2E99	func	int cell_next_to(int target, int *x, int *y, int mover)	free cell beside the target nearest the mover
+6466:0000	func	int ai_cast_spell(int actor, int count, int *spells)	highest rand(weight 37E5) of castable spells, at 6466:0179's cell
+6466:00B8	func	int ai_pick_spell(int actor, int count, int *spells)	castable with a slot left; highest rand(0..weight)
+6466:0127	func	int ai_spell_roll(int spell)	rand(0..37E5[spell]-1)
+6466:015F	func	int ai_spell_weight(int spell)	|37E5[spell]|
+6466:0179	func	int ai_area_cell(int caster, int effect, int *x, int *y)	cell within 2 of the target maximising enemy HP - own HP in the area
+6466:040D	func	int side_hit_points(int allegiance)	HP of combatants with status 1 on that side
+6466:05EF	func	int ai_pick_ability(int actor)	1 in 4: first of 11 ability bits (DS:05D0) the creature has -> effect (DS:05DB)
+6466:067E	func	int ai_use_ability(int actor)	special ability (combat record +0x16) at 6466:0179's cell
+84C1:0000	func	int has_ability(int object, unsigned char bit)	bit of the 32-bit mask 3E45:0000[+0x16]
+6798:046B	func	int castable_spells(int actor, int *list, unsigned char classes, char level)	138 spells, DS:019C table; level -1 all
+612E:25F2	func	void award_kill_xp(int combat)	enemy's character +4 / occupied party slots to each member (int16)
+6868:02E9	func	int party_slots(void)	party objects 0-3 with kind != 0
+7372:1467	func	void award_xp(int member, int xp)	GPL AWARD and kills: xp / classes, cap 2e9, +4 high mark; level check out of combat
+8E77:02E5	func	int class_count(int character)	1 for a human, else classes with a code
+8E77:0A8F	func	void level_check(void)	8E77:08A6(0) after a fight or an award
+8E77:08A6	func	void level_up_party(int force)	XP >= 100 x 38F0:027C[row][level], level < 9; message, 8E77:0765
 6698:0280	func	psionic_use	cost (3FB9 table +1, special cases), power check, half cost on failure
 6698:0CED	func	psionic_check	d20 <= ability + modifier (+bonus); contested against a defending target
 6868:00AF	func	class_level	(object, class code): level in that code
@@ -511,7 +533,7 @@
 80F5:119C	func	save_modifier	effects, element resistances, Dex/Wis/Con adjustments, dwarf/halfling Con/3.5
 80F5:2ACC	func	natural_attacks	char record +0x2B/+0x2E/+0x31/+0x34: count, dice, sides, bonus
 80F5:3671	func	melee_damage_bonus	Str damage, effect percentage
-80F5:36CC	func	speed_state	0 held, 1 slowed, 2 normal, 4 hasted, 5 other
+80F5:36CC	func	speed_state	Paralyzed 0, Stuck 5 (both: no movement), Slowed 1 (half), Hasted 4 (double), else 2
 80F5:3811	func	initiative_effects	-2 / +2 / -2 by effect bits
 80F5:3849	func	to_hit_bonus	effects, alignment, halfling missile +1, Str to-hit (melee) or Dex reaction (range)
 80F5:39B7	func	ac_effects	Dex AC, Armor caps 6, Shield 4, Spirit Armor 6 - level/4, ...

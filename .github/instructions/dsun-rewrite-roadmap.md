@@ -490,10 +490,17 @@ executable, not in the data.
       (monsters), an attack, an adjacent enemy, a move next to the target,
       the missile weapon, or ends the turn. A mind state (`8053:000E`) can
       make it skip the turn or only move.
-- [ ] Combat still to trace: the mind states' effect bits (`8053:000E`,
-      `7D80:1864`), order mode 1 in `1A0A:0B0F`, the +0x16 ability
-      (`6466:067E`), the speed state's effect on movement, spell damage
-      scaling and durations, the experience award (`8E77:0A8F`).
+- [x] Trace the rest of combat (2026-10-19, `dsun-exe-reference.md` §8):
+      the condition list and its names (Afraid makes the AI flee, Berserk
+      re-rolls its side, Confused rolls d10); order mode 1 is flee; spell
+      choice by a weight table (`37E5:0000`) and area targeting by hit
+      points; monster special abilities (+0x16: breath cones, paralysis,
+      webs); the speed state (Paralyzed and Stuck 0 movement, Slowed half,
+      Hasted double); spell damage and duration formulas; experience
+      (per kill, split over the party slots and classes) and the XP tables.
+- [ ] Combat details still open: the effect at `37BD:0231`, the ability
+      bits' names (`3E45:0000`), the −1 duration unit, the defiler's XP row
+      (row 0 isn't an XP table).
 - [ ] Monster data from `RDFF` combat objects (`ds1_parsers.py` has a start).
 - [ ] Monster AI: port `612E:0BAD`'s order of choices as data-driven rules
       (the weapon score, target choice and action order in JSON, so mods can
@@ -565,7 +572,8 @@ name the functions in `tools/ghidra/symbols.tsv`.
 | M5 | Character rules and level tables | character sheet and creation code; `GPLX` tables (`DS:4D7A`, `DS:537A`) |
 | ~~M6~~ | ~~Combat rules~~ | Done 2026-10-19: `dsun-exe-reference.md` §8 |
 | ~~M6~~ | ~~Combat AI~~ | Done 2026-10-19: `dsun-exe-reference.md` §8 "The AI" |
-| M6 | AI mind states and effect bits, order mode 1, the +0x16 ability, spell damage scaling | `8053:000E`, `7D80:1864`, `1A0A:0B0F`, `6466:067E`, `7D80:1BD3` |
+| ~~M6~~ | ~~AI mind states, conditions, special abilities, spell damage and duration, experience~~ | Done 2026-10-19: `dsun-exe-reference.md` §8 |
+| M6 | `37BD:0231`, ability bit names, the defiler XP row | `612E:2514`, `3E45:0000`, `38D4:00CA` |
 | M7 | Music and sound selection | callers of the sound driver; segment `0980` has the most port I/O (*unverified*: sound or video driver) |
 | M9 | Original save format | `303C` file-library callers that write files |
 

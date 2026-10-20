@@ -969,7 +969,7 @@ each record are not read.
 * **AWARD(who, xp)** (`043D:10EC`, `7372:1467`): 32766 each party member,
   32767 nobody; a member below status 3 gains xp ÷ their number of classes
   (`8E77:02E5`) in the character record (+0, the most at +4), up to
-  2 000 000 000; out of combat `8E77:0A8F` follows (level-up, not traced).
+  2 000 000 000; out of combat `8E77:0A8F` follows (see "Experience").
 * **DAMAGE(who, n)** / **PHYS_DAMAGE(who, percent)** (`043D:0C8A` →
   `7372:12AA` / `1342`, `80F5:0E61`, `612E:18DA`): 32766 the party, 32767
   nobody, a name each match. PHYS_DAMAGE takes that percentage of the hit
@@ -1273,10 +1273,15 @@ Records: a combatant is an object of kind 2 (`DS:0C36 + 3·index`) with a
     (`6868:033F`) + `80F5:3811` (effects: −2, +2, −2), at `DS:00D9 + 4·n`;
   * a tie-breaker 0–199 at `DS:00DB + 4·n`;
   * movement points = Move (+0x1B) × 10, at `DS:022B + 2·n` of segment 47BD;
-  * then `80F5:36CC`'s speed state (0 held, 1 slowed, 2 normal, 4 hasted,
-    5 another effect) adjusts them (its jump table isn't decoded).
+  * then `80F5:36CC`'s speed state, from the conditions (see
+    "Conditions"), first match: Paralyzed (34) 0, Stuck (51) 5, Slowed
+    (47) 1, Hasted (22) 4, else 2. 0 and 5 set the points to 0, 1 halves
+    them (rounding toward 0), 4 doubles them. The jump table (`612E:09AA`)
+    also has code that drops the creature from the round (initiative −1),
+    but no case reaches it.
   The action flags (`DS:01D5 + 2·n`) start at 0x3FF: bit 0 may move, bit 1
-  may attack.
+  may attack. Has-target (`37BD:0085`) and `37BD:005B` are reset to −1,
+  `37BD:0181` to 0.
 * **Turn order** (`612E:09B6`): the highest initiative acts first, a tie
   going to the higher tie-breaker. The original's order is the reverse of
   AD&D's low-goes-first: a high Dexterity acts early.
@@ -1396,7 +1401,9 @@ These are AD&D 2nd edition's, but 18 has no percentile strength (+2 to hit,
 
   | Offset | Read as | Meaning (examples) |
   |---|---|---|
-  | +0x00 | word | duration base: 60 for most, −9999 permanent (Charm Person, Thought Shield), 0 instant (Magic Missile) |
+  | −0x03 | byte | duration dice: low 4 bits count, high 4 sides (Color Spray 0x42: 2d4; Haste 0x13: 3) |
+  | −0x02 | word | duration per level (Hold Person 2, Shield 5) |
+  | +0x00 | word | duration unit: 60 (a round) for most, 600 a turn, 3600 an hour, −9999 permanent (Charm Person, Thought Shield), 0 instant (Magic Missile), −1 (Armor, Invisibility, Stoneskin; likely until used up) |
   | +0x02 | word | area size: 1, 40 (Burning Hands, Lightning Bolt), 80 (Fireball), 240 (Confusion) |
   | +0x05 | byte | target: 1 an area, 3 touch, 4 a creature, 6 a cone, 7 self |
   | +0x09 | byte | projectile (Magic Missile 4, Fireball 1, Lightning 5); 0xFF none |
@@ -1405,7 +1412,9 @@ These are AD&D 2nd edition's, but 18 has no percentile strength (+2 to hit,
   | +0x10 | byte | animation (×0x12 table) |
   | +0x12 | byte | condition on a failed save: Armor 2, Charm 10, Confusion 11, Ego Whip 33, Hold 34, Shield 46 |
   | +0x13 | word | element bits for resistances (fire 0x02, 0x80, 0x200, psionic 0x400) |
-  | +0x15–0x17 | bytes | damage: (32, 1, 6) Fireball and Lightning Bolt (likely 1d6 a level), (33, 2, 20) Magic Missile, (2, 9, 3) Burning Hands (*meaning unverified*) |
+  | +0x15 | byte | damage: bits 5–7 dice per step, bits 0–4 flat damage per step |
+  | +0x16 | byte | damage: bits 3–7 base dice, bits 0–2 levels per step (0 is read as 1, and written back) |
+  | +0x17 | byte | damage: bits 0–3 die sides, bits 4–7 (signed) levels added before dividing |
   | +0x18 | byte | save: bit 0 allowed, bits 1–4 modifier (Confusion −2), bits 5–7 category |
 
 * **Applying one** (`80F5:0079`, queued by `80F5:0532` / `057E`, run by
@@ -1419,6 +1428,78 @@ These are AD&D 2nd edition's, but 18 has no percentile strength (+2 to hit,
 * Casting needs the caster active ("ONLY ACTIVE CHAR CAN CAST"); being hit
   interrupts it ("YOU WERE HIT"). The memorized spells per level are
   `DS:4B08` (wizard) and `DS:4B11` (priest), 0x1E bytes per character.
+* The record before spell 1 (−0x03 to −0x01 of record 0, `3CB4:0034`) is
+  read too, so the records really start 3 bytes earlier; the offsets here
+  are kept as they were.
+* **Damage** (`7D80:1CC2(spell, level, &max)`): level at most 10; steps =
+  (level + (+0x17 >> 4)) / (+0x16 & 7), at least 1; dice = (+0x16 >> 3) +
+  (+0x15 >> 5) × steps of (+0x17 & 0xF) sides (`6CCA:1671(n, sides)`, n
+  dice); plus (+0x15 & 0x1F) × steps; max is the same with every die at
+  its highest. Fireball and Lightning Bolt (32, 1, 6): level d6 up to
+  10d6. Magic Missile (33, 2, 0x14): (level + 1) / 2 × (1d4 + 1). Burning
+  Hands (2, 9, 3): 1d3 + 2 a level. Flame Arrow (160, 5, 6): 5d6 per 5
+  levels. Cause Light Wounds (0, 9, 8): 1d8.
+* **Duration** (`7D80:1BD3(spell, level)`, level 0 counts as 1): −9999 when
+  the unit is −9999; otherwise unit × (dice (−0x03, `roll_dice`) + per
+  level (−0x02) × (level + (+0x17 >> 4)) / (+0x16 & 7)), at most 32767.
+  Hold Person: 60 × 2 × level (2 rounds a level); Confusion: 60 × (2 +
+  level); Haste: 60 × (3 + level).
+
+### Conditions
+
+An effect's condition (spell record +0x12; effect list `3BF6:0106`, 10
+bytes each, +0 object, +6 condition, sorted by object, `DS:1E24` entries)
+is bit n of the 10-byte bitfield `7D80:1864(object, buf)` builds. Names
+(far pointers, 6 bytes each, at `3F8D:0000`, entry n − 1): 1 Acid,
+2 Improved AC, 3 Berserk, 4 Biofeedback, 5 Blink, 6 —, 7 Blessed, 8 Blind,
+9 Brave, 10 Charmed, 11 Confused, 12 Cursed, 13 Diseased, 14 Detect Traps,
+15 Detect Invis, 16 Enlarged, 17 Afraid, 18 Cloak of Fear, 19 Feeblemind,
+20 Fire Shield, 21 Free Action, 22 Hasted, 23 Invisible, 24 Invis to
+Undead, 25 Mirror Images, 26 Englobed, 27 —, 28 Prot Missile, 29 Prot
+Paralysis, 30 Synaptic Static, 31 Low Resistance, 32 Mind Bar, 33 Can't
+Attack, 34 Paralyzed, 35 Poisoned, 36 Prot Cold, 37 Prot Energy, 38 Prot
+Evil, 39 Prot Evil 10', 40 Prot Fire, 41 Prot Lightning, 42 Neg Plane
+Prot, 43 Gaze Reflection, 44 Spell Turning, 45 Save penalty, 46 Shielded,
+47 Slowed, 48 Stoneskin, 49 Graft Weapon, 50 No spell use, 51 Stuck,
+52 Dispelling evil, 53 Ironskin, 54 —, 55 Blur, 56 Spirit Armor,
+57 Barkskin, 58 Displacement, 59 Flesh Armor, 60 Magical Vestments,
+61 Animal Affinity, 62 Body Weaponry, 63 Strength Enhanced, 64 Strength
+Borrowed, 65 Strength Lent, 66 Adrenalin Control, 67 Strength,
+68 Weakened, 69 Extra Hitpoints, 70 Flame Blade, 71 Spirit. Hammer,
+72 Shillelagh, 73 Prayer. The spells' +0x12 match (Bless 7, Glitterdust
+8, Charm 10, Confusion 11, Fear 17, Haste 22, Hold 34, Slow 47, Web 51,
+Prayer 73).
+
+### Experience
+
+* **Award** (`7372:1467(member, xp)`, also GPL AWARD): a party member with
+  status below 3 and allegiance & 1 gains xp ÷ their number of classes
+  (`8E77:02E5`; 1 for a human, who has one class at a time), up to
+  2 000 000 000, in character record +0 (int32); +4 keeps the highest
+  total. Out of combat (`377E:0019` = 0) the level check follows.
+* **Kills** (`612E:25F2`, from the damage code `612E:18DA`): when an enemy
+  (allegiance 2) dies, its character record +4 (int32) ÷ the number of
+  occupied party slots (`6868:02E9`: object kind ≠ 0, the dead included)
+  goes to each of the four, truncated to int16. It is given at the kill,
+  not at the end of the fight.
+* **Level check** (`8E77:0A8F` → `8E77:08A6(0)`; at the end of a fight and
+  after an award): for each party member with status below 3 and each class
+  (a human only the first), while the level (+0x24 + i) is below 9 and XP ≥
+  100 × `38F0:027C`[row][level] (20 words a row; row from `38D4:00CA +
+  2·class code`), it shows the message and raises the level (`8E77:0765`),
+  then recomputes the character (`8E77:0162`). `8E77:0AA0` (argument 1)
+  raises one level regardless.
+* XP for the next level (row: class codes): 1 clerics (1–4) 1 500, 3 000,
+  6 000, 13 000, 27 500, 55 000, 110 000, 225 000; 2 druids (5–8) 2 000,
+  4 000, 7 500, 12 500, 20 000, 35 000, 60 000, 90 000; 3 fighter (9) and 4
+  gladiator (10) 2 000, 4 000, 8 000 … doubling to 250 000; 5 preserver
+  (11) 2 500, 5 000, 10 000, 20 000, 40 000, 60 000, 90 000, 135 000;
+  6 psionicist (12) 2 200, 4 400, 8 800, 16 500, 30 000, 55 000, 100 000,
+  200 000; 7 rangers (13–16) 2 200, 4 500, 9 000 … doubling to 300 000;
+  8 thief (17) 1 200, 2 500, 5 000, 10 000, 20 000, 40 000, 70 000,
+  110 000 (AD&D has 1 250). Codes 18 (defiler) and 19 give
+  row 0, which isn't an XP table (100, 25 700, 25 600, 100, …):
+  *unverified* whether a defiler ever reaches this code with it.
 
 ### Psionic powers (`3FB9:0000 + 8 · (power − 139)`)
 
@@ -1471,12 +1552,16 @@ turn is over and 3 while a move or attack is still under way, after which the
 loop calls the AI again.
 
 * **Mind** (`DS:4946`): set once a round, when flag 0x100 is up, by
-  `8053:000E`, which clears the flag. From the effect bitfield (`7D80:1864`):
-  one bit gives 1; a confusion-like bit rolls d10: 1 gives 1, 2–6 give 0,
-  7–9 or another bit re-roll the allegiance (+0x1D = d2) and give 7;
-  otherwise it is combat record +0x1E. 8 skips the turn. 1 is
-  move-only: no spells, no psionics, no attacks; the AI walks at its target
-  (order mode 1). Which conditions set those bits isn't traced.
+  `8053:000E`, which clears the flag. From the conditions: Afraid (17)
+  gives 1; Berserk (3) re-rolls the allegiance (+0x1D = d2, either side)
+  and gives 7; Confused (11) rolls d10: 1 gives 1, 2–6 give 0, 7–9 as
+  Berserk, 10 the default. The default is combat record +0x1E: in the
+  shipped monsters 2 for most, 1 for civilians (villagers, serfs, slaves,
+  worshippers), 8 for bystanders (prisoners, a sage, some guards), also 0,
+  4 and 10. Only 1 and 8 change what the AI does. 8 skips the turn. 1
+  **flees**: no spells, abilities, psionics or attacks; it moves with order
+  mode 1, away from its target. A confused creature on 2–6 therefore acts
+  normally, not standing confused as in AD&D.
 * **Target:** the remembered one, while it is still a combatant with status
   ≤ 2. Otherwise `612E:1284` picks one at **random** (not the nearest) from
   the enemies (allegiance & (3 − own)) with status below 3 within 24,
@@ -1496,12 +1581,36 @@ loop calls the AI again.
   2. **Spells**, once (until `00AF` is set), with Intelligence (combat
      record +0x25) above 9 and mind ≠ 1: `6798:046B(actor, list, 3, −1)` lists
      castable spells (`DS:019C`, 7 bytes per spell). Within 5 of the target,
-     with points to move (flag 0x1, > 10), it first moves with order mode 1
-     (`1A0A:0B0F(actor, 1)`; returns 3 while moving). `6466:0000` casts; on
+     with points to move (flag 0x1, > 10), it first steps back (order mode
+     1, `1A0A:0B0F(actor, 1)`; returns 3 while moving). Then `6466:0000`:
+     each castable spell with a slot left (`6798:0366`, count in the high
+     4 bits) rolls rand(0 … weight − 1), weight = `37E5:0000`[spell − 1]
+     (signed bytes: Fireball and Monster Summoning II 63, Ice Storm 59,
+     Insect Plague and Slay Living 60, Vampiric Touch and Cone of Cold 55,
+     Lightning Bolt 47, Magic Missile 40, …, Cure Light Wounds 6, Armor 0:
+     never); the highest roll is cast at the cell `6466:0179` picks. On
      success the turn ends, otherwise `00AF` is set and the target dropped.
-  3. **The +0x16 ability** (flag 0x200, combat record +0x16 ≠ 0):
-     `6466:067E` picks it (`6466:05EF`) and a cell (`6466:0179`) and
-     applies it (`7D80:21C5`); on success the turn ends. *Unidentified*.
+  3. **Special ability** (flag 0x200, combat record +0x16 ≠ 0), `6466:067E`:
+     one turn in 4 (`6466:05EF`), the first of 11 abilities the creature
+     has, tested as bits of a 32-bit mask at `3E45:0000 + 4·(+0x16)`
+     (`84C1:0000`), in the order of `DS:05D0` (bits 26, 20, 31, 30, 6, 12,
+     18, 19, 21, 22, 29), gives an effect from `DS:05DB`: 27 Fireball,
+     181 a 6d6 fire cone, 185 a 3d6 fire cone, 30 Hold Person, 138 Detonate (the
+     first psionic power), 175 an area that leaves Stuck, 179 a paralysing
+     touch, 180 a 1d6 missile (projectile 14), 182 a paralysing cone, 183 a
+     touch, 43 Fear (effect = spell record index, 0-based; 172 and up have
+     no `SPIN` text). The creatures with +0x16 set include wyverns, vrocks,
+     babau, slimes, shadows and psurlons. It is cast at `6466:0179`'s cell
+     (`7D80:21C5`); on success the turn ends.
+  * **Area targeting** (`6466:0179(caster, effect, &x, &y)`, spells and
+    abilities): for each cell within ±2 of the target, on the map, in sight
+    and within range (`8BEB:0850` ÷ 16), it adds up the hit points in the
+    effect's area (`8BEB:034D`) per side. A monster (allegiance 2) scores
+    party-side HP − its own side's HP. A party-side caster scores the
+    enemies' HP, and only when it hits no allies and that HP is above
+    |weight| / 2 (a party member) or / 32 (an ally). It skips the search
+    when the enemies' total HP is below half its own side's. The best cell
+    with a score above 0 wins; none, no cast.
   4. **Psionics** (flag 0x80, monsters only, until `00AF`): `6466:0453`
      takes character record +0x46 as a power set (1-based) and draws one of
      its 10 powers at random (`DS:001C + 10·(set − 1)`, power = byte + 0x8A);
@@ -1525,10 +1634,22 @@ loop calls the AI again.
 * **Distance** (`0898:000C`) is in cells: the smallest d with d² ≥ dx² +
   dy², from an octagonal first guess. 999 out of range.
 
+### Order modes (`1A0A:0B0F`)
+
+`0B0F` plans a move from the order record's mode (+4; jump table at
+`1A0A:11B5`, mode − 1):
+
+| Mode | Goal |
+|---|---|
+| 0 | none (an attack, or idle) |
+| 1 | **flee**: start from the free cell next to the target nearest the mover (`1A0A:2E99`, else the target's cell), then take the free cell within x ± 4, y − 6 … + 4 of the mover that is farthest from it (`1A0A:2C86`); always re-planned |
+| 10, 11, 13 | the target object's cell |
+| 15 | the cell (+0, +2) |
+| others | no new goal |
+
 ### Not traced yet
 
-The AI's mind values and the effect bits behind them (`8053:000E`), what
-order mode 1 does in `1A0A:0B0F`, the speed
-state's switch in `612E:0754`, the effect bitfield's meaning bit by bit
-(`7D80:1864`), spell damage scaling (+0x15–0x17), durations (`7D80:1BD3`),
-the save category table's intent, and the experience award (`8E77:0A8F`).
+What the mind values 0, 2, 4, 7 and 10 mean outside the AI, the effect at
+`37BD:0231` (`612E:2514`), the ability bits' names (`3E45:0000`), the
+−1 duration unit, the save category table's intent, and the defiler's XP
+row.
