@@ -1,6 +1,7 @@
 using DarkSun.Data;
 using DarkSun.Data.Assets;
 using DarkSun.Data.Mods;
+using DarkSun.Data.Regions;
 using DarkSun.Data.Gff;
 using DarkSun.Data.Text;
 using DarkSun.Game.Characters;
@@ -348,6 +349,7 @@ public static class Session
             PartyCharacter = slot => slot < Party.Count ? Party[slot] : null,
             Rules = Rules,
             Fields = Open("GPLDATA.GFF").TryRead("GPLX", 1, out var gplx) ? GplFieldMap.Parse(gplx.Span) : GplFieldMap.Empty,
+            Monsters = Open("RESOURCE.GFF").TryRead("MONR", 1, out var monr) ? MonsterTable.Parse(monr.Span) : MonsterTable.Empty,
         };
         for (int slot = 0; slot < host.PartyMembers.Count; slot++)
         {

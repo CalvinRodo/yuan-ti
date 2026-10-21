@@ -696,6 +696,12 @@ executable, not in the data.
       (`@2455`) then sets hostile and HUNTs through `obj_special(0x28).72`.
       Without it the orders went to a party member (GETPARTY's "other") and
       the monsters stood at the arena's side while the fight started.
+- [x] The rest of the REQUEST codes (2026-10-21): 6 (a cinematic over the
+      map; the script resumes after it), 8 (`MONR` random monsters, with the
+      EXE's count from the next slot's strength), 15 (the move pointer) and 19
+      (game over). Open: the pictures 200 and 300 (`CMAT` / `CPAL`) that
+      REQUEST 6 shows in GPL 62 and 177, and 7 and 17 for an object that
+      isn't a name (no shipped script asks for either).
 
 ---
 

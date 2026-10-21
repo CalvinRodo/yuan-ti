@@ -149,8 +149,13 @@ leaves the game in progress alone. `-- --load=quick` starts straight into a
 save, `-- --saves` opens the list. Creatures (objects with an `RDFF` combat record) walk where their
 scripts send them (HUNT, GO, GOXY, FOLLOW, FLEE, FETCH, WAIT), and run their
 no-orders and line-of-sight scripts; RANGE, GETXY, GET_LOS and the other
-queries read the world (`DarkSun.Game.World`). Combat and a few
-REQUEST codes are still only logged: F2 shows the script log, F6 the script debugger (see Mods).
+queries read the world (`DarkSun.Game.World`). Every REQUEST code the
+shipped scripts use is carried out (`WorldGplHost.Request`): REQUEST 6 plays
+the ending's cinematic over the map, the script waiting until it is over (the
+pictures 200 and 300 aren't decoded, so those go straight on); 8 picks a random
+monster for the region from `MONR` and how many to make; 15 goes back to the
+move pointer; 19 is a game over (the party-has-fallen window, where DSUN.EXE
+goes straight back to the start). F2 shows the script log, F6 the script debugger (see Mods).
 Items: party members, creatures and containers carry items that scripts give, take, drop and search
 for; Get picks an item up; a script's
 SHOP opens a store (below) and waits for it to close; the party's money

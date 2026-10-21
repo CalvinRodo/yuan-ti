@@ -12,8 +12,8 @@ namespace DarkSun.Game.World;
 /// SHOP, CHANGE_MONEY), experience (AWARD), damage (DAMAGE, PHYS_DAMAGE)
 /// and the REQUEST codes that are traced. Engine variables and object
 /// fields live in the world. FIGHT and REQUEST 14 (the arena's watched bout)
-/// leave the fight to the view (<see cref="PendingFight"/>); REQUEST 3, 7
-/// and 8 are logged only.
+/// leave the fight to the view (<see cref="PendingFight"/>), as REQUEST 6
+/// (cinematics), 15 (the move pointer) and 19 (game over) leave theirs.
 /// </summary>
 public sealed partial class WorldGplHost : DialogueGplHost
 {
@@ -328,9 +328,41 @@ public sealed partial class WorldGplHost : DialogueGplHost
                 MusicLevelChanged?.Invoke(a);
                 break;
             case 20: return world.CountCreatures(a);
+            case 8: return RandomMonster(machine, world, a, b);
+            case 6:
+                // 87B3:0AC7 → 60B9:042E: cinematic a, played inside the request; the script goes on after it.
+                if (machine.TryTakeAnswer(out _))
+                {
+                    break;
+                }
+                if (CinematicRequested is { } play && play(a))
+                {
+                    machine.Suspend();
+                }
+                break;
+            case 15: MoveCursorRequested?.Invoke(); break; // 1587:2927(1): DS:11B8 = 1, the move pointer
+            case 19: GameOverRequested = true; break;       // DS:116A = 1: the main loop ends (1512), back to the start
+            // Not traced: 7 and 17 for an object that isn't a name (no shipped script does either).
+            default: break;
         }
         return null;
     }
+
+    /// <summary>
+    /// <c>REQUEST(6, who, n)</c>: play cinematic n, the ending's 100 or the pictures 200 and 300.
+    /// The view returns true if it plays it; the script then waits until it is over and resumes
+    /// (<see cref="GplMachine.Resume"/>). False: nothing to play (the pictures aren't decoded yet).
+    /// </summary>
+    public Func<int, bool>? CinematicRequested { get; set; }
+
+    /// <summary><c>REQUEST(15)</c>: back to the move pointer from look or attack (32 calls in the shipped scripts).</summary>
+    public Action? MoveCursorRequested { get; set; }
+
+    /// <summary>
+    /// <c>REQUEST(19)</c> (GPL 20, a riddle answered wrong): the game is over, as when the whole
+    /// party falls. The view ends it once the script is done; DSUN.EXE goes straight back to the start.
+    /// </summary>
+    public bool GameOverRequested { get; set; }
 
     private int? Fight(GameWorld world)
     {

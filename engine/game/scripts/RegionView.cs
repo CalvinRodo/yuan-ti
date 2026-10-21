@@ -4,6 +4,7 @@ using DarkSun.Data.Images;
 using DarkSun.Data.Items;
 using DarkSun.Data.Regions;
 using DarkSun.Game.Animation;
+using DarkSun.Game.Cinematics;
 using DarkSun.Game.Movement;
 using DarkSun.Game.Saves;
 using DarkSun.Game.Scripting;
@@ -557,6 +558,8 @@ public partial class RegionView : Node2D
         _world.Changed += OnWorldChanged;
         _world.Defeated += creature => Session.ScriptHost.AwardKill(_world, creature);
         Session.ScriptHost.Map = _world;
+        Session.ScriptHost.CinematicRequested = PlayCinematic;
+        Session.ScriptHost.MoveCursorRequested = _gameMenu.ResetCursor;
         _occupancy = _world.Occupancy;
         foreach (WorldObject o in _world.Objects.Where(o => o.Source is not null && !o.IsClone))
         {
@@ -1063,9 +1066,9 @@ public partial class RegionView : Node2D
 
     public override void _Process(double delta)
     {
-        if (_transitioning)
+        if (_transitioning || _cinematic is not null)
         {
-            return; // fading to the next region
+            return; // fading to the next region, or a script's cinematic plays over the map
         }
         _clock += delta;
         if (InCombat)
@@ -1660,6 +1663,13 @@ public partial class RegionView : Node2D
                 StartCombat(null, "FIGHT");
             }
         }
+        if (!run.Suspended && Session.ScriptHost.GameOverRequested)
+        {
+            Session.ScriptHost.GameOverRequested = false;
+            AddScriptLine("    game over");
+            GameOver();
+            return;
+        }
         if (_checking)
         {
             _world.PendingRegion = null;
@@ -1675,6 +1685,44 @@ public partial class RegionView : Node2D
             AddScriptLine($"    party leaves for region {go.Region} ({go.X},{go.Y})");
             Travel(go.Region, new Cell(go.X, go.Y));
         }
+    }
+
+    /// <summary>A script's cinematic (<c>REQUEST(6)</c>) playing over the map, which waits meanwhile.</summary>
+    private IntroView? _cinematic;
+
+    /// <summary>
+    /// <c>REQUEST(6, n)</c>: play cinematic n over the map, then the region's music again and the
+    /// script goes on. False (the script goes straight on) for the pictures 200 and 300, which
+    /// aren't decoded (a <c>CMAT</c> / <c>CPAL</c>), without <c>CINE.GFF</c>, and in headless checks.
+    /// </summary>
+    private bool PlayCinematic(int number)
+    {
+        if (_checking || _cinematic is not null || !CinematicPlayer.Cinematics.ContainsKey(number) || Session.Install?.FindFile("CINE.GFF") is null)
+        {
+            AddScriptLine($"    cinematic {number} not played");
+            return false;
+        }
+        var layer = new CanvasLayer { Layer = 60 };
+        _cinematic = new IntroView
+        {
+            Overlay = number,
+            Done = () =>
+            {
+                layer.QueueFree();
+                _cinematic = null;
+                if (RegionInfo.Read(Session.Open("RESOURCE.GFF"), _region.Number) is { Music: > 0 } info)
+                {
+                    Music.Instance?.ChangeTo("RESOURCE.GFF", info.Music);
+                }
+                if (Session.Scripts.IsSuspended && Session.Scripts.PausedFor is null)
+                {
+                    ReportScript("cinematic over", Session.Scripts.Resume());
+                }
+            },
+        };
+        layer.AddChild(_cinematic);
+        AddChild(layer);
+        return true;
     }
 
     /// <summary>

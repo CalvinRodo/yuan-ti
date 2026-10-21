@@ -22,6 +22,14 @@ public partial class IntroView : RetroScreen
     /// <summary>Where to go when it ends.</summary>
     public static string NextScene { get; set; } = MainMenu.ScenePath;
 
+    /// <summary>
+    /// Played over another screen (a script's <c>REQUEST(6)</c>) instead of as its own scene:
+    /// this cinematic, and <see cref="Done"/> when it ends instead of changing scene.
+    /// </summary>
+    public int? Overlay { get; init; }
+
+    public Action? Done { get; init; }
+
     private CinematicPlayer? _player;
     private TextureRect _picture = null!;
     private Image _image = null!;
@@ -56,7 +64,7 @@ public partial class IntroView : RetroScreen
                 Music.Instance?.FadeOut(seconds);
             }
         };
-        _player.PlayCinematic(Cinematic);
+        _player.PlayCinematic(Overlay ?? Cinematic);
 
         if (OS.GetCmdlineUserArgs().Contains("--check-intro"))
         {
@@ -111,6 +119,12 @@ public partial class IntroView : RetroScreen
 
     private void Finish()
     {
+        if (Overlay is not null)
+        {
+            QueueFree();
+            Done?.Invoke();
+            return;
+        }
         string next = NextScene;
         Cinematic = 0;
         NextScene = MainMenu.ScenePath;
