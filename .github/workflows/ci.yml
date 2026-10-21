@@ -1,0 +1,95 @@
+# Pull request checks: the engine builds, its unit tests pass, the Python
+# toolkit compiles, and the Godot project still exports. The headless engine
+# checks (`-- --check-*`) need the original game files, which can't be in CI,
+# so they stay a local step (see engine/README.md).
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  GODOT_VERSION: 4.7.2
+
+jobs:
+  engine:
+    name: Engine build and unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore
+        run: dotnet restore engine/DarkSun.sln
+
+      - name: Build (libraries, tests, tools and the Godot project)
+        run: dotnet build engine/DarkSun.sln --no-restore
+
+      - name: Unit tests
+        run: dotnet test engine/DarkSun.sln --no-build --logger trx --results-directory TestResults
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: TestResults
+          if-no-files-found: ignore
+
+  python:
+    name: Python toolkit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Compile every module
+        run: uv run python3 -m compileall -q src tools
+
+      - name: Import the web server
+        run: uv run python3 -c "import sys; sys.path.insert(0, 'src'); import server"
+
+  export:
+    name: Godot export (Linux)
+    needs: engine
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - uses: ./.github/actions/setup-godot
+        with:
+          version: ${{ env.GODOT_VERSION }}
+
+      - name: Build the C# project
+        run: dotnet build engine/game/DarkSunEngine.csproj
+
+      - name: Import the project
+        run: $GODOT --headless --path engine/game --import
+
+      - name: Export for Linux
+        run: |
+          mkdir -p build/linux
+          $GODOT --headless --path engine/game --export-release "Linux" ../../build/linux/DarkSunEngine.x86_64
+          test -x build/linux/DarkSunEngine.x86_64

@@ -255,6 +255,31 @@ ticks of answering for the player, counting how often each script ran (a
 script that keeps firing stands out). `--check-verbs` opens every region's verb menus and does every verb
 (but Use with) to every object that offers it.
 
+## Builds and CI
+
+`make engine-export` exports the engine for Linux, Windows and macOS into
+`build/` from the presets in `game/export_presets.cfg` (it needs Godot's .NET
+export templates for 4.7.2). The builds hold only the engine: players point
+them at their own copy of Dark Sun. The macOS build is ad-hoc signed, not
+notarized, so it is opened with right-click > Open the first time.
+
+GitHub Actions (`.github/workflows/`):
+
+- `ci.yml`, on every pull request and push to `main`: builds the solution
+  (libraries, tests, tools and the Godot project), runs the unit tests
+  (their `.trx` results are a run artifact), compiles the Python toolkit and
+  imports its web server, and exports the Linux build to catch a broken export.
+- `release.yml`, on every push to `main` (a merged pull request): runs the
+  unit tests, exports Linux, Windows and macOS builds and publishes them as a
+  GitHub release tagged `v0.1.<run number>`, with notes listing the pull
+  requests merged since the last one: `DarkSunEngine-linux-x86_64.tar.gz`,
+  `DarkSunEngine-windows-x86_64.zip` and `DarkSunEngine-macos-universal.zip`.
+
+Godot and its templates come from the official release
+(`.github/actions/setup-godot`, cached between runs); change `GODOT_VERSION`
+in both workflows to move to another version. The headless checks
+(`-- --check-*`) need the game files, so they aren't run in CI.
+
 ## Mods
 
 Mods are folders of loose files that replace the game's resources; the

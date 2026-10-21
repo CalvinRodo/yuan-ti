@@ -10,3 +10,4 @@ libgff/
 **/.DS_Store/
 precomputed/
 out/
+build/

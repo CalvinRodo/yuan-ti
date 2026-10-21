@@ -1,0 +1,121 @@
+# Builds of the engine for Linux, Windows and macOS whenever main changes (a
+# pull request is merged), from the presets in engine/game/export_presets.cfg,
+# published as a GitHub release tagged v0.1.<run number> with notes generated
+# from the merged pull requests. The builds don't contain the game: players
+# point them at their own copy of Dark Sun.
+name: Release builds
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  GODOT_VERSION: 4.7.2
+
+jobs:
+  test:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - run: dotnet test engine/DarkSun.sln
+
+  export:
+    name: Export ${{ matrix.preset }}
+    needs: test
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - preset: Linux
+            folder: linux
+            file: DarkSunEngine.x86_64
+            package: DarkSunEngine-linux-x86_64.tar.gz
+          - preset: Windows
+            folder: windows
+            file: DarkSunEngine.exe
+            package: DarkSunEngine-windows-x86_64.zip
+          - preset: macOS
+            folder: macos
+            file: DarkSunEngine.zip
+            package: DarkSunEngine-macos-universal.zip
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - uses: ./.github/actions/setup-godot
+        with:
+          version: ${{ env.GODOT_VERSION }}
+
+      - name: Build the C# project
+        run: dotnet build engine/game/DarkSunEngine.csproj
+
+      - name: Import the project
+        run: $GODOT --headless --path engine/game --import
+
+      - name: Export
+        run: |
+          mkdir -p build/${{ matrix.folder }}
+          $GODOT --headless --path engine/game --export-release "${{ matrix.preset }}" ../../build/${{ matrix.folder }}/${{ matrix.file }}
+          test -s build/${{ matrix.folder }}/${{ matrix.file }}
+          ls -la build/${{ matrix.folder }}
+
+      - name: Package
+        run: |
+          mkdir -p dist
+          case "${{ matrix.folder }}" in
+            linux)   tar -czf dist/${{ matrix.package }} -C build/linux . ;;  # tar keeps the program executable
+            windows) (cd build/windows && zip -qr ../../dist/${{ matrix.package }} .) ;;
+            macos)   cp build/macos/${{ matrix.file }} dist/${{ matrix.package }} ;;  # Godot's zip, the .app inside
+          esac
+          ls -la dist
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.package }}
+          path: dist/${{ matrix.package }}
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: Publish the release
+    needs: export
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download the builds
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: v0.1.${{ github.run_number }}
+        run: |
+          ls -la dist
+          gh release create "$TAG" dist/* \
+            --repo "${{ github.repository }}" \
+            --target "${{ github.sha }}" \
+            --title "Dark Sun Engine $TAG" \
+            --generate-notes
