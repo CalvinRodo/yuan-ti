@@ -1092,6 +1092,23 @@ each record are not read.
   merchant's items with SEARCH before and after it to tell whether
   something was bought.
 
+### Starting gear (`6ECD:1D48`)
+
+When DONE is clicked on the creation screen (`6ECD:1F81`), a new character
+gets one class's gear from the table at `38CE:0000`: 29 entries of 3 bytes,
+{word `OJFF`, byte slot}. The range is picked by the character record's
++0x12 class bits, the first that is set in this order: 0x20 fighter (8–12),
+0x40 gladiator (0–2), 0x200 ranger (3–7), 0x0F a cleric (13–16), 0x400
+thief (17–19), 0x100 psionicist (20–23), 0x80 preserver (26–27), else
+(druid) 24–25; a thri-kreen (+0x18 = 8) gets entry 28 alone. Each `OJFF` is
+loaded as an item (`7155:0000`, the `RDFF` with its quantity: 24 arrows) and
+worn in its slot (`1A0A:20EC`), or put in the backpack (`1A0A:1CD6`) when its
+class can't. The objects: 1010 chatkcha, 1012 bone long sword, 1015 sling,
+1017 bow, 1019 quarterstaff, 1020 shield, 1022 / 1023 / 1026 leather chest,
+arm and leg armour, 1070 arrows, 1185 club; slots 0 arm, 1 ammunition, 2
+missile, 3 right hand, 6 legs, 9 chest, 10 left hand. The engine:
+`StartingGear`, given as a new game begins (the roster keeps no items).
+
 ### Sound effects
 
 * `play_sound_effect(n)` (`191F:0A6F`) does nothing when sound is off

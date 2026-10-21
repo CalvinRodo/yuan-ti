@@ -206,6 +206,7 @@ public partial class RegionView : Node2D
             // A new game begins where DSUN.EXE's does: region 42, the party at pixel (488, 152).
             _regionIndex = 0;
             EnterRegion(NewGameStart.Region, NewGameStart.At);
+            GiveStartingGear();
             FireArrivalTriggers();
             if (Session.Party.Count > 0 && !_checking)
             {
@@ -662,6 +663,25 @@ public partial class RegionView : Node2D
             _itemIcons[rdff] = icon;
         }
         return icon;
+    }
+
+    /// <summary>
+    /// A new game's characters start with their class's gear
+    /// (<see cref="StartingGear"/>). DSUN.EXE gives it when DONE is clicked on
+    /// the creation screen and keeps it with the character; here a roster
+    /// character holds no items, so each new game gives it to everyone who
+    /// carries nothing.
+    /// </summary>
+    private void GiveStartingGear()
+    {
+        for (int i = 0; i < Session.Party.Count; i++)
+        {
+            if (Session.Party[i] is { } c && _world[i] is { Kind: ObjectKind.Party, Items.Count: 0 } member
+                && _world.GiveStartingGear(member, c.ItemClasses, c.Race == DarkSun.Game.Characters.Race.ThriKreen) is { Count: > 0 } given)
+            {
+                AddScriptLine($"> {c.Name} starts with {string.Join(", ", given.Select(g => (_world.Items.NameOf(g.Record) is { Length: > 0 } n ? n : $"item {g.Rdff}") + (g.Quantity > 1 ? $" ×{g.Quantity}" : "") + (g.Equipped ? "" : " (pack)")))}");
+            }
+        }
     }
 
     /// <summary>The character screens are showing (the key help lists theirs).</summary>

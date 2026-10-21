@@ -38,6 +38,35 @@ public sealed partial class GameWorld
             ? new Item(Math.Abs(rdff), record, quantity, slot)
             : null;
 
+    /// <summary>
+    /// Give <paramref name="member"/> a new character's gear (<see cref="StartingGear"/>,
+    /// <c>6ECD:1D48</c>): each item worn in its slot if its class may (<see cref="EquipAt"/>,
+    /// as <c>1A0A:20EC</c>), else in the pack (<c>1A0A:1CD6</c>); a stack (the arrows) with its
+    /// record's quantity. Returns what was given.
+    /// </summary>
+    public IReadOnlyList<Item> GiveStartingGear(WorldObject member, ItemClasses classes, bool thriKreen)
+    {
+        var given = new List<Item>();
+        foreach (GearPiece piece in StartingGear.For(classes, thriKreen))
+        {
+            if (member.Items.Count >= Equipment.Capacity || NewItem(piece.Ojff) is not { } item)
+            {
+                continue;
+            }
+            if (Stacks(item.Record))
+            {
+                item.Quantity = Math.Max(1, (int)item.Record.Quantity);
+            }
+            member.Items.Add(item);
+            if (EquipAt(member, item, piece.Slot) != EquipResult.Worn)
+            {
+                item.Slot = Equipment.Pack;
+            }
+            given.Add(item);
+        }
+        return given;
+    }
+
     /// <summary>Do items of this record stack (one entry with a quantity)? <c>IT1R</c> flags bit 2 (<c>7372:0FEE</c>).</summary>
     public bool Stacks(ItemRecord record) => Items.TypeOf(record) is { Stacks: true };
 
