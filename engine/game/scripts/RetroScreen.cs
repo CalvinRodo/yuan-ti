@@ -25,7 +25,19 @@ public partial class RetroScreen : Control
 
     public Control Canvas { get; }
 
-    public override void _Ready() => Fit();
+    public override void _Ready()
+    {
+        Fit();
+        if (OS.GetCmdlineUserArgs().FirstOrDefault(a => a.StartsWith("--screenshot=")) is { } shot)
+        {
+            // Development: the screen as a PNG after a second (as the map's --screenshot), then quit.
+            GetTree().CreateTimer(1).Timeout += () =>
+            {
+                GetViewport().GetTexture().GetImage().SavePng(shot["--screenshot=".Length..]);
+                GetTree().Quit();
+            };
+        }
+    }
 
     private void Fit()
     {

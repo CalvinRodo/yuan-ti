@@ -442,20 +442,8 @@ public partial class PartyView : RetroScreen
     private List<Character> Available() =>
         [.. Session.Roster.All().Where(c => Session.Party.All(p => p.Id != c.Id))];
 
-    /// <summary>The head of the body portrait: its top middle, 32 × 32.</summary>
-    private Texture2D? Portrait(Character c)
-    {
-        int number = new CharacterCreation(Session.Rules, Session.Names, new Random()).Portrait(c);
-        if (!_resources.TryRead("BMP ", number, out var data) || Session.Assets.Frames(data) is not [var frame, ..])
-        {
-            return null;
-        }
-        return new AtlasTexture
-        {
-            Atlas = Textures.ToTexture(frame, _palette),
-            Region = new Rect2(Math.Max(0, (frame.Width - 32) / 2), 0, Math.Min(32, frame.Width), Math.Min(32, frame.Height)),
-        };
-    }
+    /// <summary>A box's picture: the character's map sprite standing, facing forwards.</summary>
+    private Texture2D? Portrait(Character c) => CharacterGenView.StandingSprite(c.Sprite, _palette);
 
     private Label Text(Vector2 at, float width, string text, HorizontalAlignment align = HorizontalAlignment.Left)
     {

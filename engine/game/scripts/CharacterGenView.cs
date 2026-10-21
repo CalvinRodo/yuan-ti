@@ -21,8 +21,9 @@ namespace DarkSun.Engine;
 /// spheres (<c>WIND</c> 3012 / 3013, <c>ICON</c> 2038–2047), EXIT and DONE. The
 /// rules are <see cref="CharacterCreation"/>'s. Every control is where the
 /// window's data puts it (<see cref="UiWindowView"/>; the engine moves the die,
-/// <c>res://ui/WIND/3011.json</c>); the panels behind them are drawn here, as
-/// the window has no <c>APFM</c> frames.
+/// <c>res://ui/WIND/3011.json</c>); behind them the stone (<c>BMP</c> 13001) and
+/// DSUN.EXE's parchment panels (<c>BMP</c> 20083–20087, placed as <c>6ECD:08D3</c>
+/// does), with two more drawn here, as the window has no <c>APFM</c> frames.
 /// </summary>
 public partial class CharacterGenView : RetroScreen
 {
@@ -331,15 +332,17 @@ public partial class CharacterGenView : RetroScreen
         _c.Sprite = sprites[((at + by) % sprites.Count + sprites.Count) % sprites.Count].Ojff;
     }
 
-    /// <summary>The sprite standing, facing south.</summary>
-    private ImageTexture? SpriteTexture(int ojff)
+    private ImageTexture? SpriteTexture(int ojff) => StandingSprite(ojff, _palette);
+
+    /// <summary>A character's map sprite (<c>OJFF</c> <paramref name="ojff"/>) standing, facing south.</summary>
+    public static ImageTexture? StandingSprite(int ojff, Palette palette)
     {
         if (Session.CharacterSprites.FirstOrDefault(s => s.Ojff == ojff) is not { } sprite)
         {
             return null;
         }
         var animator = ScmdAnimator.ForCreature(sprite.Script, sprite.Sizes, sprite.Script.StandStart(Direction.South));
-        return sprite.Frames.Count > animator.Frame ? Textures.ToTexture(sprite.Frames[animator.Frame], _palette) : null;
+        return sprite.Frames.Count > animator.Frame ? Textures.ToTexture(sprite.Frames[animator.Frame], palette) : null;
     }
 
     // -- drawing --------------------------------------------------------------------------
@@ -350,7 +353,17 @@ public partial class CharacterGenView : RetroScreen
         {
             Canvas.AddChild(new TextureRect { Texture = stone, MouseFilter = MouseFilterEnum.Ignore });
         }
-        foreach (var (x, y, w, h) in new[] { (0, 0, 100, 116), (132, 17, 51, 41), (132, 59, 56, 57), (205, 6, 113, 72), (205, 80, 113, 66), (0, 119, 164, 64), (72, 140, 132, 42) })
+        // The parchment panels DSUN.EXE draws (6ECD:08D3, 4239:0039(bmp, x, y)): the portrait's (20084),
+        // the map icon's (20083), the die's (20085), and two on the right (20086, 20087).
+        foreach (var (number, x, y) in new[] { (20084, 0, 0), (20083, 135, 19), (20085, 129, 70), (20086, 208, 0), (20087, 210, 88) })
+        {
+            if (Bmp(number) is { } parchment)
+            {
+                Canvas.AddChild(new TextureRect { Texture = parchment, Position = new Vector2(x, y), MouseFilter = MouseFilterEnum.Ignore });
+            }
+        }
+        // The class list and the abilities have no picture of their own here: panels drawn over the stone.
+        foreach (var (x, y, w, h) in new[] { (0, 119, 164, 64), (72, 140, 132, 42) })
         {
             var panel = new Panel { Position = new Vector2(x, y), Size = new Vector2(w, h), MouseFilter = MouseFilterEnum.Ignore };
             var box = new StyleBoxFlat { BgColor = new Color(0.12f, 0.12f, 0.17f, 0.55f), BorderColor = new Color(0.62f, 0.62f, 0.72f) };

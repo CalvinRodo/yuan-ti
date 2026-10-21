@@ -94,7 +94,6 @@ public partial class CharacterScreen : RetroScreen
     private TextureRect _body = null!, _containerArt = null!;
     private readonly List<ItemSlot> _slots = [];
     private readonly Dictionary<int, Texture2D?> _slotArt = [];
-    private readonly Dictionary<int, Texture2D?> _portraits = [];
 
     private GameWorld? _world;
     private int _member;
@@ -671,23 +670,8 @@ public partial class CharacterScreen : RetroScreen
         _info.Text = note is null ? text : _store is not null ? $"{note}\n{text}" : $"{note}\n\n{text}";
     }
 
-    private Texture2D? Portrait(Character c)
-    {
-        int number = new CharacterCreation(Session.Rules, Session.Names, new Random()).Portrait(c);
-        if (_portraits.TryGetValue(number, out Texture2D? t))
-        {
-            return t;
-        }
-        t = _resources.TryRead("BMP ", number, out var data) && Session.Assets.Frames(data) is [var frame, ..]
-            ? new AtlasTexture
-            {
-                Atlas = Textures.ToTexture(frame, _palette),
-                Region = new Rect2(Math.Max(0, (frame.Width - 32) / 2), 0, Math.Min(32, frame.Width), Math.Min(32, frame.Height)),
-            }
-            : null;
-        _portraits[number] = t;
-        return t;
-    }
+    /// <summary>A party box's picture: the character's map sprite standing, facing forwards.</summary>
+    private Texture2D? Portrait(Character c) => CharacterGenView.StandingSprite(c.Sprite, _palette);
 
     // -- for the checks (--check-character): clicks as the player makes them ---------------
 
