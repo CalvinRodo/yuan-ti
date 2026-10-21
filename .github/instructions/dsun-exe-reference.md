@@ -766,7 +766,8 @@ From the handlers (2026-10-18); the engine's model is `DarkSun.Game.World`.
   is a creature with allegiance bit 1 (the party's side: party members and
   allies), an enemy within 24 cells (`612E:0000`), and either a party member
   stands (status below 3) or the actor's allegiance has bit 4. **CLONE**(name, count, x, y, radius, flag) makes copies near
-  (x, y) (`7372:0A44`) and returns how many it made.
+  (x, y) (`7372:0A44`) and returns how many it made; each copy becomes "other"
+  (`gname[8]`, stored in `47B7:0003` = `3781:0363`).
 * **REQUEST(code, who, a, b)** dispatches at `87B3:0000`, with a jump table at
   `87B3:0177`:
 

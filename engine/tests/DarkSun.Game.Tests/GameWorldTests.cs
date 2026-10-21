@@ -235,6 +235,7 @@ public class GameWorldTests
         Assert.Equal(3, templars.Count);
         Assert.All(templars, t => Assert.NotNull(t.Walker));
         Assert.Equal(templars.Count, templars.Select(t => t.Cell).Distinct().Count());
+        Assert.Contains(world.Special(0x28), templars.Where(t => t.IsClone)); // the copy is "other"
     }
 
     [Fact]
@@ -360,6 +361,7 @@ public class GameWorldTests
         GameWorld world = Arena();
         Assert.Equal(2, world.Clone(-269, 2, 20, 20)); // 7372:0A44 loads the RDFF
         Assert.Equal(2, world.Select(-269).Count());
+        Assert.Equal(-269, world.Special(0x28)?.Id); // GPL 2 then HUNTs obj_special(0x28).72
         Assert.Equal(0, world.Clone(-999, 1, 20, 20));
     }
 

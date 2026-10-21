@@ -97,7 +97,12 @@ then the party watches the mage Celgor fight a rampager and two sligs
 (`REQUEST(14)`), and once it is over the gladiators are called into the arena.
 The opening combatants are removed afterward, whoever won, as in DSUN.EXE.
 The next announcement ("Citizens of Draj!") waits for all four party members
-to leave the starting pen through the gate. A walk ordered before the gate
+to leave the starting pen through the gate. Then the gate closes behind them and the
+announcer releases the monsters: GPL 2 clones them at the arena's far side,
+(13, 32) or (51, 32), and has them HUNT the party; they walk in and attack
+when one comes within 5 cells (its line-of-sight script, `GPL 74` @0059, FIGHTs).
+`-- --new-game --check-arena` plays the whole opening; `--check-arena-release`
+starts at the release. A walk ordered before the gate
 opens continues through it if it opens while the party approaches.
 The game clock (`gname[9]`) runs as DSUN.EXE's does, so timed scripts move
 on; thief skills, ability rolls and traps are rolled as the EXE rolls them

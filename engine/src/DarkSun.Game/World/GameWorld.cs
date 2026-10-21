@@ -677,14 +677,24 @@ public sealed partial class GameWorld
     /// copies of the object named <paramref name="name"/> near (x, y). Returns
     /// how many were made. DSUN.EXE loads each copy from the <c>RDFF</c>
     /// (−name), so one need not be on the map: then each is made afresh
-    /// (<see cref="Spawn"/>).
+    /// (<see cref="Spawn"/>). Each copy becomes "other" (<c>gname[8]</c>,
+    /// <c>7372:0A44</c> stores it in <c>3781:0363</c>), which the arena's
+    /// monster release then orders: <c>HUNT(obj_special(0x28).72)</c>.
     /// </summary>
     public int Clone(int name, int count, int x, int y)
     {
         if (First(name) is not { } original)
         {
-            return name < 0 ? Enumerable.Range(0, Math.Max(0, count)).Count(_ =>
-                NearestCell(new Cell(x, y), c => Fits(c, Footprint.OneCell)) is { } cell && Spawn(-name, cell) is not null) : 0;
+            int spawned = 0;
+            for (int i = 0; name < 0 && i < count; i++)
+            {
+                if (NearestCell(new Cell(x, y), c => Fits(c, Footprint.OneCell)) is { } cell && Spawn(-name, cell) is { } spawn)
+                {
+                    SetEngineVariable(0x28, spawn.Index);
+                    spawned++;
+                }
+            }
+            return spawned;
         }
         int made = 0;
         for (int i = 0; i < count; i++)
@@ -717,6 +727,7 @@ public sealed partial class GameWorld
             }
             _objects[index] = copy;
             made++;
+            SetEngineVariable(0x28, index);
             Changed?.Invoke(copy, null);
         }
         return made;

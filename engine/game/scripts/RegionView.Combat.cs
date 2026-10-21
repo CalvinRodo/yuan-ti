@@ -1075,6 +1075,10 @@ public partial class RegionView
             problems.Add($"no next announcement; party at {string.Join(", ", _world.Party.Select(p => p.Cell))}; "
                 + $"arena stage {Session.Scripts.Memory.Read(new GplVariable(GplVarType.GlobalNum, 3))}");
         }
+        else
+        {
+            CheckReleasedMonsters(Step, problems);
+        }
         if (_scriptErrors > 0)
         {
             problems.Add($"{_scriptErrors} script errors");
@@ -1085,6 +1089,97 @@ public partial class RegionView
         }
         GD.Print(problems.Count == 0 ? "arena: OK" : $"arena: {problems.Count} problems");
         GetTree().Quit(problems.Count == 0 ? 0 : 1);
+    }
+
+    /// <summary>
+    /// <c>--check-arena-release</c>: the gate script (GPL 2) as it stands once the opening bout is over
+    /// and the gladiators are called (<c>gflag[9]</c>, <c>gflag[16]</c>, stage <c>gnum[3]</c> 1), the
+    /// party south of the gate: the gate closes, the announcer speaks and the monsters come in.
+    /// </summary>
+    private void CheckArenaRelease()
+    {
+        _checking = true;
+        var problems = new List<string>();
+        GplMemory memory = Session.Scripts.Memory;
+        memory.Assign(new GplVariable(GplVarType.GlobalFlag, 9), 1);
+        memory.Assign(new GplVariable(GplVarType.GlobalFlag, 16), 1);
+        memory.Assign(new GplVariable(GplVarType.GlobalNum, 3), 1);
+        _world.Teleport(DialogueGplHost.WholeParty, _world.Region.Number, 30, 26);
+        bool announced = false;
+        void Step()
+        {
+            _Process(1.0 / ScmdAnimator.TicksPerSecond);
+            announced |= string.Concat(Session.ScriptHost.Dialogue.Text.Select(t => t.Text)).Contains("Citizens of Draj!");
+            if (Session.ScriptHost.Dialogue.Prompt is GplContinuePrompt)
+            {
+                ReportScript("read announcement", Session.Scripts.Resume());
+            }
+            _dialogueWindow.Refresh();
+        }
+        for (int tick = 0; tick < 10_000 && !announced; tick++)
+        {
+            Step();
+        }
+        if (!announced)
+        {
+            problems.Add($"no announcement; party at {string.Join(", ", _world.Party.Select(p => p.Cell))}");
+        }
+        else
+        {
+            CheckReleasedMonsters(Step, problems);
+        }
+        if (_scriptErrors > 0)
+        {
+            problems.Add($"{_scriptErrors} script errors");
+        }
+        foreach (string problem in problems)
+        {
+            GD.Print($"  PROBLEM: {problem}");
+        }
+        GD.Print(problems.Count == 0 ? "arena release: OK" : $"arena release: {problems.Count} problems");
+        GetTree().Quit(problems.Count == 0 ? 0 : 1);
+    }
+
+    /// <summary>
+    /// After "Citizens of Draj!" GPL 2 clones its monsters at one side of the arena (13, 32) or (51, 32),
+    /// sets them hostile and HUNTs; they walk to the party and their line-of-sight script (GPL 74 @0059) FIGHTs.
+    /// </summary>
+    private void CheckReleasedMonsters(Action step, List<string> problems)
+    {
+        bool Hostile(WorldObject o) => o.Kind != ObjectKind.Party && o.Walker is not null && o.IsClone && o.Allegiance == 2;
+        int tick = 0;
+        for (; tick < 2000 && !_world.Objects.Any(Hostile); tick++)
+        {
+            step();
+        }
+        var monsters = _world.Objects.Where(Hostile).ToList();
+        if (monsters.Count == 0)
+        {
+            problems.Add("no monsters were released");
+            return;
+        }
+        Cell leader = _world.Party.First().Cell;
+        var from = monsters.ToDictionary(m => m, m => m.Walker!.Cell);
+        GD.Print($"released: {string.Join(", ", monsters.Select(m => $"{m.Name} at {m.Walker!.Cell}"))}; party at {leader}");
+        for (tick = 0; tick < 20_000 && !InCombat; tick++)
+        {
+            step();
+        }
+        if (!InCombat)
+        {
+            problems.Add($"the monsters never attacked; now at {string.Join(", ", monsters.Select(m => m.Walker!.Cell))}");
+            return;
+        }
+        GD.Print($"attacked after {tick} ticks; monsters at {string.Join(", ", monsters.Select(m => m.Walker!.Cell))}");
+        if (!PartyFights)
+        {
+            problems.Add("the party does not take part in the fight");
+        }
+        static int Distance(Cell a, Cell b) => Math.Max(Math.Abs(a.X - b.X), Math.Abs(a.Y - b.Y));
+        if (!monsters.Any(m => Distance(m.Walker!.Cell, leader) < Distance(from[m], leader)))
+        {
+            problems.Add("no monster walked towards the party");
+        }
     }
 
     /// <summary>

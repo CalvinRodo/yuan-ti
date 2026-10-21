@@ -691,6 +691,11 @@ executable, not in the data.
       removes every object of `OJFF` 296, 171 and 269, whoever won. Stage 1
       of GPL 2 waits for every party member to be south of the gate
       (y ≥ 23); a walk ordered before the gate opens replans through it.
+      The monster release after it (2026-10-20): CLONE makes each copy
+      "other" (`7372:0A44` stores it in `3781:0363`), which GPL 2's release
+      (`@2455`) then sets hostile and HUNTs through `obj_special(0x28).72`.
+      Without it the orders went to a party member (GETPARTY's "other") and
+      the monsters stood at the arena's side while the fight started.
 
 ---
 

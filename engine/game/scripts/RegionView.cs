@@ -130,7 +130,7 @@ public partial class RegionView : Node2D
 
     public override void _Ready()
     {
-        _checking = OS.GetCmdlineUserArgs().Any(a => a is "--check-arena" or "--check-party-movement");
+        _checking = OS.GetCmdlineUserArgs().Any(a => a is "--check-arena" or "--check-arena-release" or "--check-party-movement");
         Controls.Register();
         // [game] original_pathfinding in user://settings.cfg (Options): walk as DSUN.EXE plans.
         Walker.UseOriginalPathfinding = Settings.OriginalPathfinding;
@@ -316,6 +316,11 @@ public partial class RegionView : Node2D
             if (OS.GetCmdlineUserArgs().Contains("--check-arena"))
             {
                 CheckArena();
+                return;
+            }
+            if (OS.GetCmdlineUserArgs().Contains("--check-arena-release"))
+            {
+                CheckArenaRelease();
                 return;
             }
             if (OS.GetCmdlineUserArgs().Contains("--check-party-movement"))
