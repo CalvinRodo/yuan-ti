@@ -523,6 +523,7 @@ public partial class RegionView : Node2D
     /// <summary>Replace the map's nodes with <paramref name="file"/>'s region.</summary>
     private void LoadRegion(string file)
     {
+        Sounds.Instance?.StopRepeating();
         foreach (Node child in _ground.GetChildren().Concat(_sorted.GetChildren()))
         {
             child.QueueFree();
@@ -720,13 +721,7 @@ public partial class RegionView : Node2D
     /// <summary>The MOVE, LOOK and ATTACK cursors.</summary>
     private void SetCursor(GameMenu.Cursor cursor)
     {
-        _cursor = cursor;
-        Input.SetDefaultCursorShape(cursor switch
-        {
-            GameMenu.Cursor.Look => Input.CursorShape.Help,
-            GameMenu.Cursor.Attack => Input.CursorShape.Cross,
-            _ => Input.CursorShape.Arrow,
-        });
+        _cursor = cursor; // the pointer follows (UpdatePointer)
         Notice(cursor switch
         {
             GameMenu.Cursor.Look => "LOOK CURSOR: a click looks (Esc: back to moving)",
@@ -1071,6 +1066,7 @@ public partial class RegionView : Node2D
             return; // fading to the next region, or a script's cinematic plays over the map
         }
         _clock += delta;
+        UpdatePointer();
         if (InCombat)
         {
             AnimateCombat(delta);

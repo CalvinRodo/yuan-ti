@@ -604,11 +604,8 @@ public partial class RegionView
         _combatTip.Text = TipFor(c, MouseCell());
     }
 
-    private Cell MouseCell()
-    {
-        Vector2 at = GetGlobalMousePosition();
-        return new Cell((int)Math.Floor(at.X / Region.TileSize), (int)Math.Floor(at.Y / Region.TileSize));
-    }
+    /// <summary>The cell a click in a fight aims at: the mouse's, or that of the combatant drawn there (<see cref="AimCell"/>).</summary>
+    private Cell MouseCell() => AimCell(GetGlobalMousePosition());
 
     /// <summary>What a click on <paramref name="cell"/> would do, with the chance to hit an enemy there.</summary>
     private string TipFor(Combatant c, Cell cell)
@@ -715,9 +712,17 @@ public partial class RegionView
             ToggleAuto();
             return true;
         }
-        if (e is InputEventMouseButton { ButtonIndex: MouseButton.Right, Pressed: true } && _castChoice is not null)
+        if (e is InputEventMouseButton { ButtonIndex: MouseButton.Right, Pressed: true })
         {
-            _castChoice = null;
+            // 1587:01C7: a right-click puts an aimed spell away, else turns the pointer to the next cursor.
+            if (_castChoice is not null)
+            {
+                _castChoice = null;
+            }
+            else
+            {
+                _gameMenu.CycleCursor();
+            }
             UpdateCombatHud();
             return true;
         }
@@ -758,9 +763,30 @@ public partial class RegionView
             }
             return;
         }
+        if (_cursor == GameMenu.Cursor.Look)
+        {
+            if (battle.At(cell) is { } seen && battle.InSight(c.Cell, cell))
+            {
+                Log($"{Who(seen)}: {seen.Vitals.Hp}/{seen.Vitals.MaxHp} hit points{(c.IsEnemyOf(seen) ? ", an enemy" : "")}");
+            }
+            return;
+        }
+        if (_cursor == GameMenu.Cursor.Attack)
+        {
+            // The ATTACK cursor attacks only what it can reach from here (its pointer says which way: AttackPointer).
+            if (battle.At(cell) is { } target && target != c && battle.InSight(c, target))
+            {
+                bool shoot = Battle.Distance(c, target) >= 2;
+                if (!battle.Attack(c, target, shoot))
+                {
+                    Notice(shoot ? $"{Who(c)} can't shoot {Who(target)} from here." : $"{Who(c)} can't attack now.");
+                }
+            }
+            return;
+        }
         if (battle.At(cell) is { } there && there != c && c.IsEnemyOf(there))
         {
-            bool missile = Battle.Distance(c, there) > Battle.Reach(c) && c.MissileWeapon is not null && c.Ammunition > 0;
+            bool missile = MissileClick(c, there);
             if (!battle.CanAttack(c, there, missile) && (c.Flags & TurnFlags.MayMove) != 0 && battle.FreeCellNextTo(there, c) is { } next)
             {
                 battle.MoveToward(c, next);

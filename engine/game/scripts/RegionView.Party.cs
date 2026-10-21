@@ -1,3 +1,4 @@
+using DarkSun.Data.Regions;
 using DarkSun.Game.Animation;
 using DarkSun.Game.Combat;
 using DarkSun.Game.Movement;
@@ -135,7 +136,7 @@ public partial class RegionView
         // CAST, then a click on an enemy in range and sight: the spell is cast from where the member stands.
         void CheckRangedCast(Battle battle)
         {
-            const int Spell = 32; // one creature, 15 cells
+            const int Spell = 9; // one creature, any creature, 210 cells
             for (int tick = 0; tick < 10_000 && InCombat && PlayerTurn is null; tick++)
             {
                 Step(1);
@@ -151,11 +152,60 @@ public partial class RegionView
                 problems.Add("no enemy in range and sight for the cast check");
                 return;
             }
+            Vector2 Middle(Cell cell) => new((cell.X + 0.5f) * Region.TileSize, (cell.Y + 0.5f) * Region.TileSize);
+            var right = new InputEventMouseButton { ButtonIndex = MouseButton.Right, Pressed = true };
+
+            // The pointers (1587:29FA) and the right-click's cycle (1587:01C7).
+            Expect(PointerIcon(Middle(target.Cell)) is Pointers.Attack or Pointers.Ranged, "MOVE over an enemy: the sword or the missile");
+            // Anywhere on its picture aims at it, not only its own cell (the beetle's body is drawn above its feet).
+            if (SpriteOf(target) is { Texture: not null } picture && SpriteRect(picture) is var shape
+                && new Vector2(shape.GetCenter().X, shape.Position.Y + 2) is var head
+                && new Cell((int)Math.Floor(head.X / Region.TileSize), (int)Math.Floor(head.Y / Region.TileSize)) is var above
+                && above != target.Cell && battle.At(above) is null)
+            {
+                Expect(AimCell(head) == target.Cell && PointerIcon(head) is Pointers.Attack or Pointers.Ranged,
+                    $"the pointer on {Who(target)}'s head ({above}, it stands on {target.Cell}) aims at it");
+            }
+            else
+            {
+                problems.Add($"{Who(target)}'s picture doesn't reach past its cell; the aim-by-picture check didn't run");
+            }
+            _clock = 0;
+            UpdateAim(target.Cell, PointerIcon(Middle(target.Cell)));
+            Expect(SpriteOf(target)?.SelfModulate == Colors.Black, "the enemy under the sword or the missile flashes");
+            UpdateAim(player.Cell, PointerIcon(Middle(player.Cell)));
+            Expect(SpriteOf(target)?.SelfModulate == Colors.White, "and stops when the pointer leaves it");
+            CombatInput(right);
+            Expect(_cursor == GameMenu.Cursor.Attack && PointerIcon(Middle(player.Cell)) == Pointers.CantAttack,
+                "a right-click turns to ATTACK, crossed out over oneself");
+            CombatInput(right);
+            Expect(_cursor == GameMenu.Cursor.Look && PointerIcon(Middle(target.Cell)) == Pointers.Look, "another to LOOK, the eye over the enemy");
+            CombatInput(right);
+            Expect(_cursor == GameMenu.Cursor.Move, "and another back to MOVE");
+
+            // An area spell: its outline and everyone in it flashing; a right-click puts it away.
+            player.Spells.Add(8);
+            ChooseCast(8);
+            _clock = 0;
+            UpdateAim(target.Cell, PointerIcon(Middle(target.Cell)));
+            Expect(_aimOutline?.GetChildCount() > 0 && _aimTargets.Contains(target) && SpriteOf(target)?.SelfModulate == Colors.Black,
+                $"an aimed area is outlined ({_aimOutline?.GetChildCount()} dots) and its targets flash black");
+            CombatInput(right);
+            UpdateAim(player.Cell, PointerIcon(Middle(player.Cell)));
+            Expect(_castChoice is null && _cursor == GameMenu.Cursor.Move && _aimOutline?.GetChildCount() == 0 && SpriteOf(target)?.SelfModulate == Colors.White,
+                "a right-click puts the spell away and the flashing stops");
+            player.Spells.Remove(8);
+
             player.Spells.Add(Spell);
+            int ready = player.Spells.Count(n => n == Spell); // a mage may have it already
             Cell from = player.Cell;
             ChooseCast(Spell);
+            UpdateAim(target.Cell, PointerIcon(Middle(target.Cell)));
+            Expect(PointerIcon(Middle(target.Cell)) == DarkSun.Game.Magic.Spellcasting.Get(Spell)!.Icon
+                && PointerIcon(Middle(new Cell(player.Cell.X + 40, player.Cell.Y))) == Pointers.CantCast
+                && _aimTargets.SequenceEqual([target]), $"one target: the spell's icon over it ({PointerIcon(Middle(target.Cell))}), 6009 elsewhere ({PointerIcon(Middle(new Cell(player.Cell.X + 40, player.Cell.Y)))}), and it alone flashes ({string.Join(", ", _aimTargets.Select(t => t.Name))})");
             ClickCell(target.Cell);
-            Expect(!player.Spells.Contains(Spell) && player.Cell == from && battle.Current != player,
+            Expect(player.Spells.Count(n => n == Spell) == ready - 1 && player.Cell == from && battle.Current != player,
                 $"a ranged spell clicked on an enemy {Battle.Distance(player, target)} cells away is cast from where the member stands");
         }
 

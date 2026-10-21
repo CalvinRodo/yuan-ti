@@ -8,7 +8,9 @@ namespace DarkSun.Engine;
 /// records and GPL's SOUND command, played as the <c>BVOC</c> samples of
 /// <c>RESOURCE.GFF</c> (<see cref="SoundEffects"/>; mods can replace them).
 /// Samples are decoded once and played on a few voices; when all are busy the
-/// oldest stops. <c>[audio] sound_volume</c> (0–1) in <c>user://settings.cfg</c>
+/// oldest stops. A repeating sample (<c>BVOC</c> 58, the arena's crowd, 3 s
+/// a hundred times; 70) stops when another sound starts, as on the original's
+/// one digital channel, or when the map is left. <c>[audio] sound_volume</c> (0–1) in <c>user://settings.cfg</c>
 /// sets the loudness; 0 turns sound effects off.
 /// </summary>
 public partial class Sounds : Node
@@ -21,6 +23,7 @@ public partial class Sounds : Node
     private readonly AudioStreamPlayer[] _voices = new AudioStreamPlayer[Voices];
     private readonly Dictionary<int, (AudioStreamWav Stream, double Seconds)?> _streams = [];
     private readonly double[] _stopAt = new double[Voices];
+    private readonly bool[] _repeating = new bool[Voices];
     private readonly Dictionary<int, double> _lastPlayed = [];
     private int _next;
     private double _clock;
@@ -72,14 +75,32 @@ public partial class Sounds : Node
             return;
         }
         _lastPlayed[id] = _clock;
+        StopRepeating();
         int free = Array.FindIndex(_voices, v => !v.Playing);
         int index = free >= 0 ? free : _next++ % Voices;
         AudioStreamPlayer voice = _voices[index];
         _stopAt[index] = _clock + seconds;
+        _repeating[index] = stream.LoopMode != AudioStreamWav.LoopModeEnum.Disabled;
         voice.Stream = stream;
         voice.VolumeDb = Mathf.LinearToDb(Volume);
         voice.Play();
         Played++;
+    }
+
+    /// <summary>Whether a repeating sample is playing, for checks.</summary>
+    public bool PlayingRepeating => Enumerable.Range(0, Voices).Any(i => _repeating[i] && _voices[i].Playing);
+
+    /// <summary>Stop the repeating samples still playing.</summary>
+    public void StopRepeating()
+    {
+        for (int i = 0; i < Voices; i++)
+        {
+            if (_repeating[i])
+            {
+                _voices[i].Stop();
+                _repeating[i] = false;
+            }
+        }
     }
 
     public void Play(IEnumerable<int> ids)

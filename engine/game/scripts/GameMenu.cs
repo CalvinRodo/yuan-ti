@@ -296,6 +296,14 @@ public partial class GameMenu : RetroScreen
         CursorChanged?.Invoke(cursor);
     }
 
+    /// <summary>A right-click in a fight (<c>1587:01C7</c>): MOVE, then ATTACK, then LOOK, then MOVE again.</summary>
+    public void CycleCursor() => SetCursor(_cursor switch
+    {
+        Cursor.Move => Cursor.Attack,
+        Cursor.Attack => Cursor.Look,
+        _ => Cursor.Move,
+    });
+
     /// <summary>Set the cursor without the menu (Esc on the map goes back to moving).</summary>
     public void ResetCursor()
     {

@@ -1612,6 +1612,23 @@ These are AD&D 2nd edition's, but 18 has no percentile strength (+2 to hit,
   longer than its size (−3). The engine's `Battle.Aim`. The map's click
   handler (`1587:06D8`…) says "TOO FAR AWAY" (`DS:0BEB`, over 20 cells) and
   "NO LINE OF SIGHT" (`DS:0BF8`) for a move in combat.
+* **Mouse pointers** are `RESOURCE.GFF` `ICON` 6001–6010: 6001 move, 6003
+  sword, 6005 missile, 6007 eye, each followed by its crossed-out form, 6009
+  a spell crossed out, 6010 the hourglass. `191F:0A99(mode)` sets one by the
+  map's pointer mode `DS:11B8` (1 move, or the hourglass while the active
+  object `DS:4979` isn't a party slot; 2 look; 3 a held item's pointer,
+  `4281:003E`; 4 attack; 5 a spell: the spell's own icon `577D:0889` on a
+  valid target, else 6009, swapped by `8B7D:00AB`). As the pointer moves,
+  `1587:29FA` picks the crossed-out forms: LOOK with no object or no line of
+  sight; ATTACK on the active combatant itself, or with no one in sight (the
+  sword within a cell, the missile beyond), the sword next to a creature, the
+  missile farther if `1587:293E` finds a missile weapon with ammunition and
+  the range; MOVE on an empty blocked cell. A right-click (`1587:01C7`) turns
+  MOVE to ATTACK, ATTACK to LOOK, LOOK to MOVE (or 3 with an item), and puts
+  a spell away (back to MOVE). While a spell is aimed, `8B7D:00AB` dots the
+  area's outline with `BMP` 5015 (7 × 7) where its centre sees, and frames the
+  targets (`0980:337C`, colours 0xFE and 0x34). The engine: `Pointers`,
+  `RegionView.Pointer.cs` (the targets flash black instead of being framed).
 * Casting needs the caster active ("ONLY ACTIVE CHAR CAN CAST"); being hit
   interrupts it ("YOU WERE HIT"). The memorized spells per level are
   `DS:4B08` (wizard) and `DS:4B11` (priest), 0x1E bytes per character.

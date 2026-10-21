@@ -92,7 +92,18 @@ public partial class Main : Control
                 }
             }
             GD.Print($"sounds: {ok} decoded, {missing} numbers without a BVOC, {seconds:F1} s in all; repeating: {string.Join(", ", loops)}");
-            GetTree().Quit(ok > 0 ? 0 : 1);
+            // The arena's crowd (58) repeats for minutes; the next sound stops it, as on the original's one digital channel.
+            bool stops = true;
+            if (Sounds.Instance is { } player)
+            {
+                player.Volume = 1;
+                player.Play(58);
+                bool crowd = player.PlayingRepeating;
+                player.Play(37);
+                stops = crowd && !player.PlayingRepeating;
+                GD.Print($"sounds: the crowd {(crowd ? "repeats" : "didn't start")}, then {(stops ? "stops when another sound starts: OK" : "goes on")}");
+            }
+            GetTree().Quit(ok > 0 && stops ? 0 : 1);
             return;
         }
         bool regionCheck = args.Contains("--check-regions") || args.Contains("--check-exits") || args.Contains("--check-start") || args.Contains("--check-verbs") || args.Contains("--check-memory") || args.Contains("--check-save")
