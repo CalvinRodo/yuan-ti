@@ -2442,7 +2442,17 @@ public partial class RegionView : Node2D
         Expect(!boots.Equipped && helm.Slot == Head, "boots don't go on the head");
         _world.PartyClasses = classes;
         screen.Click(Pack, PackIndex(boots)); // put them back down
+        Expect(screen.Picked is null, "clicking their own place puts them back down");
+
+        // A picked item rides on the pointer and goes into the slot it is put in; a taken slot swaps.
         screen.Click(Pack, PackIndex(boots));
+        Expect(screen.HeldIcon is not null && screen.ItemAt(Pack, PackIndex(boots)) == boots, "the picked boots are the pointer's picture");
+        screen.Click(Pack, 9);
+        Expect(screen.Picked is null && screen.ItemAt(Pack, 9) == boots && boots.Cell == 9, "and go into the empty slot they are put in (10th)");
+        int potWas = PackIndex(pot);
+        screen.Click(Pack, potWas);
+        screen.Click(Pack, 9);
+        Expect(screen.ItemAt(Pack, 9) == pot && screen.ItemAt(Pack, potWas) == boots, "put on the boots' slot, the pot and the boots change places");
 
         screen.Click(Pack, PackIndex(pot));
         screen.ClickBox(next.Index);
@@ -2463,11 +2473,12 @@ public partial class RegionView : Node2D
                 Item inBody = body.Items[0];
                 screen.Click(Inside, 0);
                 screen.Click(Pack, 11);
-                Expect(body.Items.Count == 0 && me.Items.Contains(inBody), "clicking the body's pot, then the pack, takes it");
+                Expect(body.Items.Count == 0 && me.Items.Contains(inBody) && screen.ItemAt(Pack, 11) == inBody,
+                    "clicking the body's pot, then the pack's last slot, takes it there");
                 screen.Click(Pack, PackIndex(inBody));
                 screen.Click(Inside, 5);
-                Expect(body.Items.Contains(inBody), "and clicking it then the body puts it back");
-                screen.Click(Inside, 0, doubleClick: true);
+                Expect(body.Items.Contains(inBody) && screen.ItemAt(Inside, 5) == inBody, "and clicking it then the body's 6th slot puts it back there");
+                screen.Click(Inside, 5, doubleClick: true);
                 Expect(me.Items.Contains(inBody), "a double-click takes it again");
             }
             else

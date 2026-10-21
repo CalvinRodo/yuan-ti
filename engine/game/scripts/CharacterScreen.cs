@@ -568,9 +568,11 @@ public partial class CharacterScreen : RetroScreen
     {
         WorldObject? member = Member;
         List<Item> pack = Pack;
-        _packPage = Math.Clamp(_packPage, 0, Math.Max(0, (pack.Count - 1) / PackSlots));
+        Equipment.Arrange(pack);
+        _packPage = Math.Clamp(_packPage, 0, Pages(pack, PackSlots) - 1);
         List<Item> inside = _container?.Items ?? [];
-        _insidePage = Math.Clamp(_insidePage, 0, Math.Max(0, (inside.Count - 1) / InsideSlots));
+        Equipment.Arrange(inside);
+        _insidePage = Math.Clamp(_insidePage, 0, Pages(inside, InsideSlots) - 1);
         _body.Visible = _container is null;
         _containerArt.Visible = _container is not null;
         if (_container is not null)
@@ -582,9 +584,9 @@ public partial class CharacterScreen : RetroScreen
             slot.Item = slot.Where switch
             {
                 Where.Worn => member?.Items.FirstOrDefault(i => i.Slot == slot.Index),
-                Where.Pack => pack.ElementAtOrDefault(_packPage * PackSlots + slot.Index),
+                Where.Pack => pack.FirstOrDefault(i => i.Cell == _packPage * PackSlots + slot.Index),
                 Where.Sell => _offered.ElementAtOrDefault(slot.Index),
-                _ => inside.ElementAtOrDefault(_insidePage * InsideSlots + slot.Index),
+                _ => inside.FirstOrDefault(i => i.Cell == _insidePage * InsideSlots + slot.Index),
             };
             bool shown = slot.Where switch
             {
@@ -594,18 +596,19 @@ public partial class CharacterScreen : RetroScreen
             };
             slot.Control.Visible = shown;
             slot.Back.Texture = slot.Where == Where.Worn && slot.Item is null ? SlotArtFrame(FirstSilhouette + slot.Index) : SlotArtFrame(EmptyFrame);
-            slot.Icon.Texture = slot.Item is { } item ? ItemIcon(item.Rdff) : null;
-            slot.Count.Text = slot.Item is { Quantity: > 1 } many ? many.Quantity.ToString() : "";
+            // The picked item is on the pointer (HeldIcon): its place shows empty.
             bool picked = slot.Item is not null && _picked?.Item == slot.Item;
+            slot.Icon.Texture = slot.Item is { } item && !picked ? ItemIcon(item.Rdff) : null;
+            slot.Count.Text = slot.Item is { Quantity: > 1 } many && !picked ? many.Quantity.ToString() : "";
             bool cant = slot.Item is not null && member is not null && slot.Where != Where.Worn && !_world!.CanUse(member, slot.Item);
-            slot.Mark.Texture = picked ? SlotArtFrame(SelectedFrame) : cant ? SlotArtFrame(CantFrame) : null;
+            slot.Mark.Texture = !picked && cant ? SlotArtFrame(CantFrame) : null;
             slot.Mark.Modulate = cant && !picked ? new Color(1, 1, 1, 0.6f) : Colors.White;
         }
         UiWindowView items = _itemsPage.Window;
         bool stack = _picked is { } p && _world!.Stacks(p.Item.Record) && p.Item.Quantity > 1 && p.Holder == member;
         Enable(items.Button(SplitButton)!, stack);
         Enable(items.Button(DropButton)!, _picked is { } d && d.Holder == member);
-        Enable(items.Button(MoreButton)!, pack.Count > PackSlots);
+        Enable(items.Button(MoreButton)!, Pages(pack, PackSlots) > 1);
         items.Button(SellButton)!.Visible = _store is not null;
         if (_store is not null)
         {
@@ -918,30 +921,46 @@ public partial class CharacterScreen : RetroScreen
         {
             return null;
         }
+        int cell = _packPage * PackSlots + slot.Index;
         if (picked.Holder != member)
         {
             _picked = null;
-            return Take(picked.Item);
+            string? refused = Take(picked.Item);
+            if (refused is null && member.Items.Contains(picked.Item))
+            {
+                PlaceAt(Pack, picked.Item, cell);
+            }
+            return refused;
         }
         if (_offered.Remove(picked.Item))
         {
             _picked = null;
             _offer = null;
+            PlaceAt(Pack, picked.Item, cell);
             return null;
         }
+        _picked = null;
         if (picked.Item.Equipped)
         {
             picked.Item.Slot = Equipment.Pack;
-            _picked = null;
             Did?.Invoke($"{MemberName(_member)} takes off {ItemText.Name(_world, picked.Item)}");
-            return null;
         }
-        _picked = slot.Item is { } other ? (other, member) : null;
-        if (_picked is { } now)
-        {
-            ShowInfo(now.Item, member);
-        }
+        PlaceAt(Pack, picked.Item, cell);
         return null;
+    }
+
+    /// <summary>
+    /// Put <paramref name="item"/> in cell <paramref name="cell"/> of <paramref name="items"/>
+    /// (a pack's or a container's): what was there takes the item's old cell, or the first free one.
+    /// </summary>
+    private static void PlaceAt(List<Item> items, Item item, int cell)
+    {
+        if (items.FirstOrDefault(i => i != item && i.Cell == cell) is { } there)
+        {
+            there.Cell = item.Cell is int old && items.Contains(item) && items.All(i => i == item || i == there || i.Cell != old) ? old : null;
+        }
+        item.Cell = cell;
+        Equipment.Arrange(items);
     }
 
     private string? PutIn((Item Item, WorldObject Holder) picked, ItemSlot slot)
@@ -950,9 +969,11 @@ public partial class CharacterScreen : RetroScreen
         {
             return null;
         }
+        int cell = _insidePage * InsideSlots + slot.Index;
         if (picked.Holder == container)
         {
-            _picked = slot.Item is { } other ? (other, container) : null;
+            _picked = null;
+            PlaceAt(container.Items, picked.Item, cell);
             return null;
         }
         if (_store is not null)
@@ -963,6 +984,10 @@ public partial class CharacterScreen : RetroScreen
         if (!_world.MoveItem(picked.Holder, container, picked.Item))
         {
             return $"{container.Name} can't hold any more.";
+        }
+        if (container.Items.Contains(picked.Item))
+        {
+            PlaceAt(container.Items, picked.Item, cell);
         }
         Did?.Invoke($"{MemberName(_member)} puts {ItemText.Name(_world, picked.Item)} in {container.Name}");
         return null;
@@ -1026,9 +1051,16 @@ public partial class CharacterScreen : RetroScreen
         Refresh();
     }
 
+    /// <summary>The pages <paramref name="items"/>' cells take, at least one.</summary>
+    private static int Pages(IReadOnlyList<Item> items, int perPage) =>
+        Math.Max(1, items.Select(i => (i.Cell ?? 0) / perPage + 1).DefaultIfEmpty(1).Max());
+
+    /// <summary>The picked item's icon, for the pointer while it is held; null with nothing picked.</summary>
+    public Texture2D? HeldIcon => _picked is { } p ? ItemIcon(p.Item.Rdff) : null;
+
     private void TurnPack(int by)
     {
-        int pages = Math.Max(1, (Pack.Count + PackSlots - 1) / PackSlots);
+        int pages = Pages(Pack, PackSlots);
         _packPage = ((_packPage + by) % pages + pages) % pages;
         RefreshItems();
     }

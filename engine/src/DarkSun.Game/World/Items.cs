@@ -35,6 +35,13 @@ public sealed class Item
 
     public bool Equipped => Slot < Equipment.Slots;
 
+    /// <summary>
+    /// Its place in the pack or a container: page × 12 + slot (DSUN.EXE keeps
+    /// a backpack cell, 14–25, in record +0x11); null: the first free one
+    /// (<see cref="Equipment.Arrange"/>).
+    /// </summary>
+    public int? Cell { get; set; }
+
     /// <summary>Field 86, record +0x0E: charges (a wand's), which scripts read and set; at first the record's.</summary>
     public int Charges { get; set; }
 
@@ -48,14 +55,14 @@ public sealed class Item
         _ => 0,
     };
 
-    public ItemState Save() => new(Rdff, Quantity, Slot, Charges == Record.Charges ? null : Charges);
+    public ItemState Save() => new(Rdff, Quantity, Slot, Charges == Record.Charges ? null : Charges, Equipped ? null : Cell);
 }
 
 /// <summary>What came of <see cref="GameWorld.Equip"/>.</summary>
 public enum EquipResult { Worn, NotWearable, WrongClass, NoFreeSlot }
 
 /// <summary>An item as saved: its <c>RDFF</c> number, quantity and slot.</summary>
-public sealed record ItemState(int Rdff, int Quantity, int Slot, int? Charges = null);
+public sealed record ItemState(int Rdff, int Quantity, int Slot, int? Charges = null, int? Cell = null);
 
 /// <summary>
 /// Equipment slots (<c>6466:0854</c>): 14 slots, each taking items of one
@@ -72,6 +79,34 @@ public static class Equipment
 
     /// <summary>The most entries an inventory holds (<c>7372:0FEE</c> refuses past 0x4E).</summary>
     public const int Capacity = 0x4E;
+
+    /// <summary>
+    /// Give each of <paramref name="items"/> (a pack's, or a container's) a
+    /// cell of its own: one with a free cell keeps it, the others (none yet,
+    /// or one already taken) get the first free cells, in list order.
+    /// </summary>
+    public static void Arrange(IReadOnlyList<Item> items)
+    {
+        var taken = new HashSet<int>();
+        var unplaced = new List<Item>();
+        foreach (Item item in items)
+        {
+            if (item.Cell is int cell && cell >= 0 && taken.Add(cell))
+            {
+                continue;
+            }
+            unplaced.Add(item);
+        }
+        int next = 0;
+        foreach (Item item in unplaced)
+        {
+            while (!taken.Add(next))
+            {
+                next++;
+            }
+            item.Cell = next;
+        }
+    }
 
     /// <summary>Slot n takes items placed <c>Placements[n]</c>.</summary>
     public static IReadOnlyList<ItemPlacement> Placements { get; } =

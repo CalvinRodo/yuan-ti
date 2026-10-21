@@ -28,11 +28,18 @@ public static class Pointers
 
     /// <summary>
     /// The pointer of pointer mode 3 (<c>191F:0A99</c>: the held item's picture,
-    /// <c>4281:003E</c>): <paramref name="picture"/> of object
-    /// <paramref name="index"/>, aimed by its middle.
+    /// <c>4281:003E</c>), and of an item picked up in the inventory:
+    /// <paramref name="picture"/>, aimed by its middle. <paramref name="key"/>
+    /// tells pictures apart (<see cref="HeldObject"/>, <see cref="HeldItem"/>).
     /// </summary>
-    public static void ShowHeld(Window window, int index, Image picture) =>
-        Show(window, -2 - index, scale => Scaled(picture.Duplicate() as Image ?? picture, scale, centred: true));
+    public static void ShowHeld(Window window, int key, Image picture) =>
+        Show(window, key, scale => Scaled(picture.Duplicate() as Image ?? picture, scale, centred: true));
+
+    /// <summary>The key of map object <paramref name="index"/>'s picture as a pointer.</summary>
+    public static int HeldObject(int index) => -2 - index;
+
+    /// <summary>The key of item <c>RDFF</c> <paramref name="rdff"/>'s icon as a pointer.</summary>
+    public static int HeldItem(int rdff) => -100_000 - rdff;
 
     private static void Show(Window window, int key, Func<int, (Image, Vector2)?> load)
     {

@@ -23,13 +23,14 @@ public sealed partial class GameWorld
 
     /// <summary>A new item from item <c>RDFF</c> <paramref name="rdff"/>, or null if it isn't one.</summary>
     /// <summary>An item as saved (<see cref="Item.Save"/>), its charges included.</summary>
-    public Item? NewItem(ItemState s) => NewItem(s.Rdff, s.Quantity, s.Slot) is { } item
-        ? (s.Charges is int charges ? WithCharges(item, charges) : item)
-        : null;
-
-    private static Item WithCharges(Item item, int charges)
+    public Item? NewItem(ItemState s)
     {
-        item.Charges = charges;
+        if (NewItem(s.Rdff, s.Quantity, s.Slot) is not { } item)
+        {
+            return null;
+        }
+        item.Charges = s.Charges ?? item.Charges;
+        item.Cell = s.Cell;
         return item;
     }
 
@@ -409,6 +410,7 @@ public sealed partial class GameWorld
         }
         from.Items.Remove(item);
         item.Slot = Equipment.Pack;
+        item.Cell = null; // the first free place in its new holder, unless put somewhere
         to.Items.Add(item);
         return true;
     }

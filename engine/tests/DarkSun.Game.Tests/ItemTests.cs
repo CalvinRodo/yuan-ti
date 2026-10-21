@@ -144,6 +144,20 @@ public class ItemTests
     private static WorldObject TemplarOf(GameWorld w) => w.First(-Templar)!;
 
     [Fact]
+    public void PackItemsKeepTheirCellsAndTheRestFillTheGaps()
+    {
+        var (w, party) = World();
+        w.Give(3, -Torch, 0, GameWorld.None);
+        List<Item> pack = party[0].Items;
+        (pack[0].Cell, pack[1].Cell) = (7, 7); // the second one's cell is taken
+
+        Equipment.Arrange(pack);
+
+        Assert.Equal([7, 0, 1], pack.Select(i => i.Cell));
+        Assert.Equal(7, w.NewItem(pack[0].Save())!.Cell); // saved with the item
+    }
+
+    [Fact]
     public void GiveFromNobodyMakesItemsAndArrowsStack()
     {
         var (w, party) = World();

@@ -39,9 +39,14 @@ public partial class RegionView
     {
         bool overWindow = GetViewport().GuiGetHoveredControl() is not null || _character.IsOpen || _dialogueWindow.Visible;
         int icon = overWindow ? Pointers.Move : PointerIcon(GetGlobalMousePosition());
-        if (icon == Pointers.Held && _useWith is { Source.Frames: [var picture, ..] } held && TextureFor(picture)?.GetImage() is { } image)
+        if (_character.IsOpen && _character.Picked is { } picked && _character.HeldIcon?.GetImage() is { } carried)
         {
-            Pointers.ShowHeld(GetWindow(), held.Index, image);
+            // An item picked up in the inventory rides on the pointer until it is put down.
+            Pointers.ShowHeld(GetWindow(), Pointers.HeldItem(picked.Rdff), carried);
+        }
+        else if (icon == Pointers.Held && _useWith is { Source.Frames: [var picture, ..] } held && TextureFor(picture)?.GetImage() is { } image)
+        {
+            Pointers.ShowHeld(GetWindow(), Pointers.HeldObject(held.Index), image);
         }
         else
         {
