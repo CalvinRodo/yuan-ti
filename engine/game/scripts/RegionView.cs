@@ -892,6 +892,19 @@ public partial class RegionView : Node2D
         _selected = Math.Min(_selected, Math.Max(0, _party.Count - 1));
     }
 
+    /// <summary>
+    /// A walker's sprite, its hot spot on the feet. It is sorted a pixel above
+    /// them: DSUN.EXE draws row by row (<c>1DBD:0002</c>), a creature before the
+    /// walls of its own cell row (its y >> 4), but its feet are the cell's
+    /// bottom edge, which would sort as the next row and draw it over the
+    /// walls beside it (the slave pens' gate posts).
+    /// </summary>
+    private static void PlaceWalker(Sprite2D node, Walker walker)
+    {
+        node.Position = new Vector2(walker.Feet.X, walker.Feet.Y - 1);
+        node.Offset = new Vector2(-walker.Animator.HotX, -walker.Animator.HotY + 1);
+    }
+
     private void DrawMember(PartyMember member)
     {
         Walker walker = member.Walker;
@@ -899,8 +912,7 @@ public partial class RegionView : Node2D
         ImageFrame frame = member.Sprite.Frames[walker.Animator.Frame];
         member.Node.Texture = TextureFor(frame);
         member.Node.FlipH = walker.Animator.Mirrored;
-        member.Node.Position = new Vector2(walker.Feet.X, walker.Feet.Y);
-        member.Node.Offset = new Vector2(-walker.Animator.HotX, -walker.Animator.HotY);
+        PlaceWalker(member.Node, walker);
         Silhouette(member.Node);
     }
 
@@ -955,8 +967,7 @@ public partial class RegionView : Node2D
         node.Visible = !creature.Hidden && frame.Width > 0 && frame.Height > 0;
         node.Texture = TextureFor(frame);
         node.FlipH = walker.Animator.Mirrored;
-        node.Position = new Vector2(walker.Feet.X, walker.Feet.Y);
-        node.Offset = new Vector2(-walker.Animator.HotX, -walker.Animator.HotY);
+        PlaceWalker(node, walker);
         Silhouette(node);
     }
 
