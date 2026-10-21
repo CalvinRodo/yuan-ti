@@ -84,7 +84,7 @@ public class RequestTests
         var host = new WorldGplHost { Map = world, CinematicRequested = n => (played = n) == 100, MoveCursorRequested = () => cursor = true };
         var scripts = new Scripts();
         scripts.Files[(1, GplFileKind.Gpl)] = GplAssembler.Assemble("""
-              REQUEST(15, 0, 0, 0)
+              REQUEST(MOVE_CURSOR, 0, 0, 0)
               REQUEST(6, 0, 100, 0)
               gnum[0] = 1
               REQUEST(6, 0, 300, 0)
@@ -97,6 +97,7 @@ public class RequestTests
         GplRunResult run = m.Run(new GplEntry(1, 0));
 
         Assert.True(cursor);
+        Assert.Equal("REQUEST(MOVE_CURSOR=15, 0, 0, 0)", host.Log[0].Command.ToString()); // the script log
         Assert.True(run.Suspended); // the cinematic plays inside the request
         Assert.Equal(0, Gnum(m, 0));
         run = m.Resume();

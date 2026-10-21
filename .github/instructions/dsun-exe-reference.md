@@ -769,7 +769,12 @@ From the handlers (2026-10-18); the engine's model is `DarkSun.Game.World`.
   (x, y) (`7372:0A44`) and returns how many it made; each copy becomes "other"
   (`gname[8]`, stored in `47B7:0003` = `3781:0363`).
 * **REQUEST(code, who, a, b)** dispatches at `87B3:0000`, with a jump table at
-  `87B3:0177`:
+  `87B3:0177`. The engine names each code (`GplRequests`: 1 `REST_RAISE`,
+  2 `SET_DOOR`, 3 `SKILL_CHECK`, 4 `REST`, 5 `TOGGLE_STATE`, 6 `CINEMATIC`,
+  7 `TRAP`, 8 `RANDOM_MONSTER`, 9 `TRANSFORM`, 10 / 11 `BLOCK_CELL` /
+  `UNBLOCK_CELL`, 12 / 13 `BLOCK_SIGHT` / `UNBLOCK_SIGHT`, 14 `ARENA_BOUT`,
+  15 `MOVE_CURSOR`, 16 `MUSIC_LEVEL`, 17 `PLACE_OBJECT`, 18 `SET_ALLEGIANCE`,
+  19 `GAME_OVER`, 20 `COUNT_CREATURES`):
 
   | Code | Effect |
   |---|---|

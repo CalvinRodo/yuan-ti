@@ -14,7 +14,9 @@ public sealed record GplCommand(
 
     public override string ToString()
     {
-        IEnumerable<string> args = Values.Select((v, i) => Texts[i] is { } t ? $"\"{t}\"" : v.ToString());
+        IEnumerable<string> args = Values.Select((v, i) => Texts[i] is { } t ? $"\"{t}\""
+            : i == 0 && Op == GplOpcodes.Request && GplRequests.Name(v) is { } name ? $"{name}={v}"
+            : v.ToString());
         return Values.Count == 0 ? Mnemonic : $"{Mnemonic}({string.Join(", ", args)})";
     }
 }

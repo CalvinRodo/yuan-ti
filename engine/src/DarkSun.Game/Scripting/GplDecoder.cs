@@ -166,10 +166,17 @@ public sealed class GplDecoder
         int other = style.IsSource && GplOpcodes.EntryArguments.TryGetValue(i.Op, out var entry) ? entry.Address : -1;
         IEnumerable<string> args = spec.Select((kind, n) =>
             n == other ? RenderAddress(i.Args[n], GplStyle.Source)
+            : n == 0 && i.Op == GplOpcodes.Request && RequestName(i.Args[0], style) is { } name ? name
             : kind == 'A' ? RenderAddress(i.Args[n], style)
             : Render(i.Args[n], style, GplOpcodes.WordArguments.Contains((i.Op, n))));
         return $"{i.Mnemonic}({string.Join(", ", args)})";
     }
+
+    /// <summary>A constant REQUEST code's name (<see cref="GplRequests"/>); in source, only if the number is stored as the assembler would store the name.</summary>
+    private static string? RequestName(GplExpression e, GplStyle style) =>
+        e.Items is [GplTerm { Operand: GplNumber n }] && (!style.IsSource || n.Form == GplAssembler.FormFor(n.Value, word: false))
+            ? GplRequests.Name((int)n.Value)
+            : null;
 
     private static string RenderAddress(GplExpression e, GplStyle style)
     {

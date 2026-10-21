@@ -26,6 +26,8 @@ public sealed class GplAssemblyException(int line, string message) : Exception(l
 /// <c>TITLE(expr)</c>, <c>ENTRY(text=…, func=…, cond=…)</c> lines,
 /// <c>MENU_END</c>. The listing's <c>MENU(title=…)</c> works too.</item>
 /// <item>Strings take <c>\"</c>, <c>\\</c> and <c>\xNN</c>; <c>;</c> starts a comment.</item>
+/// <item>A REQUEST name (<see cref="GplRequests"/>) is its code: <c>REQUEST(SET_DOOR, -98, 0, 0)</c>
+/// is <c>REQUEST(2, -98, 0, 0)</c>.</item>
 /// </list>
 /// Numbers are stored as the original scripts store them: int8 if they fit,
 /// else a 15-bit word, int16 or int32, except that file numbers, menu
@@ -749,6 +751,11 @@ public static class GplAssembler
             w.Bytes.AddRange(ObjectRef(c));
             return null;
         }
+        if (RequestCode(c) is int request)
+        {
+            Number(w, request, FormFor(request, word));
+            return null;
+        }
         var (type, index) = Variable(c);
         if (index < 0x100)
         {
@@ -761,6 +768,18 @@ public static class GplAssembler
             Word(w, index);
         }
         return null;
+    }
+
+    /// <summary>A REQUEST name (<see cref="GplRequests"/>) at <paramref name="c"/>, taken, as its code.</summary>
+    private static int? RequestCode(Cursor c)
+    {
+        var probe = new Cursor(c.Text, c.Position);
+        if (!char.IsAsciiLetterUpper(probe.Peek()) || !GplRequests.TryCode(probe.Identifier(), out int code))
+        {
+            return null;
+        }
+        c.Position = probe.Position;
+        return code;
     }
 
     private static (GplVarType Type, int Index) Variable(Cursor c)

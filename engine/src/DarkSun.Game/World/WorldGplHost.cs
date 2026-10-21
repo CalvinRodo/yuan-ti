@@ -286,13 +286,16 @@ public sealed partial class WorldGplHost : DialogueGplHost
         return v[0] == WholeParty ? 1 : null;
     }
 
-    /// <summary>REQUEST(code, who, a, b): <c>87B3:0000</c>; see <c>dsun-exe-reference.md</c> §4.</summary>
+    /// <summary>
+    /// REQUEST(code, who, a, b): <c>87B3:0000</c>; see <c>dsun-exe-reference.md</c> §4. The code is
+    /// looked up by name in <see cref="GplRequests"/>; the numbers are written only there.
+    /// </summary>
     private int? Request(GplMachine machine, GameWorld world, IReadOnlyList<int> v)
     {
         (int code, int who, int a, int b) = (v[0], v[1], v[2], v[3]);
-        switch (code)
+        switch (GplRequests.Name(code))
         {
-            case 14:
+            case "ARENA_BOUT":
                 // 87B3:0FE9: the bout is fought inside the request; the script goes on once it is over.
                 if (machine.TryTakeAnswer(out _))
                 {
@@ -305,31 +308,31 @@ public sealed partial class WorldGplHost : DialogueGplHost
                     machine.Suspend();
                 }
                 break;
-            case 2: // 87B3: 6BB8:0D13(object, a, 1) for each match: open (0) or close (1) a door
+            case "SET_DOOR": // 87B3: 6BB8:0D13(object, a, 1) for each match: open (0) or close (1) a door
                 foreach (WorldObject door in world.Select(who).ToList())
                 {
                     world.SetDoor(door, a, force: true);
                 }
                 break;
-            case 3: return SkillCheck(machine, world, who, a, b);
-            case 5: world.ToggleState(who); break;
-            case 7 when who < 0: return SetOffTrap(machine, world, who, a, b);
-            case 10: world.SetCellFlags(a, b, CellFlags.Blocked, true); break;
-            case 11: world.SetCellFlags(a, b, CellFlags.Blocked, false); break;
-            case 12: world.SetCellFlags(a, b, CellFlags.BlocksSight, true); break;
-            case 13: world.SetCellFlags(a, b, CellFlags.BlocksSight, false); break;
-            case 17 when who < 0: world.Show(who, a, b); break;
-            case 18: world.SetAllegiance(who, a); break;
-            case 1: world.Rest(raiseDead: true); break; // 87B3:073D(1): "THE PARTY RESTS"
-            case 4: world.Rest(raiseDead: false); break;
-            case 9: world.Transform(who, a, b != 0); break;
-            case 16 when a != MusicLevel:
+            case "SKILL_CHECK": return SkillCheck(machine, world, who, a, b);
+            case "TOGGLE_STATE": world.ToggleState(who); break;
+            case "TRAP" when who < 0: return SetOffTrap(machine, world, who, a, b);
+            case "BLOCK_CELL": world.SetCellFlags(a, b, CellFlags.Blocked, true); break;
+            case "UNBLOCK_CELL": world.SetCellFlags(a, b, CellFlags.Blocked, false); break;
+            case "BLOCK_SIGHT": world.SetCellFlags(a, b, CellFlags.BlocksSight, true); break;
+            case "UNBLOCK_SIGHT": world.SetCellFlags(a, b, CellFlags.BlocksSight, false); break;
+            case "PLACE_OBJECT" when who < 0: world.Show(who, a, b); break;
+            case "SET_ALLEGIANCE": world.SetAllegiance(who, a); break;
+            case "REST_RAISE": world.Rest(raiseDead: true); break; // 87B3:073D(1): "THE PARTY RESTS"
+            case "REST": world.Rest(raiseDead: false); break;
+            case "TRANSFORM": world.Transform(who, a, b != 0); break;
+            case "MUSIC_LEVEL" when a != MusicLevel:
                 MusicLevel = a;
                 MusicLevelChanged?.Invoke(a);
                 break;
-            case 20: return world.CountCreatures(a);
-            case 8: return RandomMonster(machine, world, a, b);
-            case 6:
+            case "COUNT_CREATURES": return world.CountCreatures(a);
+            case "RANDOM_MONSTER": return RandomMonster(machine, world, a, b);
+            case "CINEMATIC":
                 // 87B3:0AC7 → 60B9:042E: cinematic a, played inside the request; the script goes on after it.
                 if (machine.TryTakeAnswer(out _))
                 {
@@ -340,9 +343,9 @@ public sealed partial class WorldGplHost : DialogueGplHost
                     machine.Suspend();
                 }
                 break;
-            case 15: MoveCursorRequested?.Invoke(); break; // 1587:2927(1): DS:11B8 = 1, the move pointer
-            case 19: GameOverRequested = true; break;       // DS:116A = 1: the main loop ends (1512), back to the start
-            // Not traced: 7 and 17 for an object that isn't a name (no shipped script does either).
+            case "MOVE_CURSOR": MoveCursorRequested?.Invoke(); break; // 1587:2927(1): DS:11B8 = 1, the move pointer
+            case "GAME_OVER": GameOverRequested = true; break;        // DS:116A = 1: the main loop ends (1512), back to the start
+            // Not traced: TRAP and PLACE_OBJECT for an object that isn't a name (no shipped script does either).
             default: break;
         }
         return null;

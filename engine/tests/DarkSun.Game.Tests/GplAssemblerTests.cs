@@ -74,6 +74,21 @@ public class GplAssemblerTests
     }
 
     [Fact]
+    public void RequestCodesHaveNames()
+    {
+        byte[] code = GplAssembler.Assemble("REQUEST(SET_DOOR, -98, 0, 0)");
+
+        Assert.Equal(GplAssembler.Assemble("REQUEST(2, -98, 0, 0)"), code);
+        Assert.EndsWith("REQUEST(SET_DOOR, -98, 0, 0)", Assert.Single(GplDecoder.Listing(code, FieldTypes)));
+        string source = GplAssembler.Disassemble(code, FieldTypes);
+        Assert.Contains("REQUEST(SET_DOOR, -98, 0, 0)", source);
+        Assert.Equal(code, GplAssembler.Assemble(source));
+        // A code without a name, or stored in a longer form than the name would be, stays a number.
+        Assert.Contains("REQUEST(99, 0, 0, 0)", GplAssembler.Disassemble(GplAssembler.Assemble("REQUEST(99, 0, 0, 0)"), FieldTypes));
+        Assert.Contains("REQUEST(2:w, 0, 0, 0)", GplAssembler.Disassemble(GplAssembler.Assemble("REQUEST(2:w, 0, 0, 0)"), FieldTypes));
+    }
+
+    [Fact]
     public void OrgKeepsEntryPointsInPlace()
     {
         byte[] code = GplAssembler.Assemble("END_FUNCTION\n.org 0x0004\nentry: EXIT_GPL\nJUMP(@entry)");
@@ -87,6 +102,7 @@ public class GplAssemblerTests
     [Theory]
     [InlineData("EXIT_GPL\nIF(@nowhere)", 2, "no label nowhere")]
     [InlineData("FROB(1)", 1, "unknown command 'FROB'")]
+    [InlineData("REQUEST(OPEN_SESAME, 0, 0, 0)", 1, "unknown operand 'OPEN_SESAME'")]
     [InlineData("GOXY(1, 2)", 1, "expected ','")]
     [InlineData("lnum[1] == 2", 1, "expected '='")]
     [InlineData("MENU\n  TITLE(\"x\")", 1, "MENU without MENU_END")]

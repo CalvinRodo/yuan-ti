@@ -155,7 +155,10 @@ the ending's cinematic over the map, the script waiting until it is over (the
 pictures 200 and 300 aren't decoded, so those go straight on); 8 picks a random
 monster for the region from `MONR` and how many to make; 15 goes back to the
 move pointer; 19 is a game over (the party-has-fallen window, where DSUN.EXE
-goes straight back to the start). F2 shows the script log, F6 the script debugger (see Mods).
+goes straight back to the start). Each code has a name in `GplRequests`
+(`SET_DOOR`, `RANDOM_MONSTER`, …), the only place the numbers are written:
+the host dispatches by name, and the script log (`REQUEST(SET_DOOR=2, …)`)
+and the debugger show it. F2 shows the script log, F6 the script debugger (see Mods).
 Items: party members, creatures and containers carry items that scripts give, take, drop and search
 for; Get picks an item up; a script's
 SHOP opens a store (below) and waits for it to close; the party's money
@@ -299,7 +302,8 @@ other scripts enter the file at (triggers, CALL_GLOBAL), and strings with
 `\"` and `\xNN` escapes; every shipped script assembles back to the same
 bytes (`make engine-gpl-check`). The assembler (`GplAssembler`) also takes
 `;` comments, `.bytes`, menus as `MENU` / `TITLE(…)` / `ENTRY(…)` / `MENU_END`,
-and `:w` `:b` `:s` `:l` suffixes to choose how a number is stored. If an edit
+`:w` `:b` `:s` `:l` suffixes to choose how a number is stored, and REQUEST
+names for their codes (`REQUEST(SET_DOOR, -98, 0, 0)`; exported source uses them). If an edit
 makes a function too long for the next `.org`, move the extra code to the
 end of the file and `JUMP` to it; the error says by how much.
 
