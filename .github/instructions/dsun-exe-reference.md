@@ -791,7 +791,7 @@ From the handlers (2026-10-18); the engine's model is `DarkSun.Game.World`.
   | 17 | if who < 0, place `OJFF` −who at cell (a, b) (`896E:0E2E`) |
   | 18 | set the allegiance (combat record +0x1D) of matching creatures (index ≥ 4, kind 2) |
   | 19 | `DS:116A` = 1: the main loop (`1512`) ends and the game starts again from the start-up screen, as `612E:3060` does when the whole party has fallen (which also shows `85FE:02C9`'s window). GPL 20's riddle, answered wrong |
-  | 1 / 4 | the party rests (`073D(1, a)` / `073D(0, a)`): "THE PARTY RESTS"; members with status 2 or 3 (with 1: any) get status 1, then healing and spells (not traced further) |
+  | 1 / 4 | the party rests (`073D(1, a)` / `073D(0, a)`): "THE PARTY RESTS"; members with status 2 or 3 (with 1: any) get status 1, then healing and spells (not traced further); a passes as PASS_TIME a would (`8053:0A02(a × 60)`). In combat: "NO RESTING DURING COMBAT". USE on a fire pit (`6BB8:0B56`: object +0x1A = `OJFF` 1307 or 1310, six in regions 3, 26, 28, 30 and 41) rests the party with `073D(0, 8)`, before its use trigger runs |
   | 2 | a door: `6BB8:0D13(object, a, 1)` (see Doors) |
   | 3 | a thief skill check, skill a, situation b (13 uses: open locks, find/remove traps, climb walls, pick pockets, hear noise; see "Thief skills"). For the party (32766) `028D` means to pick the best member but starts from 0 with an unsigned "keep the lower" test, so it always rolls for slot 0 |
   | 6 | play cinematic a (`0AC7` → `60B9:042E`; 1000 instead when `DS:1162` is 0): 100 the ending (GPL 62), 200 and 300 a `CMAT` / `CPAL` picture (GPL 177, GPL 62); the script goes on after it |

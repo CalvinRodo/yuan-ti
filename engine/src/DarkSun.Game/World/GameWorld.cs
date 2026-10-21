@@ -30,7 +30,7 @@ public static class Doors
 }
 
 /// <summary>Using an object: whether a door was closed before, and whether anything moved or toggled.</summary>
-public sealed record DoorUse(WorldObject Object, bool WasClosed, bool Toggled);
+public sealed record DoorUse(WorldObject Object, bool WasClosed, bool Toggled, bool Rested = false);
 
 /// <summary>
 /// A creature's order (<c>1A0A:03CA</c>, table <c>3972:08AA</c>): what it is
@@ -818,8 +818,15 @@ public sealed partial class GameWorld
         return true;
     }
 
+    /// <summary>The fire pits (<c>OJFF</c> 1307, 1310): using one rests the party (<c>6BB8:0B56</c>).</summary>
+    public static bool IsRestingPlace(WorldObject obj) => obj.Source?.Ojff is 1307 or 1310;
+
+    /// <summary>The time a rest at a fire pit takes (<c>87B3:073D(0, 8)</c>), in PASS_TIME's units.</summary>
+    public const int FirePitRest = 8;
+
     /// <summary>
-    /// Use an object (<c>6BB8:0B56</c>): a door opens or closes; an object
+    /// Use an object (<c>6BB8:0B56</c>): a fire pit rests the party
+    /// (<see cref="IsRestingPlace"/>); a door opens or closes; an object
     /// whose item type has flag 1 (<c>IT1R</c> +0x0F) toggles its second state,
     /// as <c>REQUEST(5)</c>. Returns what the game would say when a door stays
     /// as it was (check it after the object's use trigger has run, as DSUN.EXE
@@ -829,12 +836,17 @@ public sealed partial class GameWorld
     {
         if (!obj.IsDoor)
         {
+            bool rested = IsRestingPlace(obj);
+            if (rested)
+            {
+                Rest(raiseDead: false, FirePitRest);
+            }
             if (obj.Item is { } item && Items.TypeOf(item) is { } type && (type.Kind & ItemTypeFlags.Usable) != 0)
             {
                 ToggleState(obj);
-                return new DoorUse(obj, false, Toggled: true);
+                return new DoorUse(obj, false, Toggled: true, rested);
             }
-            return new DoorUse(obj, false, Toggled: false);
+            return new DoorUse(obj, false, Toggled: false, rested);
         }
         bool wasClosed = (obj.DoorFlags & Doors.Closed) != 0;
         bool moved = SetDoor(obj, wasClosed ? 0 : Doors.Closed, force: false);

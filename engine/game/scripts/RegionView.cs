@@ -573,6 +573,8 @@ public partial class RegionView : Node2D
             {
                 DarkSun.Game.Magic.Spellcasting.Rest(c);
             }
+            // 87B3:073D says so (5F6D:05DE, as the doors' messages), from a fire pit or a script.
+            Session.ScriptHost.Dialogue.Append("THE PARTY RESTS", 98);
         };
         // Back in a region visited before: as the party left it (before its script runs, as in DSUN.EXE).
         IReadOnlyList<WorldObject>? restored = _checking ? null : Session.Regions.Recall(_world);
@@ -1668,13 +1670,14 @@ public partial class RegionView : Node2D
             return false;
         }
         DoorUse use = _world.UseObject(obj);
-        if (!obj.IsDoor && !use.Toggled)
+        if (!obj.IsDoor && !use.Toggled && !use.Rested)
         {
             return false;
         }
         AddScriptLine(obj.IsDoor
             ? $"use {Describe(obj)}: {(use.Toggled ? (use.WasClosed ? "opens" : "closes") : "stays " + (use.WasClosed ? "closed" : "open"))}"
-            : $"use {Describe(obj)}: toggled");
+            : use.Rested ? $"use {Describe(obj)}: the party rests" : $"use {Describe(obj)}: toggled");
+        _restsTaken += use.Rested ? 1 : 0;
         if (Session.Scripts.OnObject(GplTriggerList.Use, actor, obj.Index) is { } run)
         {
             ReportScript($"use {Describe(obj)}", run);
@@ -2981,6 +2984,9 @@ public partial class RegionView : Node2D
     /// done (without walking) to every object that offers it; prints the
     /// counts and how many scripts ran or stopped with an error.
     /// </summary>
+    /// <summary>Rests taken by using a fire pit (counted for the verbs check).</summary>
+    private int _restsTaken;
+
     private void CheckVerbs()
     {
         IReadOnlyList<string> files = Session.Install!.RegionFiles;
@@ -3009,7 +3015,8 @@ public partial class RegionView : Node2D
             }
         }
         GD.Print($"verbs: {objects} objects in {files.Count} regions; offered "
-            + string.Join(", ", offered.Select(o => $"{o.Key} {o.Value}")) + $"; {_scriptRuns} script runs, {_scriptErrors} stopped with an error");
+            + string.Join(", ", offered.Select(o => $"{o.Key} {o.Value}")) + $"; {_scriptRuns} script runs, {_scriptErrors} stopped with an error; "
+            + $"{_restsTaken} rests at fire pits");
         GetTree().Quit();
     }
 

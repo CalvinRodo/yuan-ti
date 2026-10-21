@@ -323,8 +323,8 @@ public sealed partial class WorldGplHost : DialogueGplHost
             case "UNBLOCK_SIGHT": world.SetCellFlags(a, b, CellFlags.BlocksSight, false); break;
             case "PLACE_OBJECT" when who < 0: world.Show(who, a, b); break;
             case "SET_ALLEGIANCE": world.SetAllegiance(who, a); break;
-            case "REST_RAISE": world.Rest(raiseDead: true); break; // 87B3:073D(1): "THE PARTY RESTS"
-            case "REST": world.Rest(raiseDead: false); break;
+            case "REST_RAISE": world.Rest(raiseDead: true, a); break; // 87B3:073D(1, a): "THE PARTY RESTS"
+            case "REST": world.Rest(raiseDead: false, a); break;
             case "TRANSFORM": world.Transform(who, a, b != 0); break;
             case "MUSIC_LEVEL" when a != MusicLevel:
                 MusicLevel = a;

@@ -11,7 +11,7 @@ namespace DarkSun.Game.Tests;
 public class ItemTests
 {
     private const int Width = 20, Height = 10;
-    private const int Templar = 100, Torch = 200, Arrows = 300, Boots = 400;
+    private const int Templar = 100, Torch = 200, Arrows = 300, Boots = 400, FirePit = 1307;
 
     private sealed class Resources : IResourceSource
     {
@@ -130,6 +130,7 @@ public class ItemTests
         [
             new(0, Templar, 10 * 16 + 8, 6 * 16 - 1, 0, 0, false, [Frame], 0),
             new(1, Torch, 2 * 16 + 8, 3 * 16 - 1, 0, 0, false, [Frame], 0),
+            new(2, FirePit, 6 * 16 + 8, 3 * 16 - 1, 0, 0, false, [Frame], 0),
         ];
         var party = Enumerable.Range(0, GameWorld.PartySize).Select(_ => new PartyMemberState()).ToList();
         var world = new GameWorld(Region.Create(5, Width, Height, new byte[Width * Height], objects), r, party: party);
@@ -155,6 +156,25 @@ public class ItemTests
 
         Assert.Equal([7, 0, 1], pack.Select(i => i.Cell));
         Assert.Equal(7, w.NewItem(pack[0].Save())!.Cell); // saved with the item
+    }
+
+    [Fact]
+    public void UsingAFirePitRestsTheParty()
+    {
+        var (w, party) = World();
+        WorldObject pit = w.First(-FirePit)!;
+        party[0].Vitals.MaxHp = 20;
+        party[0].Vitals.Hp = 5;
+        int rested = 0;
+        w.Rested += () => rested++;
+        long before = w.Clock;
+
+        DoorUse use = w.UseObject(pit);
+
+        Assert.True(use.Rested);
+        Assert.Equal((20, 1), (party[0].Vitals.Hp, rested));
+        Assert.Equal(8 * 60, w.Clock - before); // 87B3:073D(0, 8): PASS_TIME 8
+        Assert.False(w.UseObject(w.First(-Torch)!).Rested);
     }
 
     [Fact]

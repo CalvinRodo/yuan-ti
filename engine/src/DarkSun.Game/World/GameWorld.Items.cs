@@ -577,16 +577,18 @@ public sealed partial class GameWorld
         }
     }
 
-    /// <summary>
-    /// <c>REQUEST(1)</c> / <c>REQUEST(4)</c> (<c>87B3:073D</c>): the party
-    /// rests. Members who are down (status 2 or 3) get up; with
-    /// <paramref name="raiseDead"/> (REQUEST 1) the dead too. Those standing
-    /// are healed to full (the original's spell and healing details aren't traced).
-    /// </summary>
     /// <summary>The party has rested (<see cref="Rest"/>): spells and psionic strength come back.</summary>
     public event Action? Rested;
 
-    public void Rest(bool raiseDead)
+    /// <summary>
+    /// <c>REQUEST(1)</c> / <c>REQUEST(4)</c> and the fire pits (<c>87B3:073D(raise, time)</c>):
+    /// the party rests. Members who are down (status 2 or 3) get up; with
+    /// <paramref name="raiseDead"/> (REQUEST 1) the dead too. Those standing
+    /// are healed to full (the original's spell and healing details aren't
+    /// traced). <paramref name="time"/> passes as PASS_TIME's would
+    /// (<c>8053:0A02(time × 60)</c>).
+    /// </summary>
+    public void Rest(bool raiseDead, int time = 0)
     {
         foreach (WorldObject member in Party)
         {
@@ -600,6 +602,7 @@ public sealed partial class GameWorld
                 v.Hp = v.MaxHp;
             }
         }
+        PassTime(time * 60);
         Rested?.Invoke();
     }
 

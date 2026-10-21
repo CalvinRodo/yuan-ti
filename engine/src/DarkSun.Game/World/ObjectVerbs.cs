@@ -38,7 +38,7 @@ public static class ObjectVerbs
         {
             verbs.Add(Verb.Get);
         }
-        if (door || type is { Kind: var kind } && (kind & ItemTypeFlags.Usable) != 0 || Has(GplTriggerList.Use))
+        if (door || type is { Kind: var kind } && (kind & ItemTypeFlags.Usable) != 0 || Has(GplTriggerList.Use) || GameWorld.IsRestingPlace(obj))
         {
             verbs.Add(Verb.Use);
         }
