@@ -56,6 +56,33 @@ public sealed partial class Battle
     private bool OnSide(Combatant caster, Cell at) => At(at) is { } t && !caster.IsEnemyOf(t);
 
     /// <summary>
+    /// Whether the player may cast <paramref name="e"/> at <paramref name="at"/>
+    /// (<c>8BEB:0584</c>, the spell pointer). Self effects always. One-creature
+    /// effects (<c>612E:3283</c>) need a creature there, within range of its
+    /// nearest cell, then in sight; others need the cell in sight, then within
+    /// range, a cone's range being its size (<c>8BEB:086F</c>). Not traced: the
+    /// allegiance mask (<c>8BEB:0B43</c>, −2) and a wall's other end (−3).
+    /// </summary>
+    public SpellAim Aim(Combatant caster, SpellEffect e, int level, Cell at)
+    {
+        if (e.Target is 7 or 8)
+        {
+            return SpellAim.Ok;
+        }
+        if (e.SingleTarget)
+        {
+            return At(at) is not { } t ? SpellAim.NoTarget
+                : Distance(caster, t) > e.RangeCells(level) ? SpellAim.OutOfRange
+                : !InSight(caster, t) ? SpellAim.NoLineOfSight
+                : SpellAim.Ok;
+        }
+        int range = e.Target == 6 ? Math.Max(1, Spells.AreaOf(e, level) / 16) : e.RangeCells(level);
+        return !InSight(caster.Cell, at) ? SpellAim.NoLineOfSight
+            : Distance(caster.Cell, at) > range ? SpellAim.OutOfRange
+            : SpellAim.Ok;
+    }
+
+    /// <summary>
     /// Who an effect cast at <paramref name="at"/> reaches (<c>8BEB:0000</c>):
     /// the caster for self spells; one creature for single-target ones;
     /// otherwise everyone its template's circle, cone or line covers and the

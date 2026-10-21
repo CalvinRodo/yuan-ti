@@ -121,6 +121,28 @@ public class CombatEffectsTests
     }
 
     [Fact]
+    public void ThePlayersSpellPointerNeedsATargetInRangeAndInSight()
+    {
+        Combatant mage = Fighter("mage", 1, 10, 10), orc = Fighter("orc", 2, 20, 10), far = Fighter("far", 2, 27, 12);
+        Battle open = Started(new ScriptedDice(), null, mage, orc, far);
+        Battle walled = Started(new ScriptedDice(), new WalledField(new Cell(15, 10)), mage, orc);
+
+        // 32, one creature within 15 cells (60 × 4 sixteenths); 612E:3283.
+        Assert.Equal(SpellAim.Ok, open.Aim(mage, Spell(32), 1, orc.Cell));
+        Assert.Equal(SpellAim.NoTarget, open.Aim(mage, Spell(32), 1, new Cell(12, 10)));
+        Assert.Equal(SpellAim.OutOfRange, open.Aim(mage, Spell(32), 1, far.Cell));
+        Assert.Equal(SpellAim.NoLineOfSight, walled.Aim(mage, Spell(32), 1, orc.Cell));
+        // 8, a circle within 30 cells: any cell in sight.
+        Assert.Equal(SpellAim.Ok, open.Aim(mage, Spell(8), 1, new Cell(14, 10)));
+        Assert.Equal(SpellAim.NoLineOfSight, walled.Aim(mage, Spell(8), 1, new Cell(17, 10)));
+        // Burning Hands, a cone: its range is its size, 40 sixteenths (8BEB:086F), not its record's 10 cells.
+        Assert.Equal(SpellAim.Ok, open.Aim(mage, Spell(2), 1, new Cell(12, 10)));
+        Assert.Equal(SpellAim.OutOfRange, open.Aim(mage, Spell(2), 1, new Cell(14, 10)));
+        // Self spells go anywhere.
+        Assert.Equal(SpellAim.Ok, walled.Aim(mage, Spell(10), 1, new Cell(29, 29)));
+    }
+
+    [Fact]
     public void AWallOfStoneBlocksMovementAndSight()
     {
         Combatant mage = Fighter("mage", 1, 10, 10), orc = Fighter("orc", 2, 20, 10);

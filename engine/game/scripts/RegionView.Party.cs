@@ -129,7 +129,36 @@ public partial class RegionView
             {
                 problems.Add("no player turn for the combat movement check");
             }
+            CheckRangedCast(battle);
         }
+
+        // CAST, then a click on an enemy in range and sight: the spell is cast from where the member stands.
+        void CheckRangedCast(Battle battle)
+        {
+            const int Spell = 32; // one creature, 15 cells
+            for (int tick = 0; tick < 10_000 && InCombat && PlayerTurn is null; tick++)
+            {
+                Step(1);
+            }
+            SpellEffect e = battle.Spells.Effect(Spell)!;
+            if (PlayerTurn is not { } player)
+            {
+                problems.Add("no player turn for the cast check");
+                return;
+            }
+            if (battle.Combatants.FirstOrDefault(t => player.IsEnemyOf(t) && t.Alive && battle.Aim(player, e, player.Level, t.Cell) == SpellAim.Ok) is not { } target)
+            {
+                problems.Add("no enemy in range and sight for the cast check");
+                return;
+            }
+            player.Spells.Add(Spell);
+            Cell from = player.Cell;
+            ChooseCast(Spell);
+            ClickCell(target.Cell);
+            Expect(!player.Spells.Contains(Spell) && player.Cell == from && battle.Current != player,
+                $"a ranged spell clicked on an enemy {Battle.Distance(player, target)} cells away is cast from where the member stands");
+        }
+
         foreach (string problem in problems)
         {
             GD.Print($"  PROBLEM: {problem}");

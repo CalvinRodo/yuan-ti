@@ -210,6 +210,9 @@ public sealed record TargetFilter(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] TargetSide Side = TargetSide.Any,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool NoEnemyBeside = false);
 
+/// <summary>Whether a spell can be cast at a cell (<see cref="Battle.Aim"/>; <c>8BEB:0584</c> returns −1, −5, −4).</summary>
+public enum SpellAim { Ok, NoTarget, OutOfRange, NoLineOfSight }
+
 /// <summary>How a save against an effect goes, regardless of the roll.</summary>
 public enum SaveOutcome { Rolled, Fails, Succeeds }
 

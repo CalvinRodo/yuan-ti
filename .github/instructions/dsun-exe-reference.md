@@ -1602,6 +1602,16 @@ These are AD&D 2nd edition's, but 18 has no percentile strength (+2 to hit,
   effect 195 and any fire (+0x13 & 2) remove the field objects in the same
   area (`8BEB:0000` with its last argument 1, `7D80:2368`/`2485`/`269C`;
   fire only those with template +2 & 0x40, `2267:051C`).
+* **The spell pointer** (`8BEB:0584(caster, spell, &x, &y, &x2, &y2)`, from
+  the hover code `8B7D:00AB`): the range is `8BEB:07F3`, a cone's (target 6)
+  its size `8BEB:086F`. Targets 3, 4, 5, 7 and 8 go to `612E:3283`: the
+  object at the point must be a creature (−1), of the allegiance mask
+  `8BEB:0B43` (−2), within range ÷ 16 of it (`1A0A:2BA5`, −5), and in sight
+  (`0898:00A4`, −4). Otherwise the point (and a wall's other end) must be in
+  sight (−4), within range (`1A0A:2DE6` in sixteenths, −5), and a wall no
+  longer than its size (−3). The engine's `Battle.Aim`. The map's click
+  handler (`1587:06D8`…) says "TOO FAR AWAY" (`DS:0BEB`, over 20 cells) and
+  "NO LINE OF SIGHT" (`DS:0BF8`) for a move in combat.
 * Casting needs the caster active ("ONLY ACTIVE CHAR CAN CAST"); being hit
   interrupts it ("YOU WERE HIT"). The memorized spells per level are
   `DS:4B08` (wizard) and `DS:4B11` (priest), 0x1E bytes per character.

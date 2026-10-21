@@ -621,10 +621,9 @@ public partial class RegionView
             {
                 return "";
             }
-            int range = e.RangeCells(c.Level);
-            if (Battle.Distance(c.Cell, cell) > range)
+            if (battle.Aim(c, e, c.Level, cell) is var aim and not SpellAim.Ok)
             {
-                return $"{EffectName(spell)}: out of range ({range} cells)";
+                return $"{EffectName(spell)}: {AimText(aim).ToLowerInvariant()} · right-click cancels";
             }
             IReadOnlyList<Combatant> hit = battle.AffectedBy(c, e, c.Level, cell);
             return $"{EffectName(spell)}: {(hit.Count == 0 ? "no one" : string.Join(", ", hit.Select(h => Who(h))))} · right-click cancels";
@@ -724,8 +723,7 @@ public partial class RegionView
         }
         if (e is InputEventMouseButton { ButtonIndex: MouseButton.Left, Pressed: true })
         {
-            Cell cell = MouseCell();
-            PlayerAct(c => Click(c, cell));
+            ClickCell(MouseCell());
             return true;
         }
         if (e is InputEventMouseButton { ButtonIndex: MouseButton.Left or MouseButton.Right })
@@ -741,13 +739,23 @@ public partial class RegionView
             || e.IsActionPressed(Controls.AddCharacter) || e.IsActionPressed(Controls.ChangeSprite);
     }
 
-    private void Click(Combatant c, Cell cell)
+    /// <summary>A left click on <paramref name="cell"/> in a fight.</summary>
+    private void ClickCell(Cell cell)
+    {
+        int? spell = _castChoice; // PlayerAct clears it
+        PlayerAct(c => Click(c, cell, spell));
+    }
+
+    /// <param name="spell">The spell chosen with CAST: cast at the cell, or, if it can't be, still chosen.</param>
+    private void Click(Combatant c, Cell cell, int? spell)
     {
         Battle battle = _battle!;
-        if (_castChoice is int spell)
+        if (spell is int chosen)
         {
-            _castChoice = null;
-            CastAt(c, spell, cell);
+            if (!CastAt(c, chosen, cell))
+            {
+                _castChoice = chosen;
+            }
             return;
         }
         if (battle.At(cell) is { } there && there != c && c.IsEnemyOf(there))
@@ -769,25 +777,36 @@ public partial class RegionView
         }
     }
 
-    private void CastAt(Combatant c, int spell, Cell cell)
+    /// <summary>Cast <paramref name="spell"/> at <paramref name="cell"/> where the original's pointer allows it (<see cref="Battle.Aim"/>); false if it wasn't cast.</summary>
+    private bool CastAt(Combatant c, int spell, Cell cell)
     {
         Battle battle = _battle!;
         if (battle.Spells.Effect(spell) is not { } e)
         {
-            return;
+            return false;
         }
-        if (Battle.Distance(c.Cell, cell) > e.RangeCells(c.Level) && e.Target is not (7 or 8))
+        if (battle.Aim(c, e, c.Level, cell) is var aim and not SpellAim.Ok)
         {
-            Notice($"{EffectName(spell)}: out of range.");
-            return;
+            Notice($"{EffectName(spell)}: {AimText(aim).ToLowerInvariant()}.");
+            return false;
         }
         Cell at = e.Target is 7 or 8 ? c.Cell : cell;
         bool power = spell is >= DarkSun.Game.Magic.Spellcasting.FirstPower and <= DarkSun.Game.Magic.Spellcasting.LastPower;
         if (power ? !battle.UsePower(c, spell, at) : !battle.Cast(c, spell, c.Level, at))
         {
             Notice(power ? "Not enough psionic strength." : $"{Who(c)} can't cast now.");
+            return false;
         }
+        return true;
     }
+
+    /// <summary>The original's messages: "TOO FAR AWAY" (<c>DS:0BEB</c>), "NO LINE OF SIGHT" (<c>DS:0BF8</c>).</summary>
+    private static string AimText(SpellAim aim) => aim switch
+    {
+        SpellAim.NoTarget => "No one there",
+        SpellAim.OutOfRange => "Too far away",
+        _ => "No line of sight",
+    };
 
     /// <summary>CAST: the spells this member still has ready and, with points, its powers.</summary>
     private void OpenCastMenu()
