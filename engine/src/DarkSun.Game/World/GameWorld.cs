@@ -99,6 +99,9 @@ public sealed class WorldObject
     /// <summary>Taken off the map (TELEPORT to another region).</summary>
     public bool Hidden { get; set; }
 
+    /// <summary>Travelling inside the party leader; still present for scripts and character sheets.</summary>
+    public bool Collapsed { get; internal set; }
+
     public Order Order { get; set; }
 
     /// <summary>Object flag 0x40, toggled by <c>REQUEST(5)</c> and by using a lever-like object.</summary>
@@ -379,6 +382,7 @@ public sealed partial class GameWorld
     /// <summary>Put a party member (0–3) at the free cell nearest <paramref name="near"/>, facing <paramref name="facing"/>.</summary>
     public WorldObject? AddPartyMember(int slot, CharacterSpec spec, Cell near, Direction facing = Direction.South)
     {
+        ExpandParty();
         if (slot is < 0 or >= PartySize || NearestCell(near, c => Fits(c, spec.Footprint)) is not { } cell)
         {
             return null;
@@ -397,6 +401,7 @@ public sealed partial class GameWorld
 
     public void RemovePartyMember(int slot)
     {
+        ExpandParty();
         _objects[slot]?.Walker?.Remove();
         if (slot is >= 0 and < PartySize)
         {
@@ -570,6 +575,12 @@ public sealed partial class GameWorld
             PendingRegion = (region, x, y);
             return;
         }
+        int? collapsedLeader = who == DialogueGplHost.WholeParty && region == Region.Number ? CollapsedLeader : null;
+        List<int> collapsed = [.. Party.Where(p => p.Collapsed).Select(p => p.Index)];
+        if (targets.Any(p => p.Kind == ObjectKind.Party))
+        {
+            ExpandParty();
+        }
         foreach (WorldObject obj in targets.ToList())
         {
             if (region != Region.Number)
@@ -583,6 +594,10 @@ public sealed partial class GameWorld
                 Place(obj, new Cell(x, y));
             }
             Changed?.Invoke(obj, null);
+        }
+        if (collapsedLeader is { } leader)
+        {
+            RestoreCollapsedParty(leader, collapsed);
         }
     }
 

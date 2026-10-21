@@ -7,7 +7,8 @@ using DarkSun.Game.World;
 namespace DarkSun.Game.Saves;
 
 /// <summary>A party member as saved: the sprite (its <c>OJFF</c> number), cell, facing, and the character made on Create Characters, if any.</summary>
-public sealed record PartyMemberSave(int Sprite, int X, int Y, Direction Facing, Characters.Character? Character = null);
+public sealed record PartyMemberSave(int Sprite, int X, int Y, Direction Facing, Characters.Character? Character = null,
+    bool Collapsed = false);
 
 /// <summary>A creature's line-of-sight script (<see cref="GplCreatureScripts.Sight"/>).</summary>
 public sealed record SightScriptSave(int Object, int Kind, GplEntry Entry, int Range);
@@ -42,6 +43,8 @@ public sealed record SaveGame
 
     /// <summary>The selected party member (index into <see cref="Party"/>).</summary>
     public int Selected { get; init; }
+
+    public int? CollapsedLeader { get; init; }
 
     public List<PartyMemberSave> Party { get; init; } = [];
 
@@ -89,7 +92,8 @@ public sealed record SaveGame
             Saved = DateTimeOffset.Now,
             Region = current,
             Selected = selected,
-            Party = [.. party],
+            CollapsedLeader = world.CollapsedLeader,
+            Party = [.. party.Select((member, slot) => member with { Collapsed = world[slot]?.Collapsed == true })],
             PartyStates = [.. (states ?? []).Select(s => s.Save())],
             Journal = journal?.Save(),
             Globals = GlobalAreas.ToDictionary(a => a, a => machine.Memory.Area(a).ToArray()),

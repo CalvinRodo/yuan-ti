@@ -95,6 +95,10 @@ The region viewer starts a new game where DSUN.EXE does: region 42
 (`MAS 99`). There the arena's gate runs the opening: the announcer speaks,
 then the party watches the mage Celgor fight a rampager and two sligs
 (`REQUEST(14)`), and once it is over the gladiators are called into the arena.
+The opening combatants are removed afterward, whoever won, as in DSUN.EXE.
+The next announcement ("Citizens of Draj!") waits for all four party members
+to leave the starting pen through the gate. A walk ordered before the gate
+opens continues through it if it opens while the party approaches.
 The game clock (`gname[9]`) runs as DSUN.EXE's does, so timed scripts move
 on; thief skills, ability rolls and traps are rolled as the EXE rolls them
 (the skill tables are in `characters.json`). The shipped scripts' known bugs
@@ -166,6 +170,10 @@ the pack to buy (at the item's value), put things in the six slots by SELL to se
 Esc on the map, or the wide button, opens the original GAME MENU: the character screens, exit, save
 and load, preferences (music and sound, GAME DIFFICULTY scaling creatures' hit points, animations),
 the overhead map, centre on the leader, the move, look and attack cursors, and collapse party.
+COLLAPSE PARTY makes the other members walk into the selected leader and disappear;
+they travel with that character, still present for scripts, dialogue and character screens.
+Shift+click, selecting a different map character or starting combat spreads the party
+onto separate free cells again. Saved games and region changes keep a collapsed party.
 START GAME without a party made plays the pre-made party (`game/party/premade.json`, editable:
 the roster's JSON); Create Characters' right-click menu has PRE-MADE PARTY on an empty box and DUAL for
 humans of third level or more (a new class; the old one returns once the new passes its level). The
@@ -204,9 +212,12 @@ On any screen, `?` lists every key and click that screen takes, with the keys as
 Shift+click: the whole party; Tab: select
 the next character; N: add a character; C: change the selected character's
 sprite. Characters cover a footprint of cells (estimated from the sprite's
-width until the game's size data is traced) and never overlap: one blocked by
+width until the game's size data is traced) and, except when gathering into the leader, never overlap: one blocked by
 another waits, goes round if that's short, or gives up after about 4 s.
-Arrows, WASD or middle-drag scroll (the camera eases after the selected
+Hold the arrow keys to walk the selected character (two arrows walk diagonally);
+releasing them stops after the current step. They move the active combatant one
+cell per key press in combat, using its movement allowance. Menus and dialogue
+block keyboard walking. WASD or middle-drag scroll (the camera eases after the selected
 character, and follows it again after the next click); mouse wheel or +/-
 zoom (½, 1–4; 2, the default, shows what the original showed); PgUp/PgDn change region;
 F1 shows blocked cells (red), cells that block line of sight (blue outline),
@@ -416,6 +427,12 @@ party has been defeated" screen leads back to the main menu. No saving during a 
 region drops it. `-- --new-game --fight` starts a fight with the nearest creature (`--auto`: the
 party fights by itself), `--check-combat` plays one through headless, and `--screenshot=FILE` saves
 the screen after five seconds (`--screenshot-after=N` seconds).
+`-- --new-game --check-arena` plays the opening bout, checks that its combatants
+leave, then walks the whole party through the gate and checks for the
+"Citizens of Draj!" announcement.
+`-- --new-game --check-party-movement` checks the collapse menu, follower
+visibility and occupancy, arrow-key movement, modal input blocking, loading a
+collapsed party, and spreading it out again.
 
 `make engine-mod-rules MOD=mods/MyMod` writes all four rule files (`characters.json`,
 `creatures.json`, `combat.json`, `spells.json`) with the original's values to start from, keeping any

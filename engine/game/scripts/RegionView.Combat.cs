@@ -5,6 +5,7 @@ using DarkSun.Game.Animation;
 using DarkSun.Game.Combat;
 using DarkSun.Game.Movement;
 using DarkSun.Game.Rules;
+using DarkSun.Game.Scripting;
 using DarkSun.Game.World;
 using Godot;
 
@@ -133,6 +134,7 @@ public partial class RegionView
             return true;
         }
         var dice = new BorlandDice(new BorlandRandom((uint)System.Environment.TickCount));
+        _keyboardWalker = null;
         Battle? battle = Encounter.Start(_world, slot => slot < Session.Party.Count ? Session.Party[slot] : null, dice, Session.Rules,
             Session.CombatRules, Session.SpellRules, Session.CreatureRules, attacked, fallsWhenShown: true);
         if (battle is null)
@@ -672,6 +674,23 @@ public partial class RegionView
         {
             return false;
         }
+        if (e.IsActionPressed(Controls.MoveLeft) || e.IsActionPressed(Controls.MoveRight)
+            || e.IsActionPressed(Controls.MoveUp) || e.IsActionPressed(Controls.MoveDown))
+        {
+            if (KeyboardMovementLocked)
+            {
+                return true;
+            }
+            Vector2 direction = Input.GetVector(Controls.MoveLeft, Controls.MoveRight, Controls.MoveUp, Controls.MoveDown);
+            PlayerAct(c =>
+            {
+                if ((c.Flags & TurnFlags.MayMove) != 0)
+                {
+                    _battle!.MoveToward(c, new Cell(c.Cell.X + Math.Sign(direction.X), c.Cell.Y + Math.Sign(direction.Y)));
+                }
+            });
+            return true;
+        }
         if (e.IsActionPressed(Controls.CombatEndTurn))
         {
             PlayerAct(c => _battle!.EndTurn(c));
@@ -992,6 +1011,81 @@ public partial class RegionView
     }
 
     // -- headless check ------------------------------------------------------------------------------
+
+    /// <summary>The shipped opening bout, its cleanup, and the gate's next announcement.</summary>
+    private void CheckArena()
+    {
+        _checking = true;
+        var problems = new List<string>();
+        bool called = false, announced = false;
+        void Step()
+        {
+            _Process(1.0 / ScmdAnimator.TicksPerSecond);
+            string text = string.Concat(Session.ScriptHost.Dialogue.Text.Select(t => t.Text));
+            called |= text.Contains("Gladiators: Step forward");
+            announced |= text.Contains("Citizens of Draj!");
+            if (Session.ScriptHost.Dialogue.Prompt is GplContinuePrompt)
+            {
+                ReportScript("read announcement", Session.Scripts.Resume());
+            }
+            _dialogueWindow.Refresh();
+        }
+        for (int tick = 0; tick < 1000 && !InCombat; tick++)
+        {
+            Step();
+        }
+        if (_battle is not { } battle)
+        {
+            problems.Add("the opening bout did not start");
+        }
+        else
+        {
+            for (int tick = 0; tick < 300_000 && InCombat && battle.Round <= 100; tick++)
+            {
+                Step();
+            }
+            if (InCombat)
+            {
+                problems.Add($"the opening bout did not finish after {battle.Round} rounds");
+            }
+            GD.Print($"arena bout: {battle.Round} rounds; survivors: {string.Join(", ", battle.Combatants.Where(c => c.Alive).Select(c => c.Name))}");
+        }
+        for (int tick = 0; tick < 1000 && !called; tick++)
+        {
+            Step();
+        }
+        if (!called)
+        {
+            problems.Add("the party was not called into the arena");
+        }
+        if (_world.Objects.Any(o => o.Id is -296 or -171 or -269))
+        {
+            problems.Add("the opening combatants are still in the region");
+        }
+        if (!InCombat && !Session.Scripts.IsSuspended)
+        {
+            WalkTo(new Cell(30, 26), wholeParty: true);
+            for (int tick = 0; tick < 10_000 && !announced; tick++)
+            {
+                Step();
+            }
+        }
+        if (!announced)
+        {
+            problems.Add($"no next announcement; party at {string.Join(", ", _world.Party.Select(p => p.Cell))}; "
+                + $"arena stage {Session.Scripts.Memory.Read(new GplVariable(GplVarType.GlobalNum, 3))}");
+        }
+        if (_scriptErrors > 0)
+        {
+            problems.Add($"{_scriptErrors} script errors");
+        }
+        foreach (string problem in problems)
+        {
+            GD.Print($"  PROBLEM: {problem}");
+        }
+        GD.Print(problems.Count == 0 ? "arena: OK" : $"arena: {problems.Count} problems");
+        GetTree().Quit(problems.Count == 0 ? 0 : 1);
+    }
 
     /// <summary>
     /// <c>--check-combat</c>: a new game; the nearest creature turns hostile and

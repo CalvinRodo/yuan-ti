@@ -160,6 +160,57 @@ public class WalkerTests
         Assert.Equal(new Cell(0, 0), walker.Cell);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ReachingAPartialPathsEndUsesAGateThatOpenedDuringTheWalk(bool opens)
+    {
+        bool closed = true;
+        bool Blocked(int x, int y) => y != 0 || x < 0 || x > 5 || closed && x == 3;
+        var walker = new Walker(1, Script(), Frames, new Cell(0, 0), Footprint.OneCell, new Occupancy());
+        Assert.True(walker.WalkTo(new Cell(5, 0), Blocked));
+
+        for (long tick = 0; tick < 300; tick++)
+        {
+            if (opens && tick == 10)
+            {
+                closed = false;
+            }
+            walker.Update(tick, Blocked);
+        }
+
+        Assert.Equal(new Cell(opens ? 5 : 2, 0), walker.Cell);
+        Assert.False(walker.IsWalking);
+    }
+
+    [Fact]
+    public void GatheringIgnoresOnlyTheLeaderAndResumesWhenTheLeaderMoves()
+    {
+        var occupancy = new Occupancy();
+        bool Blocked(int x, int y) => y != 0 || x < 0 || x > 3;
+        var leader = new Walker(1, Script(), Frames, new Cell(3, 0), Footprint.OneCell, occupancy);
+        var follower = new Walker(2, Script(), Frames, new Cell(0, 0), Footprint.OneCell, occupancy);
+        var obstacle = new Walker(3, Script(), Frames, new Cell(1, 0), Footprint.OneCell, occupancy);
+        follower.Join(leader, Blocked);
+        for (int tick = 0; tick < 2000; tick++)
+        {
+            follower.Update(tick, Blocked);
+        }
+        Assert.Equal(new Cell(0, 0), follower.Cell);
+        Assert.False(follower.IsWalking);
+        Assert.Equal(obstacle.Id, occupancy.OwnerOf(new Cell(1, 0)));
+
+        obstacle.Remove();
+        Assert.True(leader.Teleport(new Cell(2, 0), Blocked));
+        for (int tick = 2000; tick < 4000; tick++)
+        {
+            follower.Update(tick, Blocked);
+        }
+        Assert.Equal(leader.Cell, follower.Cell);
+        follower.Remove();
+        Assert.Equal(leader.Id, occupancy.OwnerOf(leader.Cell));
+    }
+
     /// <summary>Run walkers for <paramref name="ticks"/>, checking after every tick that no cell has two owners.</summary>
     private static void Run(Occupancy occupancy, Func<int, int, bool> blocked, int ticks, params Walker[] walkers)
     {

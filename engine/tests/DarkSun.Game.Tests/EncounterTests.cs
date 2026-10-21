@@ -31,8 +31,10 @@ public class EncounterTests
         return (world, templar);
     }
 
-    [Fact]
-    public void TheArenaBoutIsFoughtWithoutTheParty()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void TheArenaBoutIsFoughtWithoutTheParty(bool celgorFalls)
     {
         GameWorld world = GameWorldTests.Arena();
         foreach (WorldObject o in world.Objects.Where(o => o.Kind != ObjectKind.Thing))
@@ -58,8 +60,28 @@ public class EncounterTests
         Assert.Equal(["Defiler", "Rampager", "Slig", "Slig"], b.Combatants.Select(c => c.Name).Order());
         Assert.True(b.Combatants.Single(c => c.Name == "Defiler").IsEnemyOf(b.Combatants.Single(c => c.Name == "Rampager")));
 
+        if (celgorFalls)
+        {
+            celgor.Vitals.Hp = 0;
+            celgor.Vitals.Status = Vitals.Dead;
+            world.Fell(celgor);
+        }
         Assert.False(Encounter.End(b, world)); // watched, not lost
         Assert.All(world.Party, p => Assert.Equal(0, p.Allegiance));
+        Assert.DoesNotContain(world.Objects, o => o.Id is -296 or -171 or -269);
+        Assert.NotNull(world.First(-100)); // spectators are not part of the cleanup
+    }
+
+    [Fact]
+    public void OrdinaryFightsDoNotRunArenaCleanup()
+    {
+        var (world, creature) = Hostile(2);
+        creature.Id = -171;
+        Battle battle = Encounter.Start(world, _ => null, new ScriptedDice(), Rules)!;
+
+        Encounter.End(battle, world);
+
+        Assert.Same(creature, world[creature.Index]);
     }
 
     [Fact]

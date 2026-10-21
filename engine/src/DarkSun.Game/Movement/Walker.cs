@@ -39,6 +39,7 @@ public sealed class Walker
     private readonly Queue<Cell> _path = new();
     private Cell? _target;
     private Cell? _goal;
+    private Walker? _joining;
     private int _replans;
     private long _waitUntil;
     private bool _standing;
@@ -120,7 +121,8 @@ public sealed class Walker
     /// no footprint cell blocked by the map or held by another creature.
     /// </summary>
     public bool CanStand(Cell cell, Func<int, int, bool> blocked) =>
-        Footprint.Cells(cell).All(c => !blocked(c.X, c.Y) && !_occupancy.IsOccupiedByOther(c, Id));
+        Footprint.Cells(cell).All(c => !blocked(c.X, c.Y)
+            && (!_occupancy.IsOccupiedByOther(c, Id) || _occupancy.OwnerOf(c) == _joining?.Id));
 
     /// <summary>
     /// Plan a path to <paramref name="goal"/> (or as near as it can get) and
@@ -128,14 +130,36 @@ public sealed class Walker
     /// </summary>
     public bool WalkTo(Cell goal, Func<int, int, bool> blocked)
     {
+        _joining = null;
         _goal = goal;
         _replans = 0;
         return Plan(blocked, avoidCreatures: false);
     }
 
+    /// <summary>Walk into the leader when collapsing the party, without taking its occupied cells.</summary>
+    public bool Join(Walker leader, Func<int, int, bool> blocked)
+    {
+        _joining = leader;
+        _goal = leader.Cell;
+        _replans = 0;
+        return Plan(blocked, avoidCreatures: false);
+    }
+
+    /// <summary>A collapsed member travels with the leader without occupying map cells.</summary>
+    public void Carry(Cell cell)
+    {
+        Remove();
+        _target = null;
+        Cell = cell;
+        _standing = false;
+        _acting = false;
+        Animator = Stand();
+    }
+
     /// <summary>Walk along <paramref name="path"/>, a list of adjacent cells, without replanning.</summary>
     public void Follow(IEnumerable<Cell> path)
     {
+        _joining = null;
         _goal = null;
         _path.Clear();
         foreach (Cell c in path)
@@ -175,6 +199,7 @@ public sealed class Walker
 
     public void Stop()
     {
+        _joining = null;
         _goal = null;
         _path.Clear();
     }
@@ -217,6 +242,12 @@ public sealed class Walker
     /// <param name="blocked">Whether the region map blocks a cell (<c>GMAP</c> 0x40, off-map cells included).</param>
     public bool Update(long now, Func<int, int, bool> blocked)
     {
+        if (_joining is { } leader && _target is null && _goal != leader.Cell)
+        {
+            _goal = leader.Cell;
+            _replans = 0;
+            Plan(blocked, avoidCreatures: false);
+        }
         // Check a step's end before animating, so a looping walk can't run on
         // past the cell.
         if (_target is not null && !Animator.Animating && now >= Animator.NextStepAt && Moved is > 0 and < CellSize)
@@ -250,6 +281,10 @@ public sealed class Walker
             _occupancy.Release(Id, Footprint.Cells(Cell).Where(c => !kept.Contains(c)));
             Cell = arrived;
             _target = null;
+            if (_path.Count == 0 && _goal is { } goal && Cell != goal)
+            {
+                Plan(blocked, avoidCreatures: false); // a gate may have opened since this partial path was planned
+            }
         }
         if (now >= _waitUntil && _path.TryPeek(out Cell next))
         {
@@ -274,6 +309,16 @@ public sealed class Walker
     private bool StepDone(long now) =>
         now >= Animator.NextStepAt && (Moved >= CellSize || (!Animator.Animating && Moved == 0));
 
+    private void GiveUp()
+    {
+        _path.Clear();
+        // A gathering follower can try again when its leader moves somewhere reachable.
+        if (_joining is null)
+        {
+            _goal = null;
+        }
+    }
+
     private bool TryStep(Cell next, long now, Func<int, int, bool> blocked)
     {
         int dx = next.X - Cell.X;
@@ -284,18 +329,18 @@ public sealed class Walker
             // The map changed under the path, or the path was bad: plan again.
             if (_goal is null || ++_replans > MaxReplans || !Plan(blocked, avoidCreatures: false))
             {
-                Stop();
+                GiveUp();
             }
             return false;
         }
-        if (!_occupancy.TryClaim(Id, Footprint.Cells(next)))
+        if (!_occupancy.TryClaim(Id, Footprint.Cells(next).Where(c => _joining is null || _occupancy.OwnerOf(c) != _joining.Id)))
         {
             // Another creature is in the way: wait, and take a way around it if
             // there is one; if not, keep the path and try the step again.
             _waitUntil = now + WaitTicks;
             if (_goal is null || ++_replans > MaxReplans)
             {
-                Stop();
+                GiveUp();
             }
             else
             {

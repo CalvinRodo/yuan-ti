@@ -685,8 +685,12 @@ executable, not in the data.
       allows those cells too). A creature that falls leaves the map when
       its fall is played back, not when the battle (which runs a turn ahead
       of the screen) decides it: before, Celgor vanished mid-walk up to two
-      seconds before the blow that felled him was shown. Not known: where
-      the party's allegiance goes back to 1 (here: when the fight ends).
+      seconds before the blow that felled him was shown. After the bout
+      `87B3:11AC` (its caller isn't traced; here: when the fight ends), if
+      the active member's allegiance is 4, sets the party's back to 1 and
+      removes every object of `OJFF` 296, 171 and 269, whoever won. Stage 1
+      of GPL 2 waits for every party member to be south of the gate
+      (y ≥ 23); a walk ordered before the gate opens replans through it.
 
 ---
 

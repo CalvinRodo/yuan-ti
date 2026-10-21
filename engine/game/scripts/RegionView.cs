@@ -28,7 +28,7 @@ namespace DarkSun.Engine;
 /// command is listed in the script log (F2).
 /// Click: the selected character walks there; Shift+click: the whole party;
 /// Right-click: verb menu; Tab: select the next character; N: add one; C:
-/// change its sprite; arrows, WASD or middle-drag scroll; wheel or +/- zoom;
+/// change its sprite; arrows walk; WASD or middle-drag scroll; wheel or +/- zoom;
 /// PgUp/PgDn change region; Esc returns to the main menu; F1 shows the <c>GMAP</c> flags, occupied cells and
 /// triggers, F3 a grid, F4 object numbers, and with any of them on the
 /// hovered cell is described (<see cref="DebugOverlay"/>; <c>-- --debug-overlay</c>
@@ -95,6 +95,7 @@ public partial class RegionView : Node2D
     private int _selected;
     private int _nextSprite;
     private bool _follow = true;
+    private Walker? _keyboardWalker;
 
     /// <summary>A verb waiting for its character to walk up to the object (<c>With</c>: Use with's first object).</summary>
     private (Walker Walker, int Actor, WorldObject Target, Verb Verb, WorldObject? With, int Tries)? _pendingUse;
@@ -129,6 +130,7 @@ public partial class RegionView : Node2D
 
     public override void _Ready()
     {
+        _checking = OS.GetCmdlineUserArgs().Any(a => a is "--check-arena" or "--check-party-movement");
         Controls.Register();
         // [game] original_pathfinding in user://settings.cfg (Options): walk as DSUN.EXE plans.
         Walker.UseOriginalPathfinding = Settings.OriginalPathfinding;
@@ -311,6 +313,16 @@ public partial class RegionView : Node2D
                 CheckCombat();
                 return;
             }
+            if (OS.GetCmdlineUserArgs().Contains("--check-arena"))
+            {
+                CheckArena();
+                return;
+            }
+            if (OS.GetCmdlineUserArgs().Contains("--check-party-movement"))
+            {
+                CheckPartyMovement();
+                return;
+            }
             if (OS.GetCmdlineUserArgs().Contains("--check-character"))
             {
                 CheckCharacter();
@@ -461,6 +473,7 @@ public partial class RegionView : Node2D
         // The party keeps its looks, facing and selection from region to region.
         var carried = _party.Select(m => (m.Sprite, m.Walker.Facing)).ToList();
         int selected = _selected;
+        int? collapsedLeader = _world?.CollapsedLeader;
         if (_world is not null && saved is null)
         {
             Session.Regions.Remember(_world);
@@ -474,6 +487,10 @@ public partial class RegionView : Node2D
         else
         {
             PlaceParty(start, carried, selected);
+            if (collapsedLeader is { } leader)
+            {
+                _world!.RestoreCollapsedParty(leader, _world.Party.Where(p => p.Index != leader).Select(p => p.Index).ToList());
+            }
             RunRegionScripts();
         }
         UpdateHud();
@@ -494,7 +511,7 @@ public partial class RegionView : Node2D
             + $"{_region.Objects.Count} objects ({_animated.Count} animated) · {selected}\n"
             + $"Triggers: {t.Count(GplTriggerList.MoveTile)} tile, {t.Count(GplTriggerList.MoveBox)} box, {objectTriggers} object, "
             + $"{Session.Scripts.Creatures.NoOrders.Count + Session.Scripts.Creatures.Sight.Count} creature\n"
-            + "?: all keys · Click: walk · Shift+click: party · Right-click: verbs · Tab: select · Esc: back";
+            + "?: all keys · Arrows: walk · Click: walk · Shift+click: party · Right-click: verbs · Tab: select · Esc: back";
     }
 
     /// <summary>Replace the map's nodes with <paramref name="file"/>'s region.</summary>
@@ -514,6 +531,7 @@ public partial class RegionView : Node2D
         _worldObjects.Clear();
         _cloneSprites.Clear();
         _clock = 0;
+        _keyboardWalker = null;
 
         _region = Region.Load(Session.Open(file), [Session.Open("SEGOBJEX.GFF"), Session.Open("GPLDATA.GFF")], Session.Assets);
         var objectData = new GffSet([Session.Open("SEGOBJEX.GFF"), Session.Open("GPLDATA.GFF")]);
@@ -651,6 +669,10 @@ public partial class RegionView : Node2D
             return;
         }
         Session.SetLeader(slot);
+        if (slot != _selected)
+        {
+            _world.ExpandParty();
+        }
         _selected = slot;
         _world.ActiveMember = slot;
         _follow = true;
@@ -670,16 +692,19 @@ public partial class RegionView : Node2D
         ClampCamera();
     }
 
-    /// <summary>COLLAPSE PARTY: everyone walks to the leader.</summary>
+    /// <summary>COLLAPSE PARTY: walk into the leader, then travel as one character.</summary>
     private void CollapseParty()
     {
-        if (Selected is { } leader)
+        if (MapLocked || InCombat)
         {
-            Cell at = leader.Walker.Cell;
-            foreach (PartyMember member in _party.Where(m => m != leader))
-            {
-                member.Walker.WalkTo(at, _region.IsBlocked);
-            }
+            Notice("The party cannot collapse during combat or a waiting script.");
+            return;
+        }
+        if (Selected is not null)
+        {
+            _keyboardWalker = null;
+            _pendingUse = null;
+            _world.CollapseParty(_selected);
             _follow = true;
         }
     }
@@ -811,6 +836,7 @@ public partial class RegionView : Node2D
     /// <summary>Give the selected character the next walking sprite, keeping its place if it fits.</summary>
     private void ChangeSprite()
     {
+        _world.ExpandParty();
         if (Selected is not { } old)
         {
             return;
@@ -826,6 +852,7 @@ public partial class RegionView : Node2D
     private void DrawMember(PartyMember member)
     {
         Walker walker = member.Walker;
+        member.Node.Visible = _world[walker.Id] is { Hidden: false, Collapsed: false };
         ImageFrame frame = member.Sprite.Frames[walker.Animator.Frame];
         member.Node.Texture = TextureFor(frame);
         member.Node.FlipH = walker.Animator.Mirrored;
@@ -892,7 +919,12 @@ public partial class RegionView : Node2D
 
     private void WalkTo(Cell goal, bool wholeParty)
     {
+        _keyboardWalker = null;
         _pendingUse = null;
+        if (wholeParty)
+        {
+            _world.ExpandParty();
+        }
         foreach (PartyMember member in wholeParty ? _party : Selected is { } m ? [m] : [])
         {
             member.Walker.WalkTo(goal, _region.IsBlocked);
@@ -927,11 +959,16 @@ public partial class RegionView : Node2D
         for (int i = 0; i < _party.Count && _region.Number == region && !_transitioning; i++)
         {
             PartyMember member = _party[i];
-            if (member.Walker.Update(now, _region.IsBlocked))
+            if (_world[i] is { Collapsed: false } && member.Walker.Update(now, _region.IsBlocked))
             {
                 DrawMember(member);
             }
             PlaySounds(member.Walker.TakeSounds(), member.Node.Position);
+        }
+        _world.UpdateCollapsedParty();
+        for (int i = 0; i < _party.Count && _region.Number == region && !_transitioning; i++)
+        {
+            PartyMember member = _party[i];
             // Move triggers fire when a character reaches a new cell (trigger_on_move).
             Cell cell = member.Walker.Cell;
             if (_lastCells.TryGetValue(member.Walker, out Cell last) && last != cell
@@ -1039,6 +1076,7 @@ public partial class RegionView : Node2D
             FollowCharacter();
             return;
         }
+        MoveWithKeyboard();
         Animate();
         FinishApproach();
         if (Session.ScriptHost.Dialogue.Prompt is GplShopPrompt shop && !_character.IsOpen && _world[shop.Merchant] is { } merchant
@@ -1055,6 +1093,45 @@ public partial class RegionView : Node2D
         }
         FollowCharacter();
         UpdateHover(force: false);
+    }
+
+    private bool KeyboardMovementLocked => MapLocked || _dialogueWindow.Visible || _gameMenu.IsOpen || _character.IsOpen
+        || _journal.Visible || _options.Visible || _verbMenu.Visible || _debugger.Visible
+        || GetNodeOrNull<KeyHelp>("/root/KeyHelp")?.IsOpen == true
+        || GetViewport().GuiGetFocusOwner() is LineEdit or TextEdit;
+
+    private void MoveWithKeyboard()
+    {
+        Vector2 direction = KeyboardMovementLocked ? Vector2.Zero
+            : Input.GetVector(Controls.MoveLeft, Controls.MoveRight, Controls.MoveUp, Controls.MoveDown);
+        if (direction == Vector2.Zero || Selected is not { } member)
+        {
+            _keyboardWalker?.Stop();
+            _keyboardWalker = null;
+            return;
+        }
+        Walker walker = member.Walker;
+        if (_keyboardWalker != walker)
+        {
+            _keyboardWalker?.Stop();
+            walker.Stop();
+            _keyboardWalker = walker;
+            _pendingUse = null;
+            SetUseWith(null);
+        }
+        _follow = true;
+        if (walker.IsWalking)
+        {
+            return;
+        }
+        int dx = Math.Sign(direction.X), dy = Math.Sign(direction.Y);
+        Cell next = new(walker.Cell.X + dx, walker.Cell.Y + dy);
+        if (walker.CanStand(next, _region.IsBlocked)
+            && (dx == 0 || dy == 0 || walker.CanStand(new Cell(next.X, walker.Cell.Y), _region.IsBlocked)
+                && walker.CanStand(new Cell(walker.Cell.X, next.Y), _region.IsBlocked)))
+        {
+            walker.Follow([next]);
+        }
     }
 
     /// <summary>
@@ -1145,6 +1222,7 @@ public partial class RegionView : Node2D
         }
         else if (e.IsActionPressed(Controls.NextCharacter) && _party.Count > 0)
         {
+            _world.ExpandParty();
             _selected = (_selected + 1) % _party.Count;
             _follow = true;
             UpdateHud();
@@ -1941,6 +2019,11 @@ public partial class RegionView : Node2D
         _nextSprite = _party.Count;
         _selected = Math.Clamp(save.Selected, 0, Math.Max(0, _party.Count - 1));
         _world.ActiveMember = _selected;
+        if (save.CollapsedLeader is { } leader)
+        {
+            _world.RestoreCollapsedParty(leader, save.Party.Select((member, slot) => (member, slot))
+                .Where(p => p.member.Collapsed).Select(p => p.slot));
+        }
         foreach (PartyMember member in _party)
         {
             _lastCells[member.Walker] = member.Walker.Cell;

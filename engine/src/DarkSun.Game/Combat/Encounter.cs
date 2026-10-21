@@ -29,6 +29,7 @@ public static class Encounter
         bool fallsWhenShown = false)
     {
         rules ??= CombatRules.Default;
+        world.ExpandParty();
         if (attacked is { Kind: not ObjectKind.Party } && (attacked.Allegiance & 3) == 0)
         {
             attacked.Allegiance = 2;
@@ -88,17 +89,25 @@ public static class Encounter
     /// <summary>
     /// After the fight: the party members' sheets get what they used
     /// (<see cref="Battle.SyncSheets"/>), those who watched it may fight again,
+    /// the opening bout's creatures leave (<c>87B3:11AC</c>),
     /// and the party gets up (<see cref="Battle.Finish"/>). True: the party
     /// fought and has fallen.
     /// </summary>
     public static bool End(Battle battle, GameWorld? world = null)
     {
         battle.SyncSheets();
+        if (world?[world.ActiveMember]?.Allegiance == GameWorld.WatchingAllegiance)
+        {
+            foreach (WorldObject creature in world.Objects.Where(o => o.Id is -296 or -171 or -269).ToList())
+            {
+                world.Remove(creature);
+            }
+        }
         foreach (WorldObject member in world?.Party ?? [])
         {
             if (Watching(member))
             {
-                member.Allegiance = 0; // back in the party's fights (the original's reset isn't traced)
+                member.Allegiance = 0; // the original's 1; 0 is the party's fighting allegiance here
             }
         }
         return battle.Finish();

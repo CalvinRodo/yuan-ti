@@ -8,6 +8,10 @@ namespace DarkSun.Engine;
 /// </summary>
 public static class Controls
 {
+    public const string MoveLeft = "party_move_left";
+    public const string MoveRight = "party_move_right";
+    public const string MoveUp = "party_move_up";
+    public const string MoveDown = "party_move_down";
     public const string PanLeft = "map_pan_left";
     public const string PanRight = "map_pan_right";
     public const string PanUp = "map_pan_up";
@@ -44,6 +48,7 @@ public static class Controls
     /// <summary>Every action above (the key help lists them all).</summary>
     public static IReadOnlyList<string> All { get; } =
     [
+        MoveLeft, MoveRight, MoveUp, MoveDown,
         PanLeft, PanRight, PanUp, PanDown, ZoomIn, ZoomOut, NextRegion, PreviousRegion, ToggleMapFlags, NextCharacter,
         AddCharacter, ChangeSprite, ToggleScriptLog, ToggleGrid, QuickSave, QuickLoad, ToggleObjectNumbers,
         ToggleInventory, ToggleCharacter, ToggleJournal, ToggleOptions, ToggleScriptDebugger, DebugContinue, DebugStepOver, DebugStepInto,
@@ -53,10 +58,14 @@ public static class Controls
     /// <summary>The default keys of the actions this game adds (<c>ui_cancel</c>, Esc, is Godot's own).</summary>
     private static readonly Dictionary<string, InputEventKey[]> Defaults = new()
     {
-        [PanLeft] = Keys(Key.Left, Key.A),
-        [PanRight] = Keys(Key.Right, Key.D),
-        [PanUp] = Keys(Key.Up, Key.W),
-        [PanDown] = Keys(Key.Down, Key.S),
+        [MoveLeft] = Keys(Key.Left),
+        [MoveRight] = Keys(Key.Right),
+        [MoveUp] = Keys(Key.Up),
+        [MoveDown] = Keys(Key.Down),
+        [PanLeft] = Keys(Key.A),
+        [PanRight] = Keys(Key.D),
+        [PanUp] = Keys(Key.W),
+        [PanDown] = Keys(Key.S),
         [ZoomIn] = Keys(Key.Equal, Key.KpAdd),
         [ZoomOut] = Keys(Key.Minus, Key.KpSubtract),
         [NextRegion] = Keys(Key.Pagedown),
