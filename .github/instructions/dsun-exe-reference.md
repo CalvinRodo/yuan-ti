@@ -676,10 +676,19 @@ From the handlers (2026-10-18):
   * `MAS 99` sets `gstr[2]` = "END" and `gstr[3]` = "CLOSE", and the scripts
     print them after a speech (≈1 450 and 1 250 times; END before a
     CLEAR_PIC and a new page 54 times). The original shows neither (OpenDS's
-    capture of the arena's "Gladiators: Step forward"); the engine takes END
-    as "wait until read" and CLOSE as "put the window away" (inferred; the
-    window code at `84C9:0253` decompiles poorly). The EXE has its own
-    "CLOSE" and "END" at `DS:1F11` and `DS:1F1D`.
+    capture of the arena's "Gladiators: Step forward"). Window 2's print
+    (`84C9:0323`, by disassembly) compares the text with `DS:1F11` "CLOSE",
+    `DS:1F17` "DEBUG" and `DS:1F1D` "END": CLOSE closes every window
+    (`84C9:0A25`); any other text but END is appended to a 0x400-byte buffer
+    (`DS:5735`, `1A0A:324B`, a bounded `strcat`: no space or line break is
+    added, so the scripts' speeches end in a space); END opens `WIND` 3007 if
+    it isn't and puts the whole buffer in its text box (`EBOX` 4002), setting
+    the up and MORE arrows. The buffer is emptied (`84C9:09F0`) only by
+    CLOSE and once a button is pressed (`84C9:0CD9`: CONTINUE `7372:13D5`,
+    ASK_YES_NO `140D`, the menu's wait `17CE`), so what is said after an
+    answer starts a new page; text input (`7372:1235`), DAMAGE (`12AA`) and
+    PHYS_DAMAGE (`1342`) close the windows. The engine also waits for the
+    player at END (its own addition), keeping the text.
   * `SHOW_PIC(n)` shows `PORT` n (1–120, 32 × 32) in window 1; `CLEAR_PIC`
     clears window 1.
   * `CONTINUE` shows "Press continue" and a Continue button; `ASK_YES_NO`

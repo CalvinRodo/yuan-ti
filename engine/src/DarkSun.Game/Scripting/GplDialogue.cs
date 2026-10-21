@@ -54,8 +54,11 @@ public sealed class GplDialogue
         Version++;
     }
 
-    /// <summary>How many times the window was cleared, so a view can tell new text from more text.</summary>
+    /// <summary>How many times the window was cleared (CLEAR_PIC, CLOSE): the journal starts a new conversation.</summary>
     public int Clears { get; private set; }
+
+    /// <summary>How many times the text went away (<see cref="Clear"/>, or an answer), so a view starts its text again.</summary>
+    public int Pages { get; private set; }
 
     /// <summary>CLEAR_PIC (window 1): the portrait and the text go.</summary>
     public void Clear()
@@ -63,6 +66,7 @@ public sealed class GplDialogue
         Portrait = null;
         _text.Clear();
         Clears++;
+        Pages++;
         Version++;
     }
 
@@ -72,9 +76,20 @@ public sealed class GplDialogue
         Version++;
     }
 
-    public void Answered()
+    /// <summary>
+    /// The player answered. DSUN.EXE empties the text once a button is pressed
+    /// (<c>84C9:0CD9</c> → <c>09F0</c>: CONTINUE, ASK_YES_NO, a menu), so what is
+    /// said next starts a new page; the portrait stays. <paramref name="clearText"/>
+    /// false: the engine's own wait after END, which keeps it.
+    /// </summary>
+    public void Answered(bool clearText = true)
     {
         Prompt = null;
+        if (clearText && _text.Count > 0)
+        {
+            _text.Clear();
+            Pages++;
+        }
         Version++;
     }
 }
@@ -142,7 +157,7 @@ public class DialogueGplHost : LoggingGplHost
         {
             case "PRINT_STRING" when command.Texts[1] == EndMark:
                 // gstr[2] (MAS 99): the speech is over; the script goes on once the player has read it.
-                Wait(machine, new GplContinuePrompt(), out _);
+                Wait(machine, new GplContinuePrompt(), out _, clearsText: false);
                 return null;
             case "PRINT_STRING" when command.Texts[1] == CloseMark:
                 Dialogue.Clear(); // gstr[3]: put the window away
@@ -198,6 +213,7 @@ public class DialogueGplHost : LoggingGplHost
         {
             Journal.Replied(text);
             Dialogue.Answered();
+            Dialogue.Clear(); // 7372:1235: the windows close after typing (84C9:0A25)
             return text.Length > maxLength ? text[..maxLength] : text;
         }
         Dialogue.Ask(new GplTextPrompt(maxLength));
@@ -212,7 +228,8 @@ public class DialogueGplHost : LoggingGplHost
     /// The player's answer if the script is being resumed; otherwise show the
     /// prompt and pause the script.
     /// </summary>
-    protected bool Wait(GplMachine machine, GplPrompt prompt, out int answer)
+    /// <param name="clearsText">Whether answering empties the text (<see cref="GplDialogue.Answered"/>).</param>
+    protected bool Wait(GplMachine machine, GplPrompt prompt, out int answer, bool clearsText = true)
     {
         if (machine.TryTakeAnswer(out answer))
         {
@@ -223,7 +240,7 @@ public class DialogueGplHost : LoggingGplHost
                 GplMenuPrompt menu when a >= 0 && a < menu.Options.Count => menu.Options[a].Text,
                 _ => "",
             });
-            Dialogue.Answered();
+            Dialogue.Answered(clearsText);
             return true;
         }
         Dialogue.Ask(prompt);

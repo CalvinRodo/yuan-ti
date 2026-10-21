@@ -393,8 +393,29 @@ public class GplDialogueTests
         GplRunResult done = m.Resume(1);
         Assert.True(done.Ok && !done.Suspended);
         Assert.Equal(1, m.Memory.Read(new GplVariable(GplVarType.LocalNum, 0)));
-        Assert.Single(host.Dialogue.Text); // the PRINT_STRING before the question did not run again
+        Assert.Empty(host.Dialogue.Text); // answered: the text is gone (84C9:0CD9), and the PRINT_STRING before the question did not run again
         Assert.Null(host.Dialogue.Prompt);
+    }
+
+    [Fact]
+    public void EndKeepsTheTextAndAnAnswerStartsANewPage()
+    {
+        // PRINT_STRING(115, "Hi. ") PRINT_STRING(115, "END") PRINT_STRING(115, "Bye.") lnum[0] = ((ASK_YES_NO)) PRINT_STRING(115, "Done.")
+        var a = new Asm().Op(0x4F).Num(115).Bytes(Packed("Hi. ")).Op(0x00)
+            .Op(0x4F).Num(115).Bytes(Packed("END")).Op(0x00)
+            .Op(0x4F).Num(115).Bytes(Packed("Bye.")).Op(0x00)
+            .Op(0x16).Bytes(0x8C, 0x38).Bytes((byte)GplVarType.LocalNum, 0)
+            .Op(0x4F).Num(115).Bytes(Packed("Done.")).Op(0x00)
+            .Op(0x31);
+        var (m, host) = Make(a.ToArray());
+
+        Assert.True(m.Run(new GplEntry(1, 0)).Suspended); // END: read it
+        m.Resume();
+        Assert.Equal("Hi. Bye.", string.Concat(host.Dialogue.Text.Select(t => t.Text))); // END kept the text (the original's buffer)
+        int pages = host.Dialogue.Pages;
+        m.Resume(1);
+        Assert.Equal("Done.", Assert.Single(host.Dialogue.Text).Text); // the answer emptied it: a new page
+        Assert.Equal(pages + 1, host.Dialogue.Pages);
     }
 
     [Fact]

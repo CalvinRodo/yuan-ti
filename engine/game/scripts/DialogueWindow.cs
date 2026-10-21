@@ -238,8 +238,8 @@ public partial class DialogueWindow : Control
             return;
         }
         // Cleared since last shown (CLEAR_PIC, then new text in the same frame): start again.
-        bool cleared = _dialogue.Clears != _clears;
-        _clears = _dialogue.Clears;
+        bool cleared = _dialogue.Pages != _clears;
+        _clears = _dialogue.Pages;
         if (cleared)
         {
             (_top, _lines) = (0, 0);
