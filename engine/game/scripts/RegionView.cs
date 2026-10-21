@@ -724,8 +724,9 @@ public partial class RegionView : Node2D
         _cursor = cursor; // the pointer follows (UpdatePointer)
         Notice(cursor switch
         {
-            GameMenu.Cursor.Look => "LOOK CURSOR: a click looks (Esc: back to moving)",
+            GameMenu.Cursor.Look => "LOOK CURSOR: a click shows what can be done (Esc: back to moving)",
             GameMenu.Cursor.Attack => "ATTACK CURSOR: a click attacks (Esc: back to moving)",
+            GameMenu.Cursor.Item => _useWith is { } held ? $"USE {Called(held).ToUpperInvariant()} WITH: click what to use it on" : "MOVE CURSOR",
             _ => "MOVE CURSOR",
         });
     }
@@ -1175,9 +1176,10 @@ public partial class RegionView : Node2D
         {
             SetUseWith(null);
         }
-        else if (_useWith is not null && !_dialogueWindow.Visible && e is InputEventMouseButton { ButtonIndex: MouseButton.Left or MouseButton.Right, Pressed: true })
+        else if (_useWith is not null && _cursor == GameMenu.Cursor.Item && !_dialogueWindow.Visible
+            && e is InputEventMouseButton { ButtonIndex: MouseButton.Left, Pressed: true })
         {
-            // Use with…: the click picks the second object.
+            // Use with…: the held item's pointer picks the second object.
             WorldObject first = _useWith;
             SetUseWith(null);
             if (ObjectAt(GetGlobalMousePosition()) is { } second && second != first)
@@ -1260,19 +1262,24 @@ public partial class RegionView : Node2D
         else if (e is InputEventMouseButton { ButtonIndex: MouseButton.Left, Pressed: true } click)
         {
             Vector2 at = GetGlobalMousePosition();
-            if (_cursor != GameMenu.Cursor.Move && ObjectAt(at) is { } target)
+            if (_cursor == GameMenu.Cursor.Look && ObjectAt(at) is not null)
             {
-                // The LOOK and ATTACK cursors: the click looks at or attacks what is under it.
-                StartVerb(target, _cursor == GameMenu.Cursor.Look ? Verb.Look : Verb.Attack, null);
+                // The eye opens what can be done with the thing (1587:06D8 mode 2 → 68BD:0040, the verb window).
+                OpenVerbMenu(at, click.Position);
+            }
+            else if (_cursor == GameMenu.Cursor.Attack && ObjectAt(at) is { } target)
+            {
+                StartVerb(target, Verb.Attack, null);
             }
             else
             {
                 WalkTo(new Cell((int)Math.Floor(at.X / Region.TileSize), (int)Math.Floor(at.Y / Region.TileSize)), click.ShiftPressed);
             }
         }
-        else if (e is InputEventMouseButton { ButtonIndex: MouseButton.Right, Pressed: true } right)
+        else if (e is InputEventMouseButton { ButtonIndex: MouseButton.Right, Pressed: true })
         {
-            OpenVerbMenu(GetGlobalMousePosition(), right.Position);
+            // 1587:01C7: the next pointer (MOVE, ATTACK, LOOK, the held item).
+            _gameMenu.CycleCursor(_useWith is not null);
         }
         else if (e.IsActionPressed(Controls.ToggleInventory) && !_character.IsOpen && !Session.Scripts.IsSuspended)
         {
@@ -1415,7 +1422,16 @@ public partial class RegionView : Node2D
     {
         _useWith = first;
         _prompt.Visible = first is not null;
-        _prompt.Text = first is null ? "" : $"Use {Called(first)} with… (click an object; Esc cancels)";
+        _prompt.Text = first is null ? "" : $"Use {Called(first)} with… (click an object; right-click: other pointers; Esc puts it away)";
+        // DSUN.EXE's pointer mode 3: the item is held on the pointer, which shows it.
+        if (first is not null)
+        {
+            _gameMenu.SetCursor(GameMenu.Cursor.Item);
+        }
+        else if (_cursor == GameMenu.Cursor.Item)
+        {
+            _gameMenu.ResetCursor();
+        }
     }
 
     /// <summary>

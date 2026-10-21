@@ -92,6 +92,36 @@ public partial class RegionView
         Expect(_world.CollapsedLeader is null && _party.All(p => p.Node.Visible), "whole-party movement spreads everyone out");
         Expect(_world.Party.Select(p => p.Cell).Distinct().Count() == _party.Count, "spread-out members occupy different cells");
 
+        // Out of a fight a right-click on the map turns the pointer too (1587:01C7), and a held item joins the turn.
+        var turn = new InputEventMouseButton { ButtonIndex = MouseButton.Right, Pressed = true };
+        _gameMenu.ResetCursor();
+        var seen = new List<GameMenu.Cursor>();
+        for (int i = 0; i < 3; i++)
+        {
+            _UnhandledInput(turn);
+            seen.Add(_cursor);
+        }
+        Expect(seen.SequenceEqual([GameMenu.Cursor.Attack, GameMenu.Cursor.Look, GameMenu.Cursor.Move]),
+            $"right-clicks on the map: ATTACK, LOOK, MOVE ({string.Join(", ", seen)})");
+        if (_world.Objects.FirstOrDefault(o => o.Kind == ObjectKind.Thing && !o.Hidden && o.Source is not null) is { } thing)
+        {
+            SetUseWith(thing);
+            Expect(_cursor == GameMenu.Cursor.Item && PointerIcon(Vector2.Zero) == Pointers.Held, "Use with… holds the item as the pointer");
+            _UnhandledInput(turn);
+            Expect(_cursor == GameMenu.Cursor.Move && _useWith == thing, "a right-click turns to MOVE and keeps the item");
+            for (int i = 0; i < 3; i++)
+            {
+                _UnhandledInput(turn);
+            }
+            Expect(_cursor == GameMenu.Cursor.Item, "and the turn comes back to it after LOOK");
+            SetUseWith(null);
+            Expect(_cursor == GameMenu.Cursor.Move, "putting it away goes back to MOVE");
+        }
+        else
+        {
+            problems.Add("no item on the map for the held-item pointer check");
+        }
+
         _world.CollapseParty(_selected);
         Step(4000);
         Expect(StartTestFight(), "a fight can start with the party collapsed");

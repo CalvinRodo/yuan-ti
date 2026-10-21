@@ -23,7 +23,8 @@ namespace DarkSun.Engine;
 /// </summary>
 public partial class GameMenu : RetroScreen
 {
-    public enum Cursor { Move, Look, Attack }
+    /// <summary>The map's pointer modes (<c>DS:11B8</c>): 1 move, 2 look, 4 attack, 3 an item held to use with something.</summary>
+    public enum Cursor { Move, Look, Attack, Item }
 
     private const int PaletteNumber = 1001, MenuWindow = 10500, PreferencesWindow = 16500, Frame = 10000, AskWindow = 14000;
     private const int ReturnButton = 10308, MenuButton = 11308;
@@ -289,18 +290,22 @@ public partial class GameMenu : RetroScreen
         action?.Invoke();
     }
 
-    private void SetCursor(Cursor cursor)
+    public void SetCursor(Cursor cursor)
     {
         _cursor = cursor;
         Close();
         CursorChanged?.Invoke(cursor);
     }
 
-    /// <summary>A right-click in a fight (<c>1587:01C7</c>): MOVE, then ATTACK, then LOOK, then MOVE again.</summary>
-    public void CycleCursor() => SetCursor(_cursor switch
+    /// <summary>
+    /// A right-click on the map (<c>1587:01C7</c>): MOVE, then ATTACK, then LOOK,
+    /// then the held item if there is one (<paramref name="holding"/>), then MOVE again.
+    /// </summary>
+    public void CycleCursor(bool holding = false) => SetCursor(_cursor switch
     {
         Cursor.Move => Cursor.Attack,
         Cursor.Attack => Cursor.Look,
+        Cursor.Look when holding => Cursor.Item,
         _ => Cursor.Move,
     });
 

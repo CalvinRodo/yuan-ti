@@ -20,22 +20,35 @@ public static class Pointers
     private static readonly Dictionary<(int Icon, int Scale), (Image Image, Vector2 Hotspot)?> Cache = [];
     private static (int Icon, int Scale)? _shown;
 
+    /// <summary>Not an <c>ICON</c>: the item held to use with something (mode 3, <see cref="ShowHeld"/>).</summary>
+    public const int Held = -1;
+
     /// <summary>Show <c>ICON</c> <paramref name="icon"/> as the pointer (the system's arrow if there is no such icon).</summary>
-    public static void Show(Window window, int icon)
+    public static void Show(Window window, int icon) => Show(window, icon, scale => Load(icon, scale));
+
+    /// <summary>
+    /// The pointer of pointer mode 3 (<c>191F:0A99</c>: the held item's picture,
+    /// <c>4281:003E</c>): <paramref name="picture"/> of object
+    /// <paramref name="index"/>, aimed by its middle.
+    /// </summary>
+    public static void ShowHeld(Window window, int index, Image picture) =>
+        Show(window, -2 - index, scale => Scaled(picture.Duplicate() as Image ?? picture, scale, centred: true));
+
+    private static void Show(Window window, int key, Func<int, (Image, Vector2)?> load)
     {
         if (DisplayServer.GetName() == "headless")
         {
             return;
         }
         int scale = ViewportScale * Math.Max(1, (int)Math.Min(window.Size.X / 640f, window.Size.Y / 400f));
-        if (_shown == (icon, scale))
+        if (_shown == (key, scale))
         {
             return;
         }
-        _shown = (icon, scale);
-        if (!Cache.TryGetValue((icon, scale), out var pointer))
+        _shown = (key, scale);
+        if (!Cache.TryGetValue((key, scale), out var pointer))
         {
-            Cache[(icon, scale)] = pointer = Load(icon, scale);
+            Cache[(key, scale)] = pointer = load(scale);
         }
         if (pointer is { } p)
         {
@@ -64,11 +77,14 @@ public static class Pointers
         {
             return null;
         }
-        Image image = Textures.ToImage(frame, Session.Assets.Palette(resources.Read("PAL ", 1001)));
-        scale = Math.Min(scale, 256 / Math.Max(image.GetWidth(), image.GetHeight()));
-        image.Resize(image.GetWidth() * scale, image.GetHeight() * scale, Image.Interpolation.Nearest);
         // The arrows, the sword and the missile point to the top left; the rest are aimed by their middle.
-        Vector2 hotspot = icon is >= Move and <= CantRanged ? Vector2.Zero : image.GetSize() / 2;
-        return (image, hotspot);
+        return Scaled(Textures.ToImage(frame, Session.Assets.Palette(resources.Read("PAL ", 1001))), scale, centred: icon is not (>= Move and <= CantRanged));
+    }
+
+    private static (Image, Vector2) Scaled(Image image, int scale, bool centred)
+    {
+        scale = Math.Max(1, Math.Min(scale, 256 / Math.Max(1, Math.Max(image.GetWidth(), image.GetHeight()))));
+        image.Resize(image.GetWidth() * scale, image.GetHeight() * scale, Image.Interpolation.Nearest);
+        return (image, centred ? image.GetSize() / 2 : Vector2.Zero);
     }
 }

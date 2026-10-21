@@ -39,7 +39,14 @@ public partial class RegionView
     {
         bool overWindow = GetViewport().GuiGetHoveredControl() is not null || _character.IsOpen || _dialogueWindow.Visible;
         int icon = overWindow ? Pointers.Move : PointerIcon(GetGlobalMousePosition());
-        Pointers.Show(GetWindow(), icon);
+        if (icon == Pointers.Held && _useWith is { Source.Frames: [var picture, ..] } held && TextureFor(picture)?.GetImage() is { } image)
+        {
+            Pointers.ShowHeld(GetWindow(), held.Index, image);
+        }
+        else
+        {
+            Pointers.Show(GetWindow(), icon == Pointers.Held ? Pointers.Move : icon);
+        }
         UpdateAim(overWindow ? null : MouseCell(), icon);
     }
 
@@ -80,6 +87,7 @@ public partial class RegionView
         {
             GameMenu.Cursor.Look => hit is not null ? Pointers.Look : Pointers.CantLook,
             GameMenu.Cursor.Attack => hit is { Kind: ObjectKind.Creature } ? Pointers.Attack : Pointers.CantAttack,
+            GameMenu.Cursor.Item when _useWith is not null => Pointers.Held,
             _ => hit is null && _region.IsBlocked(cell.X, cell.Y) ? Pointers.CantMove : Pointers.Move,
         };
     }
