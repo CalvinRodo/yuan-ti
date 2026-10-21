@@ -309,10 +309,11 @@ public sealed class Combatant
             Facing = facing,
             PartyMember = party,
             ComputerControlled = r?.ComputerControlled ?? !party,
-            ArmorClass = ch?.BaseArmorClass ?? r?.Ac ?? 10,
+            ArmorClass = source?.SheetField(WorldObject.SheetBaseArmorClass) ?? ch?.BaseArmorClass ?? r?.Ac ?? 10,
             Thac0 = r?.Thac0 ?? 20,
             Move = r?.Move ?? 12,
-            Stats = r is null ? [10, 10, 10, 10, 10, 10] : [.. r.Stats.Select(s => (int)s)],
+            Stats = r is null ? [10, 10, 10, 10, 10, 10]
+                : [.. r.Stats.Select((s, i) => source?.StoredField(WorldObject.FieldStr + i) ?? s)],
             HomeSide = ch is { HomeAllegiance: > 0 } ? ch.HomeAllegiance : side,
             Type = r?.SpecialAttack ?? 0,
             Mind = source?.Mind ?? r?.Mind ?? 2,

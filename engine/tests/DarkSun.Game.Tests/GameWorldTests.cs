@@ -309,6 +309,9 @@ public class GameWorldTests
         Assert.Equal("Defiler", celgor.Name);
         Assert.Equal(1, celgor.Allegiance);
         Assert.Equal(1, celgor.ReadField(0x4A));
+        var mage = Combat.Combatant.FromCreature(celgor);
+        Assert.Equal(25, mage.Stats[1]); // Dexterity 25
+        Assert.Equal(-3, mage.ArmorClass); // base −3, Dexterity's −6 on top in a fight
         Assert.True(GplGeometry.Distance(celgor.Cell.X, celgor.Cell.Y, 0, 26) <= 6); // (1 − 3, 8 + 18), off the map's edge
         WorldObject rampager = world.First(-171)!;
         Assert.Equal((2, 2), (rampager.Allegiance, rampager.ReadField(0x4A)));

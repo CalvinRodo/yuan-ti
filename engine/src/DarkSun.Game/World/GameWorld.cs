@@ -190,6 +190,15 @@ public sealed class WorldObject
         }
     }
 
+    /// <summary>Field 23 + i: ability i (Str … Cha) in the combat record (+0x22 + i).</summary>
+    public const int FieldStr = 23;
+
+    /// <summary>Character record fields: 30 Dexterity (+0x1C), 46 the base armour class (+0x27).</summary>
+    public const int SheetDex = 30, SheetBaseArmorClass = 46;
+
+    /// <summary>A combat record field a script (or <see cref="GameWorld.StageArenaBout"/>) wrote, or null.</summary>
+    public int? StoredField(int field) => _fields.TryGetValue(field, out int v) ? v : null;
+
     /// <summary>A field of the creature's character record a script wrote (<c>obj.71.f</c>), kept with the stored fields under 1000 + f.</summary>
     public int? SheetField(int field) => _fields.TryGetValue(SheetFields + field, out int v) ? v : null;
 
@@ -586,9 +595,10 @@ public sealed partial class GameWorld
     /// one (<c>7372:0A44</c>, within 6 cells) with field 0x4A 1 or 2; the
     /// party's allegiance becomes 4, which keeps it out of the fight. Returns
     /// Celgor, where FIGHT starts (<c>7372:030B</c>) and the view centres
-    /// (<c>191F:01FF</c>), or null with no active member. (DSUN.EXE also sets
-    /// Celgor's combat record +0x23 and character record +0x1C to 0x19 and +0x27
-    /// to 0xFD; what they mean isn't known.)
+    /// (<c>191F:01FF</c>), or null with no active member. Celgor also gets
+    /// Dexterity 25 (combat record +0x23 and character record +0x1C = 0x19) and
+    /// base armour class −3 (character record +0x27 = 0xFD): armour class −9 in
+    /// all, so the rampager and the sligs seldom hit him.
     /// </summary>
     public WorldObject? StageArenaBout()
     {
@@ -610,7 +620,11 @@ public sealed partial class GameWorld
         WorldObject? celgor = Make(296, -3, 18, 1);
         if (celgor is { Kind: ObjectKind.Creature })
         {
+            // Allegiance 1, Dexterity 25 in both records, base armour class −3: a mage who lasts.
             celgor.Allegiance = 1;
+            celgor.WriteField(WorldObject.FieldStr + 1, 25);
+            celgor.WriteSheetField(WorldObject.SheetDex, 25);
+            celgor.WriteSheetField(WorldObject.SheetBaseArmorClass, -3);
         }
         Make(171, 3, 18, 2);
         Make(269, 3, 16, 2);

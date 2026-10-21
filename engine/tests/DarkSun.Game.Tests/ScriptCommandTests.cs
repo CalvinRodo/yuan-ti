@@ -254,6 +254,25 @@ public class ScriptCommandTests
         Assert.Equal(1, machine.Memory.Read(new GplVariable(GplVarType.GlobalNum, 0)));
     }
 
+    [Fact]
+    public void EndAndCloseArentPrintedEndWaitsAndCloseClears()
+    {
+        var host = new DialogueGplHost();
+        var machine = new GplMachine(new OneScript([GplOpcodes.EndFunction, 0x31]), host, [], new BorlandRandom(1));
+        GplCommand Print(string text)
+        {
+            var instruction = new GplInstruction(0, 0x4F, 1);
+            return new GplCommand(instruction, new GplEntry(1, 0), [115, 0], [null, text], [null, null]);
+        }
+
+        host.Execute(machine, Print("Gladiators: Step forward, into the arena! "));
+        host.Execute(machine, Print("END"));
+        Assert.IsType<GplContinuePrompt>(host.Dialogue.Prompt);
+        Assert.Equal(["Gladiators: Step forward, into the arena! "], host.Dialogue.Text.Select(t => t.Text));
+        host.Execute(machine, Print("CLOSE"));
+        Assert.True(host.Dialogue.Text.Count == 0);
+    }
+
     // -- repairs, the clock -----------------------------------------------------------------------------
 
     [Fact]

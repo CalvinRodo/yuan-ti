@@ -167,10 +167,14 @@ public partial class RegionView
             ? $"[color=#ffd080]Combat! {enemies} {(enemies == 1 ? "enemy" : "enemies")}[/color]"
             : $"[color=#ffd080]The party watches: {string.Join(" against ", battle.Combatants.GroupBy(c => c.Side).Select(g => string.Join(", ", g.Select(c => c.Name))))}[/color]");
         AddScriptLine($"> {why}: combat, {battle.Combatants.Count} combatants");
-        _combatPanel.Visible = !_checking;
+        _combatPanel.Visible = !_checking && PartyFights;
         _combatLogPanel.Visible = !_checking;
+        UpdateSilhouettes();
         return true;
     }
+
+    /// <summary>A party member is in the fight (else the party only watches, and has no buttons).</summary>
+    private bool PartyFights => _battle?.Combatants.Any(c => c.PartyMember) == true;
 
     /// <summary>REQUEST(14) staged a bout for the party to watch; it starts once the announcer's text is put away.</summary>
     private bool _watchedFightPending;
@@ -220,6 +224,7 @@ public partial class RegionView
         _combatPanel.Visible = _combatLogPanel.Visible = false;
         HideCombatMenu();
         ClearGraphics();
+        UpdateSilhouettes();
     }
 
     private void EndCombat()
@@ -257,6 +262,7 @@ public partial class RegionView
             }
         }
         _partyFell = fallen;
+        UpdateSilhouettes();
         ResumeAfterWatchedFight();
     }
 
@@ -273,7 +279,7 @@ public partial class RegionView
         {
             return;
         }
-        _combatPanel.Visible = !_checking && !_character.IsOpen; // the character screen covers the map, with its own controls
+        _combatPanel.Visible = !_checking && !_character.IsOpen && PartyFights; // the character screen covers the map, with its own controls
         for (int guard = 0; guard < 64; guard++)
         {
             if (_combatWait > 0)

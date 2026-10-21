@@ -674,10 +674,16 @@ executable, not in the data.
       4 so it stays out; the fight's range is from the party's whole side
       (`612E:281F`). The fight starts once the announcement is read, the
       view follows Celgor, and the script goes on when it ends ("Gladiators:
-      Step forward"). A fight the party only watched isn't a defeat. Not
-      known: what Celgor's combat record +0x23 and character record +0x1C
-      and +0x27 (set to 0x19, 0x19, 0xFD) do, and where the party's
-      allegiance goes back to 1 (here: when the fight ends).
+      Step forward"). A fight the party only watched isn't a defeat. Celgor
+      gets Dexterity 25 and base armour class −3 (combat record +0x23,
+      character record +0x1C and +0x27, as `GPLX` names them), so he lasts
+      and casts. The party can't walk or use verbs while a script waits or a
+      bout is pending (as in DSUN.EXE, which stays inside the script), and a
+      watched fight shows no combat buttons. In any fight each combatant has
+      a faint silhouette above the scenery (QOL): a frightened Celgor flees
+      north behind the pens' facade (the EXE's flee search, `1A0A:2C86`,
+      allows those cells too). Not known: where the party's allegiance goes
+      back to 1 (here: when the fight ends).
 
 ---
 

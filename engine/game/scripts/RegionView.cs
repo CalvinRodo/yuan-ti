@@ -831,7 +831,47 @@ public partial class RegionView : Node2D
         member.Node.FlipH = walker.Animator.Mirrored;
         member.Node.Position = new Vector2(walker.Feet.X, walker.Feet.Y);
         member.Node.Offset = new Vector2(-walker.Animator.HotX, -walker.Animator.HotY);
+        Silhouette(member.Node);
     }
+
+    /// <summary>
+    /// In a fight, a faint copy of a combatant drawn above the scenery, so one
+    /// that steps behind a building (a frightened mage fleeing north) can still
+    /// be followed. Not in DSUN.EXE.
+    /// </summary>
+    private void Silhouette(Sprite2D node)
+    {
+        if (node.GetNodeOrNull<Sprite2D>("Silhouette") is not { } ghost)
+        {
+            ghost = new Sprite2D
+            {
+                Name = "Silhouette", Centered = false, ZIndex = 5, ZAsRelative = false, Modulate = new Color(1, 1, 1, 0.4f),
+                TextureFilter = node.TextureFilter,
+            };
+            node.AddChild(ghost);
+        }
+        (ghost.Texture, ghost.FlipH, ghost.Offset, ghost.Visible) = (node.Texture, node.FlipH, node.Offset, InCombat);
+    }
+
+    /// <summary>Show or put away every combatant's <see cref="Silhouette"/> (a fight starts or ends).</summary>
+    private void UpdateSilhouettes()
+    {
+        foreach (PartyMember member in _party)
+        {
+            Silhouette(member.Node);
+        }
+        foreach (Sprite2D node in _creatureNodes.Values)
+        {
+            Silhouette(node);
+        }
+    }
+
+    /// <summary>
+    /// The party takes no walking or verbs while a script waits (a conversation,
+    /// the arena's bout) or a bout the party watches is about to start: in
+    /// DSUN.EXE the game is inside the script until it is done.
+    /// </summary>
+    private bool MapLocked => Session.Scripts.IsSuspended || _watchedFightPending || Session.ScriptHost.WatchedFight is not null;
 
     /// <summary>Draw a creature that walks: its region object's frames, placed by its walker.</summary>
     private void DrawCreature(WorldObject creature)
@@ -847,6 +887,7 @@ public partial class RegionView : Node2D
         node.FlipH = walker.Animator.Mirrored;
         node.Position = new Vector2(walker.Feet.X, walker.Feet.Y);
         node.Offset = new Vector2(-walker.Animator.HotX, -walker.Animator.HotY);
+        Silhouette(node);
     }
 
     private void WalkTo(Cell goal, bool wholeParty)
@@ -1130,9 +1171,9 @@ public partial class RegionView : Node2D
         {
             Zoom(-1);
         }
-        else if (_dialogueWindow.Visible && e is InputEventMouseButton { ButtonIndex: MouseButton.Left or MouseButton.Right })
+        else if ((_dialogueWindow.Visible || MapLocked) && e is InputEventMouseButton { ButtonIndex: MouseButton.Left or MouseButton.Right })
         {
-            // The dialogue is modal: the map takes no clicks until it closes.
+            // The dialogue is modal, and a waiting script holds the party: the map takes no clicks.
         }
         else if (e is InputEventMouseButton { ButtonIndex: MouseButton.Left, Pressed: true } click)
         {

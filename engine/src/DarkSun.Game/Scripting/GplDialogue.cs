@@ -105,6 +105,15 @@ public interface IGplWorld
 /// </summary>
 public class DialogueGplHost : LoggingGplHost
 {
+    /// <summary>
+    /// What <c>MAS 99</c> puts in <c>gstr[2]</c> and <c>gstr[3]</c>, which the
+    /// scripts print after a speech (about 1 450 and 1 250 times): not text.
+    /// The original shows neither; END waits for the player to read the
+    /// speech, CLOSE puts the window away (inferred from their use: END
+    /// before a CLEAR_PIC and a new page, the arena's bout after its speech).
+    /// </summary>
+    public const string EndMark = "END", CloseMark = "CLOSE";
+
     /// <summary>TELEPORT's "the party" value.</summary>
     public const int WholeParty = 0x7FFE;
 
@@ -131,6 +140,13 @@ public class DialogueGplHost : LoggingGplHost
     {
         switch (command.Mnemonic)
         {
+            case "PRINT_STRING" when command.Texts[1] == EndMark:
+                // gstr[2] (MAS 99): the speech is over; the script goes on once the player has read it.
+                Wait(machine, new GplContinuePrompt(), out _);
+                return null;
+            case "PRINT_STRING" when command.Texts[1] == CloseMark:
+                Dialogue.Clear(); // gstr[3]: put the window away
+                return null;
             case "PRINT_STRING":
                 Dialogue.Append(command.Texts[1] ?? "", command.Values[0] & 0xFF);
                 Journalled(machine, command.Texts[1] ?? "", command.Values[0] & 0xFF);

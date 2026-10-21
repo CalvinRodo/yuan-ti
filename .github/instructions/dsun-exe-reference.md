@@ -666,6 +666,13 @@ From the handlers (2026-10-18):
     `84C9:09E6`: 0 `027B`, 1 `0318`, 2 and 4 `0323`, 3 `0745`) never reads
     it: all text looks the same.
   * `PRINT_NUMBER(style, n)` prints n in decimal; `PRINT_NEWLINE` prints `"\n"`.
+  * `MAS 99` sets `gstr[2]` = "END" and `gstr[3]` = "CLOSE", and the scripts
+    print them after a speech (≈1 450 and 1 250 times; END before a
+    CLEAR_PIC and a new page 54 times). The original shows neither (OpenDS's
+    capture of the arena's "Gladiators: Step forward"); the engine takes END
+    as "wait until read" and CLOSE as "put the window away" (inferred; the
+    window code at `84C9:0253` decompiles poorly). The EXE has its own
+    "CLOSE" and "END" at `DS:1F11` and `DS:1F1D`.
   * `SHOW_PIC(n)` shows `PORT` n (1–120, 32 × 32) in window 1; `CLEAR_PIC`
     clears window 1.
   * `CONTINUE` shows "Press continue" and a Continue button; `ASK_YES_NO`
@@ -778,7 +785,7 @@ From the handlers (2026-10-18); the engine's model is `DarkSun.Game.World`.
   | 7 | a trap (50 uses; `OJFF` 2030–2040): makes item −who at cell (x, y); the party's find/remove traps check (situation 0), or Detect Traps on the active member unless the item's +0x0F has 0x80, avoids it (the item stays, returns 1). Otherwise its +0x0F sets it off: bits 0–2 d6s (`612E:1F92`) to everyone of allegiance bit 1 and status below 3 within bits 3–4 cells in sight (`612E:0000`), bits 5–6 the element (`DS:251C`: poison, fire, slashing, electricity); the item goes. The shipped traps are 4d6 (1d6 for 2034) on their cell |
   | 8 | `0CB4(a, b)`: a random monster from the region's `MONR` table (42-byte records); combat |
   | 9 | `0F1C(who, ojff, b)` (each match when who ≤ 0): remove the object and make `OJFF` a where it stood (b ≠ 0: at its saved start), with its facing; the new one becomes "other" (`37B7:0003`) |
-  | 14 | `0FE9`: the arena bout (GPL 2, region 42), around the active member (`47B7:0009` = `3781:0369`, `gname[5]`; *who*, the gate, isn't read) at cell (x, y): closes the text windows (`84C9:0A25`); CLONEs (`87B3:1295` → `7372:0A44`, one within 6 cells, then field 0x4A of the copy = 1 or 2) `OJFF` 296 (Celgor) at (x − 3, y + 18) with field 1, and if it is a creature its combat record +0x1D (allegiance) = 1, +0x23 = 0x19 and its character record +0x1C = 0x19, +0x27 = 0xFD; 171 (the rampager) at (x + 3, y + 18) and 269 twice at (x + 3, y + 16) and (x + 3, y + 20), field 2; the party's allegiance = 4; centres the view on Celgor (`191F:01FF`); FIGHT at his cell (`7372:030B`). The fight is over when the request returns |
+  | 14 | `0FE9`: the arena bout (GPL 2, region 42), around the active member (`47B7:0009` = `3781:0369`, `gname[5]`; *who*, the gate, isn't read) at cell (x, y): closes the text windows (`84C9:0A25`); CLONEs (`87B3:1295` → `7372:0A44`, one within 6 cells, then field 0x4A of the copy = 1 or 2) `OJFF` 296 (Celgor) at (x − 3, y + 18) with field 1, and if it is a creature its combat record +0x1D (allegiance) = 1 and +0x23 (Dexterity) = 25, its character record +0x1C (Dexterity) = 25 and +0x27 (base armour class) = −3, armour class −9 in all; 171 (the rampager) at (x + 3, y + 18) and 269 twice at (x + 3, y + 16) and (x + 3, y + 20), field 2; the party's allegiance = 4; centres the view on Celgor (`191F:01FF`); FIGHT at his cell (`7372:030B`). The fight is over when the request returns |
   | 15 | `1587:2927(1)`: sets `577D:09B5` and `DS:11B8` and calls `191F:0A99(1)`; not identified |
   | 16 | `6BB8:0FA9(a)`: if sound is on and a ≠ `DS:0D9A`, `361A:0000(a)` sets the music's intensity level (an XMIDI section, at most the track's byte at `DS:1675 + 3·track`) |
   | 20 | `13B9(a)`: how many objects 5–319 are creatures (kind 2) whose allegiance has a bit of a (all with a = 0) |
