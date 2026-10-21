@@ -1232,11 +1232,11 @@ public sealed partial class GameWorld
         foreach (WorldObject obj in Objects.Where(o => o.Kind != ObjectKind.Party && !o.Hidden && o.Index >= PartySize))
         {
             if (obj.Order.Mode == OrderMode.None && obj.Walker is not { IsWalking: true }
-                && scripts.NoOrders.TryGetValue(obj.Id, out GplEntry idle) && idle.File != 0)
+                && scripts.NoOrdersFor(obj.Index, obj.Id) is { File: not 0 } idle)
             {
                 PendingScripts.Enqueue((idle, obj.Index, $"{obj.Name} has no orders"));
             }
-            if (active is not null && scripts.Sight.TryGetValue(obj.Id, out var sight) && sight.Entry.File != 0)
+            if (active is not null && scripts.SightFor(obj.Index, obj.Id) is { Entry.File: not 0 } sight)
             {
                 bool seen = GplGeometry.LineOfSight(Region, obj.Cell.X, obj.Cell.Y, active.Cell.X, active.Cell.Y)
                     && GplGeometry.Distance(obj.Cell.X, obj.Cell.Y, active.Cell.X, active.Cell.Y) <= (sight.Range & 0x7F);

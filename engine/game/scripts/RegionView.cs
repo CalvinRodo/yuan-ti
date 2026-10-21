@@ -206,6 +206,14 @@ public partial class RegionView : Node2D
             // A new game begins where DSUN.EXE's does: region 42, the party at pixel (488, 152).
             _regionIndex = 0;
             EnterRegion(NewGameStart.Region, NewGameStart.At);
+            foreach (string set in OS.GetCmdlineUserArgs().Where(a => a.StartsWith("--set=")).SelectMany(a => a[6..].Split(';')))
+            {
+                // Development: script variables after the start-up scripts, as a script would have left them (--set=gnum[12]=1;gflag[11]=1).
+                if (GplVariables.Set(Session.Scripts, set) is { } why)
+                {
+                    GD.PrintErr($"--set {set}: {why}");
+                }
+            }
             GiveStartingGear();
             FireArrivalTriggers();
             if (Session.Party.Count > 0 && !_checking)
@@ -351,6 +359,17 @@ public partial class RegionView : Node2D
             {
                 GD.Print($"new game: {Session.Install!.RegionFiles[_regionIndex]} (region {_region.Number}); party at "
                     + string.Join(", ", _party.Select(m => $"({m.Walker.Cell.X},{m.Walker.Cell.Y})")));
+                if (OS.GetCmdlineUserArgs().FirstOrDefault(a => a.StartsWith("--idle=")) is { } idle && int.TryParse(idle[7..], out int ticks))
+                {
+                    // Development: let time pass, answering as a player would, to see what scripts keep running.
+                    for (int tick = 0; tick < ticks; tick++)
+                    {
+                        _Process(1.0 / ScmdAnimator.TicksPerSecond);
+                        AnswerForThePlayer();
+                    }
+                    GD.Print($"after {ticks} ticks: " + string.Join(", ", _scriptLines.Where(l => l.StartsWith("> "))
+                        .GroupBy(l => l[(l.IndexOf(": ") + 2)..].Split(',')[0]).OrderByDescending(g => g.Count()).Select(g => $"{g.Key} ×{g.Count()}")));
+                }
                 GD.Print(string.Join('\n', _scriptLines));
                 GetTree().Quit();
             }

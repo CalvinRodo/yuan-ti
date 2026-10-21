@@ -63,6 +63,15 @@ public interface IGplHost
     int TriggerId(GplMachine machine, int obj) => obj;
 
     /// <summary>
+    /// The objects a creature-script command names (<c>1A0A:0922</c>): for a
+    /// name every object with it, for an index that object. The no-orders and
+    /// line-of-sight scripts are kept per object (table <c>3972:08AA</c>), so
+    /// CLEAR_LOS(gname[6]) clears the one creature running the script. A name
+    /// is kept too, for objects that have it later.
+    /// </summary>
+    IReadOnlyList<int> ScriptObjects(GplMachine machine, int value) => [value];
+
+    /// <summary>
     /// Before a trigger's script runs, DSUN.EXE puts the actor's cell in
     /// <c>gname[1]</c>, <c>gname[2]</c> and 0 in <c>gname[3]</c>, as GETXY
     /// does (<c>1A0A:0256</c>, called by every trigger check); scripts use it

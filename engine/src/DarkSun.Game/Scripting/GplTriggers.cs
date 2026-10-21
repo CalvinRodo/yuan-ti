@@ -342,8 +342,11 @@ public sealed class GplTriggers
 }
 
 /// <summary>
-/// Per-creature scripts (table <c>3972:08AA</c>), keyed by the object value
-/// the script named (e.g. −248 for <c>name(-248)</c>).
+/// Per-creature scripts (table <c>3972:08AA</c>), keyed by object index
+/// (<see cref="IGplHost.ScriptObjects"/>), or by a name (e.g. −248 for
+/// <c>name(-248)</c>) that matched no object when it was set, for any object
+/// that has it later. An object's own entry comes first (<see cref="NoOrdersFor"/>,
+/// <see cref="SightFor"/>). Cleared when a region is entered.
 /// </summary>
 public sealed class GplCreatureScripts
 {
@@ -359,7 +362,29 @@ public sealed class GplCreatureScripts
 
     public void SetSight(int obj, int kind, GplEntry entry, int range) => _sight[obj] = (kind, entry, range);
 
-    public void ClearSight(int obj) => _sight.Remove(obj);
+    /// <summary>
+    /// CLEAR_LOS: an object's script is cleared, overriding a name's
+    /// (<see cref="SightFor"/>); a name's is removed.
+    /// </summary>
+    public void ClearSight(int obj)
+    {
+        if (obj >= 0)
+        {
+            _sight[obj] = (0, default, 0);
+        }
+        else
+        {
+            _sight.Remove(obj);
+        }
+    }
+
+    /// <summary>The no-orders script of object <paramref name="index"/> with id <paramref name="id"/>: its own, else its name's.</summary>
+    public GplEntry? NoOrdersFor(int index, int id) =>
+        _noOrders.TryGetValue(index, out GplEntry own) ? own : _noOrders.TryGetValue(id, out GplEntry named) ? named : null;
+
+    /// <summary>The line-of-sight script of object <paramref name="index"/> with id <paramref name="id"/>: its own, else its name's.</summary>
+    public (int Kind, GplEntry Entry, int Range)? SightFor(int index, int id) =>
+        _sight.TryGetValue(index, out var own) ? own : _sight.TryGetValue(id, out var named) ? named : null;
 
     public void Clear()
     {

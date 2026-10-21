@@ -405,6 +405,12 @@ public sealed partial class WorldGplHost : DialogueGplHost
 
     public override int TriggerId(GplMachine machine, int obj) => Map?[obj] is { } o ? o.Id : obj;
 
+    /// <summary>The objects <paramref name="value"/> names, and a name itself too, for those that show up later (a hidden one revealed).</summary>
+    public override IReadOnlyList<int> ScriptObjects(GplMachine machine, int value) =>
+        Map is not { } world ? [value]
+        : value < 0 ? [.. world.Select(value).Select(o => o.Index), value]
+        : world[value] is not null ? [value] : [];
+
     public override void FocusActor(GplMachine machine, int actor) => Map?.GetXY(actor);
 
     public override string SpeakerName(GplMachine machine) =>

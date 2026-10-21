@@ -125,6 +125,7 @@ public partial class Main : Control
         }
         if (regionCheck)
         {
+            ChooseStart(args);
             OpenRegionView();
         }
         else if (args.Contains("--check-menu"))
@@ -171,19 +172,7 @@ public partial class Main : Control
             }
             Session.NewGame();
             RegionView.StartNewGame();
-            var start = RegionView.NewGameStart;
-            foreach (string arg in args)
-            {
-                if (arg.StartsWith("--region=") && int.TryParse(arg[9..], out int region))
-                {
-                    start = (region, new DarkSun.Game.Movement.Cell(64, 49));
-                }
-                else if (arg.StartsWith("--at=") && arg[5..].Split(',') is [var x, var y] && int.TryParse(x, out int cx) && int.TryParse(y, out int cy))
-                {
-                    start = (start.Region, new DarkSun.Game.Movement.Cell(cx, cy));
-                }
-            }
-            RegionView.NewGameStart = start;
+            ChooseStart(args);
             ChangeScene(RegionView.ScenePath);
         }
         else if (install is not null)
@@ -321,4 +310,22 @@ public partial class Main : Control
     /// <summary>The repository's <c>dark_sun/</c> folder, for runs from a checkout.</summary>
     private static string DevelopmentDirectory() =>
         ProjectSettings.GlobalizePath("res://").PathJoin("../../dark_sun").SimplifyPath();
+
+    /// <summary>A new game's start from <c>--region=N</c> (at (64, 49)) and <c>--at=X,Y</c>, for development.</summary>
+    private static void ChooseStart(IEnumerable<string> args)
+    {
+        var start = RegionView.NewGameStart;
+        foreach (string arg in args)
+        {
+            if (arg.StartsWith("--region=") && int.TryParse(arg[9..], out int region))
+            {
+                start = (region, new DarkSun.Game.Movement.Cell(64, 49));
+            }
+            else if (arg.StartsWith("--at=") && arg[5..].Split(',') is [var x, var y] && int.TryParse(x, out int cx) && int.TryParse(y, out int cy))
+            {
+                start = (start.Region, new DarkSun.Game.Movement.Cell(cx, cy));
+            }
+        }
+        RegionView.NewGameStart = start;
+    }
 }

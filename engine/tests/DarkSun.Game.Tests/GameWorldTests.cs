@@ -274,6 +274,33 @@ public class GameWorldTests
     }
 
     [Fact]
+    public void CreatureScriptsAreKeptPerObject()
+    {
+        // 3972:08AA is a table by object: a name sets the script of each object that has it, an index
+        // one object's. A creature's own script (gname[6]) cleared or replaced leaves the name's for others.
+        GameWorld world = World();
+        int templar = world.First(-100)!.Index;
+        var host = new WorldGplHost { Map = world };
+        var scripts = new Scripts();
+        scripts.Files[(1, GplFileKind.Gpl)] = GplAssembler.Assemble($"""
+              CREATE_INLOS_TRIGGER(@0040, 12, name(-100), 5)
+              CREATE_NOORDERS_TRIGGER(@0050, 12, name(-100))
+              CLEAR_LOS({templar})
+              CREATE_NOORDERS_TRIGGER(0, 0, {templar})
+              EXIT_GPL
+            """);
+        var m = new GplMachine(scripts, host, [], new BorlandRandom(1));
+
+        Assert.True(m.Run(new GplEntry(1, 0)).Ok);
+
+        Assert.Equal(0, m.Creatures.SightFor(templar, -100)!.Value.Entry.File); // its own: cleared
+        Assert.Equal(0, m.Creatures.NoOrdersFor(templar, -100)!.Value.File);
+        Assert.Equal(new GplEntry(12, 0x40), m.Creatures.SightFor(99, -100)!.Value.Entry); // the name's, for one that shows up later
+        world.Update(0, m.Creatures);
+        Assert.Empty(world.PendingScripts);
+    }
+
+    [Fact]
     public void ThingsGivenANoOrdersScriptRunItToo()
     {
         // 1A0A:0554 moves any object given one into the creature slots: region 42's gate starts the arena this way.

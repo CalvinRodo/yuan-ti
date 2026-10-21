@@ -248,7 +248,11 @@ it and checks that it came back; `--check-saves` lists the saved games;
 `--check-memory` changes every region (doors,
 a creature gone, one moved, a clone), leaves and comes back, and checks it
 is as it was left; `--check-start` starts a new game and
-prints where the party stands and what the scripts did. `--check-verbs` opens every region's verb menus and does every verb
+prints where the party stands and what the scripts did: with `--region=N
+--at=X,Y` somewhere else, `--set=gnum[12]=1;gflag[11]=1` with script
+variables as earlier scripts would have left them, and `--idle=N` after N
+ticks of answering for the player, counting how often each script ran (a
+script that keeps firing stands out). `--check-verbs` opens every region's verb menus and does every verb
 (but Use with) to every object that offers it.
 
 ## Mods

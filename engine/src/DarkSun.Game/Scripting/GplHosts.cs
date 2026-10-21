@@ -83,6 +83,8 @@ public class LoggingGplHost : IGplHost
 
     public virtual int TriggerId(GplMachine machine, int obj) => obj;
 
+    public virtual IReadOnlyList<int> ScriptObjects(GplMachine machine, int value) => [value];
+
     public virtual void FocusActor(GplMachine machine, int actor)
     {
     }

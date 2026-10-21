@@ -647,7 +647,14 @@ the others are creatures), filled by:
   `+02` kind, `+06` address, `+0A` file, `+0C` range. Kind 1 runs when the
   creature has a clear line of sight (`line_of_sight`, §3) to the active
   party member and the distance (`0898:000C`) is at most the range; kind 2
-  when the sight line is blocked or the distance is greater.
+  when the sight line is blocked or the distance is greater. Each check
+  (`1A0A:1914`, from every map update, `1A0A:121D` ← `1587:1754`) runs the
+  script again while it holds, so a script stops itself: CLEAR_LOS(who)
+  clears +0x8AC of each object who names (`1A0A:0922`: a name, every object
+  with it; an index, that one). Scripts mostly pass `gname[6]`, the creature
+  running it (126 of 326 CLEAR_LOS; about 200 of the create commands also
+  name an index). The engine keeps the table per object as well
+  (`GplCreatureScripts`, `IGplHost.ScriptObjects`).
 
 Script use of the trigger commands (all 250 scripts): no-orders 1 224,
 in-LOS 768, talk-to 536, attack 664, move-box 408, use 324, not-in-LOS 216,

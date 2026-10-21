@@ -715,10 +715,26 @@ public sealed class GplMachine
             case 0x7F: Modify(a[0], 4, v => unchecked(v - V(1))); break;
 
             // Triggers (dsun-exe-reference.md §4).
-            case 0x1B: Creatures.SetSight(V(2), 1, new GplEntry(V(1), (ushort)V(0)), V(3)); break;
-            case 0x1C: Creatures.SetSight(V(2), 2, new GplEntry(V(1), (ushort)V(0)), V(3)); break;
-            case 0x1D: Creatures.ClearSight(V(0)); Host(i, a); break;
-            case 0x6F: Creatures.SetNoOrders(V(2), new GplEntry(V(1), (ushort)V(0))); break;
+            // The creature scripts are per object: each one the value names (IGplHost.ScriptObjects).
+            case 0x1B or 0x1C:
+                foreach (int obj in _host.ScriptObjects(this, V(2)))
+                {
+                    Creatures.SetSight(obj, i.Op == 0x1B ? 1 : 2, new GplEntry(V(1), (ushort)V(0)), V(3));
+                }
+                break;
+            case 0x1D:
+                foreach (int obj in _host.ScriptObjects(this, V(0)))
+                {
+                    Creatures.ClearSight(obj);
+                }
+                Host(i, a);
+                break;
+            case 0x6F:
+                foreach (int obj in _host.ScriptObjects(this, V(2)))
+                {
+                    Creatures.SetNoOrders(obj, new GplEntry(V(1), (ushort)V(0)));
+                }
+                break;
             case 0x65: AddObjectTrigger(GplTriggerList.Attack, a); break;
             case 0x66: AddObjectTrigger(GplTriggerList.Look, a); break;
             case 0x6C: AddObjectTrigger(GplTriggerList.Pickup, a); break;
