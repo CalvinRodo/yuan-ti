@@ -682,8 +682,11 @@ executable, not in the data.
       watched fight shows no combat buttons. In any fight each combatant has
       a faint silhouette above the scenery (QOL): a frightened Celgor flees
       north behind the pens' facade (the EXE's flee search, `1A0A:2C86`,
-      allows those cells too). Not known: where the party's allegiance goes
-      back to 1 (here: when the fight ends).
+      allows those cells too). A creature that falls leaves the map when
+      its fall is played back, not when the battle (which runs a turn ahead
+      of the screen) decides it: before, Celgor vanished mid-walk up to two
+      seconds before the blow that felled him was shown. Not known: where
+      the party's allegiance goes back to 1 (here: when the fight ends).
 
 ---
 

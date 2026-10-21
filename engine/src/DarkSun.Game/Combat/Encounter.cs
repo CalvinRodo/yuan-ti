@@ -20,10 +20,13 @@ public static class Encounter
     /// <summary>
     /// The battle, or null when there is no enemy. A creature that falls leaves
     /// the map at once (<see cref="GameWorld.Fell"/>: its body, the party's
-    /// experience for it).
+    /// experience for it); with <paramref name="fallsWhenShown"/> the caller
+    /// does that as it plays the battle's <see cref="Fell"/> back, since the
+    /// battle runs ahead of what the screen shows.
     /// </summary>
     public static Battle? Start(GameWorld world, Func<int, Character?> sheets, ICombatDice dice, CharacterRules characterRules,
-        CombatRules? rules = null, SpellRules? spells = null, CreatureRules? creatures = null, WorldObject? attacked = null)
+        CombatRules? rules = null, SpellRules? spells = null, CreatureRules? creatures = null, WorldObject? attacked = null,
+        bool fallsWhenShown = false)
     {
         rules ??= CombatRules.Default;
         if (attacked is { Kind: not ObjectKind.Party } && (attacked.Allegiance & 3) == 0)
@@ -62,13 +65,16 @@ public static class Encounter
             Difficulty = world.Difficulty,
             NewItem = rdff => world.NewItem(rdff, 1, 3),
         };
-        battle.Defeated += c =>
+        if (!fallsWhenShown)
         {
-            if (c.Source is { Kind: not ObjectKind.Party } o)
+            battle.Defeated += c =>
             {
-                world.Fell(o);
-            }
-        };
+                if (c.Source is { Kind: not ObjectKind.Party } o)
+                {
+                    world.Fell(o);
+                }
+            };
+        }
         return battle;
     }
 

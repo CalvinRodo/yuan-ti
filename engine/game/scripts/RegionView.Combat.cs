@@ -134,7 +134,7 @@ public partial class RegionView
         }
         var dice = new BorlandDice(new BorlandRandom((uint)System.Environment.TickCount));
         Battle? battle = Encounter.Start(_world, slot => slot < Session.Party.Count ? Session.Party[slot] : null, dice, Session.Rules,
-            Session.CombatRules, Session.SpellRules, Session.CreatureRules, attacked);
+            Session.CombatRules, Session.SpellRules, Session.CreatureRules, attacked, fallsWhenShown: true);
         if (battle is null)
         {
             AddScriptLine($"> {why}: no one to fight");
@@ -209,6 +209,18 @@ public partial class RegionView
         }
     }
 
+    /// <summary>Creatures that fell in the fight but whose fall wasn't played back leave the map (<see cref="GameWorld.Fell"/> does nothing twice).</summary>
+    private void LeaveFallen(Battle battle)
+    {
+        foreach (Combatant c in battle.Combatants.Where(c => !c.PartyMember && !c.Alive))
+        {
+            if (c.Source is { Kind: not ObjectKind.Party } o)
+            {
+                _world.Fell(o);
+            }
+        }
+    }
+
     /// <summary>The fight is dropped as it stands (the region is left, or a check only wanted to see it start).</summary>
     private void AbandonCombat()
     {
@@ -218,6 +230,7 @@ public partial class RegionView
         {
             return;
         }
+        LeaveFallen(_battle);
         _battle = null;
         _combatEvents.Clear();
         (_combatWait, _combatWalk, _castChoice) = (0, null, null);
@@ -233,6 +246,7 @@ public partial class RegionView
         {
             return;
         }
+        LeaveFallen(battle);
         bool fallen = Encounter.End(battle, _world);
         bool won = !fallen;
         Log(won ? "[color=#a0ffa0]The fight is over.[/color]" : "[color=#ff8080]The party has fallen.[/color]");
@@ -457,6 +471,11 @@ public partial class RegionView
                 if (f.Actor.PartyMember && _party.FirstOrDefault(p => p.Walker == f.Actor.Source?.Walker) is { } fallen)
                 {
                     fallen.Node.Modulate = new Color(0.5f, 0.3f, 0.3f);
+                }
+                else if (f.Actor.Source is { Kind: not ObjectKind.Party } gone)
+                {
+                    // Off the map now, as the fall is shown: the battle decided it a while ago.
+                    _world.Fell(gone);
                 }
                 break;
             case ItemDestroyed i:
@@ -1011,6 +1030,10 @@ public partial class RegionView
         if (_combatLines.Count == 0)
         {
             problems.Add("nothing was logged");
+        }
+        if (battle.Combatants.Any(c => !c.PartyMember && !c.Alive && c.Source is { } o && _world[o.Index] == o))
+        {
+            problems.Add("a creature that fell is still on the map");
         }
         if (!_partyFell && battle.Combatants.Any(c => c.PartyMember && c.Vitals is not { Status: Vitals.Well, Hp: >= 1 } && c.Vitals.Status < Vitals.Dead))
         {
