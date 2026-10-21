@@ -2549,6 +2549,13 @@ public partial class RegionView : Node2D
             screen.Press(11320);
             screen.ClickSpell(false, SlotOf(false, MagicMissile));
             Expect(preserver.Memorized.Contains(MagicMissile), "and it can be memorized");
+            screen.ClickSpell(false, SlotOf(false, MagicMissile), button: MouseButton.Right);
+            Expect(screen.SpellInfo?.StartsWith("MAGIC MISSILE:") == true && preserver.Memorized.Contains(MagicMissile),
+                $"right-clicking it in the book shows what it does ({screen.SpellInfo})");
+            screen._Input(new InputEventKey { Keycode = Key.Escape, PhysicalKeycode = Key.Escape, Pressed = true });
+            Expect(screen.SpellInfo is null && screen.Visible, "Esc closes it, not the screen");
+            screen.ClickSpell(true, SlotOf(true, MagicMissile), button: MouseButton.Right);
+            Expect(!preserver.Memorized.Contains(MagicMissile), $"right-clicking the memorized copy forgets it ({screen.Status})");
 
             // The psionicist: pick a power.
             screen.Press(11306);

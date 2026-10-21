@@ -11,8 +11,9 @@ namespace DarkSun.Engine;
 /// controls, in the 320 × 200 screen's pixels, so a screen's layout is the
 /// window's data and the screen's code only fills it in:
 /// <list type="bullet">
-/// <item>its backdrop, <c>BMP</c> of the window's number when there is one
-/// (or the one given), cut to the window's size;</item>
+/// <item>its backdrop: the <c>BMP</c> its data names (<see cref="UiWindow.Backdrop"/>),
+/// else that of the window's number when there is one (or the one given), cut
+/// to the window's size;</item>
 /// <item>each <c>BUTN</c> a <see cref="TextureButton"/> named <c>BUTN n</c> at its
 /// place and size, drawn with its <c>ICON</c>'s frames (normal, highlighted,
 /// disabled, pressed; none: an invisible button), with its text (if it has
@@ -52,9 +53,9 @@ public partial class UiWindowView : Control
 
     /// <summary>
     /// Window <paramref name="number"/> drawn in <paramref name="palette"/>,
-    /// with <c>BMP</c> <paramref name="backdrop"/> behind it (default: the
-    /// window's own number, if there is one; 0: none). Null if there is no
-    /// such window.
+    /// with <c>BMP</c> <paramref name="backdrop"/> behind it (default: the one
+    /// its data names, <see cref="UiWindow.Backdrop"/>, else the window's own
+    /// number, if there is one; 0: none). Null if there is no such window.
     /// </summary>
     public static UiWindowView? Build(int number, Palette palette, int? backdrop = null)
     {
@@ -70,7 +71,7 @@ public partial class UiWindowView : Control
                 ? Textures.ToTexture(frames[frame], palette)
                 : null;
 
-        int bmp = backdrop ?? number;
+        int bmp = backdrop ?? (window.Backdrop > 0 ? window.Backdrop : number);
         if (bmp > 0 && Art("BMP ", bmp, 0) is { } back)
         {
             var rect = new Rect2(0, 0, Math.Min(window.Width, back.GetWidth()), Math.Min(window.Height, back.GetHeight()));

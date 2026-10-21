@@ -244,7 +244,8 @@ public partial class KeyHelp : CanvasLayer
 
     private static HelpSection MagicSection => new("Spells and psionics",
         new HelpLine("Click above", "Memorize a copy of that spell (LEARN: add it to the spellbook; psionics: pick a power)"),
-        new HelpLine("Right-click above", "Forget a copy"),
+        new HelpLine("Right-click a spell above", "What it does (the spell information window)"),
+        new HelpLine("Right-click a spell below", "Forget that memorized copy"),
         new HelpLine("Click below, then a box", "Cast that spell on the member (use the power); double-click: on yourself"),
         new HelpLine("WIZ / PRI n, KINET…", "The next spell level or psionic discipline"));
 

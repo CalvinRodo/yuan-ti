@@ -396,6 +396,7 @@ public partial class CharacterScreen : RetroScreen
             return;
         }
         Visible = false;
+        CloseSpellInfo();
         (_container, _store, _picked) = (null, null, null);
         ResetStore();
         Closed?.Invoke();
@@ -419,7 +420,11 @@ public partial class CharacterScreen : RetroScreen
         {
             return; // ? is the key help's
         }
-        if (e.IsActionPressed(Controls.Back))
+        if (e.IsActionPressed(Controls.Back) && _spellInfo is not null)
+        {
+            CloseSpellInfo();
+        }
+        else if (e.IsActionPressed(Controls.Back))
         {
             if (_picked is not null || _pickedSpell is not null)
             {

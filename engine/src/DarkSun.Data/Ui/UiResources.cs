@@ -12,12 +12,14 @@ public readonly record struct WindowItem(string Tag, int Number, int X, int Y);
 /// (window list <c>2531:049E</c>). Layout, from the data and the loader:
 /// <list type="bullet">
 /// <item><c>+0x08</c> resource number; <c>+0xBE</c>, <c>+0xC0</c> width and height;
+/// <c>+0xC2</c> the <c>BMP</c> behind it, 0 for none (15503, the spell
+/// information window: 15002; 3012 / 3013: 20087; 17500–17502: 17000–17002);
 /// <c>+0xF3</c> item count.</item>
 /// <item>item i at <c>0x105 + 30·i</c>: <c>+4</c> tag, <c>+8</c> number (uint32),
 /// <c>+0x0C</c>, <c>+0x0E</c> position in the window.</item>
 /// </list>
 /// </summary>
-public sealed record UiWindow(int Number, int Width, int Height, IReadOnlyList<WindowItem> Items)
+public sealed record UiWindow(int Number, int Width, int Height, IReadOnlyList<WindowItem> Items, int Backdrop = 0)
 {
     public const int HeaderSize = 0x105;
     public const int ItemSize = 30;
@@ -48,7 +50,8 @@ public sealed record UiWindow(int Number, int Width, int Height, IReadOnlyList<W
             (int)BinaryPrimitives.ReadUInt32LittleEndian(data[8..]),
             BinaryPrimitives.ReadInt16LittleEndian(data[0xBE..]),
             BinaryPrimitives.ReadInt16LittleEndian(data[0xC0..]),
-            items);
+            items,
+            BinaryPrimitives.ReadUInt16LittleEndian(data[0xC2..]));
     }
 }
 

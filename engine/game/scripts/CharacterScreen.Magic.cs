@@ -14,10 +14,12 @@ namespace DarkSun.Engine;
 /// the status line while the pointer is on it and its description the
 /// tooltip (<c>SPIN</c> n). The status line says what is left, in DSUN.EXE's words.
 /// <list type="bullet">
-/// <item>Spells: the level's spells above, click to memorize a copy, right-click
-/// to forget one; LEARN shows the wizard spells not in the spellbook, click to
-/// learn. Below, the memorized spells ready (with how many): click one, then a
-/// member's box, to cast it on them (double-click: on the caster).</item>
+/// <item>Spells: the level's spells above, click to memorize a copy; LEARN shows
+/// the wizard spells not in the spellbook, click to learn. Below, the memorized
+/// spells ready (with how many): click one, then a member's box, to cast it on
+/// them (double-click: on the caster); right-click to forget a copy.</item>
+/// <item>A right-click on a spell above, or on a power, opens the spell
+/// information window (<see cref="ShowSpellInfo"/>).</item>
 /// <item>Psionics: the discipline's powers above, those not known dimmed:
 /// click one to pick it (while the character may know more), or a known
 /// one, then a box, to use it. Below, every power known.</item>
@@ -145,6 +147,66 @@ public partial class CharacterScreen
             _pickedSpell = null;
             _learning = false;
         }
+    }
+
+    /// <summary>DSUN.EXE's spell information window (<c>91F7:1716</c>), <c>WIND</c> 15503 and its text box 15400.</summary>
+    private const int SpellInfoWindow = 15503, SpellInfoText = 15400;
+
+    private Control? _spellInfo;
+
+    /// <summary>The spell information window's text while it shows (for the checks), else null.</summary>
+    public string? SpellInfo { get; private set; }
+
+    /// <summary>
+    /// The spell information window (<c>91F7:1716</c>): <c>WIND</c> 15503 at
+    /// (86, 56) over its <c>BMP</c> 15002, the spell's <c>ICON</c> 9 right and 8
+    /// down inside it, and its <c>SPIN</c> text ("NAME: what it does") in text
+    /// box 15400 after five spaces, UNKNOWN for none. DSUN.EXE opens it when an item that carries a spell is used; here
+    /// a right-click on a spell or power opens it too. A click or Esc closes it.
+    /// </summary>
+    private void ShowSpellInfo(int number)
+    {
+        CloseSpellInfo();
+        // Behind it, the rest of the screen takes no clicks: a click anywhere closes it.
+        var shade = new Control { Size = new Vector2(Width, Height), MouseFilter = MouseFilterEnum.Stop };
+        shade.GuiInput += e =>
+        {
+            if (e is InputEventMouseButton { Pressed: true })
+            {
+                CloseSpellInfo();
+                GetViewport().SetInputAsHandled();
+            }
+        };
+        string text = Session.SpellName(number) is { } name ? $"{name.ToUpperInvariant()}: {Session.SpellDescription(number)}" : "UNKNOWN";
+        if (UiWindowView.Build(SpellInfoWindow, _palette) is { } window)
+        {
+            window.Position = new Vector2(86, 56);
+            window.MouseFilter = MouseFilterEnum.Ignore;
+            if (SpellIcon(number) is { } icon)
+            {
+                window.AddChild(new TextureRect { Texture = icon, Position = new Vector2(9, 8), MouseFilter = MouseFilterEnum.Ignore });
+            }
+            if (window.TextBox(SpellInfoText) is { } box)
+            {
+                // DSUN.EXE reads the text 5 characters into its buffer, after spaces: the first line clears the icon.
+                box.Text = "     " + text;
+                box.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+            }
+            shade.AddChild(window);
+        }
+        else
+        {
+            _status.Text = text;
+            return;
+        }
+        Canvas.AddChild(shade);
+        (_spellInfo, SpellInfo) = (shade, text);
+    }
+
+    private void CloseSpellInfo()
+    {
+        _spellInfo?.QueueFree();
+        (_spellInfo, SpellInfo) = (null, null);
     }
 
     private Texture2D? SpellIcon(int number)
@@ -292,11 +354,17 @@ public partial class CharacterScreen
             return;
         }
         string name = Session.SpellName(n)?.ToUpperInvariant() ?? $"SPELL {n}";
-        if (click.ButtonIndex == MouseButton.Right)
+        if (click.ButtonIndex == MouseButton.Right && _page == Page.Spells && slot.Ready)
         {
-            bool forgot = _page == Page.Spells && !_learning && _magic.Forget(c, n);
+            // A memorized copy, below: forget it.
+            bool forgot = _magic.Forget(c, n);
             RefreshMagic();
             _status.Text = forgot ? $"{name} FORGOTTEN" : name;
+            return;
+        }
+        if (click.ButtonIndex == MouseButton.Right)
+        {
+            ShowSpellInfo(n);
             return;
         }
         if (click.ButtonIndex != MouseButton.Left)
