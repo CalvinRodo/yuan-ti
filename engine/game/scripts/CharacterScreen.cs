@@ -21,12 +21,14 @@ namespace DarkSun.Engine;
 /// equipment slots around it (<c>APFM</c> 11216–11229, slot n at 11216 + n,
 /// each with its silhouette, <c>BMP</c> 13007 frame 9 + n); the pack
 /// (<c>APFM</c> 11230–11241, 12 at a time, MORE for the rest); DROP and SPLIT.
-/// With a container open (Open on the map, or a carried bag or box
-/// double-clicked: <c>6527:12BD</c>) its contents show in place of
-/// the body (<c>APFM</c> 13200 and 11248–11259) over a chest, a bag or a
-/// parchment (<c>BMP</c> 13002, 13003, 13005). Double-clicking the carried
-/// one again, or right-clicking an empty slot of the open container, closes it.
-/// A container doesn't go in another.</item>
+/// A carried bag or box double-clicked opens in place of the body
+/// (<c>6527:12BD</c>): first shut (<c>BMP</c> 20104 a bag, 20105 a box) for 15
+/// screen refreshes, then open (13003, 13002, at <c>APFM</c> 13200), its six
+/// slots over it: a bag's (leather, <c>IT1R</c> +8 = 5) the upper six of
+/// <c>APFM</c> 11248–11259, a box's the lower six. So it holds six things.
+/// Double-clicking it again, or right-clicking an empty slot of it, closes
+/// it. A container doesn't go in another. (Containers on the map open in
+/// their own window, <see cref="ContainerWindow"/>.)</item>
 /// </list>
 /// <item><b>Spells</b> and <b>Psionics</b>: View Character again, its panel
 /// holding the slots DSUN.EXE draws spells into (<c>APFM</c> 11213–11247;
@@ -38,9 +40,9 @@ namespace DarkSun.Engine;
 /// Items move by clicking one, then where it goes: an equipment slot (worn,
 /// if the slot and the class allow), the pack (taken off, or out of the
 /// container), the container (put in), another member's box (given).
-/// Double-click wears, takes off or takes; right-click describes. DSUN.EXE
-/// drags items with the pointer instead. Each box has the leader button
-/// (<c>BUTN</c> 11309–11312: "MAKE %s LEADER") and computer control
+/// Double-click wears, takes off or takes; right-click opens the item
+/// window (<see cref="ItemWindow"/>). DSUN.EXE drags items with the
+/// pointer instead. Each box has the leader button (<c>BUTN</c> 11309–11312: "MAKE %s LEADER") and computer control
 /// (11313–11316: "COMPUTER CONTROL IS ON / OFF / LOCKED"); the wide button
 /// (11308) opens the game menu.
 /// </summary>
@@ -55,9 +57,14 @@ public partial class CharacterScreen : RetroScreen
     private const int SheetArea = 11269, SheetDivider = 104, FirstText = 11319, SecondText = 11320;
     private const int DropButton = 13300, SplitButton = 13302, MoreButton = 13303, SellButton = 13304;
     private const int FirstWorn = 11216, FirstPackSlot = 11230, PackSlots = 12, ContainerArea = 13200, FirstInside = 11248, InsideSlots = 12;
+    private const int ContainerSlots = ContainerWindow.Slots;
     private const int FirstSellSlot = 11242, SellSlots = 6;
     private const int SlotArt = 13007, EmptyFrame = 0, SelectedFrame = 4, CantFrame = 6, FirstSilhouette = 9;
     private const int Body = 13004, ChestArt = 13002, BagArt = 13003, ParchmentArt = 13005, Bars = 13000;
+    private const int ShutChestArt = 20105, ShutBagArt = 20104;
+
+    /// <summary>How long a carried container shows shut before it opens: 15 refreshes of the 70 Hz screen (<c>70E7:00B8</c>).</summary>
+    private const double Opening = 15 / 70.0;
 
     private static readonly Color Ink = new(0.95f, 0.9f, 0.75f);
     private static readonly Color Gold = new(1f, 0.9f, 0.5f);
@@ -95,6 +102,7 @@ public partial class CharacterScreen : RetroScreen
     private PageView _sheetPage = null!, _itemsPage = null!;
     private Label _sheet = null!, _sheetMore = null!, _info = null!, _status = null!, _itemsStatus = null!;
     private TextureRect _body = null!, _containerArt = null!;
+    private ItemWindow _itemWindow = null!;
     private readonly List<ItemSlot> _slots = [];
     private readonly Dictionary<int, Texture2D?> _slotArt = [];
 
@@ -105,6 +113,9 @@ public partial class CharacterScreen : RetroScreen
 
     /// <summary>The carried bag or box open in the container's place (its <see cref="Item.Contents"/> are <see cref="_container"/>'s items), or null.</summary>
     private Item? _openItem;
+
+    /// <summary>The open container still shows shut (<see cref="Opening"/>): its slots aren't shown yet.</summary>
+    private bool _opening;
     private (Item Item, WorldObject Holder)? _picked;
     private int _packPage, _insidePage;
 
@@ -232,6 +243,8 @@ public partial class CharacterScreen : RetroScreen
         items.Button(DropButton)!.TooltipText = "Drop the chosen item here on the map";
         items.Button(SplitButton)!.TooltipText = "Split the chosen stack in two";
         items.Button(MoreButton)!.TooltipText = "The next twelve things in the pack (or the wheel)";
+        _itemWindow = new ItemWindow();
+        Canvas.AddChild(_itemWindow);
     }
 
     private Texture2D? Art(string tag, int number, int frame) =>
@@ -388,6 +401,7 @@ public partial class CharacterScreen : RetroScreen
         _store = store;
         _container = container ?? store;
         _openItem = null;
+        _opening = false;
         (_picked, _packPage, _insidePage) = (null, 0, 0);
         ResetMagic();
         ResetStore();
@@ -404,9 +418,10 @@ public partial class CharacterScreen : RetroScreen
         }
         Visible = false;
         CloseSpellInfo();
+        _itemWindow.Close();
         // An item of the member's still picked up stays on the pointer, to use with something (pointer mode 3).
         HeldOnClose = _picked is { } held && held.Holder == Member && _store is null ? held.Item : null;
-        (_container, _store, _picked, _openItem) = (null, null, null, null);
+        (_container, _store, _picked, _openItem, _opening) = (null, null, null, null, false);
         ResetStore();
         Closed?.Invoke();
     }
@@ -590,12 +605,13 @@ public partial class CharacterScreen : RetroScreen
         _packPage = Math.Clamp(_packPage, 0, Pages(pack, PackSlots) - 1);
         List<Item> inside = _container?.Items ?? [];
         Equipment.Arrange(inside);
-        _insidePage = Math.Clamp(_insidePage, 0, Pages(inside, InsideSlots) - 1);
+        _insidePage = Math.Clamp(_insidePage, 0, Pages(inside, InsideShown.Count) - 1);
         _body.Visible = _container is null;
         _containerArt.Visible = _container is not null;
         if (_container is not null)
         {
-            _containerArt.Texture = Art("BMP ", ContainerArtOf(_container), 0);
+            int art = ContainerArtOf(_container);
+            _containerArt.Texture = Art("BMP ", !_opening ? art : art == BagArt ? ShutBagArt : ShutChestArt, 0);
         }
         foreach (ItemSlot slot in _slots)
         {
@@ -604,11 +620,11 @@ public partial class CharacterScreen : RetroScreen
                 Where.Worn => member?.Items.FirstOrDefault(i => i.Slot == slot.Index),
                 Where.Pack => pack.FirstOrDefault(i => i.Cell == _packPage * PackSlots + slot.Index),
                 Where.Sell => _offered.ElementAtOrDefault(slot.Index),
-                _ => inside.FirstOrDefault(i => i.Cell == _insidePage * InsideSlots + slot.Index),
+                _ => InsideCell(slot) is int cell ? inside.FirstOrDefault(i => i.Cell == cell) : null,
             };
             bool shown = slot.Where switch
             {
-                Where.Inside => _container is not null,
+                Where.Inside => _container is not null && !_opening && InsideCell(slot) is not null,
                 Where.Sell => _store is not null,
                 _ => true,
             };
@@ -645,17 +661,47 @@ public partial class CharacterScreen : RetroScreen
         b.Modulate = on ? Colors.White : new Color(1, 1, 1, 0.5f);
     }
 
-    /// <summary>A chest for a wooden container, a bag for a leather one, else a parchment (a body, a skeleton).</summary>
+    /// <summary>
+    /// What a container shows as (<c>6527:12BD</c>): a bag if it is leather
+    /// (<c>IT1R</c> +8 = 5), else a chest; something else (a store's goods, a
+    /// body) a parchment.
+    /// </summary>
     private int ContainerArtOf(WorldObject container) =>
         container.Id == -GameWorld.DeadBody ? ParchmentArt
         : (container.Item is { } item ? _world!.Items.TypeOf(item) : null) is { IsContainer: true } type
-            ? type.MadeOf switch
-            {
-                ItemMaterial.Wooden => ChestArt,
-                ItemMaterial.Leather => BagArt,
-                _ => ParchmentArt,
-            }
+            ? type.MadeOf == ItemMaterial.Leather ? BagArt : ChestArt
             : ParchmentArt;
+
+    /// <summary>
+    /// Which of the twelve container slots (<c>APFM</c> 11248–11259) are the
+    /// open container's: a store's goods take all twelve, a page at a time; a
+    /// bag's six things the upper six, anything else's the lower six (<c>6527:12BD</c>).
+    /// </summary>
+    private (int First, int Count) InsideShown =>
+        _store is not null ? (0, InsideSlots) : _container is { } c && ContainerArtOf(c) == BagArt ? (0, ContainerSlots) : (ContainerSlots, ContainerSlots);
+
+    /// <summary>The container's cell a container slot shows (its page counted), or null for a slot that isn't the container's.</summary>
+    private int? InsideCell(ItemSlot slot)
+    {
+        var (first, count) = InsideShown;
+        int n = slot.Index - first;
+        return n >= 0 && n < count ? _insidePage * count + n : null;
+    }
+
+    /// <summary>The item window (<see cref="ItemWindow"/>) for <paramref name="item"/>, by the pointer at <paramref name="pointer"/> (game pixels).</summary>
+    private void Describe(Item item, Vector2 pointer)
+    {
+        if (_world is null)
+        {
+            return;
+        }
+        // 91F7:12D8: the members whose class may use it (74F1:30DC), by name.
+        List<string> users = [.. _world.Party.Where(p => !p.Hidden && CharacterOf(p.Index) is not null && _world.CanUse(p, item)).Select(p => MemberName(p.Index))];
+        _itemWindow.Open(_world, item, ItemIcon(item.Rdff), users, _palette, pointer, new Vector2(Width, Height));
+    }
+
+    /// <summary>The item window (for the headless checks).</summary>
+    public ItemWindow ItemWindow => _itemWindow;
 
     /// <summary>The right-hand panel: <paramref name="item"/> described, or the pack's page, the container and the money.</summary>
     private void ShowInfo(Item? item, WorldObject? holder = null, string? note = null)
@@ -696,10 +742,10 @@ public partial class CharacterScreen : RetroScreen
 
     // -- for the checks (--check-character): clicks as the player makes them ---------------
 
-    /// <summary>Click slot <paramref name="index"/> of the worn slots (0), the pack (1) or the container (2), as the mouse would.</summary>
+    /// <summary>Click slot <paramref name="index"/> of the worn slots (0), the pack (1) or the container (2, its own six), as the mouse would.</summary>
     public void Click(int where, int index, bool doubleClick = false, MouseButton button = MouseButton.Left)
     {
-        if (_slots.FirstOrDefault(s => (int)s.Where == where && s.Index == index) is { } slot)
+        if (SlotAt(where, index) is { } slot)
         {
             slot.Control.EmitSignal(Control.SignalName.GuiInput, new InputEventMouseButton { ButtonIndex = button, Pressed = true, DoubleClick = doubleClick });
         }
@@ -738,7 +784,14 @@ public partial class CharacterScreen : RetroScreen
     /// <summary>The carried bag or box open, or null (for the headless check).</summary>
     public Item? OpenItem => _openItem;
 
-    public Item? ItemAt(int where, int index) => _slots.FirstOrDefault(s => (int)s.Where == where && s.Index == index)?.Item;
+    public Item? ItemAt(int where, int index) => SlotAt(where, index)?.Item;
+
+    /// <summary>The slot <see cref="Click"/> and <see cref="ItemAt"/> mean: the container's are counted from its first.</summary>
+    private ItemSlot? SlotAt(int where, int index)
+    {
+        int n = where == (int)Where.Inside ? InsideShown.First + index : index;
+        return _slots.FirstOrDefault(s => (int)s.Where == where && s.Index == n);
+    }
 
     public Item? Picked => _picked?.Item;
 
@@ -817,6 +870,7 @@ public partial class CharacterScreen : RetroScreen
                     break;
                 case MouseButton.Right when slot.Item is { } item:
                     ShowInfo(item, HolderOf(slot));
+                    Describe(item, Canvas.GetGlobalTransform().AffineInverse() * (slot.Control.GetGlobalTransform() * click.Position));
                     break;
                 case MouseButton.Right when slot.Where == Where.Inside && _store is null:
                     CloseContainer();
@@ -942,6 +996,11 @@ public partial class CharacterScreen : RetroScreen
         {
             return refused;
         }
+        if (!member.Items.Contains(picked.Item))
+        {
+            _picked = null; // coins: they became money
+            return null;
+        }
         if (_offered.Remove(picked.Item))
         {
             _offer = null;
@@ -1014,12 +1073,23 @@ public partial class CharacterScreen : RetroScreen
         _openItem = item;
         _insidePage = 0;
         _container = new WorldObject(-1, ObjectKind.Thing, item.Id) { Name = ItemText.Name(_world!, item), Item = item.Record, Items = item.Contents };
+        // 6527:15CD, then 6527:151B: shut a moment, then open.
+        _opening = true;
+        GetTree().CreateTimer(Opening).Timeout += () =>
+        {
+            if (_openItem == item && _opening)
+            {
+                _opening = false;
+                RefreshItems();
+            }
+        };
     }
 
     /// <summary>Put the open container away: the body shows again.</summary>
     private void CloseContainer()
     {
         _openItem = null;
+        _opening = false;
         _container = _store;
         _insidePage = 0;
     }
@@ -1035,7 +1105,10 @@ public partial class CharacterScreen : RetroScreen
             // "Cannot put container in bag" / "… in box".
             return $"Cannot put a container in {container.Name}.";
         }
-        int cell = _insidePage * InsideSlots + slot.Index;
+        if (InsideCell(slot) is not int cell)
+        {
+            return null;
+        }
         if (picked.Holder == container)
         {
             _picked = null;
@@ -1045,6 +1118,10 @@ public partial class CharacterScreen : RetroScreen
         if (_store is not null)
         {
             return "Put what you would sell in the six slots below SELL.";
+        }
+        if (container.Items.Count >= ContainerSlots)
+        {
+            return $"{container.Name} is full.";
         }
         _picked = null;
         if (!_world.MoveItem(picked.Holder, container, picked.Item))
@@ -1069,6 +1146,13 @@ public partial class CharacterScreen : RetroScreen
         if (_store is not null)
         {
             return Buy(item);
+        }
+        if (_world.TakeMoney(container, item) is > 0 and var coins)
+        {
+            // 74F1: coins taken become the party's money.
+            SetMoney?.Invoke(Money() + coins);
+            Did?.Invoke($"{MemberName(_member)} takes {coins} coins from {container.Name}");
+            return null;
         }
         if (!_world.MoveItem(container, member, item))
         {

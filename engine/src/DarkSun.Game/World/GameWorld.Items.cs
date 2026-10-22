@@ -81,6 +81,41 @@ public sealed partial class GameWorld
     /// </summary>
     public const int DeadBody = 1101;
 
+    /// <summary>
+    /// Coins: item <c>RDFF</c>s 1384–1389 and 1399, nameless items worth their
+    /// value. Taken (picked up on the map, out of a container on the map or in
+    /// the inventory) they become the party's money (<c>7BEB:0A60</c>,
+    /// <c>6527:0FD4</c>, <c>74F1</c>), never an item in a pack.
+    /// </summary>
+    public static bool IsMoney(int rdff) => Math.Abs(rdff) is >= 1384 and <= 1389 or 1399;
+
+    /// <summary>What coins <paramref name="item"/> are worth: their value, times the quantity for a type that stacks.</summary>
+    public int Worth(Item item) => item.Record.Value * (Stacks(item.Record) ? Math.Max(1, item.Quantity) : 1);
+
+    /// <summary>
+    /// Take the coins <paramref name="item"/> out of <paramref name="holder"/>'s
+    /// items: what they were worth, for the party's money (0 if they aren't
+    /// coins or <paramref name="holder"/> doesn't hold them).
+    /// </summary>
+    public int TakeMoney(WorldObject holder, Item item) =>
+        IsMoney(item.Rdff) && holder.Items.Remove(item) ? Worth(item) : 0;
+
+    /// <summary>
+    /// Get on coins lying on the map: they leave it and are worth what this
+    /// returns, for the party's money (0 if <paramref name="ground"/> isn't coins).
+    /// </summary>
+    public int PickUpMoney(WorldObject ground)
+    {
+        if (ground.Item is not { } record || ground.Source is not { } source || !IsMoney(source.Ojff))
+        {
+            return 0;
+        }
+        int quantity = ground.ReadField(82);
+        int worth = record.Value * (Stacks(record) ? Math.Max(1, quantity > 0 ? quantity : record.Quantity) : 1);
+        Remove(ground);
+        return worth;
+    }
+
     /// <summary>A party member's item classes (by slot; the session's characters), or null to let it use anything.</summary>
     public Func<int, ItemClasses?> PartyClasses { get; set; } = _ => null;
 

@@ -144,6 +144,7 @@ public partial class RegionView
         }
         _pendingUse = null;
         _verbMenu.Close();
+        _containerWindow.Close();
         SetUseWith(null);
         foreach (PartyMember m in _party)
         {
