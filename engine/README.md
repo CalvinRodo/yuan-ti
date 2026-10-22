@@ -142,7 +142,11 @@ and again to close it (or right-click an empty slot of it); it holds six
 things, and what it holds stays in it when it is dropped, picked up or saved.
 Right-click an item, in the inventory or a container, for the item window
 (`WIND` 15502, `91F7:0C29`): its picture, value and name, a weapon's damage;
-INFO turns it to who in the party may use it. Get and Attack say so when there's no script, since items
+INFO turns it to who in the party may use it. Its USE (in the inventory, `91F7:03D0`) uses
+the item: a scroll teaches its spell or power; a wand, a necklace or fruit casts its spell at level 6
+and uses a charge (the item is gone at 0): in a fight, on the member's turn, a spell on oneself at once
+and any other aimed like CAST's; outside one, as for memorized spells, only healing works (and a lemon
+makes its eater whole). Worn things whose spell helps work by being worn and have no USE. Get and Attack say so when there's no script, since items
 and combat aren't in yet. Dialogue (text, portraits, Continue, Yes/No,
 menus) opens in a window and pauses the script until answered; TELEPORT moves
 the party and creatures. Region transitions are the game's own scripts:

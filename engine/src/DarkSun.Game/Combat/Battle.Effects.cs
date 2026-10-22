@@ -16,16 +16,19 @@ public sealed partial class Battle
     /// as they enter; any other acts at once on everyone in its area
     /// (<see cref="AffectedBy"/>). Damage from a party member turns a neutral
     /// creature hostile. Fire and dispelling clear fields they reach. A spell the
-    /// caster had is used up; its turn ends. <paramref name="end"/> is a wall's
-    /// other end.
+    /// caster had is used up (not one cast from an item, <paramref name="ownSpell"/>
+    /// false); its turn ends. <paramref name="end"/> is a wall's other end.
     /// </summary>
-    public bool Cast(Combatant caster, int effect, int level, Cell at, Cell? end = null)
+    public bool Cast(Combatant caster, int effect, int level, Cell at, Cell? end = null, bool ownSpell = true)
     {
         if (Spells.Effect(effect) is not { } e || caster.Has(Condition.NoSpells) && effect < Spellcasting.FirstPower)
         {
             return false;
         }
-        caster.Spells.Remove(effect);
+        if (ownSpell)
+        {
+            caster.Spells.Remove(effect);
+        }
         Note(new Cast(caster, effect, at));
         if (e.Damaging || e.Condition != Condition.None && !OnSide(caster, at))
         {

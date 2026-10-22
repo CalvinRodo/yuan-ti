@@ -327,7 +327,7 @@ public sealed class Spellcasting(CharacterRules rules)
     {
         if (Get(number) is not { } s)
         {
-            return "NOTHING HAPPENS";
+            return NothingHappens;
         }
         bool power = s.Kind == SpellKind.Psionic;
         if (power ? !caster.Powers.Contains(number) : Ready(caster, number) < 1)
@@ -338,42 +338,14 @@ public sealed class Spellcasting(CharacterRules rules)
         {
             return "YOU NEED TO REST";
         }
-        int Dice(int n, int sides, int plus) => Enumerable.Range(0, n).Sum(_ => random.Next(1, sides + 1)) + plus;
-        int? heal = number switch
-        {
-            72 => Dice(1, 8, 0),      // cure light wounds: 1–8
-            113 => Dice(2, 8, 1),     // cure serious wounds: 3–17
-            128 => Dice(3, 8, 3),     // cure critical wounds: 6–27
-            152 => Dice(2, 4, 0),     // cell adjustment
-            _ => null,
-        };
-        string result;
-        if (number == 136) // raise dead
-        {
-            if (target.Status is < Vitals.Dead or >= Vitals.Destroyed)
-            {
-                return "NOTHING HAPPENS";
-            }
-            (target.Status, target.Hp) = (Vitals.Well, 1);
-            result = "RAISED FROM THE DEAD";
-        }
-        else if (heal is int hp)
-        {
-            if (target.Status >= Vitals.Dead || target.Hp >= target.MaxHp)
-            {
-                return "NOTHING HAPPENS";
-            }
-            int before = target.Hp;
-            target.Hp = Math.Min(target.MaxHp, target.Hp + hp);
-            if (target.Status == Vitals.Down && target.Hp > 0)
-            {
-                target.Status = Vitals.Well;
-            }
-            result = $"HEALED {target.Hp - before}";
-        }
-        else
+        string? result = Heal(number, target, random);
+        if (result is null)
         {
             return "ONLY IN COMBAT";
+        }
+        if (result == NothingHappens)
+        {
+            return result;
         }
         if (power)
         {
@@ -384,6 +356,51 @@ public sealed class Spellcasting(CharacterRules rules)
             caster.Cast.Add(number);
         }
         return result;
+    }
+
+    public const string NothingHappens = "NOTHING HAPPENS";
+
+    /// <summary>
+    /// What spell or power <paramref name="number"/> does to <paramref name="target"/>
+    /// outside combat, where only the healing ones work (cure light, serious and
+    /// critical wounds, cell adjustment, raise dead): "HEALED n", "RAISED FROM THE
+    /// DEAD" or "NOTHING HAPPENS", as DSUN.EXE's messages put it; null for any other.
+    /// </summary>
+    public static string? Heal(int number, Vitals target, Random random)
+    {
+        int Dice(int n, int sides, int plus) => Enumerable.Range(0, n).Sum(_ => random.Next(1, sides + 1)) + plus;
+        int? heal = number switch
+        {
+            72 => Dice(1, 8, 0),      // cure light wounds: 1–8
+            113 => Dice(2, 8, 1),     // cure serious wounds: 3–17
+            128 => Dice(3, 8, 3),     // cure critical wounds: 6–27
+            152 => Dice(2, 4, 0),     // cell adjustment
+            _ => null,
+        };
+        if (number == 136) // raise dead
+        {
+            if (target.Status is < Vitals.Dead or >= Vitals.Destroyed)
+            {
+                return NothingHappens;
+            }
+            (target.Status, target.Hp) = (Vitals.Well, 1);
+            return "RAISED FROM THE DEAD";
+        }
+        if (heal is not int hp)
+        {
+            return null;
+        }
+        if (target.Status >= Vitals.Dead || target.Hp >= target.MaxHp)
+        {
+            return NothingHappens;
+        }
+        int before = target.Hp;
+        target.Hp = Math.Min(target.MaxHp, target.Hp + hp);
+        if (target.Status == Vitals.Down && target.Hp > 0)
+        {
+            target.Status = Vitals.Well;
+        }
+        return $"HEALED {target.Hp - before}";
     }
 
     /// <summary>A rest: every memorized spell is ready again and psionic strength is full.</summary>

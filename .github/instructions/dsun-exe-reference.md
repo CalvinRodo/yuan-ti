@@ -1600,6 +1600,7 @@ These are AD&D 2nd edition's, but 18 has no percentile strength (+2 to hit,
 
   | Offset | Read as | Meaning (examples) |
   |---|---|---|
+  | −0x07 | byte | bits 0–1 the purpose (`91F7:0000`): 0 against a creature, 1 a help (on oneself or one touched), 2 and 3 an area. A worn item whose spell helps has no USE (it works by being worn) |
   | −0x06 | word | range (`8BEB:07F3`): (this + −0x04 × level) × 4, in sixteenths of a cell; −1 touch (8), −2 a short reach (28). Magic Missile 720 + 120 a level, Fireball 120 + 80 |
   | −0x04 | byte | range per level |
   | −0x03 | byte | duration dice: low 4 bits count, high 4 sides (Color Spray 0x42: 2d4; Haste 0x13: 3) |

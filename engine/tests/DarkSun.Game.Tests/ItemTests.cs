@@ -212,6 +212,23 @@ public class ItemTests
     }
 
     [Fact]
+    public void EachCastFromAnItemUsesACharge()
+    {
+        var (w, party) = World();
+        WorldObject member = w[0]!;
+        Item wand = w.NewItem(Torch)!, worn = w.NewItem(Torch)!;
+        (wand.Charges, worn.Charges) = (2, 0);
+        member.Items.AddRange([wand, worn]);
+
+        Assert.False(w.UseItemCharge(member, wand));
+        Assert.Equal(1, wand.Charges);
+        Assert.True(w.UseItemCharge(member, wand)); // the last: gone
+        Assert.DoesNotContain(wand, party[0].Items);
+        Assert.False(w.UseItemCharge(member, worn)); // none to count: a byte, round to 255
+        Assert.Equal(255, worn.Charges);
+    }
+
+    [Fact]
     public void UsingAFirePitRestsTheParty()
     {
         var (w, party) = World();

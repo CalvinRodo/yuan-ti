@@ -75,9 +75,9 @@ public partial class RegionView
             {
                 return Pointers.Wait;
             }
-            if (_castChoice is int spell)
+            if (_castChoice is { Spell: var spell, Level: var level })
             {
-                return battle.Spells.Effect(spell) is { } e && battle.Aim(c, e, c.Level, cell) == SpellAim.Ok
+                return battle.Spells.Effect(spell) is { } e && battle.Aim(c, e, level, cell) == SpellAim.Ok
                     && Spellcasting.Get(spell) is { } known ? known.Icon : Pointers.CantCast;
             }
             Combatant? there = battle.At(cell);
@@ -135,7 +135,7 @@ public partial class RegionView
     {
         var cell = new Cell((int)Math.Floor(at.X / Region.TileSize), (int)Math.Floor(at.Y / Region.TileSize));
         if (_battle is not { } battle
-            || _castChoice is int spell && battle.Spells.Effect(spell) is { SingleTarget: false })
+            || _castChoice is { Spell: var spell } && battle.Spells.Effect(spell) is { SingleTarget: false })
         {
             return cell;
         }
@@ -160,14 +160,14 @@ public partial class RegionView
     private void UpdateAim(Cell? pointed, int icon)
     {
         (int, Cell, Combatant)? aimed = null;
-        if (_battle is { } battle && PlayerTurn is { } c && _castChoice is int spell && battle.Spells.Effect(spell) is { } e
-            && pointed is { } cell && battle.Aim(c, e, c.Level, cell) == SpellAim.Ok)
+        if (_battle is { } battle && PlayerTurn is { } c && _castChoice is { Spell: var spell, Level: var level } && battle.Spells.Effect(spell) is { } e
+            && pointed is { } cell && battle.Aim(c, e, level, cell) == SpellAim.Ok)
         {
             aimed = (spell, cell, c);
             if (_aimed != aimed)
             {
-                _aimTargets = battle.AffectedBy(c, e, c.Level, cell);
-                DrawOutline(e.SingleTarget ? NoCells : battle.AreaCells(c, e, c.Level, cell));
+                _aimTargets = battle.AffectedBy(c, e, level, cell);
+                DrawOutline(e.SingleTarget ? NoCells : battle.AreaCells(c, e, level, cell));
             }
         }
         else if (_aimed is not null)

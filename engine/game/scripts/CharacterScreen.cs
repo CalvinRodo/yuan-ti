@@ -2,6 +2,7 @@ using DarkSun.Data.Gff;
 using DarkSun.Data.Images;
 using DarkSun.Data.Items;
 using DarkSun.Game.Characters;
+using DarkSun.Game.Magic;
 using DarkSun.Game.World;
 using Godot;
 
@@ -253,7 +254,7 @@ public partial class CharacterScreen : RetroScreen
         items.Button(DropButton)!.TooltipText = "Drop the chosen item here on the map";
         items.Button(SplitButton)!.TooltipText = "Split the chosen stack in two";
         items.Button(MoreButton)!.TooltipText = "The next twelve things in the pack (or the wheel)";
-        _itemWindow = new ItemWindow();
+        _itemWindow = new ItemWindow { Use = UseItem };
         Canvas.AddChild(_itemWindow);
     }
 
@@ -722,8 +723,12 @@ public partial class CharacterScreen : RetroScreen
         return n >= 0 && n < count ? _insidePage * count + n : null;
     }
 
-    /// <summary>The item window (<see cref="ItemWindow"/>) for <paramref name="item"/>, by the pointer at <paramref name="pointer"/> (game pixels).</summary>
-    private void Describe(Item item, Vector2 pointer)
+    /// <summary>
+    /// The item window (<see cref="ItemWindow"/>) for <paramref name="item"/>, held by
+    /// <paramref name="holder"/>, by the pointer at <paramref name="pointer"/> (game pixels).
+    /// USE is there for the member's own things (or what is in their open bag), not a store's.
+    /// </summary>
+    private void Describe(Item item, WorldObject? holder, Vector2 pointer)
     {
         if (_world is null)
         {
@@ -731,8 +736,92 @@ public partial class CharacterScreen : RetroScreen
         }
         // 91F7:12D8: the members whose class may use it (74F1:30DC), by name.
         List<string> users = [.. _world.Party.Where(p => !p.Hidden && CharacterOf(p.Index) is not null && _world.CanUse(p, item)).Select(p => MemberName(p.Index))];
-        _itemWindow.Open(_world, item, ItemIcon(item.Rdff), users, _palette, pointer, new Vector2(Width, Height));
+        bool own = _store is null && holder is not null && (holder == Member || _openItem is not null && holder == _container);
+        _described = own ? holder : null;
+        _itemWindow.Open(_world, item, ItemIcon(item.Rdff), users, _palette, pointer, new Vector2(Width, Height),
+            useOffered: own && ItemMagic.Offered(item, _world.Items.TypeOf(item.Record), Session.SpellRules));
     }
+
+    /// <summary>Who holds the item the item window shows, when it may be used (the member, or their open bag).</summary>
+    private WorldObject? _described;
+
+    /// <summary>
+    /// USE in the item window (<c>91F7:03D0</c>, <see cref="ItemMagic.Plan"/>): a scroll or
+    /// book teaches its spell or power; any other spell is cast at level 6, using one of the
+    /// item's charges. In a fight that is the map's (<see cref="CastInFight"/>: on the
+    /// member's turn, aimed there if it needs a target). Outside one, as for memorized
+    /// spells, only healing works, on the member using it (and a lemon makes them whole);
+    /// anything else waits for a fight.
+    /// </summary>
+    private void UseItem(Item item)
+    {
+        if (_world is null || _described is not { } holder || Member is not { } member || CharacterOf(_member) is not { } c || !holder.Items.Contains(item))
+        {
+            return;
+        }
+        ItemUse use = ItemMagic.Plan(item, Session.SpellRules);
+        string name = ItemText.Name(_world, item);
+        string SpellName(int n) => Session.SpellName(n)?.ToUpperInvariant() ?? $"SPELL {n}";
+        string message;
+        if (use.Kind == ItemUseKind.Nothing)
+        {
+            message = Spellcasting.NothingHappens;
+        }
+        else if (use.Kind == ItemUseKind.Learn)
+        {
+            message = _world.LearnFrom(holder, item, c, SpellName) ?? Spellcasting.NothingHappens;
+            Did?.Invoke($"{MemberName(_member)} uses {name}: {message.ToLowerInvariant()}");
+        }
+        else if (Fighting())
+        {
+            if (CastInFight?.Invoke(_member, item, holder, use) is not { } refused)
+            {
+                Close();
+                return;
+            }
+            message = refused;
+        }
+        else
+        {
+            Vitals v = member.Vitals;
+            string? result = use.Kind switch
+            {
+                ItemUseKind.FullHeal when v.Status < Vitals.Dead && v.Hp < v.MaxHp => Healed(v),
+                ItemUseKind.FullHeal => Spellcasting.NothingHappens,
+                ItemUseKind.OnSelf => Spellcasting.Heal(use.Spell, v, _random),
+                _ => null,
+            };
+            message = result ?? "ONLY IN COMBAT";
+            if (result is not null && result != Spellcasting.NothingHappens)
+            {
+                Did?.Invoke($"{MemberName(_member)} uses {name}: {result.ToLowerInvariant()}");
+                if (_world.UseItemCharge(holder, item))
+                {
+                    message += $"; {name.ToUpperInvariant()} IS USED UP";
+                }
+            }
+        }
+        RefreshItems();
+        Refresh();
+        _status.Text = message;
+        ShowInfo(null, null, message);
+    }
+
+    private static string Healed(Vitals v)
+    {
+        int before = v.Hp;
+        (v.Hp, v.Status) = (v.MaxHp, Vitals.Well);
+        return $"HEALED {v.Hp - before}";
+    }
+
+    /// <summary>Is the party fighting (USE casts on the map then)?</summary>
+    public Func<bool> Fighting { get; set; } = () => false;
+
+    /// <summary>
+    /// USE in a fight: member, item, its holder and what it does; null when it was cast or
+    /// is waiting for its target (the screens close), else why not.
+    /// </summary>
+    public Func<int, Item, WorldObject, ItemUse, string?>? CastInFight { get; set; }
 
     /// <summary>The item window (for the headless checks).</summary>
     public ItemWindow ItemWindow => _itemWindow;
@@ -904,7 +993,7 @@ public partial class CharacterScreen : RetroScreen
                     break;
                 case MouseButton.Right when slot.Item is { } item:
                     ShowInfo(item, HolderOf(slot));
-                    Describe(item, Canvas.GetGlobalTransform().AffineInverse() * (slot.Control.GetGlobalTransform() * click.Position));
+                    Describe(item, HolderOf(slot), Canvas.GetGlobalTransform().AffineInverse() * (slot.Control.GetGlobalTransform() * click.Position));
                     break;
                 case MouseButton.Right when slot.Where == Where.Inside && _store is null:
                     CloseContainer();

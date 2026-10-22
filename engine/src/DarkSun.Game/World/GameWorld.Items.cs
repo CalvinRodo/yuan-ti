@@ -358,6 +358,23 @@ public sealed partial class GameWorld
     }
 
     /// <summary>
+    /// A spell cast from <paramref name="item"/> (<c>78A9:2324</c>): its
+    /// charges (+0x0E, a byte) go down one, and at 0 it is gone from
+    /// <paramref name="holder"/> (<c>7BEB:0A06</c>). An item without charges
+    /// (worn things, 0) wraps round to 255. For a type that stacks the charges
+    /// hold the spell, and none is used. True if the item is gone.
+    /// </summary>
+    public bool UseItemCharge(WorldObject holder, Item item)
+    {
+        if (Stacks(item.Record))
+        {
+            return false;
+        }
+        item.Charges = (item.Charges - 1) & 0xFF;
+        return item.Charges == 0 && holder.Items.Remove(item);
+    }
+
+    /// <summary>
     /// May <paramref name="holder"/> use <paramref name="item"/>: its type's
     /// classes share a bit with a party member's (<c>6466:0854</c>)? Others
     /// (creatures, members without a character) may use anything.
