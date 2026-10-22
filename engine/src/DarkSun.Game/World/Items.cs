@@ -45,6 +45,13 @@ public sealed class Item
     /// <summary>Field 86, record +0x0E: charges (a wand's), which scripts read and set; at first the record's.</summary>
     public int Charges { get; set; }
 
+    /// <summary>
+    /// What a container (a bag, a box: <c>IT1R</c> flag 8) holds, carried with it
+    /// (DSUN.EXE chains them to it in its item table; <c>6527:12BD</c> opens one in
+    /// the inventory). A container doesn't go in another ("Cannot put container in bag").
+    /// </summary>
+    public List<Item> Contents { get; set; } = [];
+
     /// <summary>A field as SEARCH reads it (<c>GPLX</c> group 0): 72 id, 82 quantity, 85 slot, 86 charges; others 0.</summary>
     public int Field(int field) => field switch
     {
@@ -55,14 +62,15 @@ public sealed class Item
         _ => 0,
     };
 
-    public ItemState Save() => new(Rdff, Quantity, Slot, Charges == Record.Charges ? null : Charges, Equipped ? null : Cell);
+    public ItemState Save() => new(Rdff, Quantity, Slot, Charges == Record.Charges ? null : Charges, Equipped ? null : Cell,
+        Contents.Count > 0 ? [.. Contents.Select(i => i.Save())] : null);
 }
 
 /// <summary>What came of <see cref="GameWorld.Equip"/>.</summary>
 public enum EquipResult { Worn, NotWearable, WrongClass, NoFreeSlot }
 
 /// <summary>An item as saved: its <c>RDFF</c> number, quantity and slot.</summary>
-public sealed record ItemState(int Rdff, int Quantity, int Slot, int? Charges = null, int? Cell = null);
+public sealed record ItemState(int Rdff, int Quantity, int Slot, int? Charges = null, int? Cell = null, IReadOnlyList<ItemState>? Contents = null);
 
 /// <summary>
 /// Equipment slots (<c>6466:0854</c>): 14 slots, each taking items of one

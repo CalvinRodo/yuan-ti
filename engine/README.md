@@ -122,14 +122,18 @@ PgUp/PgDn browse the other regions, with the party in the middle
 of the map. The party is four placeholder sprites (any object whose `SCMD`
 can walk). Entering a region
 runs its script (and, once, the game-start script); characters reaching a
-cell fire its move trigger; right-click an object for its verb menu: Talk, Get,
-Use, Use with…, Attack and Look, as the object offers them (Talk, Get and Use
-with the original's icons; click one, or press its number or T/G/U/L; an
-object with only one verb, usually just Look, skips the menu). The
-selected character walks up to the object, then its trigger for that verb
-runs; Use opens or closes a door and toggles a lever; Use with… asks for a
-second object to click; Look works from anywhere and names an object with
-no look script. Get and Attack say so when there's no script, since items
+cell fire its move trigger; right-click an object for the original's verb
+window (`68BD:0040`): Get, Talk and Use, greyed where the object doesn't offer
+them, and INFO (Look, or Open for a container); an object offering only Talk,
+only Use or only Open has it done at once (a fire pit rests the party). Attack is
+the attack pointer's; to use an item with something, pick it up in the
+inventory and leave it: it rides on the pointer (pointer mode 3) until clicked
+on the second thing. The selected character walks up to the object, then its
+trigger for that verb runs; Use opens or closes a door and toggles a lever;
+Look works from anywhere and names an object with no look script. In the
+inventory, double-click a carried bag or box to open it in the body's place
+(`6527:12BD`) and again to close it (or right-click an empty slot of it); what
+it holds stays in it when it is dropped, picked up or saved. Get and Attack say so when there's no script, since items
 and combat aren't in yet. Dialogue (text, portraits, Continue, Yes/No,
 menus) opens in a window and pauses the script until answered; TELEPORT moves
 the party and creatures. Region transitions are the game's own scripts:

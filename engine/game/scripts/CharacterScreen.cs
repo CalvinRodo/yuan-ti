@@ -21,9 +21,12 @@ namespace DarkSun.Engine;
 /// equipment slots around it (<c>APFM</c> 11216–11229, slot n at 11216 + n,
 /// each with its silhouette, <c>BMP</c> 13007 frame 9 + n); the pack
 /// (<c>APFM</c> 11230–11241, 12 at a time, MORE for the rest); DROP and SPLIT.
-/// With a container open (Open on the map) its contents show in place of
+/// With a container open (Open on the map, or a carried bag or box
+/// double-clicked: <c>6527:12BD</c>) its contents show in place of
 /// the body (<c>APFM</c> 13200 and 11248–11259) over a chest, a bag or a
-/// parchment (<c>BMP</c> 13002, 13003, 13005).</item>
+/// parchment (<c>BMP</c> 13002, 13003, 13005). Double-clicking the carried
+/// one again, or right-clicking an empty slot of the open container, closes it.
+/// A container doesn't go in another.</item>
 /// </list>
 /// <item><b>Spells</b> and <b>Psionics</b>: View Character again, its panel
 /// holding the slots DSUN.EXE draws spells into (<c>APFM</c> 11213–11247;
@@ -99,6 +102,9 @@ public partial class CharacterScreen : RetroScreen
     private int _member;
     private Page _page;
     private WorldObject? _container, _store;
+
+    /// <summary>The carried bag or box open in the container's place (its <see cref="Item.Contents"/> are <see cref="_container"/>'s items), or null.</summary>
+    private Item? _openItem;
     private (Item Item, WorldObject Holder)? _picked;
     private int _packPage, _insidePage;
 
@@ -381,6 +387,7 @@ public partial class CharacterScreen : RetroScreen
         _member = world[member] is { Kind: ObjectKind.Party } ? member : world.Party.FirstOrDefault()?.Index ?? 0;
         _store = store;
         _container = container ?? store;
+        _openItem = null;
         (_picked, _packPage, _insidePage) = (null, 0, 0);
         ResetMagic();
         ResetStore();
@@ -397,7 +404,9 @@ public partial class CharacterScreen : RetroScreen
         }
         Visible = false;
         CloseSpellInfo();
-        (_container, _store, _picked) = (null, null, null);
+        // An item of the member's still picked up stays on the pointer, to use with something (pointer mode 3).
+        HeldOnClose = _picked is { } held && held.Holder == Member && _store is null ? held.Item : null;
+        (_container, _store, _picked, _openItem) = (null, null, null, null);
         ResetStore();
         Closed?.Invoke();
     }
@@ -572,6 +581,10 @@ public partial class CharacterScreen : RetroScreen
     private void RefreshItems()
     {
         WorldObject? member = Member;
+        if (_openItem is { } open && member?.Items.Contains(open) != true)
+        {
+            CloseContainer(); // the open bag was given away, dropped or sold
+        }
         List<Item> pack = Pack;
         Equipment.Arrange(pack);
         _packPage = Math.Clamp(_packPage, 0, Pages(pack, PackSlots) - 1);
@@ -719,9 +732,18 @@ public partial class CharacterScreen : RetroScreen
     public string Status => _status.Text;
 
     /// <summary>The item in a slot, as <see cref="Click"/> numbers them.</summary>
+    /// <summary>A container shows in the body's place (for the headless check).</summary>
+    public bool ContainerShown => _container is not null && _containerArt.Visible;
+
+    /// <summary>The carried bag or box open, or null (for the headless check).</summary>
+    public Item? OpenItem => _openItem;
+
     public Item? ItemAt(int where, int index) => _slots.FirstOrDefault(s => (int)s.Where == where && s.Index == index)?.Item;
 
     public Item? Picked => _picked?.Item;
+
+    /// <summary>The member's item that was picked up when the screen closed, for Use with… on the map; null if none.</summary>
+    public Item? HeldOnClose { get; private set; }
 
     public string Info => _info.Text;
 
@@ -796,6 +818,10 @@ public partial class CharacterScreen : RetroScreen
                 case MouseButton.Right when slot.Item is { } item:
                     ShowInfo(item, HolderOf(slot));
                     break;
+                case MouseButton.Right when slot.Where == Where.Inside && _store is null:
+                    CloseContainer();
+                    RefreshItems();
+                    break;
                 case MouseButton.WheelDown or MouseButton.WheelUp:
                     int by = click.ButtonIndex == MouseButton.WheelDown ? 1 : -1;
                     if (slot.Where == Where.Inside)
@@ -853,6 +879,20 @@ public partial class CharacterScreen : RetroScreen
         }
         _picked = null;
         string? note = null;
+        if (slot.Where is Where.Worn or Where.Pack && _store is null && _world.IsContainerItem(item))
+        {
+            // 6527:12BD: a carried bag or box opens in the container's place (again: closes).
+            if (_openItem == item)
+            {
+                CloseContainer();
+            }
+            else
+            {
+                OpenContainer(item);
+            }
+            RefreshItems();
+            return;
+        }
         if (slot.Where == Where.Inside)
         {
             note = Take(item);
@@ -968,11 +1008,32 @@ public partial class CharacterScreen : RetroScreen
         Equipment.Arrange(items);
     }
 
+    /// <summary>Open the carried container <paramref name="item"/>: its contents in the container's place.</summary>
+    private void OpenContainer(Item item)
+    {
+        _openItem = item;
+        _insidePage = 0;
+        _container = new WorldObject(-1, ObjectKind.Thing, item.Id) { Name = ItemText.Name(_world!, item), Item = item.Record, Items = item.Contents };
+    }
+
+    /// <summary>Put the open container away: the body shows again.</summary>
+    private void CloseContainer()
+    {
+        _openItem = null;
+        _container = _store;
+        _insidePage = 0;
+    }
+
     private string? PutIn((Item Item, WorldObject Holder) picked, ItemSlot slot)
     {
         if (_container is not { } container || _world is null)
         {
             return null;
+        }
+        if (_store is null && picked.Holder != container && _world.IsContainerItem(picked.Item))
+        {
+            // "Cannot put container in bag" / "… in box".
+            return $"Cannot put a container in {container.Name}.";
         }
         int cell = _insidePage * InsideSlots + slot.Index;
         if (picked.Holder == container)

@@ -20,9 +20,9 @@ namespace DarkSun.Engine;
 /// <c>SCMD</c> script animate on a 96 Hz tick. Characters hold their
 /// footprint's cells, so they never overlap. Entering a region runs its
 /// <c>MAS</c> script (after the game-start script, once); characters stepping
-/// into cells fire move triggers; right-clicking an object opens its verb
-/// menu (<see cref="VerbMenu"/>: Talk, Get, Use, Use with…, Attack, Look, as
-/// it offers them), and the selected character walks up to it and does that
+/// into cells fire move triggers; right-clicking an object opens the original's
+/// verb window (<see cref="VerbMenu"/>: Get, Talk, Use, and Look or Open; only
+/// Talk, only Use or only Open is done at once), and the selected character walks up to it and does that
 /// (Look works from anywhere). The region's objects live in a
 /// <see cref="GameWorld"/>: creatures that can walk carry out their scripted
 /// orders and run their no-orders and line-of-sight scripts; every world
@@ -106,6 +106,9 @@ public partial class RegionView : Node2D
 
     /// <summary>Use with…: the first object, waiting for the player to click the second.</summary>
     private WorldObject? _useWith;
+
+    /// <summary>The inventory item <see cref="_useWith"/> stands for, when it is one.</summary>
+    private Item? _useWithItem;
     private Label _prompt = null!;
     private readonly List<(RegionObject Object, Sprite2D Sprite)> _objectSprites = [];
     private readonly Dictionary<Walker, Cell> _lastCells = [];
@@ -457,6 +460,11 @@ public partial class RegionView : Node2D
             OpenGameMenu = () => _gameMenu.Open(),
             Closed = () =>
             {
+                // DSUN.EXE's pointer mode 3: an item picked up in the inventory is held, to use with something on the map.
+                if (_character.HeldOnClose is { } held && _world is not null)
+                {
+                    SetUseWithItem(held);
+                }
                 // A store's script waits for it to close.
                 if (Session.ScriptHost.Dialogue.Prompt is GplShopPrompt && Session.Scripts.IsSuspended && Session.Scripts.PausedFor is null)
                 {
@@ -1472,10 +1480,12 @@ public partial class RegionView : Node2D
         }
         IReadOnlyList<Verb> verbs = VerbsOf(hit);
         _menuTarget = hit;
-        if (verbs.Count == 1)
+        // 68BD:0040: only Talk, only Use or only a container's Open is done at once; anything else opens
+        // the verb window (Get, Talk, Use, and Look or Open). Attack and Use with… are reached otherwise.
+        Verb[] windowVerbs = [.. verbs.Where(v => v is Verb.Talk or Verb.Get or Verb.Use or Verb.Open)];
+        if (windowVerbs is [Verb.Talk] or [Verb.Use] or [Verb.Open] || verbs.Count == 1)
         {
-            // Only one thing to do: do it, as DSUN.EXE does.
-            ChooseVerb(verbs[0]);
+            ChooseVerb(windowVerbs.Length == 1 ? windowVerbs[0] : verbs[0]);
             return;
         }
         _verbMenu.Open(VerbTargetOf(hit), verbs, _palette, screen);
@@ -1484,7 +1494,8 @@ public partial class RegionView : Node2D
     /// <summary>What the verb window shows of <paramref name="obj"/> (<see cref="VerbMenu"/>).</summary>
     private VerbTarget VerbTargetOf(WorldObject obj)
     {
-        string name = obj.Name.Length > 0 ? obj.Name : $"Object {-obj.Id}";
+        // 91F7:0C29 writes a thing's name only if its record has one (a fire pit may not).
+        string name = obj.Name;
         if (obj.Kind != ObjectKind.Creature)
         {
             return new VerbTarget(name, false, 0, 0, 0, [], obj.Source?.Frame is { Width: > 0 } frame ? TextureFor(frame) : null);
@@ -1525,10 +1536,22 @@ public partial class RegionView : Node2D
         StartVerb(target, verb, null);
     }
 
+    /// <summary>
+    /// Use with… an item from the inventory: held on the pointer (<c>191F:0A99</c>
+    /// mode 3), then used with what is clicked. Use-with triggers name it by its
+    /// item (<c>name(-1095)</c>, a pot of water), which it stands for here.
+    /// </summary>
+    private void SetUseWithItem(Item item)
+    {
+        SetUseWith(new WorldObject(item.Id, ObjectKind.Thing, item.Id) { Name = ItemText.Name(_world, item), Item = item.Record });
+        _useWithItem = item;
+    }
+
     /// <summary>Use with…: wait for the second object (null: stop waiting).</summary>
     private void SetUseWith(WorldObject? first)
     {
         _useWith = first;
+        _useWithItem = null;
         _prompt.Visible = first is not null;
         _prompt.Text = first is null ? "" : $"Use {Called(first)} with… (click an object; right-click: other pointers; Esc puts it away)";
         // DSUN.EXE's pointer mode 3: the item is held on the pointer, which shows it.
@@ -2590,6 +2613,36 @@ public partial class RegionView : Node2D
             }
         }
 
+        // A carried bag (OJFF 1077): double-clicked it opens in the body's place (6527:12BD); things go in,
+        // a container doesn't; double-clicked again, or an empty slot right-clicked, it closes.
+        const int CarriedBag = 1077;
+        // (The last member, whose pack has room on its first page.)
+        int carrier = _world.Party.Last().Index;
+        WorldObject holder = _world[carrier]!;
+        if (_world.Give(2, -CarriedBag, carrier, GameWorld.None) == 2 && holder.Items.Where(i => i.Rdff == CarriedBag).ToList() is [var bag, var otherBag]
+            && _world.Give(1, -Water, carrier, GameWorld.None) == 1 && holder.Items.LastOrDefault(i => i.Rdff == Water) is { } bagged)
+        {
+            screen.Open(_world, carrier, CharacterScreen.Page.Items);
+            screen.Click(Pack, PackIndex(bag), doubleClick: true);
+            Expect(screen.OpenItem == bag && screen.ContainerShown, "double-clicking a carried bag opens it");
+            screen.Click(Pack, PackIndex(bagged));
+            screen.Click(Inside, 0);
+            Expect(bag.Contents.Contains(bagged) && !holder.Items.Contains(bagged) && screen.ItemAt(Inside, 0) == bagged, "the pot goes in the bag");
+            screen.Click(Pack, PackIndex(otherBag));
+            screen.Click(Inside, 1);
+            Expect(!bag.Contents.Contains(otherBag) && holder.Items.Contains(otherBag), "a bag doesn't go in a bag");
+            screen.Click(Pack, PackIndex(otherBag)); // put it down again
+            screen.Click(Pack, PackIndex(bag), doubleClick: true);
+            Expect(screen.OpenItem is null && !screen.ContainerShown, "double-clicking it again closes it");
+            screen.Click(Pack, PackIndex(bag), doubleClick: true);
+            screen.Click(Inside, 3, button: MouseButton.Right);
+            Expect(!screen.ContainerShown, "right-clicking an empty slot of the open bag closes it");
+        }
+        else
+        {
+            problems.Add("no bag to carry");
+        }
+
         screen.Press(10300);
         Expect(screen.Showing == CharacterScreen.Page.Character && screen.Sheet.Contains("HP"), "the Character icon turns to the sheet");
         screen.Press(10308);
@@ -3181,11 +3234,15 @@ public partial class RegionView : Node2D
                 {
                     menuProblems.Add($"region {number}: no {window} for {Called(obj)}");
                 }
-                _verbMenu.Pick(Verb.Look);
+                _verbMenu.Pick(VerbsOf(obj).Contains(Verb.Open) ? Verb.Open : Verb.Look); // the fourth button
+                if (_character.IsOpen)
+                {
+                    _character.Close();
+                }
                 AnswerForThePlayer();
                 if (_verbMenu.Visible)
                 {
-                    menuProblems.Add($"region {number}: choosing Look didn't close the menu");
+                    menuProblems.Add($"region {number}: choosing the fourth button didn't close the menu");
                 }
             }
             foreach (WorldObject obj in targets)

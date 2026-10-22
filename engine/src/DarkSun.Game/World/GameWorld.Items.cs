@@ -31,8 +31,12 @@ public sealed partial class GameWorld
         }
         item.Charges = s.Charges ?? item.Charges;
         item.Cell = s.Cell;
+        item.Contents = [.. (s.Contents ?? []).Select(NewItem).OfType<Item>()];
         return item;
     }
+
+    /// <summary>Is <paramref name="item"/> a container (<c>IT1R</c> flag 8: a bag, a box) that can hold items?</summary>
+    public bool IsContainerItem(Item item) => Items.TypeOf(item.Record) is { IsContainer: true };
 
     public Item? NewItem(int rdff, int quantity = 1, int slot = Equipment.Pack) =>
         _objectData.TryRead("RDFF", Math.Abs(rdff), out var data) && ItemRecord.FromRdff(data) is { } record
@@ -256,6 +260,13 @@ public sealed partial class GameWorld
         {
             holder.Items.Remove(item);
             quantity = item.Quantity;
+            // A bag dropped keeps what is in it: on the map, its object holds them.
+            foreach (Item inside in item.Contents)
+            {
+                inside.Slot = Equipment.Pack;
+            }
+            ground.Items = item.Contents;
+            item.Contents = [];
         }
         ground.WriteField(82, quantity);
         return ground;
@@ -263,17 +274,21 @@ public sealed partial class GameWorld
 
     /// <summary>
     /// Get: <paramref name="taker"/> picks up the item <paramref name="ground"/>
-    /// lying on the map; it leaves the map. False if it isn't an item, the
-    /// pack is full, or it still holds something (a container is emptied first,
-    /// so nothing in it is lost).
+    /// lying on the map; it leaves the map. A bag or a box takes what it holds
+    /// with it (<see cref="Item.Contents"/>). False if it isn't an item, the pack is
+    /// full, or it holds something and isn't a container that can be carried (a body).
     /// </summary>
     public bool PickUp(WorldObject taker, WorldObject ground)
     {
         if (ground.Item is null || ground.Source is not { } source || taker.Items.Count >= Equipment.Capacity
-            || ground.Items.Count > 0 || NewItem(source.Ojff) is not { } item)
+            || NewItem(source.Ojff) is not { } item
+            || ground.Items.Count > 0 && (!IsContainerItem(item) || ground.Id == -DeadBody))
         {
             return false;
         }
+        // A bag or a box is picked up with what is in it.
+        item.Contents = ground.Items;
+        ground.Items = [];
         int quantity = ground.ReadField(82);
         item.Quantity = quantity > 0 ? quantity : Math.Max(1, (int)ground.Item.Quantity);
         if (!Stacks(item.Record))

@@ -11,7 +11,7 @@ namespace DarkSun.Game.Tests;
 public class ItemTests
 {
     private const int Width = 20, Height = 10;
-    private const int Templar = 100, Torch = 200, Arrows = 300, Boots = 400, FirePit = 1307;
+    private const int Templar = 100, Torch = 200, Arrows = 300, Boots = 400, Bag = 500, FirePit = 1307;
 
     private sealed class Resources : IResourceSource
     {
@@ -109,6 +109,8 @@ public class ItemTests
         r.Data[("RDFF", Boots)] = ItemRdff(Boots, 2, 3, 300);
         r.Data[("RDFF", GameWorld.DeadBody)] = ItemRdff(GameWorld.DeadBody, 3, 4, 0);
         r.Data[("OJFF", GameWorld.DeadBody)] = [0, 0, 8, 0, 15, 0, 0, 0, 0, 0, 0, 0, 7, 0, 0, 0]; // anchor (8, 15), BMP 7
+        r.Data[("RDFF", Bag)] = ItemRdff(Bag, 3, 4, 5);
+        r.Data[("OJFF", Bag)] = r.Data[("OJFF", GameWorld.DeadBody)];
         r.Data[("BMP ", 7)] = CinematicPlayerTests.Screen(3);
         // IT1R: type 0 nothing special; 1 stacks (flags +15 bit 2), ammunition (+9 = 11); 2 worn on the
         // feet (4) by fighters and thieves only (classes +16); 3 a container (flags bit 8).
@@ -390,6 +392,32 @@ public class ItemTests
         int freed = bodies[10].Index;
         w.Remove(bodies[10]);
         Assert.Equal(freed, w.Spawn(GameWorld.DeadBody, at)!.Index);
+    }
+
+    [Fact]
+    public void ABagKeepsWhatItHoldsCarriedDroppedPickedUpAndSaved()
+    {
+        var (w, party) = World();
+        WorldObject me = w[0]!;
+        w.Give(1, -Bag, 0, GameWorld.None);
+        Item bag = party[0].Items.Single(i => i.Rdff == Bag);
+        Assert.True(w.IsContainerItem(bag));
+        Assert.False(w.IsContainerItem(w.NewItem(Torch)!));
+        bag.Contents.Add(w.NewItem(Boots)!);
+        bag.Contents.Add(w.NewItem(Arrows, 5)!);
+
+        // Saved and made again: the contents come back.
+        Item again = w.NewItem(bag.Save())!;
+        Assert.Equal([Boots, Arrows], again.Contents.Select(i => i.Rdff));
+        Assert.Equal(5, again.Contents[1].Quantity);
+
+        // Dropped: the bag on the map holds them; picked up: they come back with it.
+        WorldObject ground = w.DropItem(me, bag, 1)!;
+        Assert.Equal([Boots, Arrows], ground.Items.Select(i => i.Rdff));
+        Assert.Empty(party[0].Items);
+        Assert.True(w.PickUp(me, ground));
+        Item carried = party[0].Items.Single();
+        Assert.Equal([Boots, Arrows], carried.Contents.Select(i => i.Rdff));
     }
 
     [Fact]
