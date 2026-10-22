@@ -85,6 +85,28 @@ public sealed class ModSetTests : IDisposable
     }
 
     [Fact]
+    public void BundledModsAreOnBySettingAndComeLast()
+    {
+        // The player's mods (in "user") win over the ones that come with the game (in "bundled").
+        Write("user/Mine/TILE/100.bin", "mine"u8.ToArray());
+        Write("bundled/Tabletop/TILE/100.bin", "game"u8.ToArray());
+        Write("bundled/Tabletop/TILE/200.bin", "game"u8.ToArray());
+        Write("bundled/_Other/TILE/200.bin", "othr"u8.ToArray());
+        string user = Path.Combine(_root, "user"), bundled = Path.Combine(_root, "bundled");
+
+        ModSet off = ModSet.Load([user], bundled: bundled);
+        Assert.Equal(["Mine"], off.Mods.Select(m => m.Name));
+        Assert.Contains(off.All, m => m is { Name: "Tabletop", Bundled: true, Enabled: false });
+        Assert.Contains(off.All, m => m is { Name: "_Other", Bundled: true }); // its folder's name, not a way to turn it off
+
+        ModSet on = ModSet.Load([user], bundled: bundled, bundledOn: name => name == "Tabletop");
+        Assert.Equal(["Mine", "Tabletop"], on.Mods.Select(m => m.Name));
+        GffFile gff = on.Apply(Gff(), "TEST.GFF");
+        Assert.Equal("mine", Text(gff, "TILE", 100));
+        Assert.Equal("game", Text(gff, "TILE", 200));
+    }
+
+    [Fact]
     public void FileFoldersCanAddResourcesAndConvertText()
     {
         Write("A/TEST.GFF/TEXT/7.txt", Encoding.UTF8.GetBytes("Hello\nAthas"));

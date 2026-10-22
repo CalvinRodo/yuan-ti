@@ -8,6 +8,22 @@ public class SpellcastingTests
 {
     private static readonly Spellcasting Magic = new(CharacterRules.Default);
 
+    /// <summary>The tabletop rules mod that comes with the game (<c>engine/game/mods/Tabletop</c>).</summary>
+    internal static CharacterRules Tabletop => CharacterRules.Read(TabletopFile("characters.json"));
+
+    internal static string TabletopFile(string name)
+    {
+        for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
+        {
+            string path = Path.Combine(dir.FullName, "engine", "game", "mods", "Tabletop", "rules", name);
+            if (File.Exists(path))
+            {
+                return path;
+            }
+        }
+        throw new FileNotFoundException(name);
+    }
+
     private static Character Cleric(Sphere sphere, int wis = 12, int xp = 3000) =>
         new() { Classes = [CharacterClass.Cleric], Sphere = sphere, Rolled = [12, 12, 12, 12, wis, 12], Experience = xp };
 
@@ -41,9 +57,39 @@ public class SpellcastingTests
         Character wise = Cleric(Sphere.Water, wis: 16);
         Assert.Equal(4, Magic.Slots(wise, SpellKind.Priest, 1)); // +1 at 13 and 14
         Assert.Equal(3, Magic.Slots(wise, SpellKind.Priest, 2)); // +1 at 15 and 16
-        Character novice = Cleric(Sphere.Water, wis: 16, xp: 0);
-        Assert.Equal(0, Magic.Slots(novice, SpellKind.Priest, 2)); // no bonus without a 2nd-level spell
         Assert.Equal([(SpellKind.Priest, 1), (SpellKind.Priest, 2)], Magic.Levels(c));
+
+        // 6798:0B32: the Wisdom profile adds even where the level gives none.
+        Character novice = Cleric(Sphere.Water, wis: 16, xp: 0);
+        Assert.Equal(2, Magic.Slots(novice, SpellKind.Priest, 2));
+        Assert.Equal(1, Magic.Slots(Cleric(Sphere.Water, wis: 17), SpellKind.Priest, 3)); // level 3: none of its own, +1 at 17
+
+        // The tabletop rules: a bonus only where the level gives spells.
+        var tabletop = new Spellcasting(SpellcastingTests.Tabletop);
+        Assert.Equal(0, tabletop.Slots(novice, SpellKind.Priest, 2));
+        Assert.Equal(4, tabletop.Slots(wise, SpellKind.Priest, 1));
+    }
+
+    [Fact]
+    public void SlotsFollowTheOriginalsFormula()
+    {
+        // 6798:0B32: a preserver's maximum 5, a priest's 9, a ranger's 3 with offset 3 and parity 1.
+        var preserver = new Character { Classes = [CharacterClass.Preserver], Rolled = [12, 12, 12, 17, 12, 12] };
+        int[] Row(Character c, SpellKind kind, int xp)
+        {
+            c.Experience = xp;
+            return [.. Enumerable.Range(1, 5).Select(l => Magic.Slots(c, kind, l))];
+        }
+        Assert.Equal([2, 2, 0, 0, 0], Row(preserver, SpellKind.Wizard, 10000)); // level 4
+        Assert.Equal([3, 2, 1, 0, 0], Row(preserver, SpellKind.Wizard, 20000)); // level 5
+        var ranger = new Character { Classes = [CharacterClass.Ranger], Rolled = [12, 12, 12, 12, 12, 12] };
+        Assert.Equal([1, 0, 0, 0, 0], Row(ranger, SpellKind.Priest, 150000)); // level 8
+        // Cleric and ranger: both classes' slots.
+        var both = new Character { Classes = [CharacterClass.Cleric, CharacterClass.Ranger], Sphere = Sphere.Water, Rolled = [12, 12, 12, 12, 12, 12] };
+        Assert.Equal(Row(new Character { Classes = [CharacterClass.Cleric], Sphere = Sphere.Water, Rolled = [12, 12, 12, 12, 12, 12] }, SpellKind.Priest, 150000)[0]
+            + 1, Row(both, SpellKind.Priest, 300000)[0]);
+        Assert.Equal([3, 2, 0, 0, 0], new[] { 1, 2, 3, 4, 5 }.Select(l => new Spellcasting(Tabletop).Slots(new Character
+            { Classes = [CharacterClass.Preserver], Rolled = [12, 12, 12, 17, 12, 12], Experience = 10000 }, SpellKind.Wizard, l)));
     }
 
     [Fact]
@@ -82,13 +128,17 @@ public class SpellcastingTests
         Assert.Equal("IS LEARNED!", Magic.Learn(p, 9));
         Assert.Equal("YOU ALREADY KNOW THIS SPELL", Magic.Learn(p, 9));
         Assert.Equal("CANNOT LEARN THIS SPELL", Magic.Learn(p, 28)); // Fireball: 3rd level
-        Assert.Equal(6, Magic.SpellbookSize(p)); // Intelligence 9
+        Assert.Equal(Spellcasting.All.Count, Magic.SpellbookSize(p)); // DSUN.EXE: no limit
+        Assert.True(Magic.Memorize(p, 9));
+
+        // The tabletop rules: six a level at Intelligence 9.
+        var tabletop = new Spellcasting(Tabletop);
+        Assert.Equal(6, tabletop.SpellbookSize(p));
         foreach (int n in new[] { 2, 3, 4, 5, 6 })
         {
-            Magic.Learn(p, n);
+            tabletop.Learn(p, n);
         }
-        Assert.Equal("THE SPELLBOOK IS FULL AT THIS LEVEL", Magic.Learn(p, 7));
-        Assert.True(Magic.Memorize(p, 9));
+        Assert.Equal("THE SPELLBOOK IS FULL AT THIS LEVEL", tabletop.Learn(p, 7));
     }
 
     [Fact]

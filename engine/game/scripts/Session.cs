@@ -263,6 +263,9 @@ public static class Session
     }
 
     private static CharacterRules? _rules;
+
+    /// <summary>Where the bundled mods were copied to (once a run), or null.</summary>
+    private static string? _bundledMods;
     private static DarkSun.Game.Rules.CreatureRules? _creatureRules;
     private static DarkSun.Game.Combat.CombatRules? _combatRules;
     private static DarkSun.Game.Combat.SpellRules? _spellRules;
@@ -377,9 +380,11 @@ public static class Session
         Files.Clear();
         Assets.Clear();
         (_sprites, _rules, _names, _quests) = (null, null, null, null);
+        (_creatureRules, _combatRules, _spellRules) = (null, null, null);
         GameFonts.Reset();
         LoadParty();
-        Mods = ModSet.Load(ModFolders(install), GplModFormat.Builders);
+        _bundledMods ??= BundledMods.Extract();
+        Mods = ModSet.Load(ModFolders(install), GplModFormat.Builders, _bundledMods, Settings.BundledModOn);
         Mods.ProblemFound += p => Godot.GD.PushWarning($"Mod file not used: {p}");
         if (Mods.Mods.Count > 0)
         {

@@ -1,0 +1,35 @@
+{
+  "_about": "AD&D 2nd edition and manual values where they differ from DSUN.EXE. Anything not listed here is the original's.",
+  "Classes": [
+    { "Class": "Cleric", "Levels": [0, 1500, 3000, 6000, 13000, 27500, 55000, 110000, 225000] },
+    { "Class": "Druid", "Levels": [0, 2000, 4000, 7500, 12500, 20000, 35000, 60000, 90000] },
+    { "Class": "Fighter", "Levels": [0, 2000, 4000, 8000, 16000, 32000, 64000, 125000, 250000] },
+    { "Class": "Gladiator", "Levels": [0, 2250, 4500, 9000, 18000, 36000, 75000, 150000, 300000] },
+    { "Class": "Preserver", "Levels": [0, 2500, 5000, 10000, 20000, 40000, 60000, 90000, 135000] },
+    { "Class": "Psionicist", "Levels": [0, 2200, 4400, 8800, 16500, 30000, 55000, 100000, 200000] },
+    { "Class": "Ranger", "Levels": [0, 2250, 4500, 9000, 18000, 36000, 75000, 150000, 300000] },
+    { "Class": "Thief", "Levels": [0, 1250, 2500, 5000, 10000, 20000, 40000, 70000, 110000] }
+  ],
+  "WizardSlots": [
+    [1], [2], [2, 1], [3, 2], [4, 2, 1], [4, 2, 2], [4, 3, 2, 1], [4, 3, 3, 2], [4, 3, 3, 2, 1], [4, 4, 3, 2, 2],
+    [4, 4, 4, 3, 3], [4, 4, 4, 4, 4]
+  ],
+  "PriestSlots": [
+    [1], [2], [2, 1], [3, 2], [3, 3, 1], [3, 3, 2], [3, 3, 2, 1], [3, 3, 3, 2], [4, 4, 3, 2, 1], [4, 4, 3, 3, 2],
+    [5, 4, 4, 3, 2], [6, 5, 5, 3, 2]
+  ],
+  "RangerSlots": [[], [], [], [], [], [], [], [1], [2], [2, 1], [2, 2], [2, 2, 1]],
+  "WisdomBonusSpells": [
+    { "Wisdom": 13, "Level": 1 }, { "Wisdom": 14, "Level": 1 }, { "Wisdom": 15, "Level": 2 }, { "Wisdom": 16, "Level": 2 },
+    { "Wisdom": 17, "Level": 3 }, { "Wisdom": 18, "Level": 4 }, { "Wisdom": 19, "Level": 1 }, { "Wisdom": 19, "Level": 3 },
+    { "Wisdom": 20, "Level": 2 }, { "Wisdom": 20, "Level": 4 }, { "Wisdom": 21, "Level": 3 }, { "Wisdom": 21, "Level": 5 }
+  ],
+  "WisdomBonusNeedsSlots": true,
+  "SpellbookSizes": [
+    { "Intelligence": 9, "Spells": 6 }, { "Intelligence": 10, "Spells": 7 }, { "Intelligence": 13, "Spells": 9 },
+    { "Intelligence": 15, "Spells": 11 }, { "Intelligence": 17, "Spells": 14 }, { "Intelligence": 18, "Spells": 18 },
+    { "Intelligence": 19, "Spells": 99 }
+  ],
+  "ConstitutionHitPoints": [-2, -2, -2, -2, -1, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 2, 2, 5, 5, 5, 5, 5, 5, 5],
+  "WarriorConstitutionHitPoints": [-2, -2, -2, -2, -1, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 4, 5, 5, 5, 5, 5, 5, 5]
+}
