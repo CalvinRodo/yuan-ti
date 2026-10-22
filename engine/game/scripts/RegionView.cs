@@ -1675,7 +1675,7 @@ public partial class RegionView : Node2D
             // 7BEB:0A60: the item goes into the pack first, then its pickup trigger runs.
             if (!_world.PickUp(taker, target))
             {
-                Say(what, target.Items.Count > 0 ? $"{Called(target)} has something in it: open it and take that first." : $"{taker.Name} can't carry any more.");
+                Say(what, target.Items.Count > 0 ? $"{Called(target, start: true)} has something in it: open it and take that first." : $"{taker.Name} can't carry any more.");
                 return;
             }
             AddScriptLine($"> {taker.Name} picks up {Describe(target)}");
@@ -1692,11 +1692,14 @@ public partial class RegionView : Node2D
         }
         switch (verb)
         {
+            case Verb.Look when target.Name.Length > 0:
+                Say(what, target.Name); // no look script: the engine names it
+                break;
             case Verb.Look:
-                Say(what, Called(target));
+                AddScriptLine($"> {what}: nothing to see"); // DSUN.EXE shows nothing for a nameless thing without a look script
                 break;
             case Verb.Get:
-                Say(what, $"{Called(target)} can't be picked up.");
+                Say(what, $"{Called(target, start: true)} can't be picked up.");
                 break;
             case Verb.Attack:
                 if (_checkingVerbs)
@@ -1705,7 +1708,7 @@ public partial class RegionView : Node2D
                 }
                 else if (!StartCombat(target, what))
                 {
-                    Say(what, $"{Called(target)} won't fight.");
+                    Say(what, $"{Called(target, start: true)} won't fight.");
                 }
                 break;
             default:
@@ -1735,7 +1738,8 @@ public partial class RegionView : Node2D
         _ => "look at",
     };
 
-    private static string Called(WorldObject obj) => obj.Name.Length > 0 ? obj.Name : "it";
+    /// <summary>The object's name, or "that" (capitalised at the start of a sentence) for a thing without one.</summary>
+    private static string Called(WorldObject obj, bool start = false) => obj.Name.Length > 0 ? obj.Name : start ? "That" : "that";
 
     /// <summary>
     /// Use a door or a lever-like object (<c>6BB8:0B56</c>): a door opens or

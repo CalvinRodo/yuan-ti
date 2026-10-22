@@ -319,7 +319,8 @@ public sealed partial class GameWorld
             Allegiance = record?.Allegiance ?? 0,
             Vitals = new Vitals { Hp = hp, MaxHp = hp, Status = record?.Status ?? 0 },
             FixedCell = new Cell(source.EtabX / Region.TileSize, Math.Max(0, source.EtabY - 1) / Region.TileSize),
-            Items = definition is null ? [] : [.. definition.Carried.Select(CarriedItem)],
+            // A container thing (a chest, a coffin) links its contents the way a creature links what it carries.
+            Items = [.. (definition?.Carried ?? (item is not null ? CreatureDefinition.CarriedIn(Rdff.Entries(rdff)) : [])).Select(CarriedItem)],
         };
 
         // Creatures whose animation can walk get a walker, so orders can move them.
