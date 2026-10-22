@@ -5,8 +5,8 @@ namespace DarkSun.Engine;
 /// <summary>
 /// The options (O, on the main menu and the map; new): music and sound
 /// volume, full screen, the opening, autosave, the map's debug lines,
-/// pathfinding, and the keys, each a button: click it, then press the new
-/// key (Esc keeps the old one). Changes apply at once and are saved
+/// pathfinding, the map's shadows, dust and enemy rings, and the keys, each
+/// a button: click it, then press the new key (Esc keeps the old one). Changes apply at once and are saved
 /// (<see cref="Settings"/>, <c>user://settings.cfg</c>) when the window closes.
 /// </summary>
 public partial class OptionsWindow : PanelContainer
@@ -50,6 +50,10 @@ public partial class OptionsWindow : PanelContainer
         Check(general, "Show the map's information lines", Settings.DebugHud, v => Settings.DebugHud = v);
         Check(general, "Walk as the original plans paths", Settings.OriginalPathfinding, v => Settings.OriginalPathfinding = v);
         Check(general, "Repair the shipped scripts' known bugs (from the next launch)", Settings.ScriptRepairs, v => Settings.ScriptRepairs = v);
+        Check(general, "Shadows under the figures", Settings.Shadows, v => Settings.Shadows = v);
+        Check(general, "Dust when walking on sand", Settings.Dust, v => Settings.Dust = v);
+        Choice(general, "Rings under enemies in a fight", ["None", "The chosen one", "All"], Settings.EnemyRings, v => Settings.EnemyRings = v);
+        Check(general, "Tab chooses an enemy, Enter attacks it", Settings.ChooseEnemyKeys, v => Settings.ChooseEnemyKeys = v);
 
         column.AddChild(Panels.Text("Keys (click one, then press the new key)", Heading));
         var scroll = new ScrollContainer { SizeFlagsVertical = SizeFlags.ExpandFill, CustomMinimumSize = new Vector2(0, 120), HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled };
@@ -116,6 +120,19 @@ public partial class OptionsWindow : PanelContainer
             Settings.Apply();
         };
         grid.AddChild(box);
+    }
+
+    private static void Choice(GridContainer grid, string label, string[] options, int value, Action<int> set)
+    {
+        grid.AddChild(Panels.Text(label));
+        var choice = new OptionButton { FocusMode = FocusModeEnum.None };
+        foreach (string option in options)
+        {
+            choice.AddItem(option);
+        }
+        choice.Selected = value;
+        choice.ItemSelected += i => set((int)i);
+        grid.AddChild(Panels.Small(choice));
     }
 
     /// <summary>Each action the player can rebind, named as the key help names it, with its keys now.</summary>

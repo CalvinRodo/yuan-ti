@@ -66,6 +66,7 @@ public partial class RegionView : Node2D
     private Palette _palette = null!;
     private double _clock;
     private Node2D _ground = null!;
+    private FloorEffects _floor = null!;
     private Node2D _sorted = null!;
     private DebugOverlay _overlay = null!;
     private ScriptDebugger _debugger = null!;
@@ -143,6 +144,8 @@ public partial class RegionView : Node2D
         Walker.UseOriginalPathfinding = Settings.OriginalPathfinding;
         _ground = new Node2D();
         AddChild(_ground);
+        _floor = new FloorEffects();
+        AddChild(_floor);
         _marker = new SelectionMarker();
         AddChild(_marker);
         _sorted = new Node2D { YSortEnabled = true };
@@ -357,6 +360,11 @@ public partial class RegionView : Node2D
             if (OS.GetCmdlineUserArgs().Contains("--check-character"))
             {
                 CheckCharacter();
+                return;
+            }
+            if (OS.GetCmdlineUserArgs().Contains("--check-floor"))
+            {
+                CheckFloor();
                 return;
             }
             if (OS.GetCmdlineUserArgs().Contains("--check-items"))
@@ -630,6 +638,7 @@ public partial class RegionView : Node2D
         byte[] ground = RegionRenderer.RenderRgb(_region, _palette, RegionLayers.Ground);
         Image groundImage = Image.CreateFromData((int)_mapSize.X, (int)_mapSize.Y, false, Image.Format.Rgb8, ground);
         _ground.AddChild(new Sprite2D { Texture = ImageTexture.CreateFromImage(groundImage), Centered = false, Name = "Ground" });
+        _floor.SetGround(groundImage);
 
         // Each sprite's node sits at the point it is sorted by: an object's ETAB
         // position, a wall's cell bottom. The image hangs off it via Offset.
@@ -1160,6 +1169,7 @@ public partial class RegionView : Node2D
                 _camera.Position += pan * PanSpeed * (float)delta / _camera.Zoom.X;
             }
             FollowCharacter();
+            UpdateFloor(delta);
             return;
         }
         MoveWithKeyboard();
@@ -1179,6 +1189,7 @@ public partial class RegionView : Node2D
         }
         FollowCharacter();
         UpdateHover(force: false);
+        UpdateFloor(delta);
     }
 
     private bool KeyboardMovementLocked => MapLocked || _dialogueWindow.Visible || _gameMenu.IsOpen || _character.IsOpen
