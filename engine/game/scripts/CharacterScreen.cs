@@ -17,7 +17,8 @@ namespace DarkSun.Engine;
 /// points, armour class and THAC0 (<see cref="CharacterSheet"/>),
 /// experience, alignment, psionics, sphere.</item>
 /// <item><b>Items</b> (I): the inventory, <c>WIND</c> 13500 over <c>BMP</c>
-/// 13001. The boxes down the left; the body (<c>BMP</c> 13004) with its 14
+/// 13001. The boxes down the left; the member's figure (<c>BMP</c> 20000 +
+/// their look, on the parchment 13005: <c>74F1:17AF</c>) with its 14
 /// equipment slots around it (<c>APFM</c> 11216–11229, slot n at 11216 + n,
 /// each with its silhouette, <c>BMP</c> 13007 frame 9 + n); the pack
 /// (<c>APFM</c> 11230–11241, 12 at a time, MORE for the rest); DROP and SPLIT.
@@ -60,7 +61,13 @@ public partial class CharacterScreen : RetroScreen
     private const int ContainerSlots = ContainerWindow.Slots;
     private const int FirstSellSlot = 11242, SellSlots = 6;
     private const int SlotArt = 13007, EmptyFrame = 0, SelectedFrame = 4, CantFrame = 6, FirstSilhouette = 9;
-    private const int Body = 13004, ChestArt = 13002, BagArt = 13003, ParchmentArt = 13005, Bars = 13000;
+    private const int ChestArt = 13002, BagArt = 13003, ParchmentArt = 13005, Bars = 13000;
+
+    /// <summary>The figures in the body's place: <c>BMP</c> 20000 + the member's look (0 human male … 13 thri-kreen, as the map icons <c>OJFF</c> 300–313).</summary>
+    private const int FirstFigure = 20000, Figures = 14;
+
+    /// <summary>Where a figure's centre goes (<c>74F1:17AF</c>: (63, 78) past window item 6, at (57, 18)).</summary>
+    private static readonly Vector2 FigureCentre = new(120, 96);
     private const int ShutChestArt = 20105, ShutBagArt = 20104;
 
     /// <summary>How long a carried container shows shut before it opens: 15 refreshes of the 70 Hz screen (<c>70E7:00B8</c>).</summary>
@@ -101,7 +108,7 @@ public partial class CharacterScreen : RetroScreen
     private Palette _palette = null!;
     private PageView _sheetPage = null!, _itemsPage = null!;
     private Label _sheet = null!, _sheetMore = null!, _info = null!, _status = null!, _itemsStatus = null!;
-    private TextureRect _body = null!, _containerArt = null!;
+    private TextureRect _body = null!, _figure = null!, _containerArt = null!;
     private ItemWindow _itemWindow = null!;
     private readonly List<ItemSlot> _slots = [];
     private readonly Dictionary<int, Texture2D?> _slotArt = [];
@@ -190,7 +197,10 @@ public partial class CharacterScreen : RetroScreen
         // The items: the body (or an open container), the slots, the details on the right.
         UiWindowView items = _itemsPage.Window;
         Rect2 inside = items.RectOf("APFM", ContainerArea);
-        _body = new TextureRect { Texture = Art("BMP ", Body, 0), Position = new Vector2(inside.Position.X + 2, 12), MouseFilter = MouseFilterEnum.Ignore };
+        // 74F1:175A: the parchment where a container opens, then (74F1:17AF) the member's figure on it.
+        _body = new TextureRect { Texture = Art("BMP ", ParchmentArt, 0), Position = inside.Position, MouseFilter = MouseFilterEnum.Ignore };
+        _figure = new TextureRect { MouseFilter = MouseFilterEnum.Ignore };
+        _body.AddChild(_figure);
         _containerArt = new TextureRect { Position = inside.Position, Size = inside.Size, MouseFilter = MouseFilterEnum.Ignore, Visible = false };
         // 74F1:0000 draws BMP 13000's bars: frame 1 behind the name at (53, 3), frame 3, the
         // status line, at (46, 161); the status text starts at APFM 11270.
@@ -607,6 +617,7 @@ public partial class CharacterScreen : RetroScreen
         Equipment.Arrange(inside);
         _insidePage = Math.Clamp(_insidePage, 0, Pages(inside, InsideShown.Count) - 1);
         _body.Visible = _container is null;
+        ShowFigure();
         _containerArt.Visible = _container is not null;
         if (_container is not null)
         {
@@ -660,6 +671,29 @@ public partial class CharacterScreen : RetroScreen
         b.Disabled = !on;
         b.Modulate = on ? Colors.White : new Color(1, 1, 1, 0.5f);
     }
+
+    /// <summary>
+    /// The member's figure in the body's place (<c>74F1:17AF</c>), centred on
+    /// <see cref="FigureCentre"/>; none for a member without a character.
+    /// </summary>
+    private void ShowFigure()
+    {
+        Texture2D? figure = Member is not null && CharacterOf(_member) is { } c ? Art("BMP ", FirstFigure + FigureOf(c), 0) : null;
+        _figure.Texture = figure;
+        if (figure is not null)
+        {
+            _figure.Position = FigureCentre - _body.Position - new Vector2(figure.GetWidth() / 2, figure.GetHeight() / 2);
+        }
+    }
+
+    /// <summary>A character's look (combat record +0x18): its map icon's, else the one its race and sex give.</summary>
+    private static int FigureOf(Character c) =>
+        c.Sprite - Session.Rules.IconBase is >= 0 and < Figures and int look
+            ? look
+            : new CharacterCreation(Session.Rules, Session.Names, new Random()).Icon(c) - Session.Rules.IconBase;
+
+    /// <summary>The figure in the body's place: <c>BMP</c> number, or 0 for none (for the headless checks).</summary>
+    public int Figure => _figure.Texture is null || Member is null || CharacterOf(_member) is not { } c ? 0 : FirstFigure + FigureOf(c);
 
     /// <summary>
     /// What a container shows as (<c>6527:12BD</c>): a bag if it is leather

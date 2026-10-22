@@ -450,11 +450,12 @@ this milestone brings most of the game's content.
       15502, `91F7:0C29`) with INFO for who may use it (`91F7:12D8`).
 - [ ] Items still to do: casting from items (charges used up; needs
       spells; the item window's USE, `91F7:03D0`), breakage in combat
-      (`80F5:1F4B`), the type flags 4 and 0x10, and the character's own
-      picture in the inventory's body place (the original's kneeling figure).
+      (`80F5:1F4B`), and the type flags 4 and 0x10.
 - [x] Character sheet and inventory screens (`CharacterScreen`): View
       Character (`WIND` 11500 over `BMP` 11000) with the member's sheet, and
-      the inventory (`WIND` 13500 over `BMP` 13001: the body `BMP` 13004,
+      the inventory (`WIND` 13500 over `BMP` 13001: the member's figure,
+      `BMP` 20000 + their look (the map icon's, `OJFF` 300 + n), centred at
+      (120, 96) on the parchment 13005 (`74F1:175A`, `74F1:17AF`),
       equipment slot n at `APFM` 11216 + n with its silhouette `BMP` 13007
       frame 9 + n, the pack at 11230–11241, a carried container's six
       things at 13200 over `BMP` 13002/13003, a bag's in 11248–11253, a

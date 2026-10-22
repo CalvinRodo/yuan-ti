@@ -2654,6 +2654,9 @@ public partial class RegionView : Node2D
         CharacterScreen screen = _character;
         screen.Open(_world, 0, CharacterScreen.Page.Items);
         int PackIndex(Item item) => Enumerable.Range(0, 12).First(n => screen.ItemAt(Pack, n) == item);
+        // 74F1:17AF: the member's figure, BMP 20000 + their look, in the body's place.
+        Expect(screen.Figure is >= 20000 and < 20014 && Session.Party[0].Sprite - Session.Rules.IconBase == screen.Figure - 20000,
+            $"the member's figure shows where a container opens (BMP {screen.Figure}, map icon OJFF {Session.Party[0].Sprite})");
 
         screen.Click(Pack, PackIndex(boots));
         Expect(screen.Picked == boots && screen.Info.Contains("Boots"), "clicking the boots picks them and describes them");
