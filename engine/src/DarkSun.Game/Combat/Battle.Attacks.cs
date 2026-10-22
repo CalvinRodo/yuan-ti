@@ -36,7 +36,7 @@ public sealed partial class Battle
     public bool CanAttack(Combatant a, Combatant t, bool missile = false) =>
         (a.Flags & TurnFlags.MayAttack) != 0 && t.Alive && a != t && Distance(a, t) <= Reach(a, missile) && InSight(a, t)
         && !a.Has(Condition.CantAttack) && !a.Has(Condition.Paralyzed)
-        && (!missile || a.MissileWeapon is not null && a.Ammunition > 0);
+        && (!missile || a.CanShoot);
 
     /// <summary>Attacks this round from <paramref name="halves"/> (halves a round): Hasted doubles, Slowed halves, odd halves alternate.</summary>
     public int AttacksThisRound(Combatant c, int halves)
@@ -170,13 +170,13 @@ public sealed partial class Battle
         if (w is not null)
         {
             int count = AttacksThisRound(a, missile ? Math.Max(2, w.Type.Attacks * 2) : a.AttackHalves);
-            if (missile)
+            if (missile && a.ShootsAmmunition)
             {
                 count = Math.Min(count, a.Ammunition);
             }
             for (int i = 0; i < count && t.Alive; i++)
             {
-                if (missile)
+                if (missile && a.ShootsAmmunition)
                 {
                     a.Ammunition--;
                 }

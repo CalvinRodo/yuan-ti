@@ -170,6 +170,17 @@ public sealed class Combatant
 
     public int Ammunition { get; set; }
 
+    /// <summary>
+    /// Does the missile weapon shoot ammunition (<c>IT1R</c> +0 &amp; 8, a bow)?
+    /// Others (a chatkcha, a sling) need none: <c>612E:1FCF</c> counts the
+    /// ammunition slot only for these, 999 shots otherwise, and only their
+    /// ammunition is used up (<c>612E:20A1</c>).
+    /// </summary>
+    public bool ShootsAmmunition => MissileWeapon is { } w && (w.Type.Weapon & WeaponKind.UsesAmmunition) != 0;
+
+    /// <summary>Has it a missile weapon it can shoot now (ammunition left, if it takes any)?</summary>
+    public bool CanShoot => MissileWeapon is not null && (!ShootsAmmunition || Ammunition > 0);
+
     /// <summary>A thief's level, for backstabs (0 for others).</summary>
     public int ThiefLevel { get; init; }
 

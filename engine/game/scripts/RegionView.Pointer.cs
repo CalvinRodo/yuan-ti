@@ -145,7 +145,7 @@ public partial class RegionView
 
     /// <summary>Would a click on <paramref name="there"/> shoot rather than walk up (<see cref="Click"/>)?</summary>
     private static bool MissileClick(Combatant c, Combatant there) =>
-        Battle.Distance(c, there) > Battle.Reach(c) && c.MissileWeapon is not null && c.Ammunition > 0;
+        Battle.Distance(c, there) > Battle.Reach(c) && c.CanShoot;
 
     /// <summary>
     /// Who the aimed spell would reach flashes black, and an area's outline is

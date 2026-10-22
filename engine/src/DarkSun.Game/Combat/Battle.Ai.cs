@@ -485,7 +485,7 @@ public sealed partial class Battle
     /// <summary>A missile weapon (<c>6466:0AE8</c>): an enemy in sight and range, at random, is shot.</summary>
     private bool TryMissile(Combatant c)
     {
-        if (c.MissileWeapon is null || c.Ammunition <= 0)
+        if (!c.CanShoot)
         {
             return false;
         }

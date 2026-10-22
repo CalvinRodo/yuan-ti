@@ -156,6 +156,37 @@ public class CombatTests
         Assert.Contains(b.Log, e => e is ConditionEnded { Condition: Condition.ImprovedAc });
     }
 
+    /// <summary>A missile weapon: a chatkcha (thrown, range 9, 1d6, IT1R type 48) or a bow (shoots ammunition, range 17).</summary>
+    private static Weapon Missile(bool bow) => new(new ItemType(
+        bow ? 1 : 48, bow ? WeaponKind.Missile | WeaponKind.UsesAmmunition : WeaponKind.Missile | WeaponKind.Thrown, 0,
+        (ushort)DamageElement.Slashing, 10, 0, 0, (byte)ItemMaterial.Metal, ItemPlacement.MissileWeapon,
+        bow ? (byte)17 : (byte)9, 2, bow ? (byte)8 : (byte)6, 1, 0, 0, 0xFFFF, 0, 0));
+
+    [Fact]
+    public void AThrownWeaponNeedsNoAmmunitionAndABowUsesItsArrows()
+    {
+        // 612E:1FCF: only a weapon whose type shoots ammunition counts the ammunition slot; a chatkcha throws as it is.
+        Combatant kreen = Fighter("kreen", 1, 5, 5), t = Fighter("t", 2, 10, 5, hp: 500);
+        kreen.MissileWeapon = Missile(bow: false);
+        Battle b = Started(new ScriptedDice(Highest), kreen, t);
+        Assert.False(kreen.ShootsAmmunition);
+        Assert.True(kreen.CanShoot);
+        Assert.True(b.CanAttack(kreen, t, missile: true));
+        Assert.True(b.Attack(kreen, t, missile: true));
+        Assert.True(t.Vitals.Hp < 500);
+        Assert.Equal(0, kreen.Ammunition);
+
+        Combatant archer = Fighter("archer", 1, 5, 6), u = Fighter("u", 2, 10, 6, hp: 500);
+        archer.MissileWeapon = Missile(bow: true);
+        Battle c = Started(new ScriptedDice(Highest), archer, u);
+        Assert.True(archer.ShootsAmmunition);
+        Assert.False(c.CanAttack(archer, u, missile: true)); // no arrows
+        archer.Ammunition = 1;
+        Assert.True(c.Attack(archer, u, missile: true));
+        Assert.Equal(0, archer.Ammunition); // two shots a round, but only one arrow
+        Assert.False(archer.CanShoot);
+    }
+
     [Fact]
     public void AttackingEndsInvisibilityAndPoisonKillsWhenItsRoundsRunOut()
     {

@@ -634,7 +634,7 @@ public partial class RegionView
         {
             return who;
         }
-        bool missile = Battle.Distance(c, there) > Battle.Reach(c) && c.MissileWeapon is not null && c.Ammunition > 0;
+        bool missile = MissileClick(c, there);
         Weapon? w = missile ? c.MissileWeapon : c.Weapon;
         int needed = battle.ToHitNeeded(c, there, w);
         int chance = Math.Clamp(21 - needed, 1, 19) * 5;
@@ -1245,6 +1245,16 @@ public partial class RegionView
         }
         Dictionary<WorldObject, int> carried = battle.Combatants.Where(c => !c.PartyMember && c.Source is not null)
             .ToDictionary(c => c.Source!, c => c.Source!.Items.Count);
+        // A thrown weapon (the thri-kreen's chatkcha) needs no ammunition (612E:1FCF): a click on a distant enemy throws it.
+        foreach (Combatant thrower in battle.Combatants.Where(c => c.PartyMember && c.MissileWeapon is not null && !c.ShootsAmmunition))
+        {
+            Combatant? far = battle.Combatants.FirstOrDefault(e => thrower.IsEnemyOf(e) && Battle.Distance(thrower, e) > 1);
+            GD.Print($"combat: {Who(thrower)} has a {_world.Items.NameOf(thrower.MissileWeapon!.Item!.Record)} to throw");
+            if (!thrower.CanShoot || far is not null && !MissileClick(thrower, far))
+            {
+                problems.Add($"{Who(thrower)} can't throw its {_world.Items.NameOf(thrower.MissileWeapon!.Item!.Record)}");
+            }
+        }
         int frames = 0;
         while (InCombat && battle.Round <= 40 && frames++ < 200_000)
         {

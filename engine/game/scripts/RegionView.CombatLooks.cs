@@ -163,7 +163,8 @@ public partial class RegionView
         }
         else if (_battle is { } battle)
         {
-            int item = a.Actor.Items.FirstOrDefault(i => i.Slot == 1)?.Rdff ?? a.Actor.MissileWeapon?.Item?.Rdff ?? 0;
+            // What flies goes by the missile weapon (896E:0000): a chatkcha's own, a sling's stone, else an arrow.
+            int item = a.Actor.MissileWeapon?.Item?.Rdff ?? 0;
             ShowGraphic(battle.Spells.MissileOf(item), Middle(a.Actor.Cell), Middle(a.Target.Cell), blocks: true);
         }
         if (!a.Hit)
