@@ -1427,16 +1427,33 @@ public partial class RegionView : Node2D
         });
     }
 
-    /// <summary>The front-most object whose sprite is under <paramref name="at"/> (map position), if any.</summary>
+    /// <summary>
+    /// The front-most object with a drawn pixel under <paramref name="at"/>
+    /// (map position), if any: DSUN.EXE goes through the drawn objects front to
+    /// back and takes the first whose picture has a pixel there, not just its
+    /// box (<c>1DF3:2822</c>, <c>147D:0166</c>), so a small thing (coins on the
+    /// ground) isn't hidden by the empty corners of a bigger one in front.
+    /// </summary>
     private WorldObject? ObjectAt(Vector2 at) =>
         _objectSprites.Where(o => _worldObjects.ContainsKey(o.Object)).Select(o => (Object: _worldObjects[o.Object], o.Sprite))
             .Concat(_creatureNodes.Select(c => (Object: c.Key, Sprite: c.Value)))
             .Concat(_cloneSprites.Select(c => (Object: c.Key, Sprite: c.Value)))
-            .Where(o => o.Sprite.Visible && o.Sprite.Texture is { } tex
-                && new Rect2(o.Sprite.Position + o.Sprite.Offset, tex.GetSize()).HasPoint(at))
+            .Where(o => DrawnAt(o.Sprite, at))
             .OrderByDescending(o => o.Sprite.Position.Y)
             .Select(o => o.Object)
             .FirstOrDefault();
+
+    /// <summary>Does <paramref name="sprite"/> (visible) draw a pixel at map position <paramref name="at"/>?</summary>
+    private static bool DrawnAt(Sprite2D sprite, Vector2 at)
+    {
+        if (!sprite.Visible || sprite.Texture is not { } texture)
+        {
+            return false;
+        }
+        Vector2 local = at - (sprite.Position + sprite.GetRect().Position);
+        int x = (int)Math.Floor(local.X), y = (int)Math.Floor(local.Y);
+        return Textures.Opaque(texture, sprite.FlipH ? texture.GetWidth() - 1 - x : x, y);
+    }
 
     /// <summary>The verbs <paramref name="obj"/> offers (<see cref="ObjectVerbs"/>).</summary>
     private IReadOnlyList<Verb> VerbsOf(WorldObject obj) => ObjectVerbs.For(obj, _world.Items, Session.Scripts.Triggers, _world.IsContainer(obj));
@@ -2328,6 +2345,38 @@ public partial class RegionView : Node2D
         Expect(ground is not null && _cloneSprites.ContainsKey(ground), "the dropped item has a sprite");
         Expect(ground is not null && _world.PickUp(me, ground) && _world[ground.Index] is null, "picked it up again");
         Expect(party[0].Items.Count(i => i.Rdff == Water) == 2, "two pots again");
+
+        // Coins the arena crowd throws (OJFF 1388, GPL 2), with a big pot dropped on the same cell after them,
+        // drawn in front: the pointer on a coin's pixels finds the coin, the empty part of its box finds nothing.
+        const int Coins = 1388;
+        if (_world.Spawn(Coins, me.Cell) is { } coins && _world.DropItem(me, party[0].Items.First(i => i.Rdff == Water), 1) is { } cover
+            && _cloneSprites.TryGetValue(coins, out Sprite2D? coinSprite) && _cloneSprites.TryGetValue(cover, out Sprite2D? coverSprite))
+        {
+            Rect2 box = new(coinSprite.Position + coinSprite.GetRect().Position, coinSprite.GetRect().Size);
+            List<Vector2> points = [.. Enumerable.Range(0, (int)box.Size.Y).SelectMany(y => Enumerable.Range(0, (int)box.Size.X)
+                .Select(x => box.Position + new Vector2(x + 0.5f, y + 0.5f)))];
+            bool InCoverBox(Vector2 p) => new Rect2(coverSprite.Position + coverSprite.GetRect().Position, coverSprite.GetRect().Size).HasPoint(p);
+            // The pot moved until an empty corner of its picture lies over some of the coins (still in front of them).
+            Vector2 start = coverSprite.Position;
+            foreach (Vector2 shift in Enumerable.Range(1, 12).SelectMany(dy => Enumerable.Range(-16, 33).Select(dx => new Vector2(dx, dy))))
+            {
+                coverSprite.Position = start + shift;
+                if (points.Any(p => DrawnAt(coinSprite, p) && InCoverBox(p) && !DrawnAt(coverSprite, p)))
+                {
+                    break;
+                }
+            }
+            List<Vector2> onCoins = [.. points.Where(p => DrawnAt(coinSprite, p) && !DrawnAt(coverSprite, p))];
+            Expect(onCoins.Any(InCoverBox), "an empty corner of the pot's picture lies over the coins");
+            Expect(onCoins.Count > 0 && onCoins.All(p => ObjectAt(p) == coins), $"the pointer on the coins' pixels finds them ({onCoins.Count(p => ObjectAt(p) == coins)} of {onCoins.Count})");
+            Expect(points.Where(p => !DrawnAt(coinSprite, p) && !DrawnAt(coverSprite, p)).All(p => ObjectAt(p) != coins), "and not the empty corners of their picture");
+            Expect(_world.PickUp(me, coins), "picked up the coins");
+            _world.PickUp(me, cover);
+        }
+        else
+        {
+            problems.Add("no coins dropped beside a pot");
+        }
 
         Item boots = party[0].Items.First(i => i.Rdff == Boots);
         Expect(_world.Equip(me, boots) == EquipResult.Worn && boots.Slot == 13, $"boots worn on the feet (slot {boots.Slot})");

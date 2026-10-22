@@ -189,7 +189,8 @@ public partial class RegionView
             Expect(PointerIcon(Middle(target.Cell)) is Pointers.Attack or Pointers.Ranged, "MOVE over an enemy: the sword or the missile");
             // Anywhere on its picture aims at it, not only its own cell (the beetle's body is drawn above its feet).
             if (SpriteOf(target) is { Texture: not null } picture && SpriteRect(picture) is var shape
-                && new Vector2(shape.GetCenter().X, shape.Position.Y + 2) is var head
+                && Enumerable.Range(0, (int)shape.Size.Y).SelectMany(y => Enumerable.Range(0, (int)shape.Size.X).Select(x => shape.Position + new Vector2(x + 0.5f, y + 0.5f)))
+                    .FirstOrDefault(p => DrawnAt(picture, p)) is var head && head != default
                 && new Cell((int)Math.Floor(head.X / Region.TileSize), (int)Math.Floor(head.Y / Region.TileSize)) is var above
                 && above != target.Cell && battle.At(above) is null)
             {

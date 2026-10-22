@@ -136,7 +136,7 @@ public partial class RegionView
             return cell;
         }
         Combatant? drawn = battle.Combatants
-            .Where(c => c.Alive && SpriteOf(c) is { Visible: true, Texture: not null } s && SpriteRect(s).HasPoint(at))
+            .Where(c => c.Alive && SpriteOf(c) is { } s && DrawnAt(s, at))
             .MaxBy(c => SpriteOf(c)!.Position.Y);
         return drawn is not null && battle.At(cell) is null ? drawn.Cell : cell;
     }

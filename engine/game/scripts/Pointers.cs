@@ -7,7 +7,10 @@ namespace DarkSun.Engine;
 /// The original's mouse pointers as the system cursor: <c>RESOURCE.GFF</c>
 /// <c>ICON</c> 6001–6010, which <c>191F:0A99</c> and the map's hover code
 /// (<c>1587:29FA</c>) pick by pointer mode, and a spell's own icon while it is
-/// aimed (<c>577D:0889</c>). Drawn at the screen's scale.
+/// aimed (<c>577D:0889</c>). Drawn at the screen's scale, and aimed by the
+/// top-left corner as DSUN.EXE draws every pointer there (<c>28D1</c>: the
+/// pointer's top left is the mouse position; <c>28D1:12E8</c>'s second
+/// argument is a frame, not an offset).
 /// </summary>
 public static class Pointers
 {
@@ -29,11 +32,11 @@ public static class Pointers
     /// <summary>
     /// The pointer of pointer mode 3 (<c>191F:0A99</c>: the held item's picture,
     /// <c>4281:003E</c>), and of an item picked up in the inventory:
-    /// <paramref name="picture"/>, aimed by its middle. <paramref name="key"/>
+    /// <paramref name="picture"/>. <paramref name="key"/>
     /// tells pictures apart (<see cref="HeldObject"/>, <see cref="HeldItem"/>).
     /// </summary>
     public static void ShowHeld(Window window, int key, Image picture) =>
-        Show(window, key, scale => Scaled(picture.Duplicate() as Image ?? picture, scale, centred: true));
+        Show(window, key, scale => Scaled(picture.Duplicate() as Image ?? picture, scale));
 
     /// <summary>The key of map object <paramref name="index"/>'s picture as a pointer.</summary>
     public static int HeldObject(int index) => -2 - index;
@@ -84,14 +87,13 @@ public static class Pointers
         {
             return null;
         }
-        // The arrows, the sword and the missile point to the top left; the rest are aimed by their middle.
-        return Scaled(Textures.ToImage(frame, Session.Assets.Palette(resources.Read("PAL ", 1001))), scale, centred: icon is not (>= Move and <= CantRanged));
+        return Scaled(Textures.ToImage(frame, Session.Assets.Palette(resources.Read("PAL ", 1001))), scale);
     }
 
-    private static (Image, Vector2) Scaled(Image image, int scale, bool centred)
+    private static (Image, Vector2) Scaled(Image image, int scale)
     {
         scale = Math.Max(1, Math.Min(scale, 256 / Math.Max(1, Math.Max(image.GetWidth(), image.GetHeight()))));
         image.Resize(image.GetWidth() * scale, image.GetHeight() * scale, Image.Interpolation.Nearest);
-        return (image, centred ? image.GetSize() / 2 : Vector2.Zero);
+        return (image, Vector2.Zero);
     }
 }

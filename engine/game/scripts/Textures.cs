@@ -24,10 +24,32 @@ public static class Textures
         Palette key = frame.Rgba is null ? palette : NoPalette;
         if (!byPalette.TryGetValue(key, out ImageTexture? texture))
         {
-            texture = ImageTexture.CreateFromImage(ToImage(frame, palette));
+            Image image = ToImage(frame, palette);
+            texture = ImageTexture.CreateFromImage(image);
             byPalette[key] = texture;
+            Images.AddOrUpdate(texture, image);
         }
         return texture;
+    }
+
+    private static readonly ConditionalWeakTable<Texture2D, Image> Images = new();
+
+    /// <summary>
+    /// Is pixel (<paramref name="x"/>, <paramref name="y"/>) of
+    /// <paramref name="texture"/> drawn (not transparent)? Outside it, no.
+    /// </summary>
+    public static bool Opaque(Texture2D texture, int x, int y)
+    {
+        if (x < 0 || y < 0 || x >= texture.GetWidth() || y >= texture.GetHeight())
+        {
+            return false;
+        }
+        if (!Images.TryGetValue(texture, out Image? image))
+        {
+            image = texture.GetImage();
+            Images.AddOrUpdate(texture, image);
+        }
+        return image.GetPixel(x, y).A > 0;
     }
 
     private static readonly Palette NoPalette = new([]);
