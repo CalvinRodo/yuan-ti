@@ -26,9 +26,10 @@ namespace DarkSun.Engine;
 /// every 8, or "NO ONE" (<c>91F7:12D8</c>). It is there for things worn or
 /// wielded (<c>IT1R</c> +9) and magic items (item +0x0F); INFO again turns back.</item>
 /// </list>
-/// The USE button (15305, at the spell icon) isn't offered here: an item is
-/// used from the map (hold it on the pointer). Any click outside, a right-click
-/// or Esc closes the window.
+/// USE (<c>BUTN</c> 15305, under the spell icon) is there only in the
+/// inventory, for what <see cref="ItemMagic.Offered"/> allows; it casts the
+/// item's spell (<see cref="Use"/>), and INFO's page hides it. Any click
+/// outside, a right-click or Esc closes the window.
 /// </summary>
 public partial class ItemWindow : Control
 {
@@ -38,6 +39,10 @@ public partial class ItemWindow : Control
     private const int SpellIcons = 20999, PowerIcons = 2861, FirstPower = 139, LastPower = 172;
 
     private Control _details = null!, _users = null!;
+    private TextureButton? _use;
+
+    /// <summary>USE was pressed (the window has closed).</summary>
+    public Action<Item>? Use { get; set; }
 
     /// <summary>The item shown, or null.</summary>
     public Item? Item { get; private set; }
@@ -60,8 +65,10 @@ public partial class ItemWindow : Control
     /// pointer at <paramref name="pointer"/> in game pixels on a screen
     /// <paramref name="area"/> big, drawn <paramref name="scale"/> times as
     /// big. <paramref name="users"/>: the party members who may use it.
+    /// <paramref name="useOffered"/>: USE is there (the inventory's, for an item that offers it).
     /// </summary>
-    public void Open(GameWorld world, Item item, Texture2D? icon, IReadOnlyList<string> users, Palette palette, Vector2 pointer, Vector2 area, float scale = 1)
+    public void Open(GameWorld world, Item item, Texture2D? icon, IReadOnlyList<string> users, Palette palette, Vector2 pointer, Vector2 area, float scale = 1,
+        bool useOffered = false)
     {
         Item = item;
         foreach (Node child in GetChildren())
@@ -146,9 +153,12 @@ public partial class ItemWindow : Control
         {
             _details.AddChild(new TextureRect { Texture = spell, Position = new Vector2(76, 12), MouseFilter = MouseFilterEnum.Ignore });
         }
-        if (window.Button(UseButton) is { } use)
+        _use = window.Button(UseButton);
+        if (_use is not null)
         {
-            use.Visible = false;
+            _use.Visible = useOffered;
+            _use.TooltipText = "Use it";
+            _use.Pressed += PressUse;
         }
 
         // INFO: who may use it.
@@ -190,6 +200,24 @@ public partial class ItemWindow : Control
         }
         _users.Visible = !_users.Visible;
         _details.Visible = !_users.Visible;
+        if (_use is not null && Use is not null)
+        {
+            _use.Disabled = _users.Visible; // 91F7:12D8
+        }
+    }
+
+    /// <summary>Is USE there (for the headless checks)?</summary>
+    public bool UseOffered => _use is { Visible: true, Disabled: false };
+
+    /// <summary>USE: the window closes and the item is used.</summary>
+    public void PressUse()
+    {
+        if (Item is not { } item || !UseOffered)
+        {
+            return;
+        }
+        Close();
+        Use?.Invoke(item);
     }
 
     public void Close()

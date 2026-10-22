@@ -31,12 +31,17 @@ namespace DarkSun.Game.Combat;
 /// <param name="SaveAllowed">+0x18 bit 0.</param>
 /// <param name="SaveModifier">+0x18 bits 1–4, signed.</param>
 /// <param name="SaveCategory">+0x18 bits 5–7 (<see cref="SpellRules.SaveCategories"/>); 6 none.</param>
+/// <param name="Purpose">−7 bits 0–1: 0 against a creature, 1 a help (on oneself or one touched), 2 and 3 an area.
+/// A worn item whose spell helps works by being worn: it has no USE (<c>91F7:0000</c>).</param>
 public sealed record SpellEffect(
     int Number, int RangeBase, int RangePerLevel, int DurationCount, int DurationSides, int DurationPerLevel,
     int Unit, int AreaBase, int AreaPerLevel, int Target, int Template, int Flags, Condition Condition, DamageElement Elements,
     int BaseDice, int DicePerStep, int Sides, int FlatPerStep, int LevelsPerStep, int LevelBonus,
-    int SaveAllowed, int SaveModifier, int SaveCategory)
+    int SaveAllowed, int SaveModifier, int SaveCategory, int Purpose = 0)
 {
+    /// <summary><see cref="Purpose"/>: a help.</summary>
+    public const int Helps = 1;
+
     public const int Permanent = -9999, Charges = -1, Round = 60;
 
     /// <summary>The highest caster level the formulas use (<c>7D80:1CC2</c>).</summary>

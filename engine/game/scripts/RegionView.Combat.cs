@@ -47,8 +47,15 @@ public partial class RegionView
     private Node2D _floaters = null!;
     private Button _castButton = null!, _autoButton = null!;
 
-    /// <summary>A spell or power chosen with CAST, waiting for its target.</summary>
-    private int? _castChoice;
+    /// <summary>A spell or power chosen with CAST (or an item's, USE), waiting for its target.</summary>
+    private CastChoice? _castChoice;
+
+    /// <summary>
+    /// A spell to cast: a member's own, at their level, or an item's
+    /// (<paramref name="Item"/>, carried by <paramref name="Holder"/>), at
+    /// <see cref="ItemMagic.CasterLevel"/>, which uses one of its charges.
+    /// </summary>
+    private sealed record CastChoice(int Spell, int Level, Item? Item = null, WorldObject? Holder = null);
 
     /// <summary>Headless checks: the party fights by itself.</summary>
     private bool _autoParty;
@@ -613,17 +620,17 @@ public partial class RegionView
     {
         Battle battle = _battle!;
         Combatant? there = battle.At(cell);
-        if (_castChoice is int spell)
+        if (_castChoice is { Spell: var spell, Level: var level })
         {
             if (battle.Spells.Effect(spell) is not { } e)
             {
                 return "";
             }
-            if (battle.Aim(c, e, c.Level, cell) is var aim and not SpellAim.Ok)
+            if (battle.Aim(c, e, level, cell) is var aim and not SpellAim.Ok)
             {
                 return $"{EffectName(spell)}: {AimText(aim).ToLowerInvariant()} · right-click cancels";
             }
-            IReadOnlyList<Combatant> hit = battle.AffectedBy(c, e, c.Level, cell);
+            IReadOnlyList<Combatant> hit = battle.AffectedBy(c, e, level, cell);
             return $"{EffectName(spell)}: {(hit.Count == 0 ? "no one" : string.Join(", ", hit.Select(h => Who(h))))} · right-click cancels";
         }
         if (there is null || there == c)
@@ -748,19 +755,19 @@ public partial class RegionView
     /// <summary>A left click on <paramref name="cell"/> in a fight.</summary>
     private void ClickCell(Cell cell)
     {
-        int? spell = _castChoice; // PlayerAct clears it
-        PlayerAct(c => Click(c, cell, spell));
+        CastChoice? cast = _castChoice; // PlayerAct clears it
+        PlayerAct(c => Click(c, cell, cast));
     }
 
-    /// <param name="spell">The spell chosen with CAST: cast at the cell, or, if it can't be, still chosen.</param>
-    private void Click(Combatant c, Cell cell, int? spell)
+    /// <param name="cast">The spell chosen with CAST or USE: cast at the cell, or, if it can't be, still chosen.</param>
+    private void Click(Combatant c, Cell cell, CastChoice? cast)
     {
         Battle battle = _battle!;
-        if (spell is int chosen)
+        if (cast is not null)
         {
-            if (!CastAt(c, chosen, cell))
+            if (!CastAt(c, cast, cell))
             {
-                _castChoice = chosen;
+                _castChoice = cast;
             }
             return;
         }
@@ -804,27 +811,82 @@ public partial class RegionView
         }
     }
 
-    /// <summary>Cast <paramref name="spell"/> at <paramref name="cell"/> where the original's pointer allows it (<see cref="Battle.Aim"/>); false if it wasn't cast.</summary>
-    private bool CastAt(Combatant c, int spell, Cell cell)
+    /// <summary>
+    /// Cast <paramref name="cast"/> at <paramref name="cell"/> where the original's pointer allows it
+    /// (<see cref="Battle.Aim"/>); false if it wasn't cast. An item's spell is cast (a power too, with no
+    /// psionic strength spent) and uses one of the item's charges (<c>78A9:2324</c>).
+    /// </summary>
+    private bool CastAt(Combatant c, CastChoice cast, Cell cell)
     {
         Battle battle = _battle!;
+        int spell = cast.Spell;
         if (battle.Spells.Effect(spell) is not { } e)
         {
             return false;
         }
-        if (battle.Aim(c, e, c.Level, cell) is var aim and not SpellAim.Ok)
+        if (battle.Aim(c, e, cast.Level, cell) is var aim and not SpellAim.Ok)
         {
             Notice($"{EffectName(spell)}: {AimText(aim).ToLowerInvariant()}.");
             return false;
         }
         Cell at = e.Target is 7 or 8 ? c.Cell : cell;
+        if (cast is { Item: { } item, Holder: { } holder })
+        {
+            if (!battle.Cast(c, spell, cast.Level, at, ownSpell: false))
+            {
+                Notice($"{Who(c)} can't cast now.");
+                return false;
+            }
+            string name = ItemText.Name(_world, item);
+            AddScriptLine($"> {Who(c)} casts {EffectName(spell)} from {name}");
+            if (_world.UseItemCharge(holder, item))
+            {
+                Log($"{name} is used up.");
+            }
+            return true;
+        }
         bool power = spell is >= DarkSun.Game.Magic.Spellcasting.FirstPower and <= DarkSun.Game.Magic.Spellcasting.LastPower;
-        if (power ? !battle.UsePower(c, spell, at) : !battle.Cast(c, spell, c.Level, at))
+        if (power ? !battle.UsePower(c, spell, at) : !battle.Cast(c, spell, cast.Level, at))
         {
             Notice(power ? "Not enough psionic strength." : $"{Who(c)} can't cast now.");
             return false;
         }
         return true;
+    }
+
+    /// <summary>
+    /// USE on an item in the inventory during a fight (<c>91F7:03D0</c>, <see cref="ItemMagic"/>),
+    /// on member <paramref name="member"/>'s turn: a spell on oneself is cast at once, one to aim
+    /// waits for its target as CAST's do, and a lemon's makes the member whole; each uses a charge
+    /// and the turn. Null when done (the screen closes), else why not.
+    /// </summary>
+    private string? CastItemInFight(int member, Item item, WorldObject holder, ItemUse use)
+    {
+        if (PlayerTurn is not { } c || c.Source != _world[member])
+        {
+            return "NOT THIS CHARACTER'S TURN";
+        }
+        var cast = new CastChoice(use.Spell, ItemMagic.CasterLevel, item, holder);
+        if (use.Kind == ItemUseKind.FullHeal)
+        {
+            PlayerAct(m =>
+            {
+                m.Vitals.Hp = m.Vitals.MaxHp;
+                Log($"{Who(m)} is made whole by {ItemText.Name(_world, item)}.");
+                _world.UseItemCharge(holder, item);
+                _battle!.EndTurn(m);
+            });
+        }
+        else if (use.Kind == ItemUseKind.OnSelf || _battle!.Spells.Effect(use.Spell) is { Target: 7 or 8 })
+        {
+            PlayerAct(m => CastAt(m, cast, m.Cell));
+        }
+        else
+        {
+            _castChoice = cast;
+            UpdateCombatHud();
+        }
+        return null;
     }
 
     /// <summary>The original's messages: "TOO FAR AWAY" (<c>DS:0BEB</c>), "NO LINE OF SIGHT" (<c>DS:0BF8</c>).</summary>
@@ -870,10 +932,10 @@ public partial class RegionView
         }
         if (e.Target is 7 or 8)
         {
-            PlayerAct(m => CastAt(m, spell, m.Cell));
+            PlayerAct(m => CastAt(m, new CastChoice(spell, m.Level), m.Cell));
             return;
         }
-        _castChoice = spell;
+        _castChoice = new CastChoice(spell, c.Level);
         UpdateCombatHud();
     }
 
@@ -1338,19 +1400,35 @@ public partial class RegionView
 
     /// <summary>
     /// <c>--check-combat</c>: a new game; the nearest creature turns hostile and
-    /// the party attacks it, fighting by itself; the fight is played to its end
-    /// (or 40 rounds) and summed up.
+    /// the party attacks it. On the first member's turn a Wand of Missiles is
+    /// used from the inventory (USE) and aimed at an enemy; then the party
+    /// fights by itself; the fight is played to its end (or 40 rounds) and summed up.
     /// </summary>
     private async void CheckCombat()
     {
         _checking = true;
-        _autoParty = true;
         var problems = new List<string>();
         if (!StartTestFight() || _battle is not { } battle)
         {
             GD.Print("combat: no creature to fight in the start region");
             GetTree().Quit(1);
             return;
+        }
+        for (int frame = 0; frame < 20_000 && PlayerTurn is null && InCombat; frame++)
+        {
+            CombatProcess(1.0 / 60);
+        }
+        if (PlayerTurn is { Source: { } member } caster)
+        {
+            CheckWandInFight(caster, member, problems);
+        }
+        else
+        {
+            problems.Add("no member's turn came");
+        }
+        foreach (Combatant c in battle.Combatants.Where(c => c.PartyMember))
+        {
+            c.ComputerControlled = true;
         }
         Dictionary<WorldObject, int> carried = battle.Combatants.Where(c => !c.PartyMember && c.Source is not null)
             .ToDictionary(c => c.Source!, c => c.Source!.Items.Count);
@@ -1413,5 +1491,53 @@ public partial class RegionView
         }
         GD.Print(problems.Count == 0 ? "combat: OK" : $"combat: {problems.Count} problems");
         GetTree().Quit(problems.Count == 0 ? 0 : 1);
+    }
+
+    /// <summary>
+    /// The wand step of <c>--check-combat</c>: <paramref name="caster"/>
+    /// (<paramref name="member"/> on the map) is given a Wand of Missiles (<c>RDFF</c>
+    /// 31007: Magic Missile, 50 charges), right-clicks it in the inventory and
+    /// presses USE: the screens close and Magic Missile waits for a target at level 6;
+    /// cast at an enemy in range, it uses a charge and none of the member's own spells.
+    /// </summary>
+    private void CheckWandInFight(Combatant caster, WorldObject member, List<string> problems)
+    {
+        const int Wand = 31007, MagicMissile = 9, Pack = 1;
+        if (_world.Give(1, -Wand, member.Index, GameWorld.None) != 1 || member.Items.LastOrDefault(i => i.Rdff == Wand) is not { } wand)
+        {
+            problems.Add("no wand to give");
+            return;
+        }
+        int charges = wand.Charges, spells = caster.Spells.Count;
+        _character.Open(_world, member.Index, CharacterScreen.Page.Items);
+        int slot = Enumerable.Range(0, 12).FirstOrDefault(n => _character.ItemAt(Pack, n) == wand, -1);
+        _character.Click(Pack, slot, button: MouseButton.Right);
+        if (!_character.ItemWindow.UseOffered)
+        {
+            problems.Add("the wand's item window has no USE");
+            _character.Close();
+            return;
+        }
+        _character.ItemWindow.PressUse();
+        if (_character.IsOpen || _castChoice is not { Spell: MagicMissile, Level: ItemMagic.CasterLevel } choice || choice.Item != wand)
+        {
+            problems.Add($"USE on the wand didn't aim its Magic Missile ({_castChoice}; the screen {(_character.IsOpen ? "is still open: " + _character.Status : "closed")})");
+            return;
+        }
+        Combatant? target = _battle!.Combatants.FirstOrDefault(e => caster.IsEnemyOf(e) && e.Alive
+            && _battle.Aim(caster, _battle.Spells.Effect(MagicMissile)!, ItemMagic.CasterLevel, e.Cell) == SpellAim.Ok);
+        if (target is null)
+        {
+            GD.Print("combat: the wand is aimed, but no enemy is in range to cast at");
+            _castChoice = null;
+            return;
+        }
+        ClickCell(target.Cell);
+        if (wand.Charges != charges - 1 || caster.Spells.Count != spells || !_battle.Log.OfType<Cast>().Any(c => c.Actor == caster && c.Effect == MagicMissile))
+        {
+            problems.Add($"the wand's Magic Missile at {Who(target)}: {wand.Charges} of {charges} charges left, {caster.Spells.Count} of {spells} spells");
+            return;
+        }
+        GD.Print($"combat: {Who(caster)} casts Magic Missile from the Wand of Missiles at {Who(target)} ({wand.Charges} charges left)");
     }
 }

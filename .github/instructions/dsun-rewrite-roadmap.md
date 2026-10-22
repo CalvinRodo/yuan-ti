@@ -448,9 +448,16 @@ this milestone brings most of the game's content.
       (`WIND` 13501, `6527:002C`); coins (`RDFF` 1384–1389, 1399) taken
       become the party's money; right-click shows the item window (`WIND`
       15502, `91F7:0C29`) with INFO for who may use it (`91F7:12D8`).
-- [ ] Items still to do: casting from items (charges used up; needs
-      spells; the item window's USE, `91F7:03D0`), breakage in combat
-      (`80F5:1F4B`), and the type flags 4 and 0x10.
+- [x] Casting from items (`ItemMagic`; the item window's USE, `91F7:03D0`):
+      scrolls teach; wands, necklaces and fruit cast at level 6, a charge a
+      cast (`78A9:2324`; gone at 0); in a fight aimed like CAST, outside one
+      only healing (as memorized spells). USE is offered as `91F7:0000` does,
+      with the spell's purpose (record −7, `SpellEffect.Purpose`).
+- [ ] Items still to do: the quest items' USE scripts (`RDFF` 30029–30999,
+      `039D:0319`), spells from items aimed on the map outside a fight
+      (`8B7D:04D1` starts the spell pointer there), what worn items' spells
+      do while worn, breakage in combat (`80F5:1F4B`), and the type flags 4
+      and 0x10.
 - [x] Character sheet and inventory screens (`CharacterScreen`): View
       Character (`WIND` 11500 over `BMP` 11000) with the member's sheet, and
       the inventory (`WIND` 13500 over `BMP` 13001: the member's figure,

@@ -460,6 +460,8 @@ public partial class RegionView : Node2D
             ItemIcon = ItemIcon,
             Money = () => Session.ScriptHost.Money,
             SetMoney = money => Session.ScriptHost.Money = money,
+            Fighting = () => InCombat,
+            CastInFight = CastItemInFight,
             SpellName = Session.SpellName,
             Did = text => AddScriptLine($"> {text}"),
             Leader = () => _selected,
@@ -2686,6 +2688,43 @@ public partial class RegionView : Node2D
         window.ToggleUsers();
         Expect(window.Lines is ["USEABLE BY:", ..] && window.Lines.Contains(MemberName(0)), $"INFO: a fighter may ({Shown()})");
         window.Close();
+
+        // USE (91F7:03D0): a lemon (RDFF 31028) makes its eater whole and is eaten; a wand (31007) waits for a
+        // fight; boots have no spell and no USE.
+        const int Lemon = 31028, Wand = 31007;
+        _world.Give(1, -Lemon, 0, GameWorld.None);
+        _world.Give(1, -Wand, 0, GameWorld.None);
+        Item lemon = me.Items.Last(i => i.Rdff == Lemon), wand = me.Items.Last(i => i.Rdff == Wand);
+        screen.Open(_world, 0, CharacterScreen.Page.Items);
+        Vitals vitals = me.Vitals;
+        (int hp, int maxHp) = (vitals.Hp, vitals.MaxHp);
+        (vitals.MaxHp, vitals.Hp) = (20, 5);
+        screen.Click(Pack, PackIndex(lemon), button: MouseButton.Right);
+        Expect(window.UseOffered, "the lemon's item window has USE");
+        window.PressUse();
+        Expect(vitals.Hp == 20 && !me.Items.Contains(lemon), $"USE: the lemon makes its eater whole and is gone ({vitals.Hp}/20; {screen.Status})");
+        (vitals.MaxHp, vitals.Hp) = (maxHp, hp);
+        screen.Click(Pack, PackIndex(wand), button: MouseButton.Right);
+        window.PressUse();
+        Expect(screen.IsOpen && screen.Status == "ONLY IN COMBAT" && wand.Charges == wand.Record.Charges, $"the wand waits for a fight ({screen.Status}, {wand.Charges} charges)");
+        screen.Click(Pack, PackIndex(boots), button: MouseButton.Right);
+        Expect(window.Visible && !window.UseOffered, "boots have no USE");
+        window.Close();
+        me.Items.Remove(wand);
+        // A scroll (RDFF 1410) teaches its spell (66) and is used up.
+        const int Scroll = 1410, ScrollSpell = 66;
+        var learner = Session.Party[0];
+        bool knew = learner.Spellbook.Remove(ScrollSpell);
+        _world.Give(1, -Scroll, 0, GameWorld.None);
+        Item scroll = me.Items.Last(i => i.Rdff == Scroll);
+        screen.Open(_world, 0, CharacterScreen.Page.Items);
+        screen.Click(Pack, PackIndex(scroll), button: MouseButton.Right);
+        window.PressUse();
+        Expect(learner.Spellbook.Contains(ScrollSpell) && !me.Items.Contains(scroll), $"USE on a scroll teaches its spell ({screen.Status})");
+        if (!knew)
+        {
+            learner.Spellbook.Remove(ScrollSpell);
+        }
         screen.Click(Pack, PackIndex(boots));
         screen.Click(Worn, Head);
         Expect(!boots.Equipped && helm.Slot == Head, "boots don't go on the head");
@@ -2774,7 +2813,7 @@ public partial class RegionView : Node2D
         CheckMagicAndMenus(Expect);
 
         GD.Print(problems.Count == 0
-            ? "character: wore and took off, refused by class, gave, split, looted a body, turned to the sheet; "
+            ? "character: wore and took off, refused by class, gave, split, looted a body, used a lemon, a wand and a scroll, turned to the sheet; "
               + "memorized, cast, rested, learned, picked a power, leader, computer control, game menu, preferences, store: OK"
             : "character: " + string.Join("; ", problems));
         GetTree().Quit(problems.Count > 0 ? 1 : 0);
