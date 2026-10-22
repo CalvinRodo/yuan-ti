@@ -28,7 +28,7 @@ public static class GameFonts
 
     private static GameFont? _font;
     private static bool _loaded;
-    private static readonly Dictionary<Color, FontFile> Fonts = [];
+    private static readonly Dictionary<(Color Face, Color Shadow), FontFile> Fonts = [];
     private static char[]? _codePage;
 
     /// <summary>The decoded font, or null if the game has none (or a mod's can't be read).</summary>
@@ -61,25 +61,31 @@ public static class GameFonts
         Fonts.Clear();
     }
 
-    /// <summary>The font with letters in <paramref name="face"/>, or null if there is no game font.</summary>
-    public static Font? Get(Color face)
+    /// <summary>
+    /// The font with letters in <paramref name="face"/> and their shadow in
+    /// <paramref name="shadow"/> (<see cref="Shadow"/> if not given; DSUN.EXE's
+    /// <c>%C</c> text codes remap the shadow pixel too, as the menu's title
+    /// does), or null if there is no game font.
+    /// </summary>
+    public static Font? Get(Color face, Color? shadow = null)
     {
         if (Font is not { } font)
         {
             return null;
         }
-        if (!Fonts.TryGetValue(face, out FontFile? made))
+        Color under = shadow ?? Shadow;
+        if (!Fonts.TryGetValue((face, under), out FontFile? made))
         {
-            made = Make(font, face);
-            Fonts[face] = made;
+            made = Make(font, face, under);
+            Fonts[(face, under)] = made;
         }
         return made;
     }
 
     /// <summary>Label settings for text in <paramref name="face"/>; Godot's font at a near size without a game font.</summary>
-    public static LabelSettings Settings(Color face, int lineSpacing = 0) => Get(face) is { } f
+    public static LabelSettings Settings(Color face, int lineSpacing = 0, Color? shadow = null) => Get(face, shadow) is { } f
         ? new LabelSettings { Font = f, FontSize = Size, FontColor = Colors.White, LineSpacing = lineSpacing }
-        : new LabelSettings { FontSize = 7, FontColor = face, LineSpacing = lineSpacing - 2, OutlineSize = 2, OutlineColor = Shadow };
+        : new LabelSettings { FontSize = 7, FontColor = face, LineSpacing = lineSpacing - 2, OutlineSize = 2, OutlineColor = shadow ?? Shadow };
 
     /// <summary>Give <paramref name="control"/> the font (its <paramref name="fonts"/> theme items) in <paramref name="face"/>.</summary>
     public static void Use(Control control, Color face, params string[] fonts)
@@ -98,7 +104,7 @@ public static class GameFonts
         control.AddThemeColorOverride("default_color", Colors.White);
     }
 
-    private static FontFile Make(GameFont font, Color face)
+    private static FontFile Make(GameFont font, Color face, Color shadow)
     {
         const int CellWidth = 8;
         int h = font.Height;
@@ -125,7 +131,7 @@ public static class GameFonts
                     byte p = g[x, y];
                     if (p != 0)
                     {
-                        image.SetPixel(left + x, top + y, p == GameFont.ShadowPixel ? Shadow : face);
+                        image.SetPixel(left + x, top + y, p == GameFont.ShadowPixel ? shadow : face);
                     }
                 }
             }

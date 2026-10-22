@@ -4,22 +4,27 @@ using Godot;
 namespace DarkSun.Engine;
 
 /// <summary>
-/// A script's <see cref="GplDialogue"/>, in DSUN.EXE's text windows, 318 × 58
-/// at the bottom of the 320 × 200 screen over the stone panel <c>BMP</c> 3007,
-/// scaled as the screen is:
+/// A script's <see cref="GplDialogue"/>, in DSUN.EXE's text windows, 320 × 58
+/// over the stone panel <c>BMP</c> 3007, scaled as the 320 × 200 screen is: the
+/// text window at the top of the screen (<c>8BEB</c> opens <c>WIND</c> 3007 at
+/// (0, 0)) and, while there are choices, the choice window at the bottom
+/// under it, the text staying in view above them:
 /// <list type="bullet">
 /// <item>The text window (<c>WIND</c> 3007): the portrait (<c>PORT</c>, SHOW_PIC)
 /// in its frame (<c>ICON</c> 2090; the sun emblem when there is none), the
-/// text box (<c>EBOX</c> 4002, 236 × 46 at (58, 6); text in colour 199,
-/// its +0x80, on 229, the transparent key at +0x7E) and, on the
+/// text box (<c>EBOX</c> 4002, 236 × 46 at (58, 6); text in orange, colour
+/// 45, as the original shows it, though the box's +0x80 says 199) and, on the
 /// right, the up arrow (<c>ICON</c> 2093) and MORE (<c>ICON</c> 12100). Text
 /// that doesn't fit is paged: MORE shows the next page, the arrow the one
 /// before. Once all is read MORE (or a click on the text) answers CONTINUE,
 /// opens the choices, or puts the window away.</item>
-/// <item>The choice window (<c>WIND</c> 3008): the menu's title and its
-/// options on five stone bars (<c>ICON</c> 12102–12106), with the arrow and
-/// MORE scrolling them. ASK_YES_NO is offered here as Yes and No under
-/// "Answer Yes or No", as DSUN.EXE words it.</item>
+/// <item>The choice window (<c>WIND</c> 3008, <c>84C9:0BCE</c>): the menu's
+/// title, upper-cased, at (6, 4) in yellow (colour 47, its shadow 17: the
+/// format "%C%C%C%s"), and its options on five stone bars (<c>ICON</c>
+/// 12102–12106) as the script wrote them, leading spaces and all (no
+/// numbers), each at its bar's top left, orange (45) and red (77) under
+/// the pointer. The arrow and MORE scroll them. ASK_YES_NO is offered here
+/// as Yes and No under "ANSWER YES OR NO", as DSUN.EXE words it.</item>
 /// </list>
 /// Keys: Space or Enter for MORE, 1–9 for a choice, Y and N for Yes and No,
 /// the mouse wheel to scroll. Text is in the game's font (<see cref="GameFonts"/>),
@@ -33,14 +38,23 @@ public partial class DialogueWindow : Control
     private const int FontSize = 7;
     private const int OptionsShown = 5;
 
-    /// <summary>The text box's colour (<c>EBOX</c> 4002 +0x80).</summary>
-    private const int TextColour = 199;
+    /// <summary>
+    /// The colours DSUN.EXE's conversations show (from a capture of the original;
+    /// the same in every palette): the text and the options orange (45, 252 164 0),
+    /// the option under the pointer red (77, 212 64 40), and the choice window's
+    /// title yellow (47, its shadow 17: <c>84C9:0BCE</c>'s "%C%C%C%s" sets 0x2F and
+    /// 0x11). The text box's <c>EBOX</c> +0x80 (199, tan) and the button colours
+    /// <c>6A94:0138</c> sets (254, 52) aren't what reaches the screen, by the capture;
+    /// how the original gets its colours there isn't traced.
+    /// </summary>
+    private const int TextColour = 45, OptionColour = 45, OptionHoverColour = 77, TitleColour = 47, TitleShadow = 17;
 
     // The windows' controls.
     private const int TextWindow = 3007, ChoiceWindow = 3008, ClickArea = 12300, PortraitBox = 2090, TextBox = 4002,
         TextUp = 2093, TextMore = 2094, FirstOption = 2076, ChoiceUp = 2095, ChoiceMore = 2096;
 
-    private Control _panel = null!;
+    /// <summary>The text window's place (the screen's top) and the choice window's (its bottom).</summary>
+    private Control _panel = null!, _bottom = null!;
     private UiWindowView? _textMode, _menuMode;
     private TextureRect _portrait = null!;
     private RichTextLabel _text = null!;
@@ -76,7 +90,9 @@ public partial class DialogueWindow : Control
         MouseFilter = MouseFilterEnum.Ignore;
         SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
         _panel = new Control { Size = new Vector2(Width, Height), MouseFilter = MouseFilterEnum.Stop, ClipContents = true };
+        _bottom = new Control { Size = new Vector2(Width, Height), MouseFilter = MouseFilterEnum.Stop, ClipContents = true, Visible = false };
         AddChild(_panel);
+        AddChild(_bottom);
         _text = new RichTextLabel
         {
             BbcodeEnabled = true,
@@ -87,7 +103,7 @@ public partial class DialogueWindow : Control
         _text.AddThemeConstantOverride("line_separation", 0);
         _text.GuiInput += TextInput;
         _portrait = new TextureRect { Size = new Vector2(32, 32), MouseFilter = MouseFilterEnum.Ignore };
-        _title = new Label { Position = new Vector2(6, 1), Size = new Vector2(296, 11), ClipText = true, MouseFilter = MouseFilterEnum.Ignore };
+        _title = new Label { Position = new Vector2(6, 4), Size = new Vector2(296, 11), ClipText = true, MouseFilter = MouseFilterEnum.Ignore };
         _input = new LineEdit { Visible = false, Size = new Vector2(200, 12), PlaceholderText = "Type, then Enter" };
         _input.AddThemeFontSizeOverride("font_size", FontSize);
         _input.TextSubmitted += text =>
@@ -100,12 +116,14 @@ public partial class DialogueWindow : Control
         Fit();
     }
 
-    /// <summary>The 320 × 200 screen's scale, the window at its bottom, centred.</summary>
+    /// <summary>The 320 × 200 screen's scale, centred across: the text window at the top, the choices at the bottom.</summary>
     private void Fit()
     {
         float scale = Math.Max(1f, MathF.Floor(Math.Min(Size.X / RetroScreen.Width, Size.Y / RetroScreen.Height)));
-        _panel.Scale = new Vector2(scale, scale);
-        _panel.Position = new Vector2(MathF.Floor((Size.X - Width * scale) / 2), Size.Y - Height * scale);
+        _panel.Scale = _bottom.Scale = new Vector2(scale, scale);
+        float left = MathF.Floor((Size.X - Width * scale) / 2);
+        _panel.Position = new Vector2(left, 0);
+        _bottom.Position = new Vector2(left, Size.Y - Height * scale);
         if (_input is not null)
         {
             _input.Scale = _panel.Scale;
@@ -150,13 +168,14 @@ public partial class DialogueWindow : Control
             return;
         }
         _panel.AddChild(_textMode);
-        _panel.AddChild(_menuMode);
-        Color colour = palette[TextColour] is var c ? Color.Color8(c.R, c.G, c.B) : GameFonts.Tan;
+        _bottom.AddChild(_menuMode);
+        Color Of(int index) => palette[index] is var c ? Color.Color8(c.R, c.G, c.B) : GameFonts.Tan;
+        Color colour = Of(TextColour);
 
         // The text window: the whole window a button, the portrait in its frame, the text in its box.
         if (_textMode.Button(ClickArea) is { } area)
         {
-            area.Pressed += More;
+            area.Pressed += NextPage;
         }
         if (_textMode.Button(PortraitBox) is { } frame)
         {
@@ -175,12 +194,13 @@ public partial class DialogueWindow : Control
         _text.Size = box.Size;
         GameFonts.Use(_text, colour, "normal_font", "italics_font", "bold_font");
         _textMode.AddChild(_text);
-        _textUp = Wire(_textMode.Button(TextUp), Back);
-        _textMore = Wire(_textMode.Button(TextMore), More);
+        _textUp = Wire(_textMode.Button(TextUp), PageBack);
+        _textMore = Wire(_textMode.Button(TextMore), NextPage);
 
         // The choice window: the title above its five bars, an option on each.
-        GameFonts.Use(_title, colour);
+        _title.LabelSettings = GameFonts.Settings(Of(TitleColour), shadow: Of(TitleShadow));
         _menuMode.AddChild(_title);
+        LabelSettings normal = GameFonts.Settings(Of(OptionColour)), lit = GameFonts.Settings(Of(OptionHoverColour));
         for (int i = 0; i < OptionsShown; i++)
         {
             int slot = i;
@@ -189,17 +209,17 @@ public partial class DialogueWindow : Control
                 continue;
             }
             bar.Pressed += () => Choose(_menuTop + slot);
-            bar.MouseEntered += () => bar.Modulate = new Color(1.25f, 1.25f, 1.25f);
-            bar.MouseExited += () => bar.Modulate = Colors.White;
             Label text = bar.GetNodeOrNull<Label>("Text") ?? new Label { Name = "Text", MouseFilter = MouseFilterEnum.Ignore };
             if (text.GetParent() is null)
             {
                 bar.AddChild(text);
             }
-            text.Position = new Vector2(5, -1);
+            text.Position = Vector2.Zero;
             text.Size = bar.Size;
             text.ClipText = true;
-            text.LabelSettings = GameFonts.Settings(colour);
+            text.LabelSettings = normal;
+            bar.MouseEntered += () => text.LabelSettings = lit;
+            bar.MouseExited += () => text.LabelSettings = normal;
             _options.Add((bar, text));
         }
         _menuUp = Wire(_menuMode.Button(ChoiceUp), Back);
@@ -255,7 +275,7 @@ public partial class DialogueWindow : Control
         _choices = _dialogue.Prompt switch
         {
             GplYesNoPrompt => [("Yes", 1), ("No", 0)],
-            GplMenuPrompt menu => [.. menu.Options.Select((o, i) => (o.Text.Trim(), i, o.Enabled)).Where(o => o.Enabled).Select(o => (o.Item1, o.i))],
+            GplMenuPrompt menu => [.. menu.Options.Select((o, i) => (o.Text.TrimEnd(), i, o.Enabled)).Where(o => o.Enabled).Select(o => (o.Item1, o.i))],
             _ => [],
         };
         bool typing = _dialogue.Prompt is GplTextPrompt;
@@ -272,8 +292,8 @@ public partial class DialogueWindow : Control
         }
         _title.Text = _dialogue.Prompt switch
         {
-            GplYesNoPrompt => "Answer Yes or No",
-            GplMenuPrompt menu => menu.Title.Trim(),
+            GplYesNoPrompt => "ANSWER YES OR NO",
+            GplMenuPrompt menu => menu.Title.Trim().ToUpperInvariant(),
             _ => "",
         };
         if (_choices.Count == 0 || cleared || _dialogue.Text.Count != _textCount)
@@ -321,8 +341,12 @@ public partial class DialogueWindow : Control
         {
             return;
         }
-        _textMode.Visible = !_menuShown;
-        _menuMode.Visible = _menuShown;
+        // The text stays at the top; the choices come up at the bottom once it is read.
+        _bottom.Visible = _menuShown;
+        _text.ScrollToLine(_top);
+        Enable(_textUp, _top > 0);
+        // MORE goes on: to the next page, the choices, the script, or away; nothing more once the choices are up.
+        Enable(_textMore, !_menuShown || !AllRead);
         if (_menuShown)
         {
             for (int i = 0; i < _options.Count; i++)
@@ -330,17 +354,10 @@ public partial class DialogueWindow : Control
                 int at = _menuTop + i;
                 bool has = at < _choices.Count;
                 _options[i].Bar.Visible = has;
-                _options[i].Text.Text = has ? $"{at + 1}. {_choices[at].Text}" : "";
+                _options[i].Text.Text = has ? _choices[at].Text : "";
             }
-            Enable(_menuUp, true); // back to the text, or the options before
+            Enable(_menuUp, _menuTop > 0);
             Enable(_menuMore, _menuTop + OptionsShown < _choices.Count);
-        }
-        else
-        {
-            _text.ScrollToLine(_top);
-            Enable(_textUp, _top > 0);
-            // MORE goes on: to the next page, the choices, the script, or away.
-            Enable(_textMore, true);
         }
     }
 
@@ -409,22 +426,36 @@ public partial class DialogueWindow : Control
 
     private void Back()
     {
-        if (_menuShown)
+        if (_menuShown && _menuTop > 0)
         {
-            if (_menuTop > 0)
-            {
-                _menuTop = Math.Max(0, _menuTop - OptionsShown);
-            }
-            else if (_lines > 0)
-            {
-                _menuShown = false; // back to the text
-            }
+            _menuTop = Math.Max(0, _menuTop - OptionsShown);
+            ShowPage();
         }
         else
         {
-            _top = Math.Max(0, _top - Page);
+            PageBack();
         }
+    }
+
+    /// <summary>The text window's up arrow: the page before.</summary>
+    private void PageBack()
+    {
+        _top = Math.Max(0, _top - Page);
         ShowPage();
+    }
+
+    /// <summary>The text window's MORE (or a click on the text): the next page; once all is read, as MORE.</summary>
+    private void NextPage()
+    {
+        if (!AllRead)
+        {
+            _top = Math.Min(_top + Page, Math.Max(0, _lines - 1));
+            ShowPage();
+        }
+        else if (!_menuShown)
+        {
+            More();
+        }
     }
 
     private void Choose(int index)

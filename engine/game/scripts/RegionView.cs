@@ -2825,7 +2825,7 @@ public partial class RegionView : Node2D
                     await Frames(3);
                 }
                 Expect(_dialogueWindow.ShowingChoices && _dialogueWindow.Choices.Count > 0, "MORE goes on to the choices");
-                int bye = _dialogueWindow.Choices.ToList().FindIndex(c => c.StartsWith("Goodbye", StringComparison.OrdinalIgnoreCase) || c.StartsWith("Bye", StringComparison.OrdinalIgnoreCase));
+                int bye = _dialogueWindow.Choices.ToList().FindIndex(c => c.TrimStart().StartsWith("Goodbye", StringComparison.OrdinalIgnoreCase) || c.TrimStart().StartsWith("Bye", StringComparison.OrdinalIgnoreCase));
                 chose = bye >= 0 ? _dialogueWindow.Choices[bye] : _dialogueWindow.Choices.LastOrDefault() ?? "";
                 _dialogueWindow.Pick(bye >= 0 ? bye : _dialogueWindow.Choices.Count - 1);
                 await Frames(3);
