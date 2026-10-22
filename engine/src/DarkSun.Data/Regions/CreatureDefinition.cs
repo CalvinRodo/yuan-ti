@@ -32,15 +32,24 @@ public sealed record CreatureDefinition(CombatRecord Combat, CharacterRecord? Ch
         {
             return null;
         }
-        CharacterRecord? character = null;
+        CharacterRecord? character = entries.Skip(1)
+            .FirstOrDefault(e => e is { LoadAction: RdffEntry.Reference, Type: CharacterRecord.Type } && e.Body.Length >= CharacterRecord.Length)
+            is { } c ? CharacterRecord.Parse(c.Body.Span) : null;
+        return new CreatureDefinition(combat, character, CarriedIn(entries));
+    }
+
+    /// <summary>
+    /// The items <c>RDFF</c> entries <paramref name="entries"/> link to their
+    /// object (after its own record): a creature's carried items, or a
+    /// container's contents (an item record with linked items, such as a chest).
+    /// </summary>
+    public static IReadOnlyList<ItemRecord> CarriedIn(IReadOnlyList<RdffEntry> entries)
+    {
         var carried = new List<ItemRecord>();
         foreach (RdffEntry e in entries.Skip(1))
         {
             switch (e)
             {
-                case { LoadAction: RdffEntry.Reference, Type: CharacterRecord.Type } when e.Body.Length >= CharacterRecord.Length:
-                    character ??= CharacterRecord.Parse(e.Body.Span);
-                    break;
                 case { LoadAction: RdffEntry.NewObject or RdffEntry.NextObject, Type: RdffEntry.ItemType } when e.Body.Length >= ItemRecord.Size:
                     carried.Add(ItemRecord.Parse(e.Body.Span));
                     break;
@@ -52,6 +61,6 @@ public sealed record CreatureDefinition(CombatRecord Combat, CharacterRecord? Ch
                     break;
             }
         }
-        return new CreatureDefinition(combat, character, carried);
+        return carried;
     }
 }

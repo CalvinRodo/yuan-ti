@@ -44,6 +44,10 @@ public partial class RegionView
             // An item picked up in the inventory rides on the pointer until it is put down.
             Pointers.ShowHeld(GetWindow(), Pointers.HeldItem(picked.Rdff), carried);
         }
+        else if (icon == Pointers.Held && _useWithItem is { } heldItem && ItemIcon(heldItem.Rdff)?.GetImage() is { } itemImage)
+        {
+            Pointers.ShowHeld(GetWindow(), Pointers.HeldItem(heldItem.Rdff), itemImage);
+        }
         else if (icon == Pointers.Held && _useWith is { Source.Frames: [var picture, ..] } held && TextureFor(picture)?.GetImage() is { } image)
         {
             Pointers.ShowHeld(GetWindow(), Pointers.HeldObject(held.Index), image);

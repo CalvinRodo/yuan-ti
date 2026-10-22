@@ -31,8 +31,12 @@ public sealed partial class GameWorld
         }
         item.Charges = s.Charges ?? item.Charges;
         item.Cell = s.Cell;
+        item.Contents = [.. (s.Contents ?? []).Select(NewItem).OfType<Item>()];
         return item;
     }
+
+    /// <summary>Is <paramref name="item"/> a container (<c>IT1R</c> flag 8: a bag, a box) that can hold items?</summary>
+    public bool IsContainerItem(Item item) => Items.TypeOf(item.Record) is { IsContainer: true };
 
     public Item? NewItem(int rdff, int quantity = 1, int slot = Equipment.Pack) =>
         _objectData.TryRead("RDFF", Math.Abs(rdff), out var data) && ItemRecord.FromRdff(data) is { } record
@@ -76,6 +80,41 @@ public sealed partial class GameWorld
     /// creature dies, holding what it carried (<c>612E</c>).
     /// </summary>
     public const int DeadBody = 1101;
+
+    /// <summary>
+    /// Coins: item <c>RDFF</c>s 1384–1389 and 1399, nameless items worth their
+    /// value. Taken (picked up on the map, out of a container on the map or in
+    /// the inventory) they become the party's money (<c>7BEB:0A60</c>,
+    /// <c>6527:0FD4</c>, <c>74F1</c>), never an item in a pack.
+    /// </summary>
+    public static bool IsMoney(int rdff) => Math.Abs(rdff) is >= 1384 and <= 1389 or 1399;
+
+    /// <summary>What coins <paramref name="item"/> are worth: their value, times the quantity for a type that stacks.</summary>
+    public int Worth(Item item) => item.Record.Value * (Stacks(item.Record) ? Math.Max(1, item.Quantity) : 1);
+
+    /// <summary>
+    /// Take the coins <paramref name="item"/> out of <paramref name="holder"/>'s
+    /// items: what they were worth, for the party's money (0 if they aren't
+    /// coins or <paramref name="holder"/> doesn't hold them).
+    /// </summary>
+    public int TakeMoney(WorldObject holder, Item item) =>
+        IsMoney(item.Rdff) && holder.Items.Remove(item) ? Worth(item) : 0;
+
+    /// <summary>
+    /// Get on coins lying on the map: they leave it and are worth what this
+    /// returns, for the party's money (0 if <paramref name="ground"/> isn't coins).
+    /// </summary>
+    public int PickUpMoney(WorldObject ground)
+    {
+        if (ground.Item is not { } record || ground.Source is not { } source || !IsMoney(source.Ojff))
+        {
+            return 0;
+        }
+        int quantity = ground.ReadField(82);
+        int worth = record.Value * (Stacks(record) ? Math.Max(1, quantity > 0 ? quantity : record.Quantity) : 1);
+        Remove(ground);
+        return worth;
+    }
 
     /// <summary>A party member's item classes (by slot; the session's characters), or null to let it use anything.</summary>
     public Func<int, ItemClasses?> PartyClasses { get; set; } = _ => null;
@@ -256,6 +295,13 @@ public sealed partial class GameWorld
         {
             holder.Items.Remove(item);
             quantity = item.Quantity;
+            // A bag dropped keeps what is in it: on the map, its object holds them.
+            foreach (Item inside in item.Contents)
+            {
+                inside.Slot = Equipment.Pack;
+            }
+            ground.Items = item.Contents;
+            item.Contents = [];
         }
         ground.WriteField(82, quantity);
         return ground;
@@ -263,17 +309,21 @@ public sealed partial class GameWorld
 
     /// <summary>
     /// Get: <paramref name="taker"/> picks up the item <paramref name="ground"/>
-    /// lying on the map; it leaves the map. False if it isn't an item, the
-    /// pack is full, or it still holds something (a container is emptied first,
-    /// so nothing in it is lost).
+    /// lying on the map; it leaves the map. A bag or a box takes what it holds
+    /// with it (<see cref="Item.Contents"/>). False if it isn't an item, the pack is
+    /// full, or it holds something and isn't a container that can be carried (a body).
     /// </summary>
     public bool PickUp(WorldObject taker, WorldObject ground)
     {
         if (ground.Item is null || ground.Source is not { } source || taker.Items.Count >= Equipment.Capacity
-            || ground.Items.Count > 0 || NewItem(source.Ojff) is not { } item)
+            || NewItem(source.Ojff) is not { } item
+            || ground.Items.Count > 0 && (!IsContainerItem(item) || ground.Id == -DeadBody))
         {
             return false;
         }
+        // A bag or a box is picked up with what is in it.
+        item.Contents = ground.Items;
+        ground.Items = [];
         int quantity = ground.ReadField(82);
         item.Quantity = quantity > 0 ? quantity : Math.Max(1, (int)ground.Item.Quantity);
         if (!Stacks(item.Record))

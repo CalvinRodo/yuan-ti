@@ -25,21 +25,22 @@ public sealed record VerbTarget(string Name, bool Creature, int Level, int Hp, i
 /// <item>the three verb diamonds, Talk, Get and Use, always there and disabled
 /// when the object doesn't offer them (<c>2A1D:071A</c> with the flags of
 /// <c>68BD:0C6D</c>), and a fourth button (INFO; a creature's is blank) for
-/// Look.</item>
+/// Look, or Open for a container.</item>
 /// </list>
-/// The engine's other verbs (Attack, Use with…, Open), which the original
-/// reaches elsewhere, are on a strip under the window. Click a verb, or press
-/// its number or letter (T, G, U, L, O); Esc or a click elsewhere closes it.
-/// An object with a single verb skips the menu (<c>RegionView</c> does it at once).
+/// Only these, as in the original: Attack is the attack pointer's, and an item
+/// is used with something by holding it on the pointer from the inventory. Click
+/// a verb, or press its letter (T, G, U, L, O); Esc or a click elsewhere closes it.
+/// An object with only Talk, only Use or only Open skips the menu (<c>RegionView</c>
+/// does it at once, as <c>68BD:0040</c>).
 /// </summary>
 public partial class VerbMenu : Control
 {
     private const int CreatureWindow = 3020, ThingWindow = 15500, ThingBackdrop = 15000;
     private const int BarFrame = 20106, BarFire = 20107;
-    private const int TextColour = 31, TextShadow = 17, StripColour = 45;
+    private const int TextColour = 31, TextShadow = 17;
     private const int LineHeight = 7;
 
-    /// <summary>Each window's verb buttons (<c>BUTN</c>), Look on the fourth.</summary>
+    /// <summary>Each window's verb buttons (<c>BUTN</c>), Look (or Open) on the fourth.</summary>
     private static readonly Dictionary<Verb, int> CreatureButtons = new() { [Verb.Talk] = 15306, [Verb.Get] = 15308, [Verb.Use] = 15307, [Verb.Look] = 15309 };
 
     private static readonly Dictionary<Verb, int> ThingButtons = new() { [Verb.Talk] = 15301, [Verb.Get] = 15303, [Verb.Use] = 15302, [Verb.Look] = 15304 };
@@ -49,10 +50,10 @@ public partial class VerbMenu : Control
         [Verb.Talk] = ("Talk", Key.T),
         [Verb.Get] = ("Get", Key.G),
         [Verb.Use] = ("Use", Key.U),
-        [Verb.UseWith] = ("USE WITH", Key.None),
-        [Verb.Attack] = ("ATTACK", Key.None),
+        [Verb.UseWith] = ("Use with", Key.None),
+        [Verb.Attack] = ("Attack", Key.None),
         [Verb.Look] = ("Look", Key.L),
-        [Verb.Open] = ("OPEN", Key.O),
+        [Verb.Open] = ("Open", Key.O),
     };
 
     private IReadOnlyList<Verb> _verbs = [];
@@ -137,43 +138,14 @@ public partial class VerbMenu : Control
             {
                 continue;
             }
-            Verb v = verb;
+            // The fourth button: a container opens, anything else is looked at.
+            Verb v = verb == Verb.Look && verbs.Contains(Verb.Open) ? Verb.Open : verb;
             button.Disabled = !verbs.Contains(v);
             button.TooltipText = Labels[v].Label;
             button.Pressed += () => Choose(v);
         }
-
-        // The engine's own verbs, under the window.
-        Verb[] extras = [.. verbs.Where(v => !buttons.ContainsKey(v))];
+        _verbs = [.. buttons.Keys.Select(v => v == Verb.Look && verbs.Contains(Verb.Open) ? Verb.Open : v).Where(verbs.Contains)];
         Vector2 size = window.Size;
-        if (extras.Length > 0)
-        {
-            var strip = new HBoxContainer { Position = new Vector2(2, window.Size.Y + 1) };
-            strip.AddThemeConstantOverride("separation", 6);
-            var panel = new PanelContainer { Position = new Vector2(0, window.Size.Y), MouseFilter = MouseFilterEnum.Stop };
-            panel.AddThemeStyleboxOverride("panel", new StyleBoxFlat
-            {
-                BgColor = Of(18), BorderColor = Of(29), BorderWidthLeft = 1, BorderWidthTop = 1, BorderWidthRight = 1, BorderWidthBottom = 1,
-                ContentMarginLeft = 3, ContentMarginRight = 3, ContentMarginTop = 1, ContentMarginBottom = 1,
-            });
-            LabelSettings normal = GameFonts.Settings(Of(StripColour)), lit = GameFonts.Settings(Of(77));
-            foreach (Verb verb in extras)
-            {
-                Verb v = verb;
-                var button = new Button { Flat = true, FocusMode = FocusModeEnum.None, CustomMinimumSize = new Vector2(0, GameFonts.Size + 1) };
-                var label = new Label { Text = Labels[v].Label, LabelSettings = normal, MouseFilter = MouseFilterEnum.Ignore };
-                button.AddChild(label);
-                button.CustomMinimumSize = new Vector2(label.GetMinimumSize().X, GameFonts.Size + 1);
-                button.MouseEntered += () => label.LabelSettings = lit;
-                button.MouseExited += () => label.LabelSettings = normal;
-                button.Pressed += () => Choose(v);
-                strip.AddChild(button);
-            }
-            panel.AddChild(strip);
-            AddChild(panel);
-            size.Y += panel.GetCombinedMinimumSize().Y;
-            size.X = Math.Max(size.X, panel.GetCombinedMinimumSize().X);
-        }
         Size = size;
 
         // The screen's scale; beside the pointer, kept on screen (68BD:0DA1 keeps the window on it too).

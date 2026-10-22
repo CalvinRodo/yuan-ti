@@ -122,14 +122,27 @@ PgUp/PgDn browse the other regions, with the party in the middle
 of the map. The party is four placeholder sprites (any object whose `SCMD`
 can walk). Entering a region
 runs its script (and, once, the game-start script); characters reaching a
-cell fire its move trigger; right-click an object for its verb menu: Talk, Get,
-Use, Use with…, Attack and Look, as the object offers them (Talk, Get and Use
-with the original's icons; click one, or press its number or T/G/U/L; an
-object with only one verb, usually just Look, skips the menu). The
-selected character walks up to the object, then its trigger for that verb
-runs; Use opens or closes a door and toggles a lever; Use with… asks for a
-second object to click; Look works from anywhere and names an object with
-no look script. Get and Attack say so when there's no script, since items
+cell fire its move trigger; right-click an object for the original's verb
+window (`68BD:0040`): Get, Talk and Use, greyed where the object doesn't offer
+them, and INFO (Look, or Open for a container); an object offering only Talk,
+only Use or only Open has it done at once (a fire pit rests the party). Attack is
+the attack pointer's; to use an item with something, pick it up in the
+inventory and leave it: it rides on the pointer (pointer mode 3) until clicked
+on the second thing. The selected character walks up to the object, then its
+trigger for that verb runs; Use opens or closes a door and toggles a lever;
+Look works from anywhere and names an object with no look script. Open on a
+chest, a bag or a body on the map shows the original's container window
+(`WIND` 13501, `6527:002C`): six slots holding what the container's `RDFF`
+links to it; click a thing to take it into the opener's pack. Coins (`RDFF`
+1384–1389, 1399) are never carried: taken from the map (at once, no verb
+window), a container or a bag, they become the party's money. In the
+inventory, double-click a carried bag or box to open it in the body's place
+(`6527:12BD`: shut for a moment, then open; a bag's six slots above a box's)
+and again to close it (or right-click an empty slot of it); it holds six
+things, and what it holds stays in it when it is dropped, picked up or saved.
+Right-click an item, in the inventory or a container, for the item window
+(`WIND` 15502, `91F7:0C29`): its picture, value and name, a weapon's damage;
+INFO turns it to who in the party may use it. Get and Attack say so when there's no script, since items
 and combat aren't in yet. Dialogue (text, portraits, Continue, Yes/No,
 menus) opens in a window and pauses the script until answered; TELEPORT moves
 the party and creatures. Region transitions are the game's own scripts:
@@ -181,8 +194,8 @@ character sheet (View Character, `WIND` 11500: abilities, hit points, armour cla
 experience, psionics), I the items (`WIND` 13500: the body with its 14 equipment slots, the pack, DROP
 and SPLIT), and the bottom icons switch between them. Click a thing, then where it goes (a slot to
 wear it, the pack, another member's box to give it); double-click wears or takes off; right-click
-describes it. Open on a chest, a bag or a body shows its contents in place of the body, to take or
-put in. The bar's other icons are spells and psionics, on View Character's panel: memorize a spell
+opens the item window (and describes it in the panel). A carried bag or box opens in place of the
+body, to take or put in. The bar's other icons are spells and psionics, on View Character's panel: memorize a spell
 by clicking it, cast one by clicking it below and then a member's box (outside combat only the
 healing ones work); a preserver LEARNs spells into the spellbook, a psionicist picks powers; a rest
 (REQUEST 1 or 4) makes every spell ready again. The small buttons by each box make that member leader

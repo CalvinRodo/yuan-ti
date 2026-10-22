@@ -144,6 +144,7 @@ public partial class RegionView
         }
         _pendingUse = null;
         _verbMenu.Close();
+        _containerWindow.Close();
         SetUseWith(null);
         foreach (PartyMember m in _party)
         {
@@ -1112,7 +1113,10 @@ public partial class RegionView
         List<WorldObject> gang = [.. _world.Objects.Where(o => o.Id is -180 or -181)];
         GD.Print($"gang: {string.Join(", ", gang.Select(g => $"{g.Name} at {g.Cell.X},{g.Cell.Y} carrying {g.Items.Count}"))}; party at {_world[0]!.Cell.X},{_world[0]!.Cell.Y}");
         // "You're nothing and I'm going to kill you": GPL 142 @1002 turns the gang and sets them hunting; their line-of-sight script starts the fight.
-        ReportScript("the gang turns", Session.Scripts.RunFor(new GplEntry(142, 0x1002), 0));
+        if (Session.Scripts.RunFor(new GplEntry(142, 0x1002), 0) is { } turned)
+        {
+            ReportScript("the gang turns", turned);
+        }
         AnswerForThePlayer();
         Battle? battle = null;
         int fights = 0, frames = 0;

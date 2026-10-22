@@ -20,9 +20,9 @@ namespace DarkSun.Engine;
 /// <c>SCMD</c> script animate on a 96 Hz tick. Characters hold their
 /// footprint's cells, so they never overlap. Entering a region runs its
 /// <c>MAS</c> script (after the game-start script, once); characters stepping
-/// into cells fire move triggers; right-clicking an object opens its verb
-/// menu (<see cref="VerbMenu"/>: Talk, Get, Use, Use with…, Attack, Look, as
-/// it offers them), and the selected character walks up to it and does that
+/// into cells fire move triggers; right-clicking an object opens the original's
+/// verb window (<see cref="VerbMenu"/>: Get, Talk, Use, and Look or Open; only
+/// Talk, only Use or only Open is done at once), and the selected character walks up to it and does that
 /// (Look works from anywhere). The region's objects live in a
 /// <see cref="GameWorld"/>: creatures that can walk carry out their scripted
 /// orders and run their no-orders and line-of-sight scripts; every world
@@ -103,9 +103,15 @@ public partial class RegionView : Node2D
 
     private VerbMenu _verbMenu = null!;
     private WorldObject? _menuTarget;
+    private Vector2 _menuAt;
+    private ContainerWindow _containerWindow = null!;
+    private ItemWindow _itemWindow = null!;
 
     /// <summary>Use with…: the first object, waiting for the player to click the second.</summary>
     private WorldObject? _useWith;
+
+    /// <summary>The inventory item <see cref="_useWith"/> stands for, when it is one.</summary>
+    private Item? _useWithItem;
     private Label _prompt = null!;
     private readonly List<(RegionObject Object, Sprite2D Sprite)> _objectSprites = [];
     private readonly Dictionary<Walker, Cell> _lastCells = [];
@@ -304,7 +310,7 @@ public partial class RegionView : Node2D
                 _world.Hurt(victim, victim.Vitals.Hp + 1);
                 if (_world.First(-GameWorld.DeadBody) is { } body)
                 {
-                    Callable.From(() => _character.Open(_world, _selected, CharacterScreen.Page.Items, body)).CallDeferred();
+                    Callable.From(() => _containerWindow.Open(body, _world[_selected]!, _palette, new Vector2(200, 150))).CallDeferred();
                 }
             }
             if (OS.GetCmdlineUserArgs().Contains("--check-journal"))
@@ -368,7 +374,7 @@ public partial class RegionView : Node2D
             if (OS.GetCmdlineUserArgs().Contains("--check-start"))
             {
                 GD.Print($"new game: {Session.Install!.RegionFiles[_regionIndex]} (region {_region.Number}); party at "
-                    + string.Join(", ", _party.Select(m => $"({m.Walker.Cell.X},{m.Walker.Cell.Y})")));
+                    + string.Join(", ", _party.Select(m => $"({m.Walker.Cell.X},{m.Walker.Cell.Y})")) + $"; holding things: {HoldingThings()}");
                 if (OS.GetCmdlineUserArgs().FirstOrDefault(a => a.StartsWith("--idle=")) is { } idle && int.TryParse(idle[7..], out int ticks))
                 {
                     // Development: let time pass, answering as a player would, to see what scripts keep running.
@@ -432,6 +438,10 @@ public partial class RegionView : Node2D
         layer.AddChild(_fade);
         _verbMenu = new VerbMenu { Chosen = ChooseVerb };
         layer.AddChild(_verbMenu);
+        _itemWindow = new ItemWindow();
+        _containerWindow = new ContainerWindow { ItemIcon = ItemIcon, Take = TakeFromContainer, Describe = DescribeItem, Covered = () => _itemWindow.Visible };
+        layer.AddChild(_containerWindow);
+        layer.AddChild(_itemWindow);
         _debugger = new ScriptDebugger
         {
             Ran = run => ReportScript("debugger", run),
@@ -457,6 +467,11 @@ public partial class RegionView : Node2D
             OpenGameMenu = () => _gameMenu.Open(),
             Closed = () =>
             {
+                // DSUN.EXE's pointer mode 3: an item picked up in the inventory is held, to use with something on the map.
+                if (_character.HeldOnClose is { } held && _world is not null)
+                {
+                    SetUseWithItem(held);
+                }
                 // A store's script waits for it to close.
                 if (Session.ScriptHost.Dialogue.Prompt is GplShopPrompt && Session.Scripts.IsSuspended && Session.Scripts.PausedFor is null)
                 {
@@ -496,6 +511,8 @@ public partial class RegionView : Node2D
         _regionIndex = (index % files.Count + files.Count) % files.Count;
         _pendingUse = null;
         _verbMenu.Close();
+        _containerWindow.Close();
+        _itemWindow.Close();
         SetUseWith(null);
         _whenFree.Clear();
         AbandonCombat();
@@ -1163,7 +1180,7 @@ public partial class RegionView : Node2D
     }
 
     private bool KeyboardMovementLocked => MapLocked || _dialogueWindow.Visible || _gameMenu.IsOpen || _character.IsOpen
-        || _journal.Visible || _options.Visible || _verbMenu.Visible || _debugger.Visible
+        || _journal.Visible || _options.Visible || _verbMenu.Visible || _containerWindow.Visible || _itemWindow.Visible || _debugger.Visible
         || GetNodeOrNull<KeyHelp>("/root/KeyHelp")?.IsOpen == true
         || GetViewport().GuiGetFocusOwner() is LineEdit or TextEdit;
 
@@ -1472,10 +1489,19 @@ public partial class RegionView : Node2D
         }
         IReadOnlyList<Verb> verbs = VerbsOf(hit);
         _menuTarget = hit;
-        if (verbs.Count == 1)
+        _menuAt = screen;
+        // 68BD:0040: only Talk, only Use or only a container's Open is done at once; anything else opens
+        // the verb window (Get, Talk, Use, and Look or Open). Attack and Use with… are reached otherwise.
+        Verb[] windowVerbs = [.. verbs.Where(v => v is Verb.Talk or Verb.Get or Verb.Use or Verb.Open)];
+        if (hit.Source is { } source && GameWorld.IsMoney(source.Ojff) && verbs.Contains(Verb.Get))
         {
-            // Only one thing to do: do it, as DSUN.EXE does.
-            ChooseVerb(verbs[0]);
+            // 68BD:0040: coins are picked up at once.
+            ChooseVerb(Verb.Get);
+            return;
+        }
+        if (windowVerbs is [Verb.Talk] or [Verb.Use] or [Verb.Open] || verbs.Count == 1)
+        {
+            ChooseVerb(windowVerbs.Length == 1 ? windowVerbs[0] : verbs[0]);
             return;
         }
         _verbMenu.Open(VerbTargetOf(hit), verbs, _palette, screen);
@@ -1484,7 +1510,8 @@ public partial class RegionView : Node2D
     /// <summary>What the verb window shows of <paramref name="obj"/> (<see cref="VerbMenu"/>).</summary>
     private VerbTarget VerbTargetOf(WorldObject obj)
     {
-        string name = obj.Name.Length > 0 ? obj.Name : $"Object {-obj.Id}";
+        // 91F7:0C29 writes a thing's name only if its record has one (a fire pit may not).
+        string name = obj.Name;
         if (obj.Kind != ObjectKind.Creature)
         {
             return new VerbTarget(name, false, 0, 0, 0, [], obj.Source?.Frame is { Width: > 0 } frame ? TextureFor(frame) : null);
@@ -1525,10 +1552,22 @@ public partial class RegionView : Node2D
         StartVerb(target, verb, null);
     }
 
+    /// <summary>
+    /// Use with… an item from the inventory: held on the pointer (<c>191F:0A99</c>
+    /// mode 3), then used with what is clicked. Use-with triggers name it by its
+    /// item (<c>name(-1095)</c>, a pot of water), which it stands for here.
+    /// </summary>
+    private void SetUseWithItem(Item item)
+    {
+        SetUseWith(new WorldObject(item.Id, ObjectKind.Thing, item.Id) { Name = ItemText.Name(_world, item), Item = item.Record });
+        _useWithItem = item;
+    }
+
     /// <summary>Use with…: wait for the second object (null: stop waiting).</summary>
     private void SetUseWith(WorldObject? first)
     {
         _useWith = first;
+        _useWithItem = null;
         _prompt.Visible = first is not null;
         _prompt.Text = first is null ? "" : $"Use {Called(first)} with… (click an object; right-click: other pointers; Esc puts it away)";
         // DSUN.EXE's pointer mode 3: the item is held on the pointer, which shows it.
@@ -1640,19 +1679,23 @@ public partial class RegionView : Node2D
         }
         if (verb == Verb.Open && _world[actor] is { } opener)
         {
+            // 6527:002C: the container's own window on the map.
             AddScriptLine($"> {opener.Name} opens {Describe(target)}");
-            if (!_checking)
-            {
-                _character.Open(_world, actor, CharacterScreen.Page.Items, target);
-            }
+            _containerWindow.Open(target, opener, _palette, _menuAt);
             return;
         }
         if (verb == Verb.Get && target.Item is not null && _world[actor] is { } taker)
         {
+            if (_world.PickUpMoney(target) is > 0 and var coins)
+            {
+                // 7BEB:0A60: coins go to the party's money, not a pack.
+                GainMoney(coins, $"{taker.Name} picks up {coins} coins");
+                return;
+            }
             // 7BEB:0A60: the item goes into the pack first, then its pickup trigger runs.
             if (!_world.PickUp(taker, target))
             {
-                Say(what, target.Items.Count > 0 ? $"{Called(target)} has something in it: open it and take that first." : $"{taker.Name} can't carry any more.");
+                Say(what, target.Items.Count > 0 ? $"{Called(target, start: true)} has something in it: open it and take that first." : $"{taker.Name} can't carry any more.");
                 return;
             }
             AddScriptLine($"> {taker.Name} picks up {Describe(target)}");
@@ -1669,11 +1712,14 @@ public partial class RegionView : Node2D
         }
         switch (verb)
         {
+            case Verb.Look when target.Name.Length > 0:
+                Say(what, target.Name); // no look script: the engine names it
+                break;
             case Verb.Look:
-                Say(what, Called(target));
+                AddScriptLine($"> {what}: nothing to see"); // DSUN.EXE shows nothing for a nameless thing without a look script
                 break;
             case Verb.Get:
-                Say(what, $"{Called(target)} can't be picked up.");
+                Say(what, $"{Called(target, start: true)} can't be picked up.");
                 break;
             case Verb.Attack:
                 if (_checkingVerbs)
@@ -1682,7 +1728,7 @@ public partial class RegionView : Node2D
                 }
                 else if (!StartCombat(target, what))
                 {
-                    Say(what, $"{Called(target)} won't fight.");
+                    Say(what, $"{Called(target, start: true)} won't fight.");
                 }
                 break;
             default:
@@ -1701,6 +1747,51 @@ public partial class RegionView : Node2D
         }
     }
 
+    /// <summary>
+    /// A click on <paramref name="item"/> in the open container on the map
+    /// (<see cref="ContainerWindow"/>): coins become the party's money, anything
+    /// else goes into the opener's pack if it has room.
+    /// </summary>
+    private void TakeFromContainer(Item item)
+    {
+        if (_containerWindow is not { Container: { } container, Opener: { } taker })
+        {
+            return;
+        }
+        if (_world.TakeMoney(container, item) is > 0 and var coins)
+        {
+            GainMoney(coins, $"{taker.Name} takes {coins} coins from {Describe(container)}");
+        }
+        else if (_world.MoveItem(container, taker, item))
+        {
+            AddScriptLine($"> {taker.Name} takes {ItemText.Name(_world, item)} from {Describe(container)}");
+        }
+        else
+        {
+            Say($"take {ItemText.Name(_world, item)}", $"{taker.Name} can't carry any more.");
+        }
+    }
+
+    /// <summary>The item window (<see cref="ItemWindow"/>) for <paramref name="item"/> right-clicked in a container on the map.</summary>
+    private void DescribeItem(Item item)
+    {
+        Vector2 screen = GetViewport().GetVisibleRect().Size;
+        float scale = Math.Max(1f, MathF.Floor(Math.Min(screen.X / RetroScreen.Width, screen.Y / RetroScreen.Height)));
+        List<string> users = [.. _world.Party.Where(p => !p.Hidden && p.Index < Session.Party.Count && _world.CanUse(p, item)).Select(p => MemberName(p.Index))];
+        _itemWindow.Open(_world, item, ItemIcon(item.Rdff), users, _palette, GetViewport().GetMousePosition() / scale, screen / scale, scale);
+    }
+
+    /// <summary>
+    /// Coins taken: the party's money grows by <paramref name="coins"/>, and the
+    /// message is the new total, as DSUN.EXE's ("%d…$", <c>7BEB:0A60</c>; the
+    /// game font's $ is the coin).
+    /// </summary>
+    private void GainMoney(int coins, string what)
+    {
+        Session.ScriptHost.Money += coins;
+        Say(what, $"{Session.ScriptHost.Money}$");
+    }
+
     private static string VerbText(Verb verb) => verb switch
     {
         Verb.Talk => "talk to",
@@ -1712,7 +1803,8 @@ public partial class RegionView : Node2D
         _ => "look at",
     };
 
-    private static string Called(WorldObject obj) => obj.Name.Length > 0 ? obj.Name : "it";
+    /// <summary>The object's name, or "that" (capitalised at the start of a sentence) for a thing without one.</summary>
+    private static string Called(WorldObject obj, bool start = false) => obj.Name.Length > 0 ? obj.Name : start ? "That" : "that";
 
     /// <summary>
     /// Use a door or a lever-like object (<c>6BB8:0B56</c>): a door opens or
@@ -2405,12 +2497,50 @@ public partial class RegionView : Node2D
             Expect(onCoins.Any(InCoverBox), "an empty corner of the pot's picture lies over the coins");
             Expect(onCoins.Count > 0 && onCoins.All(p => ObjectAt(p) == coins), $"the pointer on the coins' pixels finds them ({onCoins.Count(p => ObjectAt(p) == coins)} of {onCoins.Count})");
             Expect(points.Where(p => !DrawnAt(coinSprite, p) && !DrawnAt(coverSprite, p)).All(p => ObjectAt(p) != coins), "and not the empty corners of their picture");
-            Expect(_world.PickUp(me, coins), "picked up the coins");
+            // Get on coins: the party's money, not an item (7BEB:0A60).
+            int money = Session.ScriptHost.Money, packed = me.Items.Count;
+            Act(coins, 0, Verb.Get);
+            Expect(_world[coins.Index] != coins && Session.ScriptHost.Money == money + coins.Item!.Value && me.Items.Count == packed,
+                $"picking up the coins adds their {coins.Item!.Value} to the party's money ({money} → {Session.ScriptHost.Money})");
             _world.PickUp(me, cover);
         }
         else
         {
             problems.Add("no coins dropped beside a pot");
+        }
+
+        // A chest on the map (OJFF 1564, the slave pens' zombie room: scale chest armour and +3 arrows) and a coffin
+        // (1574: a gem and 50 in coins) hold what their RDFFs link to them; Open shows them in the container's own
+        // window (6527:002C, WIND 13501), six slots; a click takes an item into the pack, coins into the party's money.
+        const int ZombieChest = 1564, Coffin = 1574, ScaleChestArmor = 1033, PlusThreeArrows = 2273, Gem = 1504, FiftyCoins = 1386;
+        if (_world.Spawn(ZombieChest, me.Cell) is { } chest && _world.Spawn(Coffin, me.Cell) is { } coffin)
+        {
+            Expect(chest.Items.Select(i => i.Rdff).SequenceEqual([ScaleChestArmor, PlusThreeArrows]), $"the chest holds scale chest armour and +3 arrows ({string.Join(", ", chest.Items.Select(i => i.Rdff))})");
+            Expect(coffin.Items.Select(i => i.Rdff).SequenceEqual([Gem, FiftyCoins]), $"the coffin holds a gem and coins ({string.Join(", ", coffin.Items.Select(i => i.Rdff))})");
+            Expect(_world.IsContainer(chest) && VerbsOf(chest).Contains(Verb.Open), "the chest offers Open");
+            Act(chest, 0, Verb.Open);
+            Expect(_containerWindow.Visible && _containerWindow.Container == chest && _containerWindow.GetNodeOrNull("WIND 13501") is not null
+                && _containerWindow.ItemAt(0)?.Rdff == ScaleChestArmor && _containerWindow.ItemAt(1)?.Rdff == PlusThreeArrows,
+                "Open shows the chest's armour and arrows in its window");
+            int packed = me.Items.Count;
+            _containerWindow.Click(0);
+            Expect(me.Items.Any(i => i.Rdff == ScaleChestArmor) && me.Items.Count == packed + 1 && _containerWindow.ItemAt(0)?.Rdff == PlusThreeArrows,
+                "clicking the armour takes it into the pack; the arrows move up");
+            _containerWindow.Click(0, MouseButton.Right);
+            Expect(_itemWindow.Visible && _itemWindow.Item?.Rdff == PlusThreeArrows && _containerWindow.Visible, "right-clicking the arrows shows them in the item window");
+            _itemWindow.Close();
+            _containerWindow.Close();
+            Act(coffin, 0, Verb.Open);
+            int money = Session.ScriptHost.Money;
+            _containerWindow.Click(1);
+            Expect(Session.ScriptHost.Money == money + 50 && coffin.Items.Select(i => i.Rdff).SequenceEqual([Gem]), $"clicking the coffin's coins adds 50 to the party's money ({money} → {Session.ScriptHost.Money})");
+            _containerWindow.Close();
+            _world.Remove(chest);
+            _world.Remove(coffin);
+        }
+        else
+        {
+            problems.Add("no chest or coffin");
         }
 
         Item boots = party[0].Items.First(i => i.Rdff == Boots);
@@ -2484,7 +2614,7 @@ public partial class RegionView : Node2D
         Expect(Session.ScriptHost.PartyMembers[0].Vitals.Hp == 12, "hit points came back");
 
         GD.Print(problems.Count == 0
-            ? $"items: made, dropped, picked up, worn, refused by class, searched, left and found, transformed, hurt, looted from a body, rested, saved and loaded ({carried[0]}; {carried[1]})"
+            ? $"items: made, dropped, picked up, coins to money, a chest and a coffin opened and emptied, worn, refused by class, searched, left and found, transformed, hurt, looted from a body, rested, saved and loaded ({carried[0]}; {carried[1]})"
             : "items: " + string.Join("; ", problems));
         GetTree().Quit(problems.Count > 0 ? 1 : 0);
     }
@@ -2524,6 +2654,9 @@ public partial class RegionView : Node2D
         CharacterScreen screen = _character;
         screen.Open(_world, 0, CharacterScreen.Page.Items);
         int PackIndex(Item item) => Enumerable.Range(0, 12).First(n => screen.ItemAt(Pack, n) == item);
+        // 74F1:17AF: the member's figure, BMP 20000 + their look, in the body's place.
+        Expect(screen.Figure is >= 20000 and < 20014 && Session.Party[0].Sprite - Session.Rules.IconBase == screen.Figure - 20000,
+            $"the member's figure shows where a container opens (BMP {screen.Figure}, map icon OJFF {Session.Party[0].Sprite})");
 
         screen.Click(Pack, PackIndex(boots));
         Expect(screen.Picked == boots && screen.Info.Contains("Boots"), "clicking the boots picks them and describes them");
@@ -2537,9 +2670,22 @@ public partial class RegionView : Node2D
         screen.Click(Pack, PackIndex(helm));
         screen.Click(Worn, Head);
         Expect(!helm.Equipped && screen.Info.Contains("can't use"), $"a thief is refused the Helm of Might ({screen.Info.Split('\n')[0]})");
+        // Right-click: the item window (WIND 15502, 91F7:0000); INFO turns to who may use it (91F7:12D8).
+        ItemWindow window = screen.ItemWindow;
+        string Shown() => string.Join(" / ", window.Lines);
+        screen.Click(Pack, PackIndex(helm), button: MouseButton.Right);
+        Expect(window.Visible && window.Item == helm && window.GetNodeOrNull("WIND 15502") is not null && window.Lines.Contains(ItemText.Name(_world, helm)),
+            $"right-clicking the helm shows it in the item window ({Shown()})");
+        window.ToggleUsers();
+        Expect(window.ShowingUsers && window.Lines.SequenceEqual(["USEABLE BY:", "NO ONE"]), $"INFO: no thief may use it ({Shown()})");
+        window.Close();
         _world.PartyClasses = _ => ItemClasses.Fighter;
         screen.Click(Worn, Head);
         Expect(helm.Slot == Head, "a fighter wears it");
+        screen.Click(Worn, Head, button: MouseButton.Right);
+        window.ToggleUsers();
+        Expect(window.Lines is ["USEABLE BY:", ..] && window.Lines.Contains(MemberName(0)), $"INFO: a fighter may ({Shown()})");
+        window.Close();
         screen.Click(Pack, PackIndex(boots));
         screen.Click(Worn, Head);
         Expect(!boots.Equipped && helm.Slot == Head, "boots don't go on the head");
@@ -2588,6 +2734,36 @@ public partial class RegionView : Node2D
             {
                 problems.Add("no body");
             }
+        }
+
+        // A carried bag (OJFF 1077): double-clicked it opens in the body's place (6527:12BD); things go in,
+        // a container doesn't; double-clicked again, or an empty slot right-clicked, it closes.
+        const int CarriedBag = 1077;
+        // (The last member, whose pack has room on its first page.)
+        int carrier = _world.Party.Last().Index;
+        WorldObject holder = _world[carrier]!;
+        if (_world.Give(2, -CarriedBag, carrier, GameWorld.None) == 2 && holder.Items.Where(i => i.Rdff == CarriedBag).ToList() is [var bag, var otherBag]
+            && _world.Give(1, -Water, carrier, GameWorld.None) == 1 && holder.Items.LastOrDefault(i => i.Rdff == Water) is { } bagged)
+        {
+            screen.Open(_world, carrier, CharacterScreen.Page.Items);
+            screen.Click(Pack, PackIndex(bag), doubleClick: true);
+            Expect(screen.OpenItem == bag && screen.ContainerShown, "double-clicking a carried bag opens it");
+            screen.Click(Pack, PackIndex(bagged));
+            screen.Click(Inside, 0);
+            Expect(bag.Contents.Contains(bagged) && !holder.Items.Contains(bagged) && screen.ItemAt(Inside, 0) == bagged, "the pot goes in the bag");
+            screen.Click(Pack, PackIndex(otherBag));
+            screen.Click(Inside, 1);
+            Expect(!bag.Contents.Contains(otherBag) && holder.Items.Contains(otherBag), "a bag doesn't go in a bag");
+            screen.Click(Pack, PackIndex(otherBag)); // put it down again
+            screen.Click(Pack, PackIndex(bag), doubleClick: true);
+            Expect(screen.OpenItem is null && !screen.ContainerShown, "double-clicking it again closes it");
+            screen.Click(Pack, PackIndex(bag), doubleClick: true);
+            screen.Click(Inside, 3, button: MouseButton.Right);
+            Expect(!screen.ContainerShown, "right-clicking an empty slot of the open bag closes it");
+        }
+        else
+        {
+            problems.Add("no bag to carry");
         }
 
         screen.Press(10300);
@@ -3181,11 +3357,16 @@ public partial class RegionView : Node2D
                 {
                     menuProblems.Add($"region {number}: no {window} for {Called(obj)}");
                 }
-                _verbMenu.Pick(Verb.Look);
+                _verbMenu.Pick(VerbsOf(obj).Contains(Verb.Open) ? Verb.Open : Verb.Look); // the fourth button
+                if (_character.IsOpen)
+                {
+                    _character.Close();
+                }
+                _containerWindow.Close();
                 AnswerForThePlayer();
                 if (_verbMenu.Visible)
                 {
-                    menuProblems.Add($"region {number}: choosing Look didn't close the menu");
+                    menuProblems.Add($"region {number}: choosing the fourth button didn't close the menu");
                 }
             }
             foreach (WorldObject obj in targets)
@@ -3371,6 +3552,11 @@ public partial class RegionView : Node2D
     /// columns away for 15 simulated seconds, and check after every tick that
     /// no two characters' footprints overlap.
     /// </summary>
+    /// <summary>For the checks: the things on the map holding items (containers, bodies), and what each holds.</summary>
+    private string HoldingThings() =>
+        string.Join("; ", _world.Objects.Where(o => o.Kind == ObjectKind.Thing && o.Items.Count > 0).Select(o =>
+            $"{Describe(o)}: {string.Join(", ", o.Items.Select(i => _world.Items.NameOf(i.Record) is { Length: > 0 } n ? n : $"RDFF {i.Rdff}"))}"));
+
     private void CheckAllRegions()
     {
         int failures = 0;
@@ -3407,6 +3593,10 @@ public partial class RegionView : Node2D
                 + $"{_world.Objects.Count(o => o.Kind == ObjectKind.Creature)} creatures ({_creatureNodes.Count} walking, "
                 + $"{_world.Objects.Count(o => o.Order.Mode != OrderMode.None)} with orders); "
                 + $"{_scriptLines.Skip(linesBefore).Count(l => l.Contains("has no orders") || l.Contains(" sight") || l.Contains(" sees "))} creature scripts run");
+            if (HoldingThings() is { Length: > 0 } holding)
+            {
+                GD.Print($"    holding things: {holding}");
+            }
         }
         GD.Print($"{Characters().Count} walking character sprites; {failures} overlaps in total; "
             + $"{_answered} dialogue prompts answered, {_scriptLines.Count(l => l.Contains("stopped:"))} scripts stopped with an error");

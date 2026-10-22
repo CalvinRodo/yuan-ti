@@ -11,7 +11,7 @@ namespace DarkSun.Game.Tests;
 public class ItemTests
 {
     private const int Width = 20, Height = 10;
-    private const int Templar = 100, Torch = 200, Arrows = 300, Boots = 400, FirePit = 1307;
+    private const int Templar = 100, Torch = 200, Arrows = 300, Boots = 400, Bag = 500, Chest = 600, FirePit = 1307, Coins = 1386;
 
     private sealed class Resources : IResourceSource
     {
@@ -50,13 +50,28 @@ public class ItemTests
     private static byte[] ArmedCreature(int ojff, short combatHp, short hp, int xp, params (int Ojff, int Type, int Name, byte Slot)[] carried)
     {
         var b = new List<byte>(Creature(ojff, combatHp));
-        void Header(int action, int block, int type, int index, int from, int length) =>
-            b.AddRange([(byte)action, (byte)block, (byte)type, 0, (byte)index, (byte)(index >> 8), (byte)from, 0, (byte)length, 0]);
-        Header(3, 0, CharacterRecord.Type, 0, 0, CharacterRecord.Length);
+        Header(b, 3, 0, CharacterRecord.Type, 0, 0, CharacterRecord.Length);
         var character = new byte[CharacterRecord.Length];
         BitConverter.GetBytes(xp).CopyTo(character, 4);
         BitConverter.GetBytes(hp).CopyTo(character, 8);
         b.AddRange(character);
+        return Carrying(b, carried);
+    }
+
+    /// <summary>
+    /// A container's item <c>RDFF</c> (<see cref="ItemRdff"/>) with the items
+    /// in it linked after its record, as the shipped chests and bodies have them.
+    /// </summary>
+    private static byte[] ContainerRdff(int ojff, int type, int name, params (int Ojff, int Type, int Name, byte Slot)[] inside) =>
+        Carrying([.. ItemRdff(ojff, type, name, 0)[..^1]], inside);
+
+    private static void Header(List<byte> b, int action, int block, int type, int index, int from, int length) =>
+        b.AddRange([(byte)action, (byte)block, (byte)type, 0, (byte)index, (byte)(index >> 8), (byte)from, 0, (byte)length, 0]);
+
+    /// <summary><paramref name="b"/> then each item linked (load action 2, then 4) with its <c>IT1R</c> and <c>NAME</c> references, and the end.</summary>
+    private static byte[] Carrying(List<byte> b, (int Ojff, int Type, int Name, byte Slot)[] carried)
+    {
+        void Header(int action, int block, int type, int index, int from, int length) => ItemTests.Header(b, action, block, type, index, from, length);
         int block = 2;
         for (int i = 0; i < carried.Length; i++)
         {
@@ -109,6 +124,12 @@ public class ItemTests
         r.Data[("RDFF", Boots)] = ItemRdff(Boots, 2, 3, 300);
         r.Data[("RDFF", GameWorld.DeadBody)] = ItemRdff(GameWorld.DeadBody, 3, 4, 0);
         r.Data[("OJFF", GameWorld.DeadBody)] = [0, 0, 8, 0, 15, 0, 0, 0, 0, 0, 0, 0, 7, 0, 0, 0]; // anchor (8, 15), BMP 7
+        r.Data[("RDFF", Bag)] = ItemRdff(Bag, 3, 4, 5);
+        r.Data[("OJFF", Bag)] = r.Data[("OJFF", GameWorld.DeadBody)];
+        r.Data[("RDFF", Chest)] = ContainerRdff(Chest, 3, 4, (Torch, 0, 1, 255), (Coins, 0, 1, 255));
+        r.Data[("OJFF", Chest)] = r.Data[("OJFF", GameWorld.DeadBody)];
+        r.Data[("RDFF", Coins)] = ItemRdff(Coins, 0, 1, 50);
+        r.Data[("OJFF", Coins)] = r.Data[("OJFF", GameWorld.DeadBody)];
         r.Data[("BMP ", 7)] = CinematicPlayerTests.Screen(3);
         // IT1R: type 0 nothing special; 1 stacks (flags +15 bit 2), ammunition (+9 = 11); 2 worn on the
         // feet (4) by fighters and thieves only (classes +16); 3 a container (flags bit 8).
@@ -156,6 +177,38 @@ public class ItemTests
 
         Assert.Equal([7, 0, 1], pack.Select(i => i.Cell));
         Assert.Equal(7, w.NewItem(pack[0].Save())!.Cell); // saved with the item
+    }
+
+    [Fact]
+    public void AContainerOnTheMapHoldsWhatItsRdffLinksToIt()
+    {
+        var (w, _) = World();
+
+        WorldObject chest = w.Spawn(Chest, new Cell(3, 3))!;
+
+        Assert.Equal([Torch, Coins], chest.Items.Select(i => i.Rdff));
+        Assert.True(w.IsContainer(chest));
+        Assert.Empty(w.Spawn(Bag, new Cell(4, 3))!.Items); // nothing linked: empty
+    }
+
+    [Fact]
+    public void CoinsTakenBecomeMoneyNotAnItem()
+    {
+        var (w, _) = World();
+        WorldObject bag = w.Spawn(Bag, new Cell(3, 3))!;
+        Item torch = w.NewItem(Torch)!, coins = w.NewItem(Coins)!;
+        bag.Items.AddRange([torch, coins]);
+
+        Assert.Equal(0, w.TakeMoney(bag, torch)); // not coins: left where it is
+        Assert.Equal(50, w.TakeMoney(bag, coins));
+        Assert.Equal([torch], bag.Items);
+
+        WorldObject ground = w.Spawn(Coins, new Cell(5, 3))!;
+        Assert.Equal(50, w.PickUpMoney(ground));
+        Assert.Null(w[ground.Index]);
+        Assert.Equal(0, w.PickUpMoney(w.Spawn(Bag, new Cell(4, 3))!));
+        Assert.True(GameWorld.IsMoney(-1399));
+        Assert.False(GameWorld.IsMoney(1390));
     }
 
     [Fact]
@@ -390,6 +443,32 @@ public class ItemTests
         int freed = bodies[10].Index;
         w.Remove(bodies[10]);
         Assert.Equal(freed, w.Spawn(GameWorld.DeadBody, at)!.Index);
+    }
+
+    [Fact]
+    public void ABagKeepsWhatItHoldsCarriedDroppedPickedUpAndSaved()
+    {
+        var (w, party) = World();
+        WorldObject me = w[0]!;
+        w.Give(1, -Bag, 0, GameWorld.None);
+        Item bag = party[0].Items.Single(i => i.Rdff == Bag);
+        Assert.True(w.IsContainerItem(bag));
+        Assert.False(w.IsContainerItem(w.NewItem(Torch)!));
+        bag.Contents.Add(w.NewItem(Boots)!);
+        bag.Contents.Add(w.NewItem(Arrows, 5)!);
+
+        // Saved and made again: the contents come back.
+        Item again = w.NewItem(bag.Save())!;
+        Assert.Equal([Boots, Arrows], again.Contents.Select(i => i.Rdff));
+        Assert.Equal(5, again.Contents[1].Quantity);
+
+        // Dropped: the bag on the map holds them; picked up: they come back with it.
+        WorldObject ground = w.DropItem(me, bag, 1)!;
+        Assert.Equal([Boots, Arrows], ground.Items.Select(i => i.Rdff));
+        Assert.Empty(party[0].Items);
+        Assert.True(w.PickUp(me, ground));
+        Item carried = party[0].Items.Single();
+        Assert.Equal([Boots, Arrows], carried.Contents.Select(i => i.Rdff));
     }
 
     [Fact]
