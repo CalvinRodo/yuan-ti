@@ -1057,6 +1057,111 @@ public partial class RegionView
 
     // -- headless check ------------------------------------------------------------------------------
 
+    /// <summary>
+    /// <c>--check-gang</c>: the slave pens' gang (region 41: Merzol, <c>OJFF</c> 180,
+    /// and the gladiators, 181) turned on the party as <c>GPL 142</c> @1002 does
+    /// (REQUEST 18 to allegiance 2), fought to the end by the party itself: the
+    /// fight ends once no enemy is near, and each that falls leaves a body with
+    /// what it carried.
+    /// </summary>
+    private async void CheckGang()
+    {
+        _checking = true;
+        _autoParty = true;
+        var problems = new List<string>();
+        int index = Session.Install!.RegionFiles.ToList().FindIndex(f => f.Equals("RGN29.GFF", StringComparison.OrdinalIgnoreCase));
+        if (index < 0)
+        {
+            GD.Print("gang: no region 41");
+            GetTree().Quit(1);
+            return;
+        }
+        for (int i = 0; i < 10; i++)
+        {
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        }
+        ShowRegion(index);
+        AnswerForThePlayer();
+        for (int i = 0; i < 10; i++)
+        {
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            AnswerForThePlayer();
+        }
+        GD.Print($"gang: in region {_region.Number}");
+        WorldObject? merzol = _world.First(-180);
+        if (merzol is null)
+        {
+            GD.Print("gang: no Merzol");
+            GetTree().Quit(1);
+            return;
+        }
+        _world.Teleport(DialogueGplHost.WholeParty, _region.Number, merzol.Cell.X + 2, merzol.Cell.Y);
+        // One gladiator has wandered out of sight (within sight range, behind a wall): he doesn't keep the fight going (612E:281F).
+        Cell party = _world[0]!.Cell;
+        WorldObject? away = _world.Objects.LastOrDefault(o => o.Id == -181);
+        Cell? hidden = Enumerable.Range(8, 14).SelectMany(r => Enumerable.Range(-r, 2 * r + 1).SelectMany(d => new[]
+            { new Cell(party.X + d, party.Y - r), new Cell(party.X + d, party.Y + r), new Cell(party.X - r, party.Y + d), new Cell(party.X + r, party.Y + d) }))
+            .Where(c => c.X >= 0 && c.Y >= 0 && c.X < _region.Width && c.Y < _region.Height && !_region.IsBlocked(c.X, c.Y)
+                && !GplGeometry.LineOfSight(_region, party.X, party.Y, c.X, c.Y))
+            .Select(c => (Cell?)c).FirstOrDefault();
+        if (away?.Walker is { } walker && hidden is { } spot)
+        {
+            walker.Teleport(spot, (_, _) => false);
+            DrawCreature(away);
+        }
+        List<WorldObject> gang = [.. _world.Objects.Where(o => o.Id is -180 or -181)];
+        GD.Print($"gang: {string.Join(", ", gang.Select(g => $"{g.Name} at {g.Cell.X},{g.Cell.Y} carrying {g.Items.Count}"))}; party at {_world[0]!.Cell.X},{_world[0]!.Cell.Y}");
+        // "You're nothing and I'm going to kill you": GPL 142 @1002 turns the gang and sets them hunting; their line-of-sight script starts the fight.
+        ReportScript("the gang turns", Session.Scripts.RunFor(new GplEntry(142, 0x1002), 0));
+        AnswerForThePlayer();
+        Battle? battle = null;
+        int fights = 0, frames = 0;
+        while (frames++ < 60_000 && (battle is null || InCombat || frames < 600))
+        {
+            _Process(1.0 / 60);
+            AnswerForThePlayer();
+            if (_battle is { } b && b != battle)
+            {
+                battle = b;
+                fights++;
+                GD.Print($"gang: fight {fights} with {string.Join(", ", b.Combatants.Where(c => !c.PartyMember).Select(c => $"{c.Name} at {c.Cell.X},{c.Cell.Y}"))}");
+            }
+            if (battle is not null && battle.Round > 60)
+            {
+                break;
+            }
+            if (frames % 200 == 0)
+            {
+                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            }
+        }
+        if (battle is null)
+        {
+            GD.Print($"gang: no fight started; hostile: {string.Join(", ", gang.Select(g => $"{g.Name} {g.Allegiance}"))}");
+            GetTree().Quit(1);
+            return;
+        }
+
+        string left = string.Join(", ", battle.Combatants.Where(c => !c.PartyMember).Select(c => $"{c.Name} {(c.Alive ? "alive" : "fell")} at {c.Cell.X},{c.Cell.Y}"));
+        int bodies = _world.Objects.Count(o => o.Id == -GameWorld.DeadBody && !o.Hidden);
+        int fell = battle.Combatants.Count(c => !c.PartyMember && c.Vitals.Status is >= Vitals.Down and < Vitals.Destroyed);
+        GD.Print($"gang: {battle.Round} rounds, {(InCombat ? "still fighting" : "over")}; {left}; {bodies} bodies for {fell} fallen");
+        if (InCombat)
+        {
+            problems.Add($"still fighting after {battle.Round} rounds");
+        }
+        if (bodies < fell)
+        {
+            problems.Add($"{fell - bodies} of the fallen left no body");
+        }
+        foreach (string p in problems)
+        {
+            GD.Print($"  PROBLEM: {p}");
+        }
+        GD.Print(problems.Count == 0 ? "gang: OK" : $"gang: {problems.Count} problems");
+        GetTree().Quit(problems.Count == 0 ? 0 : 1);
+    }
+
     /// <summary>The shipped opening bout, its cleanup, and the gate's next announcement.</summary>
     private void CheckArena()
     {

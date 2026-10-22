@@ -74,8 +74,15 @@ public sealed partial class Battle
     /// <summary>A combatant went down, died or was destroyed (status 3 or more): the caller takes it off the map, gives experience.</summary>
     public event Action<Combatant>? Defeated;
 
-    /// <summary>No two sides that fight each other are left (<c>612E:281F</c>).</summary>
-    public bool Over => !_all.Any(a => a.Fights && _all.Any(a.IsEnemyOf));
+    /// <summary>
+    /// The fight is over unless one of the party's side (allegiance bit 1) has an
+    /// enemy (bit 2) standing within sight range and line of sight
+    /// (<c>612E:281F</c>, which asks <c>612E:0000</c> for enemies within 24 cells
+    /// with line of sight): one left out of sight, in another room, doesn't
+    /// keep the fight going.
+    /// </summary>
+    public bool Over => !_all.Any(p => p.Fights && (p.Side & 1) != 0
+        && _all.Any(e => e.Fights && (e.Side & 2) != 0 && Distance(p, e) <= Rules.SightRange && InSight(p, e)));
 
     public void Add(Combatant c)
     {

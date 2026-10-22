@@ -188,6 +188,26 @@ public class CombatTests
     }
 
     [Fact]
+    public void TheFightEndsWhenNoEnemyIsInSightOrRange()
+    {
+        // 612E:281F: an enemy within 24 cells and in line of sight of the party's side keeps the fight going.
+        Combatant a = Fighter("a", 1, 5, 5), seen = Fighter("seen", 2, 9, 5);
+        Battle b = Fight(new ScriptedDice(), a, seen);
+        Assert.False(b.Over);
+
+        Combatant hidden = Fighter("hidden", 2, 7, 5);
+        Battle walled = new([Fighter("a", 1, 5, 5), hidden], new WalledField(new Cell(6, 5)), new ScriptedDice());
+        Assert.True(walled.Over); // behind the wall
+
+        Combatant far = Fighter("far", 2, 29, 29);
+        Battle distant = Fight(new ScriptedDice(), Fighter("a", 1, 0, 0), far);
+        Assert.True(distant.Over); // more than 24 cells away
+
+        seen.Vitals.Status = Vitals.Down;
+        Assert.True(b.Over);
+    }
+
+    [Fact]
     public void AttackingEndsInvisibilityAndPoisonKillsWhenItsRoundsRunOut()
     {
         Combatant a = Fighter("a", 1, 5, 5), t = Fighter("t", 2, 6, 5, hp: 500);

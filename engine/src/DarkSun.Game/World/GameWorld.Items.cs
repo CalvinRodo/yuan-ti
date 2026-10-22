@@ -440,13 +440,13 @@ public sealed partial class GameWorld
     /// <summary>
     /// A new object of <c>OJFF</c> <paramref name="ojff"/> at the free index its
     /// kind takes, standing on <paramref name="cell"/>: drawn on its own, like a
-    /// clone. Null if there is no room or no such object.
+    /// clone. Null if there is no such object, or for a creature when the
+    /// creature slots are full (things always find room).
     /// </summary>
     public WorldObject? Spawn(int ojff, Cell cell)
     {
         bool creature = IsCreature(ojff);
-        int first = creature ? PartySize : MaxCreatures, last = creature ? MaxCreatures : MaxObjects;
-        int index = Enumerable.Range(first, last - first).FirstOrDefault(n => _objects[n] is null, -1);
+        int index = FreeSlot(creature);
         int x = cell.X * Region.TileSize + Region.TileSize / 2, y = (cell.Y + 1) * Region.TileSize - 1;
         if (index < 0 || Region.MakeObject(_objectData, ojff, x, y) is not { } source)
         {
@@ -455,7 +455,7 @@ public sealed partial class GameWorld
         WorldObject obj = MakeObject(index, source);
         obj.IsClone = true;
         obj.FixedCell = cell;
-        _objects[index] = obj;
+        Put(index, obj);
         Changed?.Invoke(obj, null);
         return obj;
     }
@@ -463,7 +463,7 @@ public sealed partial class GameWorld
     /// <summary>Take <paramref name="obj"/> out of the region for good (picked up, dead, replaced).</summary>
     public void Remove(WorldObject obj)
     {
-        if (obj.Kind == ObjectKind.Party || _objects[obj.Index] != obj)
+        if (obj.Kind == ObjectKind.Party || this[obj.Index] != obj)
         {
             return;
         }
@@ -562,7 +562,7 @@ public sealed partial class GameWorld
     /// </summary>
     public void Fell(WorldObject target)
     {
-        if (target.Kind != ObjectKind.Party && target.Vitals.Status >= Vitals.Down && _objects[target.Index] == target)
+        if (target.Kind != ObjectKind.Party && target.Vitals.Status >= Vitals.Down && this[target.Index] == target)
         {
             Defeated?.Invoke(target);
             if (target.Vitals.Status < Vitals.Destroyed)

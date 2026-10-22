@@ -376,6 +376,23 @@ public class ItemTests
     }
 
     [Fact]
+    public void ThingsAlwaysFindRoomAndCreaturesKeepTheirSlots()
+    {
+        // The things' part of the table grows (DSUN.EXE's 320 would be full in a busy region).
+        var (w, _) = World();
+        Cell at = TemplarOf(w).Cell;
+        List<WorldObject> bodies = [.. Enumerable.Range(0, 1500).Select(_ => w.Spawn(GameWorld.DeadBody, at)!)];
+        Assert.All(bodies, b => Assert.True(b.Index >= GameWorld.MaxCreatures));
+        Assert.Equal(1500, bodies.Select(b => b.Index).Distinct().Count());
+        Assert.Same(bodies[^1], w[bodies[^1].Index]);
+
+        // A slot given back is used again.
+        int freed = bodies[10].Index;
+        w.Remove(bodies[10]);
+        Assert.Equal(freed, w.Spawn(GameWorld.DeadBody, at)!.Index);
+    }
+
+    [Fact]
     public void ARegionRemembersWhatItsCreaturesCarry()
     {
         var (w, _) = World();

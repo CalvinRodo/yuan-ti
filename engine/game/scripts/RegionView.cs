@@ -323,6 +323,11 @@ public partial class RegionView : Node2D
                 CheckPrisoners();
                 return;
             }
+            if (OS.GetCmdlineUserArgs().Contains("--check-gang"))
+            {
+                CheckGang();
+                return;
+            }
             if (OS.GetCmdlineUserArgs().Contains("--check-combat"))
             {
                 CheckCombat();
@@ -1750,6 +1755,7 @@ public partial class RegionView : Node2D
     {
         _scriptRuns++;
         _scriptErrors += run.Error is null || run.Suspended ? 0 : 1;
+        if (_checking && run.Error is not null && !run.Suspended) GD.Print($"TEMPERR {what}: {run.Entry.Kind} {run.Entry.File} @{run.Entry.Address:x4}: {run.Error}");
         string status = run.Paused ? $", paused by the debugger ({Session.Scripts.PausedFor}) before {GplBreakpoints.Format(Session.Scripts.Current)}"
             : run.Suspended ? ", waiting for the player" : run.Error is null ? "" : $", stopped: {run.Error}";
         AddScriptLine($"> {what}: {run.Entry.Kind} {run.Entry.File} @{run.Entry.Address:x4}, {run.Instructions} instructions{status}");

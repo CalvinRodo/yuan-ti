@@ -234,7 +234,17 @@ public sealed record CharacterSpec(Scmd Script, IReadOnlyList<(int Width, int He
 /// </summary>
 public sealed partial class GameWorld
 {
-    public const int MaxObjects = 0x140;
+    /// <summary>
+    /// Creatures take the slots below this (the party 0–3), as in DSUN.EXE;
+    /// things (items, bodies, scenery) take the slots from here on, as many as
+    /// the region needs. DSUN.EXE's whole table holds 320 (<c>0x140</c>), but it
+    /// makes a map entry an object only when it is drawn (<c>1DBD:0002</c> →
+    /// <c>1DF3:1157</c>) and, when the table is full, gives back the slots of
+    /// things off screen (<c>1DF3:0F7C</c>). Here every entry is an object for as
+    /// long as the region is shown, so the things' part grows instead: regions
+    /// have up to 645 entries (region 38), and dropped items and bodies are
+    /// added to them.
+    /// </summary>
     public const int MaxCreatures = 0x30;
     public const int PartySize = 4;
     public const int None = 9999;
@@ -245,7 +255,8 @@ public sealed partial class GameWorld
     /// <summary>Ticks between checks for idle creatures and line-of-sight scripts (about 0.5 s).</summary>
     private const int ScriptCheckTicks = 48;
 
-    private readonly WorldObject?[] _objects = new WorldObject?[MaxObjects];
+    /// <summary>The objects by slot (<see cref="MaxCreatures"/>); it grows as things are added.</summary>
+    private readonly List<WorldObject?> _objects = [.. new WorldObject?[MaxCreatures]];
     private readonly int[] _engine;
     private readonly Dictionary<int, Scmd?> _scripts = [];
     private readonly IResourceSource _objectData;
@@ -273,11 +284,8 @@ public sealed partial class GameWorld
         foreach (RegionObject source in region.Objects)
         {
             bool creature = IsCreature(source.Ojff);
-            int index = creature && nextCreature < MaxCreatures ? nextCreature++ : nextThing < MaxObjects ? nextThing++ : -1;
-            if (index >= 0)
-            {
-                _objects[index] = MakeObject(index, source);
-            }
+            int index = creature && nextCreature < MaxCreatures ? nextCreature++ : nextThing++;
+            Put(index, MakeObject(index, source));
         }
         SetUpDoors();
     }
@@ -359,7 +367,28 @@ public sealed partial class GameWorld
 
     public IEnumerable<WorldObject> Party => Enumerable.Range(0, PartySize).Select(i => _objects[i]).OfType<WorldObject>();
 
-    public WorldObject? this[int index] => index is >= 0 and < MaxObjects ? _objects[index] : null;
+    public WorldObject? this[int index] => index >= 0 && index < _objects.Count ? _objects[index] : null;
+
+    /// <summary>Put <paramref name="obj"/> in slot <paramref name="index"/>, growing the table to it.</summary>
+    private void Put(int index, WorldObject? obj)
+    {
+        while (_objects.Count <= index)
+        {
+            _objects.Add(null);
+        }
+        _objects[index] = obj;
+    }
+
+    /// <summary>
+    /// A free slot: for a creature the first free below <see cref="MaxCreatures"/>
+    /// (−1 if none), for a thing the first free from there on, else a new one.
+    /// </summary>
+    private int FreeSlot(bool creature)
+    {
+        int first = creature ? PartySize : MaxCreatures, last = creature ? MaxCreatures : _objects.Count;
+        int index = Enumerable.Range(first, last - first).FirstOrDefault(n => _objects[n] is null, -1);
+        return index >= 0 || creature ? index : _objects.Count;
+    }
 
     /// <summary>The party's active member (<c>gname[5]</c>, <c>3781:0369</c>).</summary>
     public int ActiveMember
@@ -699,11 +728,7 @@ public sealed partial class GameWorld
         int made = 0;
         for (int i = 0; i < count; i++)
         {
-            int index = Enumerable.Range(PartySize, MaxObjects - PartySize).FirstOrDefault(n => _objects[n] is null, -1);
-            if (index < 0)
-            {
-                break;
-            }
+            int index = Enumerable.Range(PartySize, _objects.Count - PartySize).FirstOrDefault(n => _objects[n] is null, _objects.Count);
             var copy = new WorldObject(index, original.Kind, original.Id)
             {
                 Source = original.Source,
@@ -725,7 +750,7 @@ public sealed partial class GameWorld
                 }
                 copy.Walker = new Walker(index, spec.Script, spec.Frames, cell, spec.Footprint, Occupancy);
             }
-            _objects[index] = copy;
+            Put(index, copy);
             made++;
             SetEngineVariable(0x28, index);
             Changed?.Invoke(copy, null);
@@ -1000,7 +1025,7 @@ public sealed partial class GameWorld
         }
         var saved = state.Objects.ToDictionary(o => o.Index);
         // Gone since the files: removed (the party keeps its slots).
-        for (int i = PartySize; i < MaxObjects; i++)
+        for (int i = PartySize; i < _objects.Count; i++)
         {
             if (_objects[i] is { } obj && !saved.ContainsKey(i))
             {
@@ -1012,19 +1037,19 @@ public sealed partial class GameWorld
         var changed = new List<WorldObject>();
         foreach (ObjectState o in state.Objects)
         {
-            WorldObject? obj = _objects[o.Index];
+            WorldObject? obj = this[o.Index];
             if ((obj is null || obj.Source?.EtabIndex != o.Etab) && o.Ojff is int ojff)
             {
                 // Made at run time from nothing: made again.
                 obj?.Walker?.Remove();
-                _objects[o.Index] = null;
+                Put(o.Index, null);
                 if (Region.MakeObject(_objectData, ojff, 0, 0) is not { } made)
                 {
                     continue;
                 }
                 obj = MakeObject(o.Index, made);
                 obj.IsClone = true;
-                _objects[o.Index] = obj;
+                Put(o.Index, obj);
             }
             else if (obj is null || obj.Source?.EtabIndex != o.Etab)
             {
@@ -1047,7 +1072,7 @@ public sealed partial class GameWorld
                 {
                     obj.Walker = new Walker(o.Index, w.Script, w.Frames, o.Cell, w.Footprint, Occupancy);
                 }
-                _objects[o.Index] = obj;
+                Put(o.Index, obj);
             }
             obj.Id = o.Id;
             obj.Name = o.Name;
