@@ -104,6 +104,10 @@ when one comes within 5 cells (its line-of-sight script, `GPL 74` @0059, FIGHTs)
 `-- --new-game --check-arena` plays the whole opening; `--check-arena-release`
 starts at the release. A walk ordered before the gate
 opens continues through it if it opens while the party approaches.
+The arena's bound prisoners (GPL 5) become an empty frame and either a freed
+man or a body (`OJFF` 1258); a creature that dies leaves a body only if it
+carried something (`612E:2659`), as in DSUN.EXE. `--check-prisoners` unties
+them, then leaves the arena and comes back to check what they left.
 The game clock (`gname[9]`) runs as DSUN.EXE's does, so timed scripts move
 on; thief skills, ability rolls and traps are rolled as the EXE rolls them
 (the skill tables are in `characters.json`). The shipped scripts' known bugs

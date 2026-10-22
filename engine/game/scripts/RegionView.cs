@@ -318,6 +318,11 @@ public partial class RegionView : Node2D
                 CheckDialogue();
                 return;
             }
+            if (OS.GetCmdlineUserArgs().Contains("--check-prisoners"))
+            {
+                CheckPrisoners();
+                return;
+            }
             if (OS.GetCmdlineUserArgs().Contains("--check-combat"))
             {
                 CheckCombat();
@@ -2641,6 +2646,88 @@ public partial class RegionView : Node2D
             Session.Party.Clear();
             Session.Party.AddRange(keep);
         }
+    }
+
+    /// <summary>
+    /// <c>--check-prisoners</c>: in the arena, untie each bound prisoner
+    /// (GPL 5 by way of their talk triggers) and see what the script leaves:
+    /// the empty frame (<c>OJFF</c> 2603) and the prisoner, freed (280 or 319)
+    /// or dead (his body, 1258); then leave the arena and come back to them.
+    /// </summary>
+    private async void CheckPrisoners()
+    {
+        var problems = new List<string>();
+        async Task Frames(int n)
+        {
+            for (int i = 0; i < n; i++)
+            {
+                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            }
+        }
+        GplDialogue dialogue = Session.ScriptHost.Dialogue;
+        foreach (int prisoner in new[] { -1202, -318 })
+        {
+            if (_world.First(prisoner) is not { } bound)
+            {
+                problems.Add($"no prisoner {-prisoner}");
+                continue;
+            }
+            Cell at = bound.Cell;
+            _world.Teleport(DialogueGplHost.WholeParty, _world.Region.Number, at.X + 1, at.Y + 1);
+            await Frames(3);
+            Act(bound, _selected, Verb.Talk);
+            var said = new List<string>();
+            for (int i = 0; i < 40 && (dialogue.Prompt is not null || Session.Scripts.IsSuspended || _dialogueWindow.Visible); i++)
+            {
+                await Frames(3);
+                said.Add(string.Concat(dialogue.Text.Select(t => t.Text)).Trim());
+                if (_dialogueWindow.ShowingChoices)
+                {
+                    var choices = _dialogueWindow.Choices.ToList();
+                    int untie = choices.FindIndex(c => c.Contains("untie", StringComparison.OrdinalIgnoreCase) || c.Contains("free you", StringComparison.OrdinalIgnoreCase));
+                    int bye = choices.FindIndex(c => c.TrimStart().StartsWith("Goodbye", StringComparison.OrdinalIgnoreCase));
+                    GD.Print($"prisoners: {-prisoner} offers [{string.Join(" | ", choices.Select(c => c.Trim()))}]");
+                    _dialogueWindow.Pick(untie >= 0 ? untie : bye >= 0 ? bye : choices.Count - 1);
+                }
+                else
+                {
+                    _dialogueWindow.PressMore();
+                }
+            }
+            await Frames(3);
+            string near = string.Join(", ", _world.Objects.Where(o => !o.Hidden && Math.Abs(o.Cell.X - at.X) <= 2 && Math.Abs(o.Cell.Y - at.Y) <= 2)
+                .Select(o => $"{-o.Id} {o.Kind} {o.Cell.X},{o.Cell.Y}"));
+            GD.Print($"prisoners: {-prisoner} at {at.X},{at.Y}: said \"{said.LastOrDefault(s => s.Length > 0)}\"; near now: {near}");
+            if (_world.First(prisoner) is not null)
+            {
+                problems.Add($"prisoner {-prisoner} is still tied up");
+            }
+            if (!_world.Objects.Any(o => !o.Hidden && o.Id is -1258 or -280 or -319 && Math.Abs(o.Cell.X - at.X) <= 2 && Math.Abs(o.Cell.Y - at.Y) <= 2))
+            {
+                problems.Add($"prisoner {-prisoner} left neither a body (1258) nor a freed prisoner (280, 319)");
+            }
+        }
+        // Back in the arena later (by way of region 43): the body and the empty frame are still there.
+        int region = _region.Number;
+        EnterRegion(region + 1, new Cell(10, 10));
+        await Frames(3);
+        EnterRegion(region, new Cell(30, 30));
+        await Frames(3);
+        foreach (int left in new[] { -1258, -2603 })
+        {
+            WorldObject? o = _world.First(left);
+            GD.Print($"prisoners: back in region {_region.Number}: {-left} {(o is null ? "gone" : $"at {o.Cell.X},{o.Cell.Y} sprite={(_cloneSprites.TryGetValue(o, out var sp) ? $"{sp.Position} visible={sp.Visible}" : "none")}")}");
+            if (o is null || !_cloneSprites.TryGetValue(o, out var drawn) || !drawn.Visible)
+            {
+                problems.Add($"{-left} isn't shown after coming back");
+            }
+        }
+        foreach (string p in problems)
+        {
+            GD.Print($"  PROBLEM: {p}");
+        }
+        GD.Print(problems.Count == 0 ? "prisoners: OK" : $"prisoners: {problems.Count} problems");
+        GetTree().Quit(problems.Count == 0 ? 0 : 1);
     }
 
     /// <summary>

@@ -1243,6 +1243,8 @@ public partial class RegionView
             GetTree().Quit(1);
             return;
         }
+        Dictionary<WorldObject, int> carried = battle.Combatants.Where(c => !c.PartyMember && c.Source is not null)
+            .ToDictionary(c => c.Source!, c => c.Source!.Items.Count);
         int frames = 0;
         while (InCombat && battle.Round <= 40 && frames++ < 200_000)
         {
@@ -1268,6 +1270,13 @@ public partial class RegionView
         if (battle.Combatants.Any(c => !c.PartyMember && !c.Alive && c.Source is { } o && _world[o.Index] == o))
         {
             problems.Add("a creature that fell is still on the map");
+        }
+        int bodiesDue = battle.Combatants.Count(c => !c.PartyMember && c.Vitals.Status is >= Vitals.Down and < Vitals.Destroyed
+            && c.Source is { } o && carried.GetValueOrDefault(o) > 0);
+        int bodies = _world.Objects.Count(o => o.Id == -GameWorld.DeadBody && !o.Hidden);
+        if (bodies < bodiesDue)
+        {
+            problems.Add($"{bodiesDue - bodies} creatures that fell carrying something left no body");
         }
         if (!_partyFell && battle.Combatants.Any(c => c.PartyMember && c.Vitals is not { Status: Vitals.Well, Hp: >= 1 } && c.Vitals.Status < Vitals.Dead))
         {
