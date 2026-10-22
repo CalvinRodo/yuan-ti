@@ -5,32 +5,56 @@ using Godot;
 
 namespace DarkSun.Engine;
 
+/// <summary>What the right-click menu shows of its object (<see cref="VerbMenu.Open"/>).</summary>
+/// <param name="Lines">A creature's weapon lines (<c>78A9:28DC</c>: each weapon's name, then its damage).</param>
+/// <param name="Picture">A thing's picture.</param>
+public sealed record VerbTarget(string Name, bool Creature, int Level, int Hp, int MaxHp, IReadOnlyList<string> Lines, Texture2D? Picture);
+
 /// <summary>
-/// The right-click menu of an object: its name and the verbs it offers
-/// (<see cref="ObjectVerbs"/>), one button each. Talk, Get and Use show
-/// DSUN.EXE's verb icons (<c>ICON</c> 15101–15103 for things, 15105–15107
-/// for creatures, from the buttons of windows 15500 and 3020). Click a verb,
-/// or press its number or letter (T, G, U, L); Esc or a click elsewhere closes it.
+/// The right-click menu of an object, DSUN.EXE's verb window (<c>68BD:0040</c>):
+/// <list type="bullet">
+/// <item>a creature's <c>WIND</c> 3020 (its stone <c>BMP</c> 3020): its hit
+/// points as a fire bar (<c>78A9:2796</c>: <c>BMP</c> 20106 at (5, 5), the fire
+/// <c>BMP</c> 20107 cut to the hit points left), its name at (6, 16) and
+/// "LEVEL: n" under it in colour 31 (shadow 17, <c>68BD:0F5C</c>), and its
+/// weapons from (6, 30), a line every 7 (<c>78A9:28DC</c>);</item>
+/// <item>a thing's <c>WIND</c> 15500 over the parchment <c>BMP</c> 15000 (its
+/// size; the window's verb icons are drawn with the parchment's edge): the
+/// thing's picture unless it is bigger than 85 × 43 (<c>91F7:0C29</c>), and its
+/// name (laid out more simply here);</item>
+/// <item>the three verb diamonds, Talk, Get and Use, always there and disabled
+/// when the object doesn't offer them (<c>2A1D:071A</c> with the flags of
+/// <c>68BD:0C6D</c>), and a fourth button (INFO; a creature's is blank) for
+/// Look.</item>
+/// </list>
+/// The engine's other verbs (Attack, Use with…, Open), which the original
+/// reaches elsewhere, are on a strip under the window. Click a verb, or press
+/// its number or letter (T, G, U, L, O); Esc or a click elsewhere closes it.
 /// An object with a single verb skips the menu (<c>RegionView</c> does it at once).
 /// </summary>
-public partial class VerbMenu : PanelContainer
+public partial class VerbMenu : Control
 {
-    private const int FontSize = 10;
+    private const int CreatureWindow = 3020, ThingWindow = 15500, ThingBackdrop = 15000;
+    private const int BarFrame = 20106, BarFire = 20107;
+    private const int TextColour = 31, TextShadow = 17, StripColour = 45;
+    private const int LineHeight = 7;
+
+    /// <summary>Each window's verb buttons (<c>BUTN</c>), Look on the fourth.</summary>
+    private static readonly Dictionary<Verb, int> CreatureButtons = new() { [Verb.Talk] = 15306, [Verb.Get] = 15308, [Verb.Use] = 15307, [Verb.Look] = 15309 };
+
+    private static readonly Dictionary<Verb, int> ThingButtons = new() { [Verb.Talk] = 15301, [Verb.Get] = 15303, [Verb.Use] = 15302, [Verb.Look] = 15304 };
 
     private static readonly Dictionary<Verb, (string Label, Key Letter)> Labels = new()
     {
         [Verb.Talk] = ("Talk", Key.T),
         [Verb.Get] = ("Get", Key.G),
         [Verb.Use] = ("Use", Key.U),
-        [Verb.UseWith] = ("Use with…", Key.None),
-        [Verb.Attack] = ("Attack", Key.None),
+        [Verb.UseWith] = ("USE WITH", Key.None),
+        [Verb.Attack] = ("ATTACK", Key.None),
         [Verb.Look] = ("Look", Key.L),
-        [Verb.Open] = ("Open", Key.O),
+        [Verb.Open] = ("OPEN", Key.O),
     };
 
-    private readonly Dictionary<(Verb, bool), Texture2D?> _icons = [];
-    private VBoxContainer _list = null!;
-    private Label _title = null!;
     private IReadOnlyList<Verb> _verbs = [];
 
     /// <summary>The verb the player chose (the menu has closed).</summary>
@@ -39,61 +63,126 @@ public partial class VerbMenu : PanelContainer
     public override void _Ready()
     {
         Visible = false;
-        AddThemeStyleboxOverride("panel", new StyleBoxFlat
-        {
-            BgColor = new Color(0.12f, 0.08f, 0.05f, 0.95f),
-            BorderColor = new Color(0.6f, 0.42f, 0.25f),
-            BorderWidthLeft = 1, BorderWidthTop = 1, BorderWidthRight = 1, BorderWidthBottom = 1,
-            ContentMarginLeft = 4, ContentMarginTop = 3, ContentMarginRight = 4, ContentMarginBottom = 4,
-        });
-        var column = new VBoxContainer();
-        column.AddThemeConstantOverride("separation", 2);
-        AddChild(column);
-        _title = new Label { HorizontalAlignment = HorizontalAlignment.Center };
-        _title.AddThemeFontSizeOverride("font_size", FontSize);
-        _title.AddThemeColorOverride("font_color", new Color(0.95f, 0.8f, 0.55f));
-        column.AddChild(_title);
-        _list = new VBoxContainer();
-        _list.AddThemeConstantOverride("separation", 1);
-        column.AddChild(_list);
+        MouseFilter = MouseFilterEnum.Stop;
     }
 
-    /// <summary>Show <paramref name="verbs"/> for <paramref name="title"/> at <paramref name="at"/> (screen position).</summary>
-    public void Open(string title, IReadOnlyList<Verb> verbs, bool creature, Vector2 at)
+    /// <summary>
+    /// Show <paramref name="verbs"/> for <paramref name="target"/> beside
+    /// <paramref name="at"/> (screen position), in <paramref name="palette"/>
+    /// (the region's), at the 320 × 200 screen's scale.
+    /// </summary>
+    public void Open(VerbTarget target, IReadOnlyList<Verb> verbs, Palette palette, Vector2 at)
     {
         _verbs = verbs;
-        _title.Text = title;
-        foreach (Node child in _list.GetChildren())
+        foreach (Node child in GetChildren())
         {
-            _list.RemoveChild(child);
+            RemoveChild(child);
             child.QueueFree();
         }
-        for (int i = 0; i < verbs.Count; i++)
+        Color Of(int index) => palette[index] is var c ? Color.Color8(c.R, c.G, c.B) : Colors.White;
+        LabelSettings text = GameFonts.Settings(Of(TextColour), shadow: Of(TextShadow));
+        if (UiWindowView.Build(target.Creature ? CreatureWindow : ThingWindow, palette, target.Creature ? null : ThingBackdrop) is not { } window)
         {
-            Verb verb = verbs[i];
-            var (label, letter) = Labels[verb];
-            var button = new Button
+            return;
+        }
+        AddChild(window);
+        Label Line(string s, Vector2 where)
+        {
+            var label = new Label { Text = s, Position = where, Size = new Vector2(window.Size.X - where.X - 4, GameFonts.Size), ClipText = true, LabelSettings = text, MouseFilter = MouseFilterEnum.Ignore };
+            window.AddChild(label);
+            return label;
+        }
+
+        if (target.Creature)
+        {
+            if (Art("BMP ", BarFrame, palette) is { } frame)
             {
-                Text = $"{i + 1}  {label}",
-                Icon = Icon(verb, creature),
-                Alignment = HorizontalAlignment.Left,
-                TooltipText = letter == Key.None ? $"{i + 1}" : $"{i + 1} or {letter}",
-                FocusMode = FocusModeEnum.All,
-            };
-            button.AddThemeFontSizeOverride("font_size", FontSize);
-            button.Pressed += () => Choose(verb);
-            _list.AddChild(button);
+                window.AddChild(new TextureRect { Texture = frame, Position = new Vector2(5, 5), MouseFilter = MouseFilterEnum.Ignore });
+            }
+            if (Art("BMP ", BarFire, palette) is { } fire && target.MaxHp > 0)
+            {
+                int width = Math.Clamp(fire.GetWidth() * Math.Max(0, target.Hp) / target.MaxHp, 0, fire.GetWidth());
+                if (width > 0)
+                {
+                    var cut = new AtlasTexture { Atlas = fire, Region = new Rect2(0, 0, width, fire.GetHeight()) };
+                    window.AddChild(new TextureRect { Texture = cut, Position = new Vector2(6, 6), MouseFilter = MouseFilterEnum.Ignore });
+                }
+            }
+            Line(target.Name, new Vector2(6, 16));
+            if (target.Level > 0)
+            {
+                Line($"LEVEL: {target.Level}", new Vector2(6, 16 + LineHeight));
+            }
+            for (int i = 0; i < target.Lines.Count && i < 4; i++)
+            {
+                Line(target.Lines[i], new Vector2(6, 30 + LineHeight * i));
+            }
         }
-        Size = Vector2.Zero;
-        Visible = true;
-        // Keep it on screen, just right of and below the pointer.
-        Vector2 size = GetCombinedMinimumSize();
-        Vector2 screen = GetViewportRect().Size;
-        Position = new Vector2(Math.Clamp(at.X + 6, 0, Math.Max(0, screen.X - size.X)), Math.Clamp(at.Y + 6, 0, Math.Max(0, screen.Y - size.Y)));
-        if (_list.GetChildCount() > 0)
+        else
         {
-            ((Control)_list.GetChild(0)).CallDeferred(Control.MethodName.GrabFocus);
+            // 91F7:0C29: a picture over 85 × 43 isn't shown; the text goes under it (at 28 under a small one).
+            float y = 12;
+            if (target.Picture is { } picture && picture.GetWidth() <= 85 && picture.GetHeight() <= 43)
+            {
+                window.AddChild(new TextureRect { Texture = picture, Position = new Vector2(13, 8), MouseFilter = MouseFilterEnum.Ignore });
+                y = Math.Max(28, 8 + picture.GetHeight() + 4);
+            }
+            Line(target.Name, new Vector2(13, y));
         }
+
+        Dictionary<Verb, int> buttons = target.Creature ? CreatureButtons : ThingButtons;
+        foreach (var (verb, number) in buttons)
+        {
+            if (window.Button(number) is not { } button)
+            {
+                continue;
+            }
+            Verb v = verb;
+            button.Disabled = !verbs.Contains(v);
+            button.TooltipText = Labels[v].Label;
+            button.Pressed += () => Choose(v);
+        }
+
+        // The engine's own verbs, under the window.
+        Verb[] extras = [.. verbs.Where(v => !buttons.ContainsKey(v))];
+        Vector2 size = window.Size;
+        if (extras.Length > 0)
+        {
+            var strip = new HBoxContainer { Position = new Vector2(2, window.Size.Y + 1) };
+            strip.AddThemeConstantOverride("separation", 6);
+            var panel = new PanelContainer { Position = new Vector2(0, window.Size.Y), MouseFilter = MouseFilterEnum.Stop };
+            panel.AddThemeStyleboxOverride("panel", new StyleBoxFlat
+            {
+                BgColor = Of(18), BorderColor = Of(29), BorderWidthLeft = 1, BorderWidthTop = 1, BorderWidthRight = 1, BorderWidthBottom = 1,
+                ContentMarginLeft = 3, ContentMarginRight = 3, ContentMarginTop = 1, ContentMarginBottom = 1,
+            });
+            LabelSettings normal = GameFonts.Settings(Of(StripColour)), lit = GameFonts.Settings(Of(77));
+            foreach (Verb verb in extras)
+            {
+                Verb v = verb;
+                var button = new Button { Flat = true, FocusMode = FocusModeEnum.None, CustomMinimumSize = new Vector2(0, GameFonts.Size + 1) };
+                var label = new Label { Text = Labels[v].Label, LabelSettings = normal, MouseFilter = MouseFilterEnum.Ignore };
+                button.AddChild(label);
+                button.CustomMinimumSize = new Vector2(label.GetMinimumSize().X, GameFonts.Size + 1);
+                button.MouseEntered += () => label.LabelSettings = lit;
+                button.MouseExited += () => label.LabelSettings = normal;
+                button.Pressed += () => Choose(v);
+                strip.AddChild(button);
+            }
+            panel.AddChild(strip);
+            AddChild(panel);
+            size.Y += panel.GetCombinedMinimumSize().Y;
+            size.X = Math.Max(size.X, panel.GetCombinedMinimumSize().X);
+        }
+        Size = size;
+
+        // The screen's scale; beside the pointer, kept on screen (68BD:0DA1 keeps the window on it too).
+        Vector2 screen = GetViewportRect().Size;
+        float scale = Math.Max(1f, MathF.Floor(Math.Min(screen.X / RetroScreen.Width, screen.Y / RetroScreen.Height)));
+        Scale = new Vector2(scale, scale);
+        Vector2 shown = size * scale;
+        Position = new Vector2(Math.Clamp(at.X + 6, 0, Math.Max(0, screen.X - shown.X)), Math.Clamp(at.Y + 6, 0, Math.Max(0, screen.Y - shown.Y)));
+        Visible = true;
     }
 
     public void Close() => Visible = false;
@@ -104,7 +193,7 @@ public partial class VerbMenu : PanelContainer
         {
             return;
         }
-        if (e is InputEventMouseButton { Pressed: true } click && !GetGlobalRect().HasPoint(click.Position))
+        if (e is InputEventMouseButton { Pressed: true } click && !new Rect2(GlobalPosition, Size * Scale).HasPoint(click.Position))
         {
             Close();
             GetViewport().SetInputAsHandled();
@@ -127,32 +216,26 @@ public partial class VerbMenu : PanelContainer
         }
     }
 
+    /// <summary>Choose <paramref name="verb"/> as a click on it would (for the headless checks).</summary>
+    public void Pick(Verb verb)
+    {
+        if (Visible && _verbs.Contains(verb))
+        {
+            Choose(verb);
+        }
+    }
+
     private void Choose(Verb verb)
     {
         Close();
         Chosen?.Invoke(verb);
     }
 
-    /// <summary>The original's icon for Talk, Get and Use (normal frame, in the menu palette), or null.</summary>
-    private Texture2D? Icon(Verb verb, bool creature)
+    private static Texture2D? Art(string tag, int number, Palette palette)
     {
-        if (_icons.TryGetValue((verb, creature), out Texture2D? icon))
-        {
-            return icon;
-        }
-        int? number = verb switch
-        {
-            Verb.Talk => creature ? 15105 : 15101,
-            Verb.Use => creature ? 15106 : 15102,
-            Verb.Get => creature ? 15107 : 15103,
-            _ => null,
-        };
         GffFile resources = Session.Open("RESOURCE.GFF");
-        if (number is int n && resources.TryRead("ICON", n, out var data) && Session.Assets.Frames(data) is [var frame, ..])
-        {
-            icon = Textures.ToTexture(frame, Session.Assets.Palette(resources.Read("PAL ", 1001)));
-        }
-        _icons[(verb, creature)] = icon;
-        return icon;
+        return resources.TryRead(tag, number, out var data) && Session.Assets.Frames(data) is [var frame, ..] && frame.Width > 0
+            ? Textures.ToTexture(frame, palette)
+            : null;
     }
 }

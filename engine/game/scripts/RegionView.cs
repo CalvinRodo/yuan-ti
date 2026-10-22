@@ -1473,7 +1473,36 @@ public partial class RegionView : Node2D
             ChooseVerb(verbs[0]);
             return;
         }
-        _verbMenu.Open(hit.Name.Length > 0 ? hit.Name : $"Object {-hit.Id}", verbs, hit.Kind == ObjectKind.Creature, screen);
+        _verbMenu.Open(VerbTargetOf(hit), verbs, _palette, screen);
+    }
+
+    /// <summary>What the verb window shows of <paramref name="obj"/> (<see cref="VerbMenu"/>).</summary>
+    private VerbTarget VerbTargetOf(WorldObject obj)
+    {
+        string name = obj.Name.Length > 0 ? obj.Name : $"Object {-obj.Id}";
+        if (obj.Kind != ObjectKind.Creature)
+        {
+            return new VerbTarget(name, false, 0, 0, 0, [], obj.Source?.Frame is { Width: > 0 } frame ? TextureFor(frame) : null);
+        }
+        int level = 0;
+        if (obj.Character is { } character)
+        {
+            foreach (byte l in character.Levels)
+            {
+                level = Math.Max(level, l);
+            }
+        }
+        // 78A9:28DC: each readied weapon's name, then its damage (attacks * dice, 6868:0489's "%d%s*%dD%d%+d").
+        var lines = new List<string>();
+        foreach (Item item in obj.Items.Where(i => i.Slot is 3 or 10 or 2).OrderBy(i => i.Slot == 2 ? 1 : 0))
+        {
+            if (_world.Items.TypeOf(item.Record) is { IsWeapon: true } type && (type.Weapon & DarkSun.Data.Items.WeaponKind.Shield) == 0)
+            {
+                lines.Add(_world.Items.NameOf(item.Record));
+                lines.Add($"{Math.Max(1, (int)type.Attacks)}*{type.DamageDice}D{type.DamageSides}{type.DamageBonus + item.Record.Bonus:+0;-0;+0}");
+            }
+        }
+        return new VerbTarget(name, true, level, obj.Vitals.Hp, obj.Vitals.MaxHp, lines, null);
     }
 
     private void ChooseVerb(Verb verb)
@@ -3127,6 +3156,7 @@ public partial class RegionView : Node2D
     {
         IReadOnlyList<string> files = Session.Install!.RegionFiles;
         var offered = Enum.GetValues<Verb>().ToDictionary(v => v, _ => 0);
+        var menuProblems = new List<string>();
         int objects = 0;
         (_scriptRuns, _scriptErrors) = (0, 0);
         for (int index = 0; index < files.Count; index++)
@@ -3135,6 +3165,23 @@ public partial class RegionView : Node2D
             AnswerForThePlayer();
             int number = _region.Number;
             var targets = _world.Objects.Where(o => o.Kind != ObjectKind.Party && !o.Hidden).ToList();
+            // The right-click menu: the original's window for the kind of object, its verbs on its buttons.
+            foreach (WorldObject obj in targets.Where(o => VerbsOf(o).Count > 1).DistinctBy(o => o.Kind).ToList())
+            {
+                _menuTarget = obj;
+                _verbMenu.Open(VerbTargetOf(obj), VerbsOf(obj), _palette, Vector2.Zero);
+                string window = obj.Kind == ObjectKind.Creature ? "WIND 3020" : "WIND 15500";
+                if (!_verbMenu.Visible || _verbMenu.GetNodeOrNull(window) is null)
+                {
+                    menuProblems.Add($"region {number}: no {window} for {Called(obj)}");
+                }
+                _verbMenu.Pick(Verb.Look);
+                AnswerForThePlayer();
+                if (_verbMenu.Visible)
+                {
+                    menuProblems.Add($"region {number}: choosing Look didn't close the menu");
+                }
+            }
             foreach (WorldObject obj in targets)
             {
                 objects++;
@@ -3153,7 +3200,11 @@ public partial class RegionView : Node2D
         GD.Print($"verbs: {objects} objects in {files.Count} regions; offered "
             + string.Join(", ", offered.Select(o => $"{o.Key} {o.Value}")) + $"; {_scriptRuns} script runs, {_scriptErrors} stopped with an error; "
             + $"{_restsTaken} rests at fire pits");
-        GetTree().Quit();
+        foreach (string p in menuProblems.Take(10))
+        {
+            GD.Print($"  PROBLEM: {p}");
+        }
+        GetTree().Quit(menuProblems.Count == 0 ? 0 : 1);
     }
 
     /// <summary>
