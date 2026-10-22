@@ -16,6 +16,13 @@ public sealed record Mod(string Name, string Directory)
 
     public bool Enabled { get; init; } = true;
 
+    /// <summary>
+    /// Comes with the game (<see cref="ModSet.Load"/>'s bundled folder): turned on
+    /// and off by a setting, not by renaming its folder, and loaded after the
+    /// player's own mods, so theirs win.
+    /// </summary>
+    public bool Bundled { get; init; }
+
     /// <summary>The mods folder it is in.</summary>
     public string Root => Path.GetDirectoryName(Directory)!;
 
@@ -168,7 +175,12 @@ public sealed class ModSet
     /// skipped), earlier roots first, with <paramref name="builders"/> for
     /// extra file formats by extension (".gpl").
     /// </summary>
-    public static ModSet Load(IEnumerable<string?> roots, IReadOnlyDictionary<string, ModBuilder>? builders = null)
+    /// <param name="bundled">
+    /// The mods that come with the game (the tabletop rules), lowest priority;
+    /// <paramref name="bundledOn"/> says which are on (all off without it).
+    /// </param>
+    public static ModSet Load(IEnumerable<string?> roots, IReadOnlyDictionary<string, ModBuilder>? builders = null,
+        string? bundled = null, Func<string, bool>? bundledOn = null)
     {
         var mods = new List<Mod>();
         var used = new List<string>();
@@ -188,6 +200,12 @@ public sealed class ModSet
                 int at = order.FindIndex(o => o.Equals(m.Name, StringComparison.OrdinalIgnoreCase));
                 return at < 0 ? int.MaxValue : at;
             }));
+        }
+        if (!string.IsNullOrEmpty(bundled) && Directory.Exists(bundled))
+        {
+            mods.AddRange(Directory.EnumerateDirectories(bundled)
+                .Select(d => Mod.Read(d) is var m ? m with { Name = Path.GetFileName(d), Enabled = bundledOn?.Invoke(Path.GetFileName(d)) ?? false, Bundled = true } : m)
+                .OrderBy(m => m.Name, StringComparer.OrdinalIgnoreCase));
         }
         return new ModSet(mods, builders) { Roots = used };
     }

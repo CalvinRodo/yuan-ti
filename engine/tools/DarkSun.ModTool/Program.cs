@@ -27,6 +27,7 @@
 
 using System.Globalization;
 using System.Text;
+using DarkSun.Data;
 using DarkSun.Data.Gff;
 using DarkSun.Data.Images;
 using DarkSun.Data.Mods;
@@ -122,8 +123,12 @@ if (args.Length >= 6 && args[0] == "export")
 if (args.Length == 3 && args[0] == "check")
 {
     ModSet mods = ModSet.Load([args[2]], GplModFormat.Builders);
-    var problems = mods.Verify(Directory.EnumerateFiles(args[1], "*.GFF", new EnumerationOptions { MatchCasing = MatchCasing.CaseInsensitive })
-        .Order().Select(p => (Path.GetFileName(p).ToUpperInvariant(), GffFile.Open(p))));
+    if (GameInstall.TryOpen(args[1], out string? notGame) is not { } install)
+    {
+        Console.Error.WriteLine(notGame);
+        return 2;
+    }
+    var problems = mods.Verify(install.OpenGffFiles((name, why) => Console.WriteLine($"{name} not checked: {why}")));
     var bad = new List<string>();
     foreach (var mod in mods.Mods)
     {
@@ -206,10 +211,13 @@ if (args.Length == 3 && args[0] == "list")
 {
     ModSet mods = ModSet.Load([args[2]], GplModFormat.Builders);
     Console.WriteLine($"{mods.Mods.Count} mods, highest priority first: {string.Join(", ", mods.Mods.Select(m => m.Name))}");
-    foreach (string path in Directory.EnumerateFiles(args[1], "*.GFF").Order())
+    if (GameInstall.TryOpen(args[1], out string? notGame) is not { } install)
     {
-        string name = Path.GetFileName(path).ToUpperInvariant();
-        GffFile original = GffFile.Open(path);
+        Console.Error.WriteLine(notGame);
+        return 2;
+    }
+    foreach (var (name, original) in install.OpenGffFiles((name, why) => Console.WriteLine($"{name} not listed: {why}")))
+    {
         GffFile modded = mods.Apply(original, name);
         foreach (ResourceDescriptor r in modded.DescribeResources())
         {

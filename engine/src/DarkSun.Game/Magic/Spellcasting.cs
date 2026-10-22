@@ -132,9 +132,10 @@ public sealed class Spellcasting(CharacterRules rules)
         {
             return 0;
         }
+        // 6798:071C: each priest class's slots added up; a cleric's or druid's Wisdom bonus with them.
         int priest = Math.Max(Level(c, CharacterClass.Cleric), Level(c, CharacterClass.Druid));
-        int slots = Math.Max(At(Rules.PriestSlots, priest, level), At(Rules.RangerSlots, Level(c, CharacterClass.Ranger), level));
-        if (slots > 0)
+        int slots = At(Rules.PriestSlots, priest, level) + At(Rules.RangerSlots, Level(c, CharacterClass.Ranger), level);
+        if (priest > 0 && (slots > 0 || !Rules.WisdomBonusNeedsSlots))
         {
             int wis = Creation.Adjusted(c, Ability.Wis);
             slots += Rules.WisdomBonusSpells.Where(b => wis >= b.Wisdom).Sum(b => b.Level == level ? 1 : 0);
@@ -166,9 +167,16 @@ public sealed class Spellcasting(CharacterRules rules)
         Slots(c, SpellKind.Wizard, level) == 0 ? []
             : All.Where(s => s.Kind == SpellKind.Wizard && s.Level == level && Allows(c, s) && !c.Spellbook.Contains(s.Number));
 
-    /// <summary>How many spells of a level the spellbook may hold (Intelligence: 6 at 9 … 18 at 18, all from 19).</summary>
+    /// <summary>
+    /// How many spells of a level the spellbook may hold, by Intelligence
+    /// (<see cref="CharacterRules.SpellbookSizes"/>); with no sizes listed, as many as there are (DSUN.EXE).
+    /// </summary>
     public int SpellbookSize(Character c)
     {
+        if (Rules.SpellbookSizes.Count == 0)
+        {
+            return All.Count;
+        }
         int intelligence = Creation.Adjusted(c, Ability.Int);
         return Rules.SpellbookSizes.Where(b => intelligence >= b.Intelligence).Select(b => b.Spells).DefaultIfEmpty(0).Max();
     }

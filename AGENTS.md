@@ -65,7 +65,7 @@ Multi-game support is driven by the `GAMES` dict in `src/config.py`; adding a ne
 ### DS1 (`dark_sun/`)
 - Region files: `RGNxx.GFF` (2-digit hex suffix, e.g. `RGN02.GFF`)
 - Objects in `SEGOBJEX.GFF`; no standalone cinematics or music directory
-- `CINE.GFF` holds in-engine cutscene data; `DARKRUN.GFF` is the launcher config
+- `CINE.GFF` holds in-engine cutscene data; `DARKRUN.GFF` is the original game's working copy of the game in progress (loaded saves are copied into it; it can be empty, and tools skip it then)
 
 ### DS2 (`dark_sun_2/data/`)
 - Region files: `RGN001.GFF` – `RGNxxx.GFF` (3-digit zero-padded)

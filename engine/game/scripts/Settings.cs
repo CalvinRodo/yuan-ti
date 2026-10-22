@@ -13,6 +13,7 @@ namespace DarkSun.Engine;
 /// <item><c>[display]</c> <c>fullscreen</c>, <c>debug_hud</c> (the region view's information lines);</item>
 /// <item><c>[game]</c> <c>skip_intro</c>, <c>autosave</c> (on entering a region), <c>original_pathfinding</c>,
 /// <c>difficulty</c> (0–3: easy, balanced, hard, hideous), <c>animations</c> (the map's animated things);</item>
+/// <item><c>[mods]</c> <c>bundled_on</c>: the mods that come with the game turned on (the tabletop rules).</item>
 /// <item><c>[keys]</c> an action's keys, as the key help names them (<c>quick_save = "F5"</c>, <c>"Shift+F11"</c>, several with " / ").</item>
 /// </list>
 /// </summary>
@@ -107,6 +108,23 @@ public static class Settings
     {
         get => Get("game", "script_repairs", true);
         set => Set("game", "script_repairs", value);
+    }
+
+    /// <summary>Is the bundled mod <paramref name="name"/> on (<c>[mods] bundled_on</c>, names separated by commas)?</summary>
+    public static bool BundledModOn(string name) =>
+        Get("mods", "bundled_on", "").Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+            .Contains(name, StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Turn the bundled mod <paramref name="name"/> on or off (saved with <see cref="Save"/>).</summary>
+    public static void SetBundledMod(string name, bool on)
+    {
+        var names = Get("mods", "bundled_on", "").Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+            .Where(n => !n.Equals(name, StringComparison.OrdinalIgnoreCase)).ToList();
+        if (on)
+        {
+            names.Add(name);
+        }
+        Set("mods", "bundled_on", string.Join(",", names));
     }
 
     public static bool OriginalPathfinding

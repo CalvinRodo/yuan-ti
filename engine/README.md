@@ -67,7 +67,11 @@ make engine-cine    # play a cinematic headless, snapshots in out/cine (CINE=0 i
 
 `engine-compare` runs the repository's `tools/compare/gff_dump.py` (using `src/gff.py` and
 `src/image.py`) and `tools/DarkSun.Dump` over the game files, and fails unless
-the two outputs are identical. Run it after changing either side.
+the two outputs are identical. Run it after changing either side. The script
+listings compare the engine's names for REQUEST codes (`REQUEST(MUSIC_LEVEL, …)`):
+`tools/compare/gpl_listing.py` reads them from `GplRequests.cs`, so a code
+renamed or added there needs no change on the Python side. A GFF file that
+isn't valid (an empty `DARKRUN.GFF`) is skipped by both.
 
 Headless checks: that the engine starts and finds the game files (exit code
 1 if it doesn't), that every region loads in the region viewer, that the
@@ -416,7 +420,8 @@ may take (humans one; the others up to three, never cleric with druid), good
 or neutral alignments, one psionic discipline (psionicists all three) and a
 sphere for clerics, druids and rangers. Where the manual contradicts itself,
 half-giants can't be rangers and muls and thri-kreen can't be druids. A mod can replace the rules with
-`rules/characters.json` in its folder (the same JSON `CharacterRules` reads). The same file holds what
+`rules/characters.json` in its folder (the same JSON `CharacterRules` reads; a file need only hold what
+it changes). The same file holds what
 the character sheet and combat work out: the ability tables (Strength's damage and to-hit,
 Dexterity's reaction and defence, Constitution's poison save, Wisdom's magical defence), Constitution's
 hit points, each class's THAC0 factor and saving throws, attacks a round by warrior level, the
@@ -484,6 +489,35 @@ collapsed party, and spreading it out again.
 `make engine-mod-rules MOD=mods/MyMod` writes all four rule files (`characters.json`,
 `creatures.json`, `combat.json`, `spells.json`) with the original's values to start from, keeping any
 that are there, and `make engine-mod-check` reports rule files that can't be read.
+
+### The original's rules and the tabletop rules
+
+The rules are DSUN.EXE's, not the tabletop game's, where they have been traced:
+
+| Rules | Where they come from |
+|---|---|
+| Experience for each level | `38F0:027C` (a row per class by `38F0:00CA`; gladiators use the fighter's) |
+| Spells per day and the Wisdom bonus | `6798:0B32`'s formula (profiles `DS:0664` / `DS:0678`); every priest class's slots added; the Wisdom bonus for clerics and druids, even at spell levels their level doesn't give yet |
+| Spellbook size | none: DSUN.EXE doesn't limit it |
+| Constitution's hit points | `40B1:0052`; levels of non-warrior classes held to +2 (`8E77:032C`) |
+| Saves, THAC0, attacks a round, ability tables, thief skills, racial adjustments, hit dice, starting experience | `40B1`, `8E77`, `DS:07A8`, `3FAA`, `38D4` (see `CharacterRules`) |
+| Combat, spells, creatures | `CombatRules`, `SpellRules`, `CreatureRules` (see `dsun-exe-reference.md` §8) |
+
+Still from the manual or AD&D 2nd edition, not yet traced: the classes each race may take, the
+alignments, prime requisites, the dual-class requirements, and psionic strength (DSUN.EXE works it
+out from the abilities and the psionicist level, `6698:0B8A` and `8E77:0162`; the engine's table is a
+stand-in).
+
+The tabletop rules come with the game as a mod, **Tabletop rules** (`engine/game/mods/Tabletop`), off
+until it is turned on in the mod list: AD&D 2nd edition's and the manual's experience tables, spells
+per day, Wisdom bonus (only for spell levels the priest can already cast), spellbook size by
+Intelligence, and Constitution's hit points. Rules take effect from a new game; characters keep their
+experience, so their levels follow the rules in play.
+
+Mods in `engine/game/mods` are packed with the game, copied to `bundled-mods` in the Godot user data
+folder each time it starts, and loaded after the player's own mods (theirs win). Their on/off
+state is a setting (`[mods] bundled_on` in `settings.cfg`), not a renamed folder. To change one, copy
+its folder into a mods folder and edit the copy.
 
 The party is kept in `party.json` in the Godot user data folder and starts
 the next new game (no party: four placeholder characters); characters made

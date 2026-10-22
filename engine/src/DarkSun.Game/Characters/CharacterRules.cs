@@ -60,7 +60,10 @@ public sealed record SaveRow(int Base, int Rate, int Max)
 /// <summary>From <paramref name="WarriorLevel"/> in a warrior class on, <paramref name="Halves"/> attacks a round in halves (<c>8E77:038F</c>).</summary>
 public sealed record AttackStep(int WarriorLevel, int Halves);
 
-/// <param name="Levels">Experience needed for levels 1, 2, 3…</param>
+/// <param name="Levels">
+/// Experience needed for levels 1, 2, 3… DSUN.EXE's table (<c>38F0:027C</c>, in hundreds;
+/// a row per class by <c>38F0:00CA</c>[code]) checked by <c>8E77:08A6</c>; levels go up to 9.
+/// </param>
 /// <param name="Thac0Factor">THAC0 is 20 − (level − 1) × this ÷ 12 (<c>8E77:0416</c>, <c>40B1:0000</c>): warriors 12, priests 8, rogues and psionicists 6, wizards 4.</param>
 /// <param name="Saves">Its five saving throws (paralysation, rod, petrification, breath, spell; <c>8E77:059B</c>).</param>
 public sealed record ClassRules(
@@ -84,13 +87,19 @@ public sealed record ClassRules(
 /// with <c>38D4:0180</c>), the hit dice (<c>38D4:014A</c>) and hit points
 /// (<c>6ECD:0156</c>), the starting experience (3000 in each class, the new
 /// character template at <c>38D4:0048</c>) and the map icons (<c>OJFF</c> 300–313);</item>
-/// <item>from the manual: the classes each race may take, prime requisites,
-/// the experience tables, the alignments a party may have, and that cleric
+/// <item>also from DSUN.EXE: the experience tables (<c>38F0:027C</c>), spells
+/// per day (<c>6798:0B32</c>'s formula; <see cref="WizardSlots"/>), Constitution's
+/// hit points (<c>40B1:0052</c>), saves and THAC0 (<c>40B1</c>) and the ability
+/// tables (<c>DS:07A8</c>);</item>
+/// <item>from the manual, not yet traced in DSUN.EXE: the classes each race may
+/// take, prime requisites, the alignments a party may have, and that cleric
 /// and druid don't combine. Where it contradicts itself the stricter reading
 /// is taken: half-giants can't be rangers and muls and thri-kreen can't be
-/// druids.</item>
+/// druids. The dual-class requirements and psionic strength are AD&amp;D 2nd
+/// edition's (see their fields).</item>
 /// </list>
-/// A mod can replace the rules with a JSON file (<see cref="Read"/>).
+/// A mod can replace the rules with a JSON file (<see cref="Read"/>); the
+/// tabletop rules that come with the game (<c>engine/game/mods/Tabletop</c>) are one.
 /// </summary>
 public sealed record CharacterRules
 {
@@ -145,46 +154,72 @@ public sealed record CharacterRules
     /// <summary>A human may dual-class from this level in the current class ("at least third level", the manual).</summary>
     public int DualLevel { get; init; } = 3;
 
-    /// <summary>The current class's prime requisites must be this or more to dual-class (AD&amp;D 2nd edition).</summary>
+    /// <summary>The current class's prime requisites must be this or more to dual-class (AD&amp;D 2nd edition; DSUN.EXE's checks aren't traced).</summary>
     public int DualFromPrime { get; init; } = 15;
 
     /// <summary>The new class's prime requisites must be this or more (AD&amp;D 2nd edition).</summary>
     public int DualToPrime { get; init; } = 17;
 
-    // -- spells and psionics (Magic.Spellcasting): AD&D 2nd edition's, where DSUN.EXE's aren't traced --
+    // -- spells and psionics (Magic.Spellcasting) --
 
-    /// <summary>Wizard spells per day: row n is preserver level n + 1, column m spell level m + 1.</summary>
+    /// <summary>
+    /// Wizard spells per day: row n is preserver level n + 1, column m spell level m + 1.
+    /// DSUN.EXE works them out (<c>6798:0B32</c>, profiles <c>DS:0664</c> / <c>DS:0678</c>): for
+    /// a profile of a maximum, an offset and a parity, n = level − (level + parity) ÷ 2 −
+    /// (spell level + offset − 1), 2 where that is 1 and level and parity agree, held to
+    /// 0 … maximum. Preservers: maximum 5; clerics and druids: 9; rangers: 3, offset 3,
+    /// parity 1. These tables are that formula's.
+    /// </summary>
     public IReadOnlyList<IReadOnlyList<int>> WizardSlots { get; init; } =
     [
-        [1], [2], [2, 1], [3, 2], [4, 2, 1], [4, 2, 2], [4, 3, 2, 1], [4, 3, 3, 2], [4, 3, 3, 2, 1], [4, 4, 3, 2, 2],
-        [4, 4, 4, 3, 3], [4, 4, 4, 4, 4],
+        [1], [2], [2, 1], [2, 2], [3, 2, 1], [3, 2, 2], [4, 3, 2, 1], [4, 3, 2, 2], [5, 4, 3, 2, 1], [5, 4, 3, 2, 2],
+        [5, 5, 4, 3, 2], [5, 5, 4, 3, 2],
     ];
 
-    /// <summary>Priest spells per day by cleric or druid level.</summary>
+    /// <summary>Priest spells per day by cleric or druid level (<see cref="WizardSlots"/>' formula, maximum 9).</summary>
     public IReadOnlyList<IReadOnlyList<int>> PriestSlots { get; init; } =
     [
-        [1], [2], [2, 1], [3, 2], [3, 3, 1], [3, 3, 2], [3, 3, 2, 1], [3, 3, 3, 2], [4, 4, 3, 2, 1], [4, 4, 3, 3, 2],
-        [5, 4, 4, 3, 2], [6, 5, 5, 3, 2],
+        [1], [2], [2, 1], [2, 2], [3, 2, 1], [3, 2, 2], [4, 3, 2, 1], [4, 3, 2, 2], [5, 4, 3, 2, 1], [5, 4, 3, 2, 2],
+        [6, 5, 4, 3, 2], [6, 5, 4, 3, 2],
     ];
 
-    /// <summary>A ranger's priest spells by ranger level (none before the 8th).</summary>
+    /// <summary>A ranger's priest spells by ranger level (none before the 8th; added to a cleric's or druid's).</summary>
     public IReadOnlyList<IReadOnlyList<int>> RangerSlots { get; init; } =
     [
-        [], [], [], [], [], [], [], [1], [2], [2, 1], [2, 2], [2, 2, 1],
+        [], [], [], [], [], [], [], [1], [2], [2, 1], [2, 2], [3, 2, 1],
     ];
 
-    /// <summary>A priest's extra spells for Wisdom: one of <c>Level</c> from <c>Wisdom</c> up (cumulative).</summary>
+    /// <summary>
+    /// A cleric's or druid's extra spells for Wisdom: one of <c>Level</c> from <c>Wisdom</c>
+    /// up (cumulative). DSUN.EXE's is a second profile of the same formula, on Wisdom
+    /// (maximum 3, offset 6; <c>6798:071C</c> passes the Wisdom).
+    /// </summary>
     public IReadOnlyList<WisdomBonus> WisdomBonusSpells { get; init; } =
-        [new(13, 1), new(14, 1), new(15, 2), new(16, 2), new(17, 3), new(18, 4), new(19, 1), new(19, 3), new(20, 2), new(20, 4), new(21, 3), new(21, 5)];
+    [
+        new(13, 1), new(14, 1), new(15, 2), new(16, 2), new(17, 1), new(17, 3), new(18, 3), new(19, 2), new(19, 4), new(20, 4),
+        new(21, 3), new(21, 5), new(22, 5), new(23, 4), new(25, 5),
+    ];
 
-    /// <summary>How many spells of each level a preserver's spellbook holds, by Intelligence.</summary>
-    public IReadOnlyList<SpellbookSize> SpellbookSizes { get; init; } =
-        [new(9, 6), new(10, 7), new(13, 9), new(15, 11), new(17, 14), new(18, 18), new(19, 99)];
+    /// <summary>
+    /// The Wisdom bonus only adds to spell levels the class's level already gives
+    /// (AD&amp;D 2nd edition). DSUN.EXE adds the two profiles, so a wise priest has
+    /// slots of a level before the class level gives them; false: as the original.
+    /// </summary>
+    public bool WisdomBonusNeedsSlots { get; init; }
+
+    /// <summary>
+    /// How many spells of each level a preserver's spellbook holds, by Intelligence;
+    /// none listed: no limit. DSUN.EXE has no limit (no code reads Intelligence for it).
+    /// </summary>
+    public IReadOnlyList<SpellbookSize> SpellbookSizes { get; init; } = [];
 
     /// <summary>
     /// A psionicist's psionic strength points by level; past the table,
-    /// <see cref="PspPerLevelAfter"/> more each level. (DSUN.EXE's
-    /// <c>38D4:013B</c> holds 20, 22, … 34, likely this; not traced.)
+    /// <see cref="PspPerLevelAfter"/> more each level (AD&amp;D 2nd edition's). Not yet
+    /// DSUN.EXE's: <c>38D4:013B</c> holds 20, 22, … 34; <c>6698:0B8A</c> works points out as
+    /// 2 × Wis − 10 + (Int − 15) + (Con − 15) (each if above 15) + (Wis − 5) × the
+    /// psionicist level (1 for others), and <c>8E77:0162</c> adds 10 a level on a
+    /// level-up; which applies when isn't traced.
     /// </summary>
     public IReadOnlyList<int> PsionicistPsp { get; init; } = [20, 22, 24, 26, 28, 30, 32, 34];
 
@@ -203,15 +238,15 @@ public sealed record CharacterRules
     public AbilityTables Abilities { get; init; } = AbilityTables.Default;
 
     /// <summary>
-    /// Constitution's hit points a level, by score 0–25 (AD&amp;D 2nd edition's:
-    /// −2 to 3, −1 to 6, +1 at 15, +2 at 16–18, +5 from 19), and for warriors
-    /// (+3 at 17, +4 at 18).
+    /// Constitution's hit points a level, by score 0–25, for warriors' levels
+    /// (<see cref="WarriorConstitutionHitPoints"/>) and the others'. DSUN.EXE has one
+    /// table (<c>40B1:0052</c>) and holds other classes' levels to +2 (<c>8E77:032C</c>).
     /// </summary>
     public IReadOnlyList<int> ConstitutionHitPoints { get; init; } =
-        [-2, -2, -2, -2, -1, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 2, 2, 5, 5, 5, 5, 5, 5, 5];
+        [-3, -3, -2, -2, -1, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2];
 
     public IReadOnlyList<int> WarriorConstitutionHitPoints { get; init; } =
-        [-2, -2, -2, -2, -1, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 4, 5, 5, 5, 5, 5, 5, 5];
+        [-3, -3, -2, -2, -1, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 4, 5, 5, 6, 6, 6, 7, 7];
 
     /// <summary>Attacks a round in halves: 2, then by a warrior class's level (<c>8E77:038F</c>).</summary>
     public int BaseAttackHalves { get; init; } = 2;
@@ -291,7 +326,9 @@ public sealed record CharacterRules
     /// <summary>
     /// A mod's rules. A race or class that leaves out a field (a file written
     /// before the field existed) gets the original's for that race or class,
-    /// not the record's default: a thief keeps a thief's THAC0 and saves.
+    /// not the record's default: a thief keeps a thief's THAC0 and saves. A file
+    /// without <c>Races</c> or <c>Classes</c> keeps the original's, so a mod need
+    /// only hold what it changes.
     /// </summary>
     public static CharacterRules Read(string path)
     {
@@ -301,6 +338,10 @@ public sealed record CharacterRules
             JsonNode original = JsonNode.Parse(Default.ToJson())!;
             foreach (var (list, key) in new[] { ("Races", "Race"), ("Classes", "Class") })
             {
+                if (node is JsonObject root && !root.ContainsKey(list))
+                {
+                    root[list] = original[list]!.DeepClone();
+                }
                 foreach (JsonObject entry in (node[list] as JsonArray ?? []).OfType<JsonObject>())
                 {
                     if ((original[list] as JsonArray)!.OfType<JsonObject>()
@@ -387,19 +428,20 @@ public sealed record CharacterRules
             new(CharacterClass.Cleric, "Cleric", Minimums(Ability.Wis, 9), [Ability.Wis], 8, false, true,
                 [0, 1500, 3000, 6000, 13000, 27500, 55000, 110000, 225000], 8, PriestSaves),
             new(CharacterClass.Druid, "Druid", Minimums(Ability.Wis, 12), [Ability.Wis, Ability.Cha], 8, false, true,
-                [0, 1500, 3000, 6000, 13000, 27500, 55000, 110000, 225000], 8, PriestSaves),
+                [0, 2000, 4000, 7500, 12500, 20000, 35000, 60000, 90000], 8, PriestSaves),
             new(CharacterClass.Fighter, "Fighter", Minimums(Ability.Str, 9), [Ability.Str], 10, true, false,
                 [0, 2000, 4000, 8000, 16000, 32000, 64000, 125000, 250000], 12, WarriorSaves),
+            // DSUN.EXE gives gladiators the fighter's row.
             new(CharacterClass.Gladiator, "Gladiator", Minimums(Ability.Str, 13), [Ability.Str], 10, true, false,
-                [0, 2250, 4500, 9000, 18000, 36000, 75000, 150000, 300000], 12, WarriorSaves),
+                [0, 2000, 4000, 8000, 16000, 32000, 64000, 125000, 250000], 12, WarriorSaves),
             new(CharacterClass.Preserver, "Preserver", Minimums(Ability.Int, 9), [Ability.Int], 4, false, false,
                 [0, 2500, 5000, 10000, 20000, 40000, 60000, 90000, 135000], 4, WizardSaves),
             new(CharacterClass.Psionicist, "Psionicist", Minimums(Ability.Wis, 12), [Ability.Con, Ability.Wis], 6, false, false,
                 [0, 2200, 4400, 8800, 16500, 30000, 55000, 100000, 200000], 6, RogueSaves),
             new(CharacterClass.Ranger, "Ranger", Minimums(Ability.Wis, 14), [Ability.Str, Ability.Dex, Ability.Wis], 10, true, true,
-                [0, 2250, 4500, 9000, 18000, 36000, 75000, 150000, 300000], 12, WarriorSaves),
+                [0, 2200, 4500, 9000, 18000, 36000, 75000, 150000, 300000], 12, WarriorSaves),
             new(CharacterClass.Thief, "Thief", Minimums(Ability.Dex, 9), [Ability.Dex], 6, false, false,
-                [0, 1250, 2500, 5000, 10000, 20000, 40000, 70000, 110000], 6, RogueSaves),
+                [0, 1200, 2500, 5000, 10000, 20000, 40000, 70000, 110000], 6, RogueSaves),
         ],
     };
 }

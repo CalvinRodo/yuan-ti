@@ -1,0 +1,6 @@
+{
+  "title": "Tabletop rules",
+  "version": "1",
+  "author": "Dark Sun Engine",
+  "description": "Plays by the AD&D 2nd edition and manual tables where they differ from DSUN.EXE's: experience tables (gladiators and rangers 2250 to level 2, thieves 1250, druids their own), spells per day and the Wisdom bonus (only for spell levels the priest can already cast), spellbook size by Intelligence, and Constitution's hit points (+2 at most at 16–18 for other classes, +5 from 19). Off: the game uses DSUN.EXE's own rules. Turn it on from a new game; characters keep their experience, so their levels may change."
+}

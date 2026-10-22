@@ -263,6 +263,9 @@ public static class Session
     }
 
     private static CharacterRules? _rules;
+
+    /// <summary>Where the bundled mods were copied to (once a run), or null.</summary>
+    private static string? _bundledMods;
     private static DarkSun.Game.Rules.CreatureRules? _creatureRules;
     private static DarkSun.Game.Combat.CombatRules? _combatRules;
     private static DarkSun.Game.Combat.SpellRules? _spellRules;
@@ -377,9 +380,11 @@ public static class Session
         Files.Clear();
         Assets.Clear();
         (_sprites, _rules, _names, _quests) = (null, null, null, null);
+        (_creatureRules, _combatRules, _spellRules) = (null, null, null);
         GameFonts.Reset();
         LoadParty();
-        Mods = ModSet.Load(ModFolders(install), GplModFormat.Builders);
+        _bundledMods ??= BundledMods.Extract();
+        Mods = ModSet.Load(ModFolders(install), GplModFormat.Builders, _bundledMods, Settings.BundledModOn);
         Mods.ProblemFound += p => Godot.GD.PushWarning($"Mod file not used: {p}");
         if (Mods.Mods.Count > 0)
         {
@@ -410,7 +415,7 @@ public static class Session
 
     /// <summary>Build everything the mods change, so <see cref="ModSet.Problems"/> lists every file that can't be used.</summary>
     public static IReadOnlyList<ModProblem> VerifyMods() =>
-        Install is null ? [] : Mods.Verify(Install.GffFiles.Select(n => (n, GffFile.Open(Install.FindFile(n)!))));
+        Install is null ? [] : Mods.Verify(Install.OpenGffFiles((name, why) => Godot.GD.PushWarning($"{name} not checked: {why}")));
 
     /// <summary>A GFF file from the install, opened on first use.</summary>
     private static Dictionary<int, SpellInfo>? _spells;

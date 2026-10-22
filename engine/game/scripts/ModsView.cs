@@ -6,7 +6,8 @@ namespace DarkSun.Engine;
 /// <summary>
 /// The mod list, from the main menu (M): every mod found, in priority order
 /// (highest first), with a box to turn each on or off (renames its folder
-/// with a leading <c>_</c>) and arrows to change its priority (writes
+/// with a leading <c>_</c>; a mod that comes with the game, such as the
+/// tabletop rules, is a setting instead) and arrows to change its priority (writes
 /// <c>load_order.txt</c>; only among mods in the same folder). Changes apply
 /// at once: the mods are loaded again. Selecting a mod shows its
 /// <c>mod.json</c> details, what it replaces, and any file that couldn't be
@@ -47,7 +48,8 @@ public partial class ModsView : Control
             {
                 GD.Print($"  problem: {p}");
             }
-            GetTree().Quit(problems.Count > 0 ? 1 : 0);
+            bool rulesOk = CheckTabletopRules();
+            GetTree().Quit(problems.Count > 0 || !rulesOk ? 1 : 0);
             return;
         }
         _selected = Session.Mods.All.FirstOrDefault()?.Name;
@@ -61,6 +63,34 @@ public partial class ModsView : Control
             GetViewport().SetInputAsHandled();
             Back();
         }
+    }
+
+    /// <summary>
+    /// The tabletop rules come with the game, off: turned on (for this run, not
+    /// saved), the game plays by them (a gladiator needs 4500 for level 3), and
+    /// off again by DSUN.EXE's (4000).
+    /// </summary>
+    private static bool CheckTabletopRules()
+    {
+        const string Name = "Tabletop";
+        if (Session.Mods.All.FirstOrDefault(m => m.Name == Name) is not { Bundled: true } tabletop)
+        {
+            GD.Print("  problem: the tabletop rules mod isn't there");
+            return false;
+        }
+        bool wasOn = tabletop.Enabled;
+        int Gladiator3() => Session.Rules.Class(DarkSun.Game.Characters.CharacterClass.Gladiator).Levels[2];
+        Settings.SetBundledMod(Name, false);
+        Session.ReloadMods();
+        int original = Gladiator3();
+        Settings.SetBundledMod(Name, true);
+        Session.ReloadMods();
+        int tabletopRules = Gladiator3();
+        Settings.SetBundledMod(Name, wasOn);
+        Session.ReloadMods();
+        bool ok = (original, tabletopRules) == (4000, 4500);
+        GD.Print($"  tabletop rules: {(wasOn ? "on" : "off")}; a gladiator's level 3 at {original} without them, {tabletopRules} with them{(ok ? "" : " (problem)")}");
+        return ok;
     }
 
     private static IReadOnlyList<ModProblem> Verify() =>
@@ -143,7 +173,18 @@ public partial class ModsView : Control
             var row = new HBoxContainer();
             var on = new CheckBox { ButtonPressed = mod.Enabled, TooltipText = "On or off" };
             on.AddThemeFontSizeOverride("font_size", FontSize);
-            on.Toggled += enabled => Change(() => ModManager.SetEnabled(mod, enabled), mod.Name);
+            on.Toggled += enabled => Change(() =>
+            {
+                if (mod.Bundled)
+                {
+                    Settings.SetBundledMod(mod.Name, enabled);
+                    Settings.Save();
+                }
+                else
+                {
+                    ModManager.SetEnabled(mod, enabled);
+                }
+            }, mod.Name);
             row.AddChild(on);
             int problemCount = problems.Count(p => p.Mod.Name == mod.Name);
             string label = mod.DisplayName + (mod.Version.Length > 0 ? $" {mod.Version}" : "")
@@ -162,10 +203,10 @@ public partial class ModsView : Control
             var sameFolder = mods.All.Where(m => m.Root == mod.Root).ToList();
             int at = sameFolder.IndexOf(mod);
             Button up = SmallButton("▲", () => Move(sameFolder, at, -1));
-            up.Disabled = at == 0;
+            up.Disabled = at == 0 || mod.Bundled;
             up.TooltipText = "Higher priority";
             Button down = SmallButton("▼", () => Move(sameFolder, at, +1));
-            down.Disabled = at == sameFolder.Count - 1;
+            down.Disabled = at == sameFolder.Count - 1 || mod.Bundled;
             down.TooltipText = "Lower priority";
             row.AddChild(up);
             row.AddChild(down);
@@ -189,8 +230,13 @@ public partial class ModsView : Control
         {
             lines.Add(Escape(string.Join(" · ", new[] { mod.Version, mod.Author.Length > 0 ? "by " + mod.Author : "" }.Where(s => s.Length > 0))));
         }
-        lines.Add(Escape(mod.Directory));
+        lines.Add(mod.Bundled ? "Comes with the game; to change it, copy its folder into your mods folder (the copy wins)." : Escape(mod.Directory));
         lines.Add(mod.Enabled ? $"Replaces or adds {counts.GetValueOrDefault(mod.Name)} resources." : "Off.");
+        string rules = Path.Combine(mod.Directory, "rules");
+        if (Directory.Exists(rules) && Directory.GetFiles(rules, "*.json") is { Length: > 0 } files)
+        {
+            lines.Add($"Rules: {string.Join(", ", files.Select(Path.GetFileName).Order())} (from a new game).");
+        }
         if (mod.Description.Length > 0)
         {
             lines.Add("");

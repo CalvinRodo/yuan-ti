@@ -20,6 +20,26 @@ public class CharacterTests
     }
 
     [Fact]
+    public void LevelsFollowTheOriginalsExperienceTable()
+    {
+        // 38F0:027C: a gladiator levels as a fighter; druids, rangers and thieves have their own rows.
+        var cc = Creation();
+        int LevelAt(CharacterClass k, int xp) => cc.Levels(new Character { Classes = [k], Experience = xp })[0];
+        Assert.Equal((2, 3), (LevelAt(CharacterClass.Gladiator, 3999), LevelAt(CharacterClass.Gladiator, 4000)));
+        Assert.Equal((2, 3), (LevelAt(CharacterClass.Fighter, 3000), LevelAt(CharacterClass.Fighter, 4000)));
+        Assert.Equal((2, 3), (LevelAt(CharacterClass.Druid, 3000), LevelAt(CharacterClass.Druid, 4000)));
+        Assert.Equal((1, 2), (LevelAt(CharacterClass.Ranger, 2199), LevelAt(CharacterClass.Ranger, 2200)));
+        Assert.Equal((1, 2), (LevelAt(CharacterClass.Thief, 1199), LevelAt(CharacterClass.Thief, 1200)));
+        Assert.Equal(9, LevelAt(CharacterClass.Cleric, 10_000_000)); // up to 9
+
+        // The tabletop rules mod: a gladiator needs 4500 for level 3.
+        var tabletop = new CharacterCreation(SpellcastingTests.Tabletop, new CharacterNames(["Garn"], ["Shandra"], ["T'kir'taap"]), new Random(1));
+        Assert.Equal(2, tabletop.Levels(new Character { Classes = [CharacterClass.Gladiator], Experience = 4000 })[0]);
+        Assert.Equal(CharacterRules.Default.Races.Count, SpellcastingTests.Tabletop.Races.Count); // races left out: the original's
+        Assert.Equal(CharacterRules.Default.Class(CharacterClass.Thief).Saves, SpellcastingTests.Tabletop.Class(CharacterClass.Thief).Saves);
+    }
+
+    [Fact]
     public void AHumanDualClassesFromThirdLevel()
     {
         var cc = Creation();
@@ -183,7 +203,11 @@ public class CharacterTests
 
         cc.ToggleClass(c, CharacterClass.Fighter);
         cc.ToggleClass(c, CharacterClass.Preserver);
-        Assert.Equal((7, 13), cc.HpRange(c)); // level 2 at 2500: two d4, + 5
+        Assert.Equal((4, 10), cc.HpRange(c)); // level 2 at 2500: two d4, + 2 (40B1:0052's 5, held to 2: not a warrior)
+        Assert.Equal(-3, CharacterRules.Default.ConstitutionBonus(1, warrior: false));
+        Assert.Equal(7, CharacterRules.Default.ConstitutionBonus(25, warrior: true));
+        CharacterRules tabletop = SpellcastingTests.Tabletop;
+        Assert.Equal((5, 5, -2), (tabletop.ConstitutionBonus(25, true), tabletop.ConstitutionBonus(19, false), tabletop.ConstitutionBonus(3, false)));
 
         Character giant = cc.New();
         cc.SetLooks(giant, Race.HalfGiant, Gender.Male);
