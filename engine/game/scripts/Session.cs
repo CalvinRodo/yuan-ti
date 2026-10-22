@@ -415,7 +415,7 @@ public static class Session
 
     /// <summary>Build everything the mods change, so <see cref="ModSet.Problems"/> lists every file that can't be used.</summary>
     public static IReadOnlyList<ModProblem> VerifyMods() =>
-        Install is null ? [] : Mods.Verify(Install.GffFiles.Select(n => (n, GffFile.Open(Install.FindFile(n)!))));
+        Install is null ? [] : Mods.Verify(Install.OpenGffFiles((name, why) => Godot.GD.PushWarning($"{name} not checked: {why}")));
 
     /// <summary>A GFF file from the install, opened on first use.</summary>
     private static Dictionary<int, SpellInfo>? _spells;

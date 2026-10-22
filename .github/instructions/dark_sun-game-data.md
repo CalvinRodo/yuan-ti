@@ -27,12 +27,18 @@ Cutscene / cinematic resources. Drives the intro, ending, and in-game FMV sequen
 ---
 
 ## DARKRUN.GFF
-Single-entry launcher configuration file. Loaded by `DARKRUN.EXE`.
+The game in progress: DSUN.EXE's working copy of the current run, not a
+launcher configuration (there is no `DARKRUN.EXE`). DSUN.EXE copies the save
+being loaded into it ("DARKSAVE.GFF to DARKRUN.GFF failed"), opens it while
+playing to keep the run's state (`7155:1F4A`, called from the object loading
+in `7155`; "cannot reopen darkrun in awaken game", "Unable to close darkrun"),
+and copies it out again to save. The install ships it as an empty template
+(`dsun-exe-reference.md`, "Character creation"); a copy can be 0 bytes, which
+isn't a valid GFF, so tools skip it (`GameInstall.OpenGffFiles`). The engine
+doesn't read it: it keeps its own saves and region memory.
 
-### Resource Types
-| Tag | Count | Description |
-|-----|------:|-------------|
-| ETME | 1 | Event timer entry — timing/launch configuration record |
+An earlier note listed one `ETME` resource (an "event timer entry") in this
+file; that hasn't been confirmed against DSUN.EXE.
 
 ---
 

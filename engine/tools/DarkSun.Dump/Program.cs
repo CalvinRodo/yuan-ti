@@ -16,6 +16,7 @@
 
 using System.Security.Cryptography;
 using System.Text;
+using DarkSun.Data;
 using DarkSun.Data.Gff;
 using DarkSun.Data.Images;
 using DarkSun.Data.Regions;
@@ -55,10 +56,9 @@ using var output = new StreamWriter(args[1]) { NewLine = "\n" };
 GffFile segObjEx = GffFile.Open(Path.Combine(args[0], "SEGOBJEX.GFF"));
 GffFile gplData = GffFile.Open(Path.Combine(args[0], "GPLDATA.GFF"));
 GffFile resourceGff = GffFile.Open(Path.Combine(args[0], "RESOURCE.GFF"));
-var files = Directory.EnumerateFiles(args[0], "*.GFF").Select(Path.GetFileName).Order(StringComparer.Ordinal);
-foreach (string name in files!)
+GameInstall install = GameInstall.TryOpen(args[0], out string? notGame) ?? throw new DirectoryNotFoundException(notGame);
+foreach (var (name, gff) in install.OpenGffFiles((name, why) => Console.Error.WriteLine($"{name} skipped: {why}")).OrderBy(f => f.Name, StringComparer.Ordinal))
 {
-    GffFile gff = GffFile.Open(Path.Combine(args[0], name!));
     var resources = gff.DescribeResources();
     foreach (var r in resources)
     {

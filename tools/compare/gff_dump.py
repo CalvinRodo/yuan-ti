@@ -40,7 +40,12 @@ def main(game_dir: str, out_path: str):
     with open(out_path, 'w', newline='\n', encoding='utf-8') as out:
         for name in names:
             with open(os.path.join(game_dir, name), 'rb') as f:
-                gff = GffFile.create(f.read())
+                try:
+                    gff = GffFile.create(f.read())
+                except (struct.error, ValueError, IndexError) as e:
+                    # The original game writes DARKRUN.GFF as it runs; an install can hold an empty one.
+                    print(f'{name} skipped: {e}', file=sys.stderr)
+                    continue
             resources = gff.describe_resources()
             for r in resources:
                 data = gff.get_resource_data(r.tag, r.number)

@@ -1,3 +1,5 @@
+using DarkSun.Data.Gff;
+
 namespace DarkSun.Data;
 
 /// <summary>
@@ -31,6 +33,32 @@ public sealed class GameInstall
     /// <summary>Every GFF file in the install, sorted by name.</summary>
     public IReadOnlyList<string> GffFiles =>
         _files.Keys.Where(n => n.EndsWith(".GFF", StringComparison.OrdinalIgnoreCase)).Order(StringComparer.OrdinalIgnoreCase).ToList();
+
+    /// <summary>
+    /// Every GFF file that opens, by name (upper case, sorted). One that can't
+    /// is left out and passed to <paramref name="skipped"/> with the reason: the
+    /// original game writes <c>DARKRUN.GFF</c> as it runs, and an install can hold an
+    /// empty one.
+    /// </summary>
+    public IEnumerable<(string Name, GffFile File)> OpenGffFiles(Action<string, string>? skipped = null)
+    {
+        foreach (string name in GffFiles)
+        {
+            GffFile? gff = null;
+            try
+            {
+                gff = GffFile.Open(_files[name]);
+            }
+            catch (Exception e) when (e is InvalidDataException or IOException)
+            {
+                skipped?.Invoke(name, e.Message);
+            }
+            if (gff is not null)
+            {
+                yield return (name.ToUpperInvariant(), gff);
+            }
+        }
+    }
 
     /// <summary>
     /// Open <paramref name="directory"/> as a game install, or return null

@@ -67,7 +67,11 @@ make engine-cine    # play a cinematic headless, snapshots in out/cine (CINE=0 i
 
 `engine-compare` runs the repository's `tools/compare/gff_dump.py` (using `src/gff.py` and
 `src/image.py`) and `tools/DarkSun.Dump` over the game files, and fails unless
-the two outputs are identical. Run it after changing either side.
+the two outputs are identical. Run it after changing either side. The script
+listings compare the engine's names for REQUEST codes (`REQUEST(MUSIC_LEVEL, …)`):
+`tools/compare/gpl_listing.py` reads them from `GplRequests.cs`, so a code
+renamed or added there needs no change on the Python side. A GFF file that
+isn't valid (an empty `DARKRUN.GFF`) is skipped by both.
 
 Headless checks: that the engine starts and finds the game files (exit code
 1 if it doesn't), that every region loads in the region viewer, that the

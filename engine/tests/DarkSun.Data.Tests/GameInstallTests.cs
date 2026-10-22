@@ -38,6 +38,24 @@ public sealed class GameInstallTests : IDisposable
     }
 
     [Fact]
+    public void OpensTheGffFilesItCanAndSkipsTheRest()
+    {
+        // The original game writes DARKRUN.GFF as it runs; an install can hold an empty one.
+        foreach (string name in new[] { "GPLDATA.GFF", "resource.gff", "SEGOBJEX.GFF" })
+        {
+            File.WriteAllBytes(Path.Combine(_dir, name), GffFileTests.BuildGff());
+        }
+        Touch("DARKRUN.GFF");
+        var install = GameInstall.TryOpen(_dir, out _)!;
+
+        var skipped = new List<string>();
+        var opened = install.OpenGffFiles((name, _) => skipped.Add(name)).ToList();
+
+        Assert.Equal(["GPLDATA.GFF", "RESOURCE.GFF", "SEGOBJEX.GFF"], opened.Select(f => f.Name));
+        Assert.Equal(["DARKRUN.GFF"], skipped);
+    }
+
+    [Fact]
     public void ListsRegionFiles()
     {
         Touch("GPLDATA.GFF", "RESOURCE.GFF", "SEGOBJEX.GFF", "RGN0A.GFF", "RGN02.GFF", "RGNFF.GFF",
