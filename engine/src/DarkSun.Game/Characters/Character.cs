@@ -509,6 +509,15 @@ public sealed class CharacterCreation(CharacterRules rules, CharacterNames names
     /// <summary>Level in each class: experience is divided evenly among them.</summary>
     public IReadOnlyList<int> Levels(Character c) =>
         [.. c.Classes.Select(k => Rules.Class(k).Levels.Count(xp => c.Experience / Math.Max(1, c.Classes.Count) >= xp))];
+
+    /// <summary>The experience at which the next level comes, in whichever class is first (shared evenly, as <see cref="Levels"/>); null at the top of every class.</summary>
+    public int? NextLevelExperience(Character c)
+    {
+        var levels = Levels(c);
+        var next = c.Classes.Select((k, i) => Rules.Class(k).Levels is var table && levels[i] < table.Count ? table[levels[i]] * c.Classes.Count : (int?)null)
+            .OfType<int>().ToList();
+        return next.Count > 0 ? next.Min() : null;
+    }
 }
 
 /// <summary>

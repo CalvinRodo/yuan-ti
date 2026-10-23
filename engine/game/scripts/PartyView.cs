@@ -7,20 +7,29 @@ using Godot;
 namespace DarkSun.Engine;
 
 /// <summary>
-/// The View Character screen that Create Characters opens (<c>WIND</c> 11500
-/// over <c>BMP</c> 11000, as DSUN.EXE draws it; <c>9106:0622</c>): four
-/// character boxes (<c>BUTN</c> 11300–11303), the selected character's
-/// details on the right, and along the bottom the two text buttons, which
-/// here do what the manual's right-click menus do. An empty box: NEW (the
-/// Character Generation screen) or ADD (a character made before); a full
-/// one: EDIT (EDIT NAME once the character has adventured) or DROP (back to
-/// the roster). Right-clicking a box opens the same choices as a menu. The
-/// party is kept for the next new game; Return (or Esc) goes back to the menu.
-/// The menu also has DUAL for a human (a new class, the old one kept at its
-/// level: <c>WIND</c> 17502, the eight classes, over <c>BMP</c> 17002) and, on
-/// an empty box, PRE-MADE PARTY (fills the empty boxes from
-/// <see cref="Session.Premade"/>). Under the boxes are DSUN.EXE's bars and the
-/// leader and computer-control buttons work (<see cref="PartyFrames"/>).
+/// The View Character screen that Create Characters opens, drawn as DSUN.EXE
+/// draws it (<c>9106:0622</c> builds it, <c>8F23:1E30</c> fills it) and as a
+/// recording of the original shows: the menu's fire (<c>BMP</c> 20028 at
+/// (47, 0)), window 11500 over its backdrop (<c>BMP</c> 11000) at (0, 9), and
+/// the VIEW•CHARACTER banner (<c>BMP</c> 20079, centred at y 11) over both.
+/// Four character boxes (<c>BUTN</c> 11300–11303, <c>ICON</c> 11100: the
+/// selected one's yellow border is frame 3, an empty one's stone disc frame
+/// 2), the text under them and the selected character's details on the right
+/// (<see cref="ViewCharacterText"/>), with the three readied-weapon slots
+/// (<c>APFM</c> 11215–11217, <c>BMP</c> 13007's stone). The bottom bar's
+/// text buttons (11319, 11320) are hidden, as the original hides them; the
+/// status line names what the pointer is on. Right-clicking a box opens the
+/// original's small window (<c>WIND</c> 14000 over <c>BMP</c> 14000, its
+/// title INACTIVE CHARACTER or the name, the choices in dark letters, red
+/// under the pointer): an empty box NEW (the Character Generation screen) or
+/// ADD (a character made before, listed three at a time, then PRE-MADE
+/// PARTY, which fills the empty boxes from <see cref="Session.Premade"/>, not
+/// in the original); a full one EDIT (EDIT NAME once the character has
+/// adventured), DROP (back to the roster) and, for a human, DUAL (a new
+/// class, the old one kept at its level: <c>WIND</c> 17502, the eight
+/// classes, over <c>BMP</c> 17002). The return button or Esc closes it. The
+/// party is kept for the next new game; Return (or Esc) goes back to the
+/// menu. The leader and computer-control buttons work (<see cref="PartyFrames"/>).
 /// </summary>
 public partial class PartyView : RetroScreen
 {
@@ -29,19 +38,29 @@ public partial class PartyView : RetroScreen
     private const int PaletteNumber = 1001;
     // WIND 11500's controls.
     private const int WindowNumber = 11500, FirstBox = 11300, FirstLeader = 11309, FirstComputerControl = 11313,
-        NameBar = 11318, FirstText = 11319, SecondText = 11320, ReturnButton = 10308, ItemArea = 11269;
+        FirstText = 11319, SecondText = 11320, ReturnButton = 10308, FirstReadied = 11215;
+    private const int WindowTop = 9, Fire = 20028, Banner = 20079, BoxArt = 11100, SelectedFrame = 3, EmptyFrame = 2, SlotArt = 13007;
+    // The question window: WIND 14000 over BMP 14000, its title strip and three choices.
+    private const int AskWindow = 14000, AskTitle = 14004, FirstChoice = 14001;
+
+    /// <summary>The status line's grey (colour 27) and the small window's: its title the same, its choices dark (17) on a light shadow (29), red (77) under the pointer.</summary>
+    private static readonly Color StatusGrey = Color.Color8(136, 136, 160), ChoiceInk = Color.Color8(32, 32, 56),
+        ChoiceShadow = Color.Color8(164, 164, 188), ChoiceHover = Color.Color8(212, 64, 40);
 
     private Palette _palette = null!;
     private GffFile _resources = null!;
-    private readonly List<TextureRect> _slotPictures = [];
+    private readonly List<TextureRect> _slotPictures = [], _selectedFrames = [];
     private PartyFrames _frames = null!;
+    private ViewCharacterText _text = null!;
     private UiWindowView _dual = null!;
     private Label _dualTitle = null!;
     private const int DualWindow = 17502, DualBackdrop = 17002, FirstDualClass = 17303, DualExit = 17302;
-    private Label _name = null!, _details = null!, _status = null!;
-    private UiWindowView _window = null!;
-    private TextureButton _first = null!, _second = null!;
-    private PopupMenu _menu = null!;
+    private Label _status = null!;
+    private UiWindowView _window = null!, _ask = null!;
+    private Label _askTitle = null!;
+    private readonly Label[] _choices = new Label[3];
+    private readonly Action?[] _choiceActions = new Action?[3];
+    private int _addPage;
     private int _selected;
 
     public override void _Ready()
@@ -54,26 +73,29 @@ public partial class PartyView : RetroScreen
         }
         _resources = Session.Open("RESOURCE.GFF");
         _palette = Session.Assets.Palette(_resources.Read("PAL ", PaletteNumber));
-        // Window 11500 over its backdrop, BMP 11000: every control where the window's data puts it.
+        // 9106:0622: the fire behind, window 11500 at (0, 9) over BMP 11000, the banner over both (70E7:0000(20079, centred, 320, 11)).
+        AddPicture(Fire, new Vector2(47, 0));
         _window = UiWindowView.Build(WindowNumber, _palette, backdrop: 11000)!;
+        _window.Position = new Vector2(0, WindowTop);
         Canvas.AddChild(_window);
+        if (Bmp(Banner) is { } banner)
+        {
+            AddPicture(Banner, new Vector2((RetroScreen.Width - banner.GetWidth()) / 2 + 1, 11));
+        }
 
         for (int i = 0; i < GameWorld.PartySize; i++)
         {
             int slot = i;
             TextureButton box = _window.Button(FirstBox + i)!;
-            var picture = new TextureRect
-            {
-                Position = new Vector2(1, 1),
-                Size = box.Size - new Vector2(2, 2),
-                ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
-                StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
-                ClipContents = true,
-                MouseFilter = MouseFilterEnum.Ignore,
-            };
+            // The figure at its own size, as the original draws it: centred across, from the top; the box cuts a tall one's feet.
+            var picture = new TextureRect { MouseFilter = MouseFilterEnum.Ignore };
+            box.ClipContents = true;
             box.AddChild(picture);
+            var selected = new TextureRect { Texture = Icon(BoxArt, SelectedFrame), MouseFilter = MouseFilterEnum.Ignore };
+            box.AddChild(selected);
             box.GuiInput += e => SlotInput(slot, e);
             _slotPictures.Add(picture);
+            _selectedFrames.Add(selected);
             if (_window.Button(FirstLeader + i) is { } leader)
             {
                 leader.Pressed += () => LeaderPressed(slot);
@@ -83,46 +105,48 @@ public partial class PartyView : RetroScreen
                 computer.Pressed += () => ComputerPressed(slot);
             }
         }
-        Rect2 bar = _window.RectOf("BUTN", NameBar);
-        _name = Text(bar.Position + new Vector2(0, 1), bar.Size.X, "", HorizontalAlignment.Center);
-        // The original shows the items here (its slots, APFM 11213–11247); this shows the character's details.
-        Rect2 area = _window.RectOf("APFM", ItemArea);
-        _details = Text(area.Position + new Vector2(3, 0), area.Size.X - 4, "");
-        _details.Size = area.Size;
-        _details.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        // The three readied weapons' slots (9106:0B64), stone where nothing is held.
+        for (int i = 0; i < 3; i++)
+        {
+            Rect2 at = _window.RectOf("APFM", FirstReadied + i);
+            _window.AddChild(new TextureRect { Texture = Bmp(SlotArt), Position = at.Position, MouseFilter = MouseFilterEnum.Ignore });
+        }
+        _text = new ViewCharacterText(_window);
 
-        // The bottom bar: the character screens' icons and the game menu (not ported yet), the two text buttons, Return.
+        // The bottom bar (9106:0622): the character screens' icons, drawn but not used here, this page's (10300)
+        // pressed, the spells' (11305) and 11308 disabled out of the game; the text buttons hidden.
         foreach (int n in new[] { 10300, 11304, 11305, 11306, 11308 })
         {
             if (_window.Button(n) is { } b)
             {
-                b.Modulate = new Color(1, 1, 1, 0.45f);
                 b.MouseFilter = MouseFilterEnum.Ignore;
+                b.Disabled = n is 11305 or 11308;
             }
         }
-        _first = _window.Button(FirstText)!;
-        _first.Pressed += () => Do(first: true);
-        _second = _window.Button(SecondText)!;
-        _second.Pressed += () => Do(first: false);
-        foreach (TextureButton b in new[] { _first, _second })
+        if (_window.Button(10300) is { } page)
         {
-            if (b.GetNodeOrNull<Label>("Text") is { } t)
-            {
-                t.LabelSettings = GameFonts.Settings(new Color(0.95f, 0.9f, 0.75f));
-            }
+            page.TextureNormal = page.TexturePressed;
+        }
+        foreach (int n in new[] { FirstText, SecondText })
+        {
+            _window.Button(n)!.Visible = false;
         }
         TextureButton back = _window.Button(ReturnButton)!;
         back.Pressed += Back;
-        back.TooltipText = "Return (Esc)";
-        _status = Text(new Vector2(72, 175), 176, "", HorizontalAlignment.Center);
-        _status.ClipText = true;
-        _frames = new PartyFrames(_window, _status, MemberView, () => Session.LeaderIndex);
+        _status = new Label
+        {
+            Position = new Vector2(72, 176),
+            Size = new Vector2(176, GameFonts.Size),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            ClipText = true,
+            MouseFilter = MouseFilterEnum.Ignore,
+            LabelSettings = GameFonts.Settings(StatusGrey),
+        };
+        _window.AddChild(_status);
+        _frames = new PartyFrames(_window, _status, MemberView, () => Session.LeaderIndex, bars: false);
+        _frames.Hoverable(back, () => "RETURN TO GAME");
+        BuildAsk();
         BuildDual();
-
-        _menu = new PopupMenu();
-        _menu.AddThemeFontSizeOverride("font_size", 8);
-        _menu.IdPressed += id => Command((int)id);
-        AddChild(_menu);
 
         if (OS.GetCmdlineUserArgs().Contains("--check-party"))
         {
@@ -142,6 +166,10 @@ public partial class PartyView : RetroScreen
             {
                 _dual.Visible = false;
             }
+            else if (_ask.Visible)
+            {
+                _ask.Visible = false;
+            }
             else
             {
                 Back();
@@ -159,76 +187,148 @@ public partial class PartyView : RetroScreen
 
     private void Refresh()
     {
-        var cc = new CharacterCreation(Session.Rules, Session.Names, new Random());
         for (int i = 0; i < GameWorld.PartySize; i++)
         {
             Character? c = i < Session.Party.Count ? Session.Party[i] : null;
-            _slotPictures[i].Texture = c is null ? null : Portrait(c);
-            _slotPictures[i].Modulate = i == _selected || c is null ? Colors.White : new Color(0.75f, 0.75f, 0.75f);
+            TextureRect picture = _slotPictures[i];
+            picture.Texture = c is null ? null : Portrait(c);
+            if (picture.Texture is { } figure)
+            {
+                picture.Size = figure.GetSize();
+                picture.Position = new Vector2(MathF.Floor((_window.RectOf("BUTN", FirstBox + i).Size.X - figure.GetWidth()) / 2), 1);
+            }
+            // An empty box is the stone disc; a full one the frame round its picture.
+            TextureButton box = _window.Button(FirstBox + i)!;
+            box.TextureNormal = Icon(BoxArt, c is null ? EmptyFrame : 0);
+            _selectedFrames[i].Visible = i == _selected;
+            _text.ShowBox(i, MemberView(i), i == _selected);
         }
         _frames.Refresh();
-        if (Selected is { } s)
+        _text.Show(Selected is { } s ? ViewCharacterText.Of(s) : null);
+        if (Selected is null && _frames.Resting.Length == 0)
         {
-            _name.Text = s.Name;
-            string Abil(Ability a) => $"{a.ToString().ToUpperInvariant()} {cc.Adjusted(s, a),2}";
-            var levels = cc.Levels(s);
-            _details.Text = $"{Session.Rules.Race(s.Race).Name.ToUpperInvariant()} {s.Gender.ToString().ToUpperInvariant()}\n"
-                + string.Join(" / ", s.Former.Select(f => $"({Session.Rules.Class(f.Class).Name.ToUpperInvariant()} {f.Level})")
-                    .Concat(s.Classes.Select((k, n) => $"{Session.Rules.Class(k).Name.ToUpperInvariant()} {levels[n]}"))) + "\n"
-                + $"{Abil(Ability.Str)}  {Abil(Ability.Int)}\n{Abil(Ability.Dex)}  {Abil(Ability.Wis)}\n{Abil(Ability.Con)}  {Abil(Ability.Cha)}\n"
-                + $"HP {s.Hp}   EXP {s.Experience}\n{Spaced(s.Alignment.ToString())}\n"
-                + $"PSI: {string.Join(", ", s.Disciplines.Select(d => d.ToString().ToUpperInvariant()))}"
-                + (s.Sphere is { } sphere ? $"\nSPHERE: {sphere.ToString().ToUpperInvariant()}" : "");
+            _frames.Resting = "PRESS RIGHT MOUSE BUTTON";
         }
-        else
-        {
-            _name.Text = "";
-            _details.Text = "An empty character box.\n\nNEW creates a character; ADD brings back one made before.";
-        }
-        bool full = Selected is not null;
-        _window.ButtonText(FirstText)!.Text = full ? (Selected!.Adventured ? "NAME" : "EDIT") : "NEW";
-        _window.ButtonText(SecondText)!.Text = full ? "DROP" : "ADD";
-        _second.Modulate = _second.Disabled ? new Color(1, 1, 1, 0.5f) : Colors.White;
-        _second.Disabled = !full && Available().Count == 0;
     }
-
-    private static string Spaced(string pascal) =>
-        string.Concat(pascal.Select((ch, i) => i > 0 && char.IsUpper(ch) ? " " + ch : ch.ToString())).ToUpperInvariant();
 
     private void SlotInput(int slot, InputEvent e)
     {
-        if (e is not InputEventMouseButton { Pressed: true } click)
+        if (e is not InputEventMouseButton { Pressed: true } click || _ask.Visible)
         {
             return;
         }
         _selected = Math.Min(slot, Session.Party.Count);
+        _frames.Resting = "";
         Refresh();
-        if (click.ButtonIndex == MouseButton.Right)
+        if (click.ButtonIndex != MouseButton.Right)
         {
-            _menu.Clear();
-            if (Selected is not null)
-            {
-                _menu.AddItem(Selected.Adventured ? "EDIT NAME" : "EDIT", 1);
-                _menu.AddItem("DROP", 2);
-                if (Selected.Race == Race.Human)
-                {
-                    _menu.AddItem("DUAL", 5); // only humans dual-class (the manual)
-                }
-            }
-            else
-            {
-                _menu.AddItem("NEW", 3);
-                _menu.AddItem("ADD", 4);
-                _menu.SetItemDisabled(1, Available().Count == 0);
-                _menu.AddItem("PRE-MADE PARTY", 6);
-            }
-            _menu.AddItem("CANCEL", 0);
-            _menu.Position = (Vector2I)GetGlobalMousePosition();
-            _menu.Popup();
+            return;
+        }
+        // The small window opens beside the box, its top 2 pixels above the box's (as the recording shows).
+        Rect2 box = _window.RectOf("BUTN", FirstBox + slot);
+        Vector2 at = _window.Position + new Vector2(box.End.X + 1, box.Position.Y - 2);
+        if (Selected is { } c)
+        {
+            Ask(c.Name.ToUpperInvariant(), at,
+                (c.Adventured ? "EDIT NAME" : "EDIT", () => Command(1)),
+                ("DROP", () => Command(2)),
+                c.Race == Race.Human ? ("DUAL", () => Command(5)) : ("CANCEL", null));
+        }
+        else
+        {
+            Ask("INACTIVE CHARACTER", at, ("NEW", () => Command(3)), ("ADD", () => Command(4)), ("CANCEL", null));
         }
     }
 
-    private void Do(bool first) => Command(Selected is not null ? (first ? 1 : 2) : (first ? 3 : 4));
+    // -- the small window: WIND 14000 over BMP 14000 --------------------------------------------
+
+    private void BuildAsk()
+    {
+        _ask = UiWindowView.Build(AskWindow, _palette, backdrop: AskWindow)!;
+        _ask.Visible = false;
+        Canvas.AddChild(_ask);
+        Rect2 title = _ask.RectOf("BUTN", AskTitle);
+        _askTitle = new Label
+        {
+            Position = title.Position + new Vector2(2, 0),
+            Size = new Vector2(title.Size.X - 4, GameFonts.Size),
+            MouseFilter = MouseFilterEnum.Ignore,
+            LabelSettings = GameFonts.Settings(StatusGrey),
+        };
+        _ask.AddChild(_askTitle);
+        for (int i = 0; i < 3; i++)
+        {
+            int choice = i;
+            TextureButton button = _ask.Button(FirstChoice + i)!;
+            _choices[i] = new Label
+            {
+                Position = new Vector2(2, 0),
+                Size = new Vector2(button.Size.X - 4, GameFonts.Size),
+                MouseFilter = MouseFilterEnum.Ignore,
+                LabelSettings = GameFonts.Settings(ChoiceInk, shadow: ChoiceShadow),
+            };
+            button.AddChild(_choices[i]);
+            button.MouseEntered += () => _choices[choice].LabelSettings = GameFonts.Settings(ChoiceHover, shadow: ChoiceShadow);
+            button.MouseExited += () => _choices[choice].LabelSettings = GameFonts.Settings(ChoiceInk, shadow: ChoiceShadow);
+            button.Pressed += () =>
+            {
+                _ask.Visible = false;
+                _choiceActions[choice]?.Invoke();
+            };
+        }
+        _ask.Button(ReturnButton)!.Pressed += () => _ask.Visible = false;
+    }
+
+    /// <summary>The small window at <paramref name="at"/> (kept on the screen): a title and up to three choices; a choice without an action just closes it.</summary>
+    private void Ask(string title, Vector2 at, params (string Text, Action? Then)[] choices)
+    {
+        _askTitle.Text = title;
+        for (int i = 0; i < 3; i++)
+        {
+            bool there = i < choices.Length;
+            _choices[i].Text = there ? choices[i].Text : "";
+            _choices[i].LabelSettings = GameFonts.Settings(ChoiceInk, shadow: ChoiceShadow);
+            _choiceActions[i] = there ? choices[i].Then : null;
+            _ask.Button(FirstChoice + i)!.Visible = there;
+        }
+        _ask.Position = new Vector2(
+            Math.Clamp(at.X, 0, RetroScreen.Width - _ask.Size.X),
+            Math.Clamp(at.Y, 0, RetroScreen.Height - _ask.Size.Y));
+        _ask.Visible = true;
+    }
+
+    /// <summary>ADD: the roster's characters not in the party, two a page with MORE between pages, then PRE-MADE PARTY.</summary>
+    private void AskAdd(Vector2 at)
+    {
+        var names = Available().Select(c => (c.Name.ToUpperInvariant(), (Action?)(() => AddCharacter(c)))).ToList();
+        names.Add(("PRE-MADE PARTY", () => Command(6)));
+        int pages = (names.Count + 1) / 2;
+        _addPage %= Math.Max(1, pages);
+        var shown = names.Skip(_addPage * 2).Take(2).ToList();
+        if (names.Count <= 3)
+        {
+            shown = names;
+        }
+        else
+        {
+            shown.Add(("MORE", () => { _addPage++; AskAdd(at); }));
+        }
+        Ask("ADD", at, [.. shown]);
+    }
+
+    private void AddCharacter(Character c)
+    {
+        if (Session.Party.Count >= GameWorld.PartySize)
+        {
+            _frames.Resting = "MAXIMUM CHARACTERS: 4";
+            return;
+        }
+        Session.Party.Add(c);
+        Session.SaveParty();
+        _selected = Session.Party.Count - 1;
+        _frames.Resting = "";
+        Refresh();
+    }
 
     /// <summary>1 edit, 2 drop, 3 new, 4 add, 0 cancel.</summary>
     private void Command(int id)
@@ -249,26 +349,14 @@ public partial class PartyView : RetroScreen
                 CharacterGenView.Open(null, Session.Party.Count);
                 break;
             case 4:
-                var choices = Available();
-                _menu.Clear();
-                for (int i = 0; i < choices.Count; i++)
-                {
-                    _menu.AddItem(choices[i].Name, 100 + i);
-                }
-                _menu.AddItem("CANCEL", 0);
-                _menu.Popup(new Rect2I((Vector2I)GetGlobalMousePosition(), Vector2I.Zero));
+                _addPage = 0;
+                AskAdd(_ask.Position);
                 break;
             case 5 when Selected is { } c:
                 OpenDual(c);
                 break;
             case 6:
                 AddPremade();
-                break;
-            case >= 100 when Available() is var list && id - 100 < list.Count && Session.Party.Count < GameWorld.PartySize:
-                Session.Party.Add(list[id - 100]);
-                Session.SaveParty();
-                _selected = Session.Party.Count - 1;
-                Refresh();
                 break;
         }
     }
@@ -281,7 +369,7 @@ public partial class PartyView : RetroScreen
         }
         Character c = Session.Party[slot];
         int psp = new DarkSun.Game.Magic.Spellcasting(Session.Rules).MaxPsp(c);
-        return new PartyMemberView(c.Name, c.Hp, c.Hp, psp - c.PspSpent, psp, 1, c.ComputerControl);
+        return new PartyMemberView(c.Name, c.Hp, c.Hp, psp - c.PspSpent, psp, c.Adventured ? 1 : 0, c.ComputerControl);
     }
 
     private void LeaderPressed(int slot)
@@ -445,18 +533,19 @@ public partial class PartyView : RetroScreen
     /// <summary>A box's picture: the character's map sprite standing, facing forwards.</summary>
     private Texture2D? Portrait(Character c) => CharacterGenView.StandingSprite(c.Sprite, _palette);
 
-    private Label Text(Vector2 at, float width, string text, HorizontalAlignment align = HorizontalAlignment.Left)
+    private ImageTexture? Bmp(int number) =>
+        _resources.TryRead("BMP ", number, out var data) && Session.Assets.Frames(data) is [var frame, ..] ? Textures.ToTexture(frame, _palette) : null;
+
+    private ImageTexture? Icon(int number, int frame) =>
+        _resources.TryRead("ICON", number, out var data) && Session.Assets.Frames(data) is { } frames && frame < frames.Count
+            ? Textures.ToTexture(frames[frame], _palette)
+            : null;
+
+    private void AddPicture(int bmp, Vector2 at)
     {
-        var label = new Label
+        if (Bmp(bmp) is { } texture)
         {
-            Position = at,
-            Size = new Vector2(width, 10),
-            Text = text,
-            HorizontalAlignment = align,
-            MouseFilter = MouseFilterEnum.Ignore,
-            LabelSettings = GameFonts.Settings(new Color(0.95f, 0.9f, 0.75f), lineSpacing: -1),
-        };
-        Canvas.AddChild(label);
-        return label;
+            Canvas.AddChild(new TextureRect { Texture = texture, Position = at, MouseFilter = MouseFilterEnum.Ignore });
+        }
     }
 }

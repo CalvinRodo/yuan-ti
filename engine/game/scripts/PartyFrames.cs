@@ -21,6 +21,9 @@ public sealed record PartyMemberView(string Name, int Hp, int MaxHp, int Psp, in
 /// ON / OFF / LOCKED"; INACTIVE CHARACTER for an empty box's buttons.</item>
 /// </list>
 /// The leader and computer-control buttons show their state pressed.
+/// Without <c>bars</c> (Create Characters' View Character, whose
+/// <c>8F23:1E30</c> writes the points and status under the boxes instead,
+/// <see cref="ViewCharacterText"/>) the bar frames stay empty.
 /// </summary>
 public sealed class PartyFrames
 {
@@ -38,10 +41,10 @@ public sealed class PartyFrames
     private readonly ColorRect[,] _fills = new ColorRect[3, 4];
     private string? _saved;
 
-    public PartyFrames(UiWindowView window, Label status, Func<int, PartyMemberView?> member, Func<int> leader)
+    public PartyFrames(UiWindowView window, Label status, Func<int, PartyMemberView?> member, Func<int> leader, bool bars = true)
     {
         (_window, _status, _member, _leader) = (window, status, member, leader);
-        for (int bar = 0; bar < 3; bar++)
+        for (int bar = 0; bar < (bars ? 3 : 0); bar++)
         {
             for (int row = 0; row < 2; row++)
             {
@@ -85,9 +88,15 @@ public sealed class PartyFrames
     {
         if (_window.Button(button) is { } b)
         {
-            b.MouseEntered += () => Hover(text());
-            b.MouseExited += Unhover;
+            Hoverable(b, text);
         }
+    }
+
+    /// <summary>Name <paramref name="control"/> on the status line while the pointer is on it.</summary>
+    public void Hoverable(Control control, Func<string> text)
+    {
+        control.MouseEntered += () => Hover(text());
+        control.MouseExited += Unhover;
     }
 
     /// <summary>Put the screen's own message on the status line (what shows again when the pointer leaves a frame).</summary>

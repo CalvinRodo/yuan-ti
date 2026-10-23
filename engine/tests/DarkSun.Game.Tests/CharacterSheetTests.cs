@@ -58,4 +58,29 @@ public class CharacterSheetTests
         var allClasses = CharacterRules.Default with { ConstitutionSavesWarriorsOnly = false };
         Assert.Equal([8, 9, 7, 11, 10], CharacterSheet.Saves([(CharacterClass.Thief, 1)], Race.Dwarf, 18, allClasses));
     }
+
+    [Fact]
+    public void DamageIsWrittenAsTheOriginalWritesIt()
+    {
+        Assert.Equal("1.5x1D8+8", CharacterSheet.DamageText(3, 1, 8, 8)); // View Character's ranger
+        Assert.Equal("1x1D1+9", CharacterSheet.DamageText(2, 1, 1, 9));
+        Assert.Equal("2x2D4", CharacterSheet.DamageText(4, 2, 4, 0));
+        Assert.Equal("1x1D6-1", CharacterSheet.DamageText(2, 1, 6, -1));
+    }
+
+    [Fact]
+    public void TheNextLevelIsTheFirstClassToReachIt()
+    {
+        var cc = new CharacterCreation(CharacterRules.Default, CharacterNames.Empty, new Random(1));
+        var fighter = new Character { Classes = [CharacterClass.Fighter], Experience = 4000 };
+        var ranger = new Character { Classes = [CharacterClass.Ranger], Experience = 4500 };
+        var both = new Character { Classes = [CharacterClass.Fighter, CharacterClass.Thief], Experience = 6000 };
+
+        Assert.Equal(8000, cc.NextLevelExperience(fighter)); // as Character Generation shows: EXP:4000 (8000)
+        Assert.Equal(9000, cc.NextLevelExperience(ranger)); // and View Character: EXP:4500 (9000)
+        int thiefNext = CharacterRules.Default.Class(CharacterClass.Thief).Levels.First(xp => xp > 3000) * 2;
+        int fighterNext = CharacterRules.Default.Class(CharacterClass.Fighter).Levels.First(xp => xp > 3000) * 2;
+        Assert.Equal(Math.Min(thiefNext, fighterNext), cc.NextLevelExperience(both));
+        Assert.Null(cc.NextLevelExperience(new Character { Classes = [CharacterClass.Fighter], Experience = int.MaxValue / 2 }));
+    }
 }
