@@ -54,8 +54,25 @@ public sealed record TurnStarted(Combatant Actor) : CombatEvent;
 
 public sealed record Moved(Combatant Actor, Cell From, Cell To) : CombatEvent;
 
-/// <summary>An attack roll: <paramref name="Roll"/> against <paramref name="Needed"/>.</summary>
-public sealed record AttackRolled(Combatant Actor, Combatant Target, int Roll, int Needed, bool Hit) : CombatEvent;
+/// <summary>A term of a roll's target number: "THAC0" 18, "STR" −1, "AC" −5 (they add up to it).</summary>
+public sealed record RollTerm(string What, int Value);
+
+/// <summary>An attack roll: <paramref name="Roll"/> against <paramref name="Needed"/>, made of <paramref name="Terms"/>.</summary>
+public sealed record AttackRolled(Combatant Actor, Combatant Target, int Roll, int Needed, bool Hit, IReadOnlyList<RollTerm>? Terms = null) : CombatEvent;
+
+/// <summary>
+/// Damage rolled for a hit or a spell (<paramref name="Effect"/>, 0 for a
+/// blow): <paramref name="Dice"/>d<paramref name="Sides"/> + <paramref name="Bonus"/>,
+/// times <paramref name="Times"/> (a backstab), <paramref name="Total"/> before
+/// saves and resistances.
+/// </summary>
+public sealed record DamageRolled(Combatant? Actor, Combatant Target, int Dice, int Sides, int Bonus, int Times, int Total, int Effect = 0) : CombatEvent;
+
+/// <summary>A saving throw against <paramref name="Effect"/>: the d20 (<paramref name="Natural"/>), with its bonuses <paramref name="Total"/>, against <paramref name="Needed"/>.</summary>
+public sealed record SaveRolled(Combatant Target, int Effect, int Natural, int Total, int Needed, bool Saved) : CombatEvent;
+
+/// <summary>Magic resistance against <paramref name="Effect"/>: a d100 under <paramref name="Percent"/> resists.</summary>
+public sealed record ResistanceRolled(Combatant Target, int Effect, int Percent, int Roll, bool Resisted) : CombatEvent;
 
 /// <summary>Damage dealt, and what it was made of (DSUN.EXE picks its damage splash by it, <c>896E:0A0E</c>).</summary>
 public sealed record Damaged(Combatant? Actor, Combatant Target, int Amount, DamageElement Elements = DamageElement.None) : CombatEvent;

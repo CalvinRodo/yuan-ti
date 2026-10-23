@@ -30,9 +30,6 @@ public partial class RegionView
     /// <summary>The longest a step's walk is waited for.</summary>
     private const double StepTimeout = 0.6;
 
-    /// <summary>Combat log lines kept on screen.</summary>
-    private const int LogLines = 12;
-
     private Battle? _battle;
 
     /// <summary>The enemy chosen with Tab (<see cref="ChooseEnemy"/>), whom Enter attacks; its ring is the red one.</summary>
@@ -44,8 +41,7 @@ public partial class RegionView
     private PanelContainer _combatPanel = null!;
     private Label _combatTurn = null!;
     private Label _combatTip = null!;
-    private RichTextLabel _combatLog = null!;
-    private PanelContainer _combatLogPanel = null!;
+    private CombatLogView _combatLog = null!;
     private PopupMenu _castMenu = null!;
     private Node2D _floaters = null!;
     private Button _castButton = null!, _autoButton = null!;
@@ -81,10 +77,12 @@ public partial class RegionView
         AddChild(_floaters);
 
         _combatPanel = new PanelContainer { Visible = false };
-        _combatPanel.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.CenterBottom);
-        _combatPanel.GrowHorizontal = Control.GrowDirection.Both;
+        // At the lower left: the combat log has the lower right, as in Obsidian Edition.
+        _combatPanel.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.BottomLeft);
+        _combatPanel.GrowHorizontal = Control.GrowDirection.End;
         _combatPanel.GrowVertical = Control.GrowDirection.Begin;
         _combatPanel.OffsetBottom = -4;
+        _combatPanel.OffsetLeft = 4;
         var box = new VBoxContainer();
         _combatTurn = new Label { HorizontalAlignment = HorizontalAlignment.Center };
         _combatTurn.AddThemeFontSizeOverride("font_size", 10);
@@ -111,19 +109,14 @@ public partial class RegionView
         _combatPanel.AddChild(box);
         layer.AddChild(_combatPanel);
 
-        _combatLogPanel = new PanelContainer { Visible = false, MouseFilter = Control.MouseFilterEnum.Ignore };
-        _combatLogPanel.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.TopRight);
-        _combatLogPanel.GrowHorizontal = Control.GrowDirection.Begin;
-        _combatLogPanel.OffsetTop = 4;
-        _combatLogPanel.OffsetRight = -4;
-        _combatLog = new RichTextLabel
+        _combatLog = new CombatLogView
         {
-            BbcodeEnabled = true, FitContent = true, ScrollActive = false, CustomMinimumSize = new Vector2(230, 0),
-            MouseFilter = Control.MouseFilterEnum.Ignore,
+            Log = NewCombatLog(),
+            Battle = () => _battle,
+            PartySlot = c => c.PartyMember && c.Source is { } o && o.Index < _party.Count ? o.Index : null,
+            Covered = () => _checking || MapCovered || _journal.Visible || _options.Visible || _debugger.Visible,
         };
-        _combatLog.AddThemeFontSizeOverride("normal_font_size", 8);
-        _combatLogPanel.AddChild(_combatLog);
-        layer.AddChild(_combatLogPanel);
+        layer.AddChild(_combatLog);
 
         _castMenu = new PopupMenu();
         _castMenu.AddThemeFontSizeOverride("font_size", 9);
@@ -174,14 +167,19 @@ public partial class RegionView
         _battle = battle;
         _combatLines.Clear();
         _combatEvents.Clear();
-        battle.Happened += e => _combatEvents.Enqueue(e);
+        _combatLog.Log = NewCombatLog();
+        _combatLog.FollowNewest();
+        battle.Happened += e =>
+        {
+            _combatEvents.Enqueue(e);
+            _combatLog.Log.Add(e);
+        };
         int enemies = battle.Combatants.Count(c => !c.PartyMember && battle.Combatants.Any(p => p.PartyMember && p.IsEnemyOf(c)));
         Log(battle.Combatants.Any(c => c.PartyMember)
-            ? $"[color=#ffd080]Combat! {enemies} {(enemies == 1 ? "enemy" : "enemies")}[/color]"
-            : $"[color=#ffd080]The party watches: {string.Join(" against ", battle.Combatants.GroupBy(c => c.Side).Select(g => string.Join(", ", g.Select(c => c.Name))))}[/color]");
+            ? $"Combat! {enemies} {(enemies == 1 ? "enemy" : "enemies")}"
+            : $"The party watches: {string.Join(" against ", battle.Combatants.GroupBy(c => c.Side).Select(g => string.Join(", ", g.Select(c => c.Name))))}");
         AddScriptLine($"> {why}: combat, {battle.Combatants.Count} combatants");
         _combatPanel.Visible = !_checking && PartyFights;
-        _combatLogPanel.Visible = !_checking;
         UpdateSilhouettes();
         return true;
     }
@@ -247,7 +245,7 @@ public partial class RegionView
         _battle = null;
         _combatEvents.Clear();
         (_combatWait, _combatWalk, _castChoice) = (0, null, null);
-        _combatPanel.Visible = _combatLogPanel.Visible = false;
+        _combatPanel.Visible = false;
         HideCombatMenu();
         ClearGraphics();
         UpdateSilhouettes();
@@ -262,7 +260,7 @@ public partial class RegionView
         LeaveFallen(battle);
         bool fallen = Encounter.End(battle, _world);
         bool won = !fallen;
-        Log(won ? "[color=#a0ffa0]The fight is over.[/color]" : "[color=#ff8080]The party has fallen.[/color]");
+        Log(won ? "The fight is over." : "The party has fallen.", won ? LogKind.Hit : LogKind.Fell);
         AddScriptLine($"> combat over after {battle.Round} rounds: {(won ? "won" : "lost")}");
         foreach (Combatant c in battle.Combatants.Where(c => c.PartyMember && c.Source is not null))
         {
@@ -282,7 +280,6 @@ public partial class RegionView
         if (!_checking)
         {
             Notice(won ? "The fight is over." : "The party has fallen.");
-            GetTree().CreateTimer(6).Timeout += () => _combatLogPanel.Visible = InCombat;
             if (fallen)
             {
                 GameOver();
@@ -415,11 +412,12 @@ public partial class RegionView
     private void PlayEvent(CombatEvent e)
     {
         bool fast = _checking;
+        foreach (string line in _combatLog.Log.Reveal(e))
+        {
+            Remember(line);
+        }
         switch (e)
         {
-            case RoundStarted r:
-                Log($"[color=#c0c0c0]— Round {r.Round} —[/color]");
-                break;
             case TurnStarted t:
                 _menuShown = false;
                 HideCombatMenu();
@@ -434,7 +432,6 @@ public partial class RegionView
                 MoveTriggers(m.Actor, m.To);
                 return;
             case AttackRolled a:
-                Log($"{Who(a.Actor)} attacks {Who(a.Target)}: rolls {a.Roll}, needs {Math.Max(2, a.Needed)} — {(a.Hit ? "[color=#ffd080]hit[/color]" : "miss")}");
                 if (!a.Hit)
                 {
                     Float(a.Target, "miss", new Color(0.8f, 0.8f, 0.8f));
@@ -443,44 +440,31 @@ public partial class RegionView
                 _combatWait = fast ? 0 : AttackPause;
                 return;
             case Damaged d:
-                Log($"{Who(d.Target)} takes [color=#ff8080]{d.Amount}[/color] ({Math.Max(0, d.Target.Vitals.Hp)} left)");
                 LookOfDamage(d);
                 _combatWait = fast ? 0 : NotePause;
                 return;
             case Healed h:
-                Log($"{Who(h.Target)} heals [color=#a0ffa0]{h.Amount}[/color]");
                 Float(h.Target, $"+{h.Amount}", new Color(0.5f, 1f, 0.5f));
                 LookOfSpellOn(h.Target);
                 _combatWait = fast ? 0 : NotePause;
                 return;
             case Avoided v:
-                Log($"{Who(v.Target)}: {v.Why}");
                 Float(v.Target, v.Why, new Color(0.7f, 0.8f, 1f));
                 _combatWait = fast ? 0 : NotePause;
                 return;
             case Cast c:
-                Log($"{Who(c.Actor)} {(c.Effect is >= DarkSun.Game.Magic.Spellcasting.FirstPower and <= DarkSun.Game.Magic.Spellcasting.LastPower ? "uses" : "casts")} [color=#c0a0ff]{EffectName(c.Effect)}[/color]");
                 Float(c.Actor, EffectName(c.Effect), new Color(0.8f, 0.65f, 1f));
                 double look = LookOfCast(c);
                 _combatWait = fast ? 0 : Math.Max(CastPause, look);
                 return;
             case ConditionGained g:
-                Log($"{Who(g.Target)} is {Words(g.Condition)}");
-                Float(g.Target, Words(g.Condition), new Color(1f, 0.85f, 0.4f));
+                Float(g.Target, CombatLog.Words(g.Condition), new Color(1f, 0.85f, 0.4f));
                 LookOfSpellOn(g.Target);
                 break;
-            case ConditionEnded x:
-                Log($"[color=#a0a0a0]{Who(x.Target)} is no longer {Words(x.Condition)}[/color]");
-                break;
             case Guarded gd:
-                Log($"{Who(gd.Actor)} guards");
                 Float(gd.Actor, "guard", new Color(0.8f, 0.8f, 1f));
                 break;
-            case Waited w:
-                Log($"{Who(w.Actor)} waits");
-                break;
             case Fell f:
-                Log($"[color=#ff8080]{Who(f.Actor)} {(f.Status switch { Vitals.Down => "falls", Vitals.Dead => "dies", _ => "is destroyed" })}[/color]");
                 if (f.Actor.PartyMember && _party.FirstOrDefault(p => p.Walker == f.Actor.Source?.Walker) is { } fallen)
                 {
                     fallen.Node.Modulate = new Color(0.5f, 0.3f, 0.3f);
@@ -491,19 +475,11 @@ public partial class RegionView
                     _world.Fell(gone);
                 }
                 break;
-            case ItemDestroyed i:
-                Log($"{Who(i.Owner)}: {_world.Items.NameOf(i.Item.Record)} {i.Message}");
-                break;
             case FieldMade fm:
-                Log($"{EffectName(fm.Field.Effect.Number)} covers {fm.Field.Cells.Count} cells");
                 LookOfField(fm.Field);
                 break;
             case FieldEnded fe:
-                Log($"[color=#a0a0a0]{EffectName(fe.Field.Effect.Number)} fades[/color]");
                 FieldGone(fe.Field);
-                break;
-            case SideChanged s:
-                Log($"{Who(s.Actor)} now fights for {(s.Side == 1 ? "the party" : "the enemy")}");
                 break;
         }
         _combatWait = fast ? 0 : Math.Max(_combatWait, 0);
@@ -567,25 +543,26 @@ public partial class RegionView
     private static string EffectName(int effect) =>
         Session.SpellName(effect) is { Length: > 0 } name ? name : $"effect {effect}";
 
-    /// <summary>A condition as words ("CantAttack" → "can't attack").</summary>
-    private static string Words(Condition c) => c switch
+    /// <summary>A line of words in the combat log, at once.</summary>
+    private void Log(string line, LogKind kind = LogKind.Other)
     {
-        Condition.CantAttack => "unable to attack",
-        Condition.ImprovedAc => "armored",
-        _ => string.Concat(c.ToString().Select((ch, i) => i > 0 && char.IsUpper(ch) ? " " + char.ToLowerInvariant(ch) : char.ToLowerInvariant(ch).ToString())),
-    };
+        _combatLog.Log.Note(line, kind);
+        Remember(line);
+    }
 
-    private void Log(string line)
+    /// <summary>A line shown in the combat log, kept for the checks and the script log.</summary>
+    private void Remember(string line)
     {
         _combatLines.Add(line);
         if (_combatLines.Count > 200)
         {
             _combatLines.RemoveRange(0, 100);
         }
-        _combatLog.Text = string.Join('\n', _combatLines.TakeLast(LogLines));
-        _combatLogPanel.Visible = !_checking;
-        AddScriptLine("    " + System.Text.RegularExpressions.Regex.Replace(line, @"\[/?color[^\]]*\]", ""));
+        AddScriptLine("    " + line);
     }
+
+    /// <summary>A combat log with the game's spell and item names.</summary>
+    private CombatLog NewCombatLog() => new(EffectName, item => _world.Items.NameOf(item.Record));
 
     // -- the player's turn --------------------------------------------------------------------------------
 
@@ -788,7 +765,7 @@ public partial class RegionView
         {
             if (battle.At(cell) is { } seen && battle.InSight(c.Cell, cell))
             {
-                Log($"{Who(seen)}: {seen.Vitals.Hp}/{seen.Vitals.MaxHp} hit points{(c.IsEnemyOf(seen) ? ", an enemy" : "")}");
+                Log($"{Who(seen)}: {seen.Vitals.Hp}/{seen.Vitals.MaxHp} hit points{(c.IsEnemyOf(seen) ? ", an enemy" : "")}", LogKind.Detail);
             }
             return;
         }
@@ -853,7 +830,7 @@ public partial class RegionView
         int now = _chosenEnemy is null ? -1 : enemies.IndexOf(_chosenEnemy);
         int index = now < 0 ? (step > 0 ? 0 : enemies.Count - 1) : (now + step + enemies.Count) % enemies.Count;
         _chosenEnemy = enemies[index];
-        Log($"Chosen: {TipFor(c, _chosenEnemy.Cell)}");
+        Log($"Chosen: {TipFor(c, _chosenEnemy.Cell)}", LogKind.Detail);
         if (SpriteOf(_chosenEnemy) is { } sprite)
         {
             Vector2 size = GetViewportRect().Size / _camera.Zoom;
@@ -1565,6 +1542,7 @@ public partial class RegionView
         {
             problems.Add("nothing was logged");
         }
+        CheckCombatLog(battle, problems);
         if (battle.Combatants.Any(c => !c.PartyMember && !c.Alive && c.Source is { } o && _world[o.Index] == o))
         {
             problems.Add("a creature that fell is still on the map");
@@ -1592,6 +1570,64 @@ public partial class RegionView
         }
         GD.Print(problems.Count == 0 ? "combat: OK" : $"combat: {problems.Count} problems");
         GetTree().Quit(problems.Count == 0 ? 0 : 1);
+    }
+
+    /// <summary>
+    /// The combat log step of <c>--check-combat</c>: every attack, wound and
+    /// save of the fight has its line (in short); the panel shows rows; its
+    /// level chip, + and L work (the settings put back after).
+    /// </summary>
+    private void CheckCombatLog(Battle battle, List<string> problems)
+    {
+        List<LogLine> lines = _combatLog.Log.At(LogLevel.Short);
+        int Count(Func<LogLine, bool> which) => lines.Count(which);
+        void Expect(string what, int want, int got)
+        {
+            if (want != got)
+            {
+                problems.Add($"combat log: {got} {what} lines for {want}");
+            }
+        }
+        Expect("attack", battle.Log.OfType<AttackRolled>().Count(), Count(l => l.Kind is LogKind.Hit or LogKind.Miss && l.Text.Contains(" attacks ")));
+        Expect("hit point", battle.Log.OfType<Damaged>().Count(), Count(l => l.Kind == LogKind.Damage && l.Text.Contains(" HP (-")));
+        Expect("save", battle.Log.OfType<SaveRolled>().Count(), Count(l => l.Kind == LogKind.Save && l.Text.Contains("'s save vs ")));
+        if (_combatLog.Log.At(LogLevel.Detail).Count(l => l.Text.StartsWith("THAC0 ")) != battle.Log.OfType<AttackRolled>().Count())
+        {
+            problems.Add("combat log: an attack in detail without its terms");
+        }
+
+        var (open, level, size) = (Settings.CombatLogOpen, Settings.CombatLogLevel, Settings.CombatLogSize);
+        _combatLog.Rebuild();
+        if (_combatLog.ShownRows().Count == 0 && _combatLog.CurrentSize != CombatLogView.PanelSize.Collapsed)
+        {
+            problems.Add("combat log: the panel shows no rows");
+        }
+        LogLevel before = _combatLog.Level;
+        if (!_combatLog.PressButton(new[] { "Least", "Short", "Detail" }[(int)before]) || _combatLog.Level == before)
+        {
+            problems.Add("combat log: the level chip doesn't change the level");
+        }
+        if (_combatLog.CurrentSize != CombatLogView.PanelSize.Expanded && (!_combatLog.PressButton("+") || _combatLog.CurrentSize == (CombatLogView.PanelSize)size))
+        {
+            problems.Add("combat log: + doesn't make it bigger");
+        }
+        bool shown = CombatLogView.Open;
+        _combatLog.PressButton("L");
+        if (CombatLogView.Open == shown)
+        {
+            problems.Add("combat log: its L button doesn't hide it");
+        }
+        foreach (bool down in new[] { true, false })
+        {
+            GetViewport().PushInput(new InputEventKey { Keycode = Key.L, PhysicalKeycode = Key.L, Pressed = down });
+        }
+        if (CombatLogView.Open != shown)
+        {
+            problems.Add("combat log: the L key doesn't show it again");
+        }
+        GD.Print($"combat log: {lines.Count} lines in short, {_combatLog.Log.At(LogLevel.Detail).Count} in detail");
+        (Settings.CombatLogOpen, Settings.CombatLogLevel, Settings.CombatLogSize) = (open, level, size);
+        Settings.Save();
     }
 
     /// <summary>

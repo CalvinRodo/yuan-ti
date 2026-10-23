@@ -1364,6 +1364,10 @@ public partial class RegionView : Node2D
         {
             QuickLoadGame();
         }
+        else if (e.IsActionPressed(Controls.ToggleCombatLog))
+        {
+            _combatLog.Toggle();
+        }
         else if (e.IsActionPressed(Controls.ToggleGrid))
         {
             _overlay.Grid = !_overlay.Grid;

@@ -188,10 +188,18 @@ public sealed partial class Battle
             Note(new Avoided(caster, t, "mind defended"));
             return;
         }
-        if (!friendly && e.Number < Spellcasting.FirstPower && Roll(1, 100) < MagicResistance(t, e, level))
+        if (!friendly && e.Number < Spellcasting.FirstPower)
         {
-            Note(new Avoided(caster, t, "resisted"));
-            return;
+            int mr = MagicResistance(t, e, level), d100 = Roll(1, 100);
+            if (mr > 0)
+            {
+                Note(new ResistanceRolled(t, e.Number, mr, d100, d100 < mr));
+            }
+            if (d100 < mr)
+            {
+                Note(new Avoided(caster, t, "resisted"));
+                return;
+            }
         }
         bool saved = !friendly && Saved(t, e, caster, level);
         if (saved)
@@ -206,6 +214,7 @@ public sealed partial class Battle
         {
             var (dice, flat) = e.DamageAt(level);
             int damage = RollDice(dice, e.Sides) + flat;
+            Note(new DamageRolled(caster, t, dice, e.Sides, flat, 1, damage, e.Number));
             damage = saved ? (e.SaveCancels ? 0 : damage / 2) : damage;
             damage = damage * percent / 100;
             if (damage > 0 && Spells.AreaOf(e) > 8 && Creatures.HasAbility(t.Type, CreatureAbilityBit.DiesToRangedSpells))
@@ -390,13 +399,17 @@ public sealed partial class Battle
         int roll = Roll(1, 20);
         if (roll is 1 or 20)
         {
+            Note(new SaveRolled(t, e.Number, roll, roll, score, roll == 20));
             return roll == 20;
         }
+        int natural = roll;
         if ((e.Elements & (DamageElement.Fire | DamageElement.Cold | DamageElement.Electricity)) != 0)
         {
             roll *= 2;
         }
-        return (byte)(roll + e.SaveModifier + SaveBonus(t, e, caster, level, save)) >= score;
+        int total = (byte)(roll + e.SaveModifier + SaveBonus(t, e, caster, level, save));
+        Note(new SaveRolled(t, e.Number, natural, total, score, total >= score));
+        return total >= score;
     }
 
     public const int Dismissal = 61;

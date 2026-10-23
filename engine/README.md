@@ -491,7 +491,7 @@ fighting allegiance within 24 cells. The battle plays back step by step as DSUN.
 attackers play their attack animation with its sound, missiles and spell projectiles fly to their
 targets, spells show their graphics over caster and target with their sounds, blows that hurt sound
 the target's cry, damage shows as a number on the original's splash (its look by what hit), and
-lingering fields show their graphic on every cell; a combat log (top right) says it all. On a party member's turn, click an enemy to attack it (it walks up first if needed;
+lingering fields show their graphic on every cell; a combat log (lower right, see [Combat log](#combat-log)) says it all. On a party member's turn, click an enemy to attack it (it walks up first if needed;
 hovering shows the chance to hit and the number needed), click the ground to move, or use CAST (Q,
 then click a target; hovering shows who the area takes), GUARD (G), WAIT (T), END TURN (E) and AUTO
 (U: the computer fights for that member). Once a member can't move any more, the original's menu
@@ -602,6 +602,51 @@ whoever stands on or beside them.
 walks a member across the arena's sand and checks for dust that fades,
 then in a fight presses Tab (the nearest enemy, its ring drawn) and Enter
 (an attack on it).
+
+## Combat log
+
+The combat log on the map follows [Obsidian Edition](https://github.com/daaki85/darksun-obsidian-edition)'s
+combat log in the game (its PLAYER-GUIDE's quality of life table and its
+DEVELOPMENT.md, "The combat log in the game"; drawn here with Godot, its
+look and wording taken, no code). `CombatLog` (`DarkSun.Game`) turns the
+fight's events into lines, and `CombatLogView` draws them:
+
+- **The panel**: the game's stone, docked at the screen's lower right
+  (180 × 78 of the 320 × 200 screen, its foot at row 198), in the game's
+  font. The header says the round, whose turn it is and who still has one
+  ("Round 2: Gerakis, then Cermak, Cilla"). The lines sit in a dark well,
+  coloured by kind: hits green, misses grey, damage amber, saves and magic
+  resistance blue, turns sand, the rest yellow. Each name is in its own
+  colour (each party member's by party slot, monsters red). A party
+  member's line has a filled pip, a monster's a hollow one. A round is a
+  rule across the well.
+- **How much it says** (the header's level chip): **Least** gives only
+  what came of each roll ("Halton hits Slig for 6"). **Short**, the
+  default, adds the dice ("Halton attacks Slig: 15 vs 15+ HIT, 6 damage
+  (1d8)"; "Slig's save vs Sleep: 9 vs 14, failed"; "Slig now 24/30 HP
+  (-6)"). **Detail** gives every term ("THAC0 20 - STR 1 - AC 5 = 14",
+  the damage dice, the save's natural roll). `Battle` notes what this
+  needs: `AttackRolled.Terms` (`ToHitTerms`, which add up to
+  `ToHitNeeded`), `DamageRolled`, `SaveRolled` and `ResistanceRolled`.
+- **Its size** (the header's − and +): collapsed to the newest line, docked,
+  or expanded, with filters: All, Party (a party member's lines), Damage
+  (hits, wounds, falls), Saves.
+- **Reading back**: the mouse wheel over it, its scrollbar (click the track
+  for a page, drag the handle), and LATEST in the header to come back to
+  the newest.
+- **L** shows and hides it, as does its own L button, in a fight or out of
+  one (the last fight's lines stay). It waits under the game's screens and
+  windows. Whether it is shown, its level and its size are kept in
+  `[combat_log]` in the settings.
+- Lines are written when the fight decides them, so the hit points are
+  those of that moment. They are shown when the playback reaches them.
+- The CAST, GUARD, WAIT, END TURN and AUTO buttons moved to the lower left,
+  to leave the lower right to the log.
+
+Unlike Obsidian Edition's log, it shows only fights, not the rolls made
+out of them (thief skills, hit points at a new level), and it has no strip
+below the map. `-- --new-game --check-combat` checks that every attack,
+wound and save has its line and that the panel's buttons and L work.
 
 ## Notes
 

@@ -128,26 +128,43 @@ public sealed partial class Battle
     /// against a blurred target, and +1 for a halfling with a weapon at more than
     /// 28 cells (beyond any combat range, so never).
     /// </summary>
-    public int ToHitNeeded(Combatant a, Combatant t, Weapon? w)
+    public int ToHitNeeded(Combatant a, Combatant t, Weapon? w) => ToHitTerms(a, t, w).Sum(term => term.Value);
+
+    /// <summary>
+    /// <see cref="ToHitNeeded"/> as its terms, for the combat log: THAC0, each
+    /// bonus that isn't 0 (less), and the armour class (less); they add up to the
+    /// number needed.
+    /// </summary>
+    public IReadOnlyList<RollTerm> ToHitTerms(Combatant a, Combatant t, Weapon? w)
     {
         bool missile = w is { IsMissile: true };
-        int bonus = (w?.Bonus ?? 0) + (w?.MaterialToHit ?? 0)
-            + (missile ? Abilities.DexReactionOf(a.Stats[1]) : Abilities.StrToHitOf(a.Strength))
-            + (a.PartyMember ? 0 : Difficulty - 1);
-        bonus += ModifiersOf(a).Sum(m => m.ToHit) + ModifiersOf(t).Sum(m => m.ToHitAgainst);
+        var terms = new List<RollTerm> { new("THAC0", a.Thac0) };
+        void Less(string what, int bonus)
+        {
+            if (bonus != 0)
+            {
+                terms.Add(new RollTerm(what, -bonus));
+            }
+        }
+        Less("weapon", (w?.Bonus ?? 0) + (w?.MaterialToHit ?? 0));
+        Less(missile ? "DEX" : "STR", missile ? Abilities.DexReactionOf(a.Stats[1]) : Abilities.StrToHitOf(a.Strength));
+        Less("difficulty", a.PartyMember ? 0 : Difficulty - 1);
+        Less("effects", ModifiersOf(a).Sum(m => m.ToHit) + ModifiersOf(t).Sum(m => m.ToHitAgainst));
         if (a.Effects.FirstOrDefault(e => e.Condition == Condition.Prayer) is { Caster: { } priest })
         {
-            bonus += priest.Side == a.Side ? 1 : -1;
+            Less("Prayer", priest.Side == a.Side ? 1 : -1);
         }
         if (a.Race == 6 && w is not null && Distance(a, t) > 28)
         {
-            bonus++;
+            Less("range", 1);
         }
         if (FromBehind(a, t))
         {
-            bonus += Backstabs(a, t, w) ? Rules.Backstab : Rules.FromBehind;
+            bool backstab = Backstabs(a, t, w);
+            Less(backstab ? "backstab" : "from behind", backstab ? Rules.Backstab : Rules.FromBehind);
         }
-        return a.Thac0 - bonus - ArmorClassAgainst(t, a);
+        terms.Add(new RollTerm("AC", -ArmorClassAgainst(t, a)));
+        return terms;
     }
 
     /// <summary>
@@ -209,34 +226,34 @@ public sealed partial class Battle
 
     private void Swing(Combatant a, Combatant t, Weapon? w, NaturalAttack? natural, bool first, bool last)
     {
-        int needed = ToHitNeeded(a, t, w);
+        IReadOnlyList<RollTerm> terms = ToHitTerms(a, t, w);
+        int needed = terms.Sum(term => term.Value);
         int roll = Roll(1, 20);
         bool hit = roll == 20 || roll != 1 && roll >= needed;
-        Note(new AttackRolled(a, t, roll, needed, hit));
+        Note(new AttackRolled(a, t, roll, needed, hit, terms));
         if (!hit)
         {
             return;
         }
         bool melee = w is not { IsMissile: true };
-        int damage;
+        int dice, sides, bonus;
         if (w is not null)
         {
-            damage = RollDice(w.Type.DamageDice, w.Type.DamageSides) + w.Type.DamageBonus + w.Bonus + w.MaterialDamage;
+            (dice, sides, bonus) = (w.Type.DamageDice, w.Type.DamageSides, w.Type.DamageBonus + w.Bonus + w.MaterialDamage);
         }
         else
         {
             NaturalAttack n = natural ?? new(2, 1, 1, 0);
-            damage = RollDice(n.Dice, n.Sides) + n.Bonus;
+            (dice, sides, bonus) = (n.Dice, n.Sides, n.Bonus);
         }
         if (melee)
         {
-            damage += Abilities.StrDamageOf(a.Strength);
+            bonus += Abilities.StrDamageOf(a.Strength);
         }
-        damage = Math.Max(1, damage);
-        if (Backstabs(a, t, w))
-        {
-            damage *= Math.Min(5, (a.ThiefLevel - 1) / 4 + 2);
-        }
+        int damage = Math.Max(1, RollDice(dice, sides) + bonus);
+        int times = Backstabs(a, t, w) ? Math.Min(5, (a.ThiefLevel - 1) / 4 + 2) : 1;
+        damage *= times;
+        Note(new DamageRolled(a, t, dice, sides, bonus, times, damage));
         Hit(a, t, damage, w?.Elements ?? NaturalHit(a), first, last && natural is not null, missile: !melee);
     }
 
