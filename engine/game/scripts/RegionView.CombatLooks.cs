@@ -277,7 +277,7 @@ public partial class RegionView
     /// A window covers the map (DSUN.EXE's display mode <c>DS:0BC9</c> = 2, set by
     /// <c>1587:22BA</c> for the character screens, messages and popups).
     /// </summary>
-    private bool MapCovered => _character.IsOpen || _dialogueWindow.Visible || _gameMenu.IsOpen || _combatMenu is { Visible: true };
+    private bool MapCovered => _character.IsOpen || _dialogueWindow.Visible || _gameMenu.IsOpen || _saves.IsOpen || _combatMenu is { Visible: true };
 
     /// <summary>
     /// Damage to a party member while a window covers the map

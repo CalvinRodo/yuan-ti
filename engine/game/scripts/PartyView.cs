@@ -41,12 +41,9 @@ public partial class PartyView : RetroScreen
     private const int WindowNumber = 11500, FirstBox = 11300, FirstLeader = 11309, FirstComputerControl = 11313,
         FirstText = 11319, SecondText = 11320, ReturnButton = 10308, FirstReadied = 11215;
     private const int WindowTop = 9, Fire = 20028, Banner = 20079, BoxArt = 11100, SelectedFrame = 3, EmptyFrame = 2, SlotArt = 13007;
-    // The question window: WIND 14000 over BMP 14000, its title strip and three choices.
-    private const int AskWindow = 14000, AskTitle = 14004, FirstChoice = 14001;
 
-    /// <summary>The status line's grey (colour 27) and the small window's: its title the same, its choices dark (17) on a light shadow (29), red (77) under the pointer.</summary>
-    private static readonly Color StatusGrey = Color.Color8(136, 136, 160), ChoiceInk = Color.Color8(32, 32, 56),
-        ChoiceShadow = Color.Color8(164, 164, 188), ChoiceHover = Color.Color8(212, 64, 40);
+    /// <summary>The status line's grey (colour 27), as the question window's title.</summary>
+    private static readonly Color StatusGrey = QuestionWindow.TitleGrey;
 
     private Palette _palette = null!;
     private GffFile _resources = null!;
@@ -63,10 +60,8 @@ public partial class PartyView : RetroScreen
     private Label _dualTitle = null!;
     private const int DualWindow = 17502, DualBackdrop = 17002, FirstDualClass = 17303, DualExit = 17302;
     private Label _status = null!;
-    private UiWindowView _window = null!, _ask = null!;
-    private Label _askTitle = null!;
-    private readonly Label[] _choices = new Label[3];
-    private readonly Action?[] _choiceActions = new Action?[3];
+    private UiWindowView _window = null!;
+    private QuestionWindow _ask = null!;
     private int _addPage;
     private int _selected;
 
@@ -154,7 +149,7 @@ public partial class PartyView : RetroScreen
         _window.AddChild(_status);
         _frames = new PartyFrames(_window, _status, MemberView, () => Session.LeaderIndex, bars: false);
         _frames.Hoverable(back, () => "RETURN TO GAME");
-        BuildAsk();
+        _ask = new QuestionWindow(Canvas, _palette);
         BuildDual();
 
         if (OS.GetCmdlineUserArgs().Contains("--check-party"))
@@ -177,7 +172,7 @@ public partial class PartyView : RetroScreen
             }
             else if (_ask.Visible)
             {
-                _ask.Visible = false;
+                _ask.Close();
             }
             else
             {
@@ -244,72 +239,15 @@ public partial class PartyView : RetroScreen
         Vector2 at = _window.Position + new Vector2(box.End.X + 1, box.Position.Y - 2);
         if (Selected is { } c)
         {
-            Ask(c.Name.ToUpperInvariant(), at,
+            _ask.Ask(c.Name.ToUpperInvariant(), at,
                 (c.Adventured ? "EDIT NAME" : "EDIT", () => Command(1)),
                 ("DROP", () => Command(2)),
                 c.Race == Race.Human ? ("DUAL", () => Command(5)) : ("CANCEL", null));
         }
         else
         {
-            Ask("INACTIVE CHARACTER", at, ("NEW", () => Command(3)), ("ADD", () => Command(4)), ("CANCEL", null));
+            _ask.Ask("INACTIVE CHARACTER", at, ("NEW", () => Command(3)), ("ADD", () => Command(4)), ("CANCEL", null));
         }
-    }
-
-    // -- the small window: WIND 14000 over BMP 14000 --------------------------------------------
-
-    private void BuildAsk()
-    {
-        _ask = UiWindowView.Build(AskWindow, _palette, backdrop: AskWindow)!;
-        _ask.Visible = false;
-        Canvas.AddChild(_ask);
-        Rect2 title = _ask.RectOf("BUTN", AskTitle);
-        _askTitle = new Label
-        {
-            Position = title.Position + new Vector2(2, 0),
-            Size = new Vector2(title.Size.X - 4, GameFonts.Size),
-            MouseFilter = MouseFilterEnum.Ignore,
-            LabelSettings = GameFonts.Settings(StatusGrey),
-        };
-        _ask.AddChild(_askTitle);
-        for (int i = 0; i < 3; i++)
-        {
-            int choice = i;
-            TextureButton button = _ask.Button(FirstChoice + i)!;
-            _choices[i] = new Label
-            {
-                Position = new Vector2(2, 0),
-                Size = new Vector2(button.Size.X - 4, GameFonts.Size),
-                MouseFilter = MouseFilterEnum.Ignore,
-                LabelSettings = GameFonts.Settings(ChoiceInk, shadow: ChoiceShadow),
-            };
-            button.AddChild(_choices[i]);
-            button.MouseEntered += () => _choices[choice].LabelSettings = GameFonts.Settings(ChoiceHover, shadow: ChoiceShadow);
-            button.MouseExited += () => _choices[choice].LabelSettings = GameFonts.Settings(ChoiceInk, shadow: ChoiceShadow);
-            button.Pressed += () =>
-            {
-                _ask.Visible = false;
-                _choiceActions[choice]?.Invoke();
-            };
-        }
-        _ask.Button(ReturnButton)!.Pressed += () => _ask.Visible = false;
-    }
-
-    /// <summary>The small window at <paramref name="at"/> (kept on the screen): a title and up to three choices; a choice without an action just closes it.</summary>
-    private void Ask(string title, Vector2 at, params (string Text, Action? Then)[] choices)
-    {
-        _askTitle.Text = title;
-        for (int i = 0; i < 3; i++)
-        {
-            bool there = i < choices.Length;
-            _choices[i].Text = there ? choices[i].Text : "";
-            _choices[i].LabelSettings = GameFonts.Settings(ChoiceInk, shadow: ChoiceShadow);
-            _choiceActions[i] = there ? choices[i].Then : null;
-            _ask.Button(FirstChoice + i)!.Visible = there;
-        }
-        _ask.Position = new Vector2(
-            Math.Clamp(at.X, 0, RetroScreen.Width - _ask.Size.X),
-            Math.Clamp(at.Y, 0, RetroScreen.Height - _ask.Size.Y));
-        _ask.Visible = true;
     }
 
     /// <summary>ADD: the roster's characters not in the party, two a page with MORE between pages, then PRE-MADE PARTY.</summary>
@@ -328,7 +266,7 @@ public partial class PartyView : RetroScreen
         {
             shown.Add(("MORE", () => { _addPage++; AskAdd(at); }));
         }
-        Ask("ADD", at, [.. shown]);
+        _ask.Ask("ADD", at, [.. shown]);
     }
 
     private void AddCharacter(Character c)

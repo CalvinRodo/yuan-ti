@@ -37,7 +37,36 @@ public sealed record Mod(string Name, string Directory)
     /// <summary>A problem reading <see cref="InfoFile"/>, if any.</summary>
     public string? InfoError { get; init; }
 
-    public string DisplayName => Title.Length > 0 ? Title : Name;
+    /// <summary>What to call it: its <c>mod.json</c> title, else its folder's name made friendly (<see cref="FriendlyName"/>).</summary>
+    public string DisplayName => Title.Length > 0 ? Title : FriendlyName(Name);
+
+    /// <summary>
+    /// A folder name as words: <c>_</c>, <c>-</c> and <c>.</c> are spaces, a
+    /// capital after a small letter starts a word, and each word starts with a
+    /// capital ("better_shops", "BetterShops" → "Better Shops").
+    /// </summary>
+    public static string FriendlyName(string folder)
+    {
+        var words = new StringBuilder();
+        char previous = ' ';
+        foreach (char c in folder.Trim())
+        {
+            char ch = c is '_' or '-' or '.' ? ' ' : c;
+            if (ch == ' ' && previous == ' ')
+            {
+                continue;
+            }
+            if (char.IsUpper(ch) && char.IsLower(previous))
+            {
+                words.Append(' ');
+                previous = ' ';
+            }
+            words.Append(previous == ' ' ? char.ToUpperInvariant(ch) : ch);
+            previous = ch;
+        }
+        string name = words.ToString().Trim();
+        return name.Length > 0 ? name : folder;
+    }
 
     internal static Mod Read(string directory)
     {

@@ -184,12 +184,13 @@ public partial class KeyHelp : CanvasLayer
     public static (string Title, IReadOnlyList<HelpSection> Sections) For(Node? scene) => scene switch
     {
         RegionView { CharacterScreenOpen: true } => ("the character screens", [CharacterScreenSection, MagicSection, Everywhere]),
+        RegionView { SavesOpen: true } => ("Load and Save", [SavesSection, Everywhere]),
         RegionView { GameMenuOpen: true } => ("the game menu", [GameMenuSection, Everywhere]),
         RegionView => ("the map", [.. RegionSections, Everywhere]),
         MainMenu => ("main menu", [MainMenuSection, Buttons, Everywhere]),
         PartyView => ("View Character", [PartySection, Everywhere]),
         CharacterGenView => ("Character Generation", [CharacterGenSection, Everywhere]),
-        SavesView => ("Load Saved Game", [SavesSection, Everywhere]),
+        SavesView => ("Load Game", [SavesSection, Everywhere]),
         ModsView => ("mods", [ModsSection, Everywhere]),
         IntroView => ("opening", [new HelpSection("Opening", new HelpLine("Any key, click", "Skip to the main menu")), Everywhere]),
         _ => ("this screen", [Buttons, Everywhere]),
@@ -200,14 +201,20 @@ public partial class KeyHelp : CanvasLayer
         new HelpLine("Tab, arrows", "Move between buttons"),
         new HelpLine("Enter, Space", "Press the highlighted button"));
 
-    private static HelpSection SavesSection => Lists("Saved games", "the saved games", "Load or Delete the save");
+    private static HelpSection SavesSection => new("Saved games",
+        new HelpLine("Click", "Choose a game; double-click loads or saves it"),
+        new HelpLine("Up, Down", "Choose a game"),
+        new HelpLine("Page Up, Page Down, wheel", "The next or previous ten"),
+        new HelpLine("Type", "Name the game (saving)"),
+        new HelpLine("Enter", "LOAD or SAVE"),
+        new HelpLine("Delete", "DELETE the game (it asks first)"),
+        HelpLine.For(Controls.Back, "EXIT", "Esc"));
 
-    private static HelpSection ModsSection => Lists("Mods", "the mods", "Turn a mod on or off, or move it up or down");
-
-    private static HelpSection Lists(string title, string what, string press) => new(title,
-        new HelpLine("Click", press),
-        new HelpLine("Tab, arrows", $"Move through {what}"),
-        new HelpLine("Enter, Space", "Press the highlighted button"),
+    private static HelpSection ModsSection => new("Mods",
+        new HelpLine("Click", "Choose a mod, or press a button"),
+        new HelpLine("Up, Down", "Choose a mod"),
+        new HelpLine("Enter, Space", "Turn the mod on or off"),
+        new HelpLine("Page Up, Page Down, wheel", "Read more of its description"),
         HelpLine.For(Controls.Back, "Back to the main menu", "Esc"));
 
     private static HelpSection MainMenuSection => new("Main menu",
