@@ -31,9 +31,9 @@ public partial class SavesView : RetroScreen
 
     /// <summary>
     /// In the game: save as name (the first argument) to the file of that key
-    /// (the second; null: a new file), true if saved. Null on the main menu.
+    /// (the second; null: a new file); null if saved, else why not. Null on the main menu.
     /// </summary>
-    public Func<string, string?, bool>? SaveTo { get; set; }
+    public Func<string, string?, string?>? SaveTo { get; set; }
 
     /// <summary>In the game: load this save over the game in progress. On the main menu the screen starts the map with it.</summary>
     public Action<SaveGame>? LoadSave { get; set; }
@@ -131,7 +131,14 @@ public partial class SavesView : RetroScreen
         Visible = true;
         if (saving)
         {
-            _name.CallDeferred(Control.MethodName.GrabFocus);
+            // Unless it was closed, or opened to load, meanwhile.
+            Callable.From(() =>
+            {
+                if (Visible && _mode == Mode.Save)
+                {
+                    _name.GrabFocus();
+                }
+            }).CallDeferred();
         }
     }
 
@@ -167,7 +174,7 @@ public partial class SavesView : RetroScreen
         }
         else if (_ask.Visible)
         {
-            return;
+            // The question takes its own clicks; keys go nowhere else meanwhile.
         }
         else if (e.IsActionPressed("ui_up", true) || e.IsActionPressed("ui_down", true))
         {
@@ -185,10 +192,11 @@ public partial class SavesView : RetroScreen
         {
             Delete();
         }
-        else
+        else if (e is not InputEventKey { Pressed: true } key || key.Unicode == '?')
         {
             return;
         }
+        // Every other key stops here: the map under the screen gets none meanwhile (F9 would load a game under it).
         GetViewport().SetInputAsHandled();
     }
 
@@ -507,9 +515,9 @@ public partial class SavesView : RetroScreen
             }), ("CANCEL", null));
             return;
         }
-        if (SaveTo?.Invoke(name, e.File) != true)
+        if (SaveTo?.Invoke(name, e.File) is { } refused)
         {
-            _status.Text = "Couldn't save the game.";
+            _status.Text = refused.Length > 0 ? refused : "Couldn't save the game.";
             return;
         }
         Action? then = _afterSave;

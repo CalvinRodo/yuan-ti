@@ -508,7 +508,11 @@ public partial class RegionView : Node2D
         layer.AddChild(_gameMenu);
         _saves = new SavesView
         {
-            SaveTo = (name, file) => Save(file ?? $"save-{DateTime.Now:yyyyMMdd-HHmmss}", name),
+            SaveTo = (name, file) =>
+            {
+                _notice.Text = "";
+                return Save(file ?? NewSaveFile(), name) ? null : _notice.Text; // the notice, under the screen, says why
+            },
             LoadSave = save => LoadSaved(save),
         };
         layer.AddChild(_saves);
@@ -2283,6 +2287,17 @@ public partial class RegionView : Node2D
         }
     }
 
+    /// <summary>A file key for a new saved game: when it was saved, made unique if two are saved in the same second.</summary>
+    private static string NewSaveFile()
+    {
+        string stamp = $"save-{DateTime.Now:yyyyMMdd-HHmmss}", file = stamp;
+        for (int n = 2; File.Exists(Session.SavePath(file)); n++)
+        {
+            file = $"{stamp}-{n}";
+        }
+        return file;
+    }
+
     private void QuickLoadGame()
     {
         string path = Session.SavePath(QuickSave);
@@ -3332,6 +3347,13 @@ public partial class RegionView : Node2D
         ShowRegion(home + 2);
         AnswerForThePlayer();
         _saves.Open(SavesView.Mode.Load);
+        // The map gets no keys under the screen: quick load (F9) does nothing, not even say there is none.
+        _notice.Text = "";
+        foreach (bool down in new[] { true, false })
+        {
+            GetViewport().PushInput(new InputEventKey { Keycode = Key.F9, PhysicalKeycode = Key.F9, Pressed = down });
+        }
+        bool keysKept = _notice.Text.Length == 0 && _saves.IsOpen;
         bool listed = _saves.SelectTitle(name);
         _saves.Press(2057);
         File.Delete(path);
@@ -3345,6 +3367,7 @@ public partial class RegionView : Node2D
             }
         }
         Expect("listed by its name", true, listed);
+        Expect("F9 kept from the map under the load screen", true, keysKept);
         Expect("region", expected.Region, _region.Number);
         Expect("door flags", expected.Door, door is null ? null : _world[door.Index]?.DoorFlags);
         Expect("leader's cell", expected.Leader, _party[0].Walker.Cell);

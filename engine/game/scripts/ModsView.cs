@@ -404,7 +404,7 @@ public partial class ModsView : RetroScreen
             return;
         }
         bool enabled = !mod.Enabled;
-        Change(() =>
+        bool changed = Change(() =>
         {
             if (mod.Bundled)
             {
@@ -416,7 +416,10 @@ public partial class ModsView : RetroScreen
                 ModManager.SetEnabled(mod, enabled);
             }
         }, mod.Name);
-        Say($"{mod.DisplayName} is {(enabled ? "on" : "off")}.");
+        if (changed)
+        {
+            Say($"{mod.DisplayName} is {(enabled ? "on" : "off")}.");
+        }
     }
 
     private void MoveSelected(int by)
@@ -427,9 +430,8 @@ public partial class ModsView : RetroScreen
         }
         var sameFolder = Session.Mods.All.Where(m => m.Root == mod.Root).ToList();
         int at = sameFolder.IndexOf(mod);
-        if (at + by >= 0 && at + by < sameFolder.Count)
+        if (at + by >= 0 && at + by < sameFolder.Count && Move(sameFolder, at, by))
         {
-            Move(sameFolder, at, by);
             Say($"{mod.DisplayName} moved {(by < 0 ? "up" : "down")}.");
         }
     }
@@ -442,16 +444,17 @@ public partial class ModsView : RetroScreen
         Say(n == 0 ? "Reloaded; every mod file is usable." : $"Reloaded; {n} file(s) can't be used.");
     }
 
-    private void Move(List<Mod> sameFolder, int at, int by)
+    private bool Move(List<Mod> sameFolder, int at, int by)
     {
         var names = sameFolder.Select(m => m.Name).ToList();
         (names[at], names[at + by]) = (names[at + by], names[at]);
-        Change(() => ModManager.SaveLoadOrder(sameFolder[0].Root, names), names[at + by]);
+        return Change(() => ModManager.SaveLoadOrder(sameFolder[0].Root, names), names[at + by]);
     }
 
-    /// <summary>Make a change on disk, then load the mods again.</summary>
-    private void Change(Action change, string? select)
+    /// <summary>Make a change on disk, then load the mods again; false (saying why) if it couldn't be made.</summary>
+    private bool Change(Action change, string? select)
     {
+        bool changed = true;
         try
         {
             change();
@@ -460,11 +463,13 @@ public partial class ModsView : RetroScreen
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
             Say(e.Message);
+            changed = false;
         }
         Session.ReloadMods();
         Verify();
         _selected = select ?? _selected;
         Callable.From(Refresh).CallDeferred();
+        return changed;
     }
 
     private void OpenFolder()
