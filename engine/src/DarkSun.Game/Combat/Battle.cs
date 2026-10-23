@@ -161,6 +161,11 @@ public sealed partial class Battle
         }
     }
 
+    /// <summary>Who still has a turn this round, in the order they take them (<see cref="NextTurn"/>'s).</summary>
+    public IEnumerable<Combatant> StillToAct() =>
+        _all.Where(c => c.Fights && c.Initiative >= 0 && c.Flags != TurnFlags.None)
+            .OrderByDescending(c => c.Initiative).ThenByDescending(c => c.TieBreak);
+
     /// <summary>
     /// The next to act (<c>612E:09B6</c>): the highest initiative, a tie to the
     /// higher tie-breaker; null when the round is over. Its guard ends, and on
@@ -169,8 +174,7 @@ public sealed partial class Battle
     /// </summary>
     public Combatant? NextTurn()
     {
-        Current = _all.Where(c => c.Fights && c.Initiative >= 0 && c.Flags != TurnFlags.None)
-            .OrderByDescending(c => c.Initiative).ThenByDescending(c => c.TieBreak).FirstOrDefault();
+        Current = StillToAct().FirstOrDefault();
         if (Current is { } c)
         {
             c.Guarding = false;

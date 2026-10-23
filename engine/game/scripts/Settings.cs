@@ -133,6 +133,27 @@ public static class Settings
         set => Set("game", "autosave", value);
     }
 
+    /// <summary>The combat log on the map is shown (L shows and hides it).</summary>
+    public static bool CombatLogOpen
+    {
+        get => Get("combat_log", "open", true);
+        set => Set("combat_log", "open", value);
+    }
+
+    /// <summary>How much the combat log says: 0 the least, 1 in short, 2 in detail (<c>LogLevel</c>).</summary>
+    public static int CombatLogLevel
+    {
+        get => Get("combat_log", "level", 1);
+        set => Set("combat_log", "level", value);
+    }
+
+    /// <summary>The combat log's size: 0 collapsed, 1 docked, 2 expanded.</summary>
+    public static int CombatLogSize
+    {
+        get => Get("combat_log", "size", 1);
+        set => Set("combat_log", "size", value);
+    }
+
     /// <summary>Repair the shipped scripts' known bugs as they load (<c>GplRepairs</c>: dead triggers in Darkhold, the Lava Rifts ranger, Linara).</summary>
     public static bool ScriptRepairs
     {

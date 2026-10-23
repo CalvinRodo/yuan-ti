@@ -28,9 +28,10 @@ public partial class RetroScreen : Control
     public override void _Ready()
     {
         Fit();
-        if (OS.GetCmdlineUserArgs().FirstOrDefault(a => a.StartsWith("--screenshot=")) is { } shot)
+        if (GetTree().CurrentScene == this && OS.GetCmdlineUserArgs().FirstOrDefault(a => a.StartsWith("--screenshot=")) is { } shot)
         {
             // Development: the screen as a PNG after a second (as the map's --screenshot), then quit.
+            // Only a screen that is the scene: one over the map (the game menu, the combat log) leaves it to the map's.
             GetTree().CreateTimer(1).Timeout += () =>
             {
                 GetViewport().GetTexture().GetImage().SavePng(shot["--screenshot=".Length..]);

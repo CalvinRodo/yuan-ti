@@ -18,9 +18,10 @@ internal sealed class ScriptedDice(Func<int, int, int>? then = null, params int[
 
 public class CombatTests
 {
-    internal static Combatant Fighter(string name, int side, int x, int y, int hp = 30, int type = 0, int dex = 10, int ac = 5, int str = 10, int mind = 2, int race = 0) => new()
+    internal static Combatant Fighter(string name, int side, int x, int y, int hp = 30, int type = 0, int dex = 10, int ac = 5, int str = 10, int mind = 2, int race = 0, bool party = false) => new()
     {
         Name = name,
+        PartyMember = party,
         Side = side,
         Cell = new Cell(x, y),
         Vitals = new Vitals { Hp = hp, MaxHp = hp },
