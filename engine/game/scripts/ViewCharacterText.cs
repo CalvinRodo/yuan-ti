@@ -1,5 +1,7 @@
+using DarkSun.Data.Items;
 using DarkSun.Game.Characters;
 using DarkSun.Game.Magic;
+using DarkSun.Game.World;
 using Godot;
 
 namespace DarkSun.Engine;
@@ -73,18 +75,34 @@ public sealed class ViewCharacterText
 
     /// <summary>
     /// What View Character and Character Generation write about
-    /// <paramref name="c"/> out of the game: wearing nothing, so armour class
-    /// 10 with Dexterity's adjustment and the damage of bare hands (or a
-    /// thri-kreen's first natural attack) with Strength's bonus.
+    /// <paramref name="c"/> out of the game, carrying <paramref name="items"/>
+    /// (none on the creation screen, where the gear isn't given yet): armour
+    /// class 10 with Dexterity's adjustment and the worn armour's, and the
+    /// damage of the weapon in hand (slot 3), else of bare hands (or a
+    /// thri-kreen's first natural attack), with Strength's bonus.
     /// </summary>
-    public static CharacterDetailsView Of(Character c)
+    public static CharacterDetailsView Of(Character c, IReadOnlyList<ItemState>? items = null)
     {
         var cc = new CharacterCreation(Session.Rules, Session.Names, new Random());
         var rules = Session.Rules;
         int str = cc.Adjusted(c, Ability.Str), dex = cc.Adjusted(c, Ability.Dex);
-        string damage = rules.Race(c.Race).NaturalAttacks is [var first, ..]
-            ? CharacterSheet.DamageText(first.Halves, first.Dice, first.Sides, first.Bonus + rules.Abilities.StrDamageOf(str))
-            : CharacterSheet.DamageText(CharacterSheet.AttackHalves(cc.ActiveLevels(c), rules), rules.UnarmedDice, rules.UnarmedSides, rules.Abilities.StrDamageOf(str));
+        int halves = CharacterSheet.AttackHalves(cc.ActiveLevels(c), rules), strDamage = rules.Abilities.StrDamageOf(str);
+        int armorClass = CharacterSheet.BaseArmorClass + CharacterSheet.DexterityDefence(dex, rules);
+        string? damage = null;
+        if (items is { Count: > 0 })
+        {
+            var data = Session.ObjectData;
+            var catalog = ItemCatalog.Load(data);
+            List<Item> carried = Carried(items, data);
+            armorClass = CharacterSheet.ArmorClass(dex, carried, catalog, rules);
+            if (carried.FirstOrDefault(i => i.Slot == 3) is { } held && catalog.TypeOf(held.Record) is { IsWeapon: true } weapon)
+            {
+                damage = CharacterSheet.DamageText(halves, weapon.DamageDice, weapon.DamageSides, weapon.DamageBonus + held.Record.Bonus + strDamage);
+            }
+        }
+        damage ??= rules.Race(c.Race).NaturalAttacks is [var first, ..]
+            ? CharacterSheet.DamageText(first.Halves, first.Dice, first.Sides, first.Bonus + strDamage)
+            : CharacterSheet.DamageText(halves, rules.UnarmedDice, rules.UnarmedSides, strDamage);
         int psp = new Spellcasting(rules).MaxPsp(c);
         return new CharacterDetailsView(
             c.Name,
@@ -94,8 +112,14 @@ public sealed class ViewCharacterText
             string.Join("/", c.Former.Select(f => rules.Class(f.Class).Name).Concat(c.Classes.Select(k => rules.Class(k).Name))),
             string.Join("/", c.Former.Select(f => f.Level).Concat(cc.Levels(c))),
             c.Experience, cc.NextLevelExperience(c), c.Hp, c.Hp, Math.Max(0, psp - c.PspSpent), psp,
-            CharacterSheet.BaseArmorClass + CharacterSheet.DexterityDefence(dex, rules), damage);
+            armorClass, damage);
     }
+
+    /// <summary><paramref name="items"/> as items, their records read from <paramref name="data"/> (any that isn't an item left out).</summary>
+    public static List<Item> Carried(IEnumerable<ItemState> items, DarkSun.Data.Gff.IResourceSource data) =>
+        [.. items.Select(s => data.TryRead("RDFF", s.Rdff, out var rdff) && ItemRecord.FromRdff(rdff) is { } record
+            ? new Item(s.Rdff, record, s.Quantity, s.Slot)
+            : null).OfType<Item>()];
 
     /// <summary>The selected character's details, or an empty box's.</summary>
     public void Show(CharacterDetailsView? c)

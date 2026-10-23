@@ -773,18 +773,17 @@ public partial class RegionView : Node2D
     }
 
     /// <summary>
-    /// A new game's characters start with their class's gear
-    /// (<see cref="StartingGear"/>). DSUN.EXE gives it when DONE is clicked on
-    /// the creation screen and keeps it with the character; here a roster
-    /// character holds no items, so each new game gives it to everyone who
-    /// carries nothing.
+    /// A new game's characters start with the items they bring
+    /// (<see cref="Session.Kit"/>: their class's <see cref="StartingGear"/>,
+    /// given when DONE was clicked on the creation screen), each given to its
+    /// member if it carries nothing yet.
     /// </summary>
     private void GiveStartingGear()
     {
         for (int i = 0; i < Session.Party.Count; i++)
         {
             if (Session.Party[i] is { } c && _world[i] is { Kind: ObjectKind.Party, Items.Count: 0 } member
-                && _world.GiveStartingGear(member, c.ItemClasses, c.Race == DarkSun.Game.Characters.Race.ThriKreen) is { Count: > 0 } given)
+                && _world.GiveItems(member, Session.Kit(c)) is { Count: > 0 } given)
             {
                 AddScriptLine($"> {c.Name} starts with {string.Join(", ", given.Select(g => (_world.Items.NameOf(g.Record) is { Length: > 0 } n ? n : $"item {g.Rdff}") + (g.Quantity > 1 ? $" ×{g.Quantity}" : "") + (g.Equipped ? "" : " (pack)")))}");
             }

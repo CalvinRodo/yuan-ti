@@ -44,26 +44,22 @@ public sealed partial class GameWorld
             : null;
 
     /// <summary>
-    /// Give <paramref name="member"/> a new character's gear (<see cref="StartingGear"/>,
-    /// <c>6ECD:1D48</c>): each item worn in its slot if its class may (<see cref="EquipAt"/>,
-    /// as <c>1A0A:20EC</c>), else in the pack (<c>1A0A:1CD6</c>); a stack (the arrows) with its
-    /// record's quantity. Returns what was given.
+    /// Give <paramref name="member"/> the items a character brings to a new game
+    /// (<see cref="Characters.Character.Items"/>, at first its <see cref="StartingGear"/>):
+    /// each worn in its slot if its class may (<see cref="EquipAt"/>, as <c>1A0A:20EC</c>),
+    /// else in the pack (<c>1A0A:1CD6</c>). Returns what was given.
     /// </summary>
-    public IReadOnlyList<Item> GiveStartingGear(WorldObject member, ItemClasses classes, bool thriKreen)
+    public IReadOnlyList<Item> GiveItems(WorldObject member, IEnumerable<ItemState> items)
     {
         var given = new List<Item>();
-        foreach (GearPiece piece in StartingGear.For(classes, thriKreen))
+        foreach (ItemState state in items)
         {
-            if (member.Items.Count >= Equipment.Capacity || NewItem(piece.Ojff) is not { } item)
+            if (member.Items.Count >= Equipment.Capacity || NewItem(state) is not { } item)
             {
                 continue;
             }
-            if (Stacks(item.Record))
-            {
-                item.Quantity = Math.Max(1, (int)item.Record.Quantity);
-            }
             member.Items.Add(item);
-            if (EquipAt(member, item, piece.Slot) != EquipResult.Worn)
+            if (state.Slot < Equipment.Slots && EquipAt(member, item, state.Slot) != EquipResult.Worn)
             {
                 item.Slot = Equipment.Pack;
             }

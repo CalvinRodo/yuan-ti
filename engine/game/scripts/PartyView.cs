@@ -1,5 +1,6 @@
 using DarkSun.Data.Gff;
 using DarkSun.Data.Images;
+using DarkSun.Data.Regions;
 using DarkSun.Game.Characters;
 using DarkSun.Game.World;
 using Godot;
@@ -50,6 +51,12 @@ public partial class PartyView : RetroScreen
     private Palette _palette = null!;
     private GffFile _resources = null!;
     private readonly List<TextureRect> _slotPictures = [], _selectedFrames = [];
+
+    /// <summary>The equipment slots the readied boxes show, as the recording does: the missile weapon, the weapon hand, the other hand.</summary>
+    private static readonly int[] ReadiedSlots = [2, 3, 10];
+
+    private readonly TextureRect[] _readied = new TextureRect[ReadiedSlots.Length];
+    private readonly Dictionary<int, Texture2D?> _itemPictures = [];
     private PartyFrames _frames = null!;
     private ViewCharacterText _text = null!;
     private UiWindowView _dual = null!;
@@ -105,11 +112,13 @@ public partial class PartyView : RetroScreen
                 computer.Pressed += () => ComputerPressed(slot);
             }
         }
-        // The three readied weapons' slots (9106:0B64), stone where nothing is held.
-        for (int i = 0; i < 3; i++)
+        // The three readied weapons' slots (9106:0B64), stone, the item's picture centred over it.
+        for (int i = 0; i < ReadiedSlots.Length; i++)
         {
             Rect2 at = _window.RectOf("APFM", FirstReadied + i);
             _window.AddChild(new TextureRect { Texture = Bmp(SlotArt), Position = at.Position, MouseFilter = MouseFilterEnum.Ignore });
+            _readied[i] = new TextureRect { Position = at.Position, Size = at.Size, StretchMode = TextureRect.StretchModeEnum.KeepCentered, MouseFilter = MouseFilterEnum.Ignore };
+            _window.AddChild(_readied[i]);
         }
         _text = new ViewCharacterText(_window);
 
@@ -204,7 +213,13 @@ public partial class PartyView : RetroScreen
             _text.ShowBox(i, MemberView(i), i == _selected);
         }
         _frames.Refresh();
-        _text.Show(Selected is { } s ? ViewCharacterText.Of(s) : null);
+        Character? selected = Selected;
+        IReadOnlyList<ItemState> kit = selected is null ? [] : Session.Kit(selected);
+        _text.Show(selected is null ? null : ViewCharacterText.Of(selected, kit));
+        for (int i = 0; i < ReadiedSlots.Length; i++)
+        {
+            _readied[i].Texture = kit.FirstOrDefault(k => k.Slot == ReadiedSlots[i]) is { } item ? ItemPicture(item.Rdff) : null;
+        }
         if (Selected is null && _frames.Resting.Length == 0)
         {
             _frames.Resting = "PRESS RIGHT MOUSE BUTTON";
@@ -540,6 +555,19 @@ public partial class PartyView : RetroScreen
         _resources.TryRead("ICON", number, out var data) && Session.Assets.Frames(data) is { } frames && frame < frames.Count
             ? Textures.ToTexture(frames[frame], _palette)
             : null;
+
+    /// <summary>An item's picture: its map sprite (<c>OJFF</c> = <c>RDFF</c>), as the inventory shows it.</summary>
+    private Texture2D? ItemPicture(int rdff)
+    {
+        if (!_itemPictures.TryGetValue(rdff, out Texture2D? picture))
+        {
+            picture = Region.MakeObject(Session.ObjectData, rdff, 0, 0, d => Session.Assets.Frames(d)) is { Frames: [var frame, ..] }
+                ? Textures.ToTexture(frame, _palette)
+                : null;
+            _itemPictures[rdff] = picture;
+        }
+        return picture;
+    }
 
     private void AddPicture(int bmp, Vector2 at)
     {

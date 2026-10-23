@@ -344,6 +344,11 @@ public partial class CharacterGenView : RetroScreen
         {
             party[at] = _c;
         }
+        if (!_c.Adventured)
+        {
+            // DONE gives the class's gear (6ECD:1D48), kept with the character.
+            _c.Items = Session.StartingItems(_c);
+        }
         Session.Roster.Save(_c);
         Session.SaveParty();
         GetTree().CallDeferred(SceneTree.MethodName.ChangeSceneToFile, PartyView.ScenePath);

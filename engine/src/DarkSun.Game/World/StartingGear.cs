@@ -1,3 +1,4 @@
+using DarkSun.Data.Gff;
 using DarkSun.Data.Items;
 
 namespace DarkSun.Game.World;
@@ -43,5 +44,29 @@ public static class StartingGear
             : (classes & ItemClasses.Preserver) != 0 ? (26, 27)
             : (24, 25);
         return Table[first..(last + 1)];
+    }
+
+    /// <summary>
+    /// The gear as the items a new character keeps (<see cref="Characters.Character.Items"/>):
+    /// each piece worn in its slot if it goes there and its class may use it
+    /// (as <c>1A0A:20EC</c>), else in the pack; a stack (the arrows) with its
+    /// record's quantity. <paramref name="objectData"/> holds the item
+    /// <c>RDFF</c>s; a piece that isn't one is left out.
+    /// </summary>
+    public static List<ItemState> Items(ItemClasses classes, bool thriKreen, IResourceSource objectData, ItemCatalog catalog)
+    {
+        var items = new List<ItemState>();
+        foreach (GearPiece piece in For(classes, thriKreen))
+        {
+            if (!objectData.TryRead("RDFF", piece.Ojff, out var data) || ItemRecord.FromRdff(data) is not { } record)
+            {
+                continue;
+            }
+            ItemType? type = catalog.TypeOf(record);
+            bool worn = type is { Placement: not ItemPlacement.None } && type.UsableBy(classes)
+                && piece.Slot is >= 0 and < Equipment.Slots && Equipment.Placements[piece.Slot] == type.Placement;
+            items.Add(new ItemState(piece.Ojff, type is { Stacks: true } ? Math.Max(1, (int)record.Quantity) : 1, worn ? piece.Slot : Equipment.Pack));
+        }
+        return items;
     }
 }

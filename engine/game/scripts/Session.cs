@@ -220,6 +220,19 @@ public static class Session
         }
     }
 
+    /// <summary>The item <c>RDFF</c>s (<c>SEGOBJEX.GFF</c>) and the item types and names (<c>GPLDATA.GFF</c>), as a world reads them.</summary>
+    public static IResourceSource ObjectData => new GffSet([Open("SEGOBJEX.GFF"), Open("GPLDATA.GFF")]);
+
+    /// <summary>The gear a character of <paramref name="c"/>'s class and race starts with (<see cref="StartingGear.Items"/>).</summary>
+    public static List<ItemState> StartingItems(Character c)
+    {
+        IResourceSource data = ObjectData;
+        return StartingGear.Items(c.ItemClasses, c.Race == Race.ThriKreen, data, DarkSun.Data.Items.ItemCatalog.Load(data));
+    }
+
+    /// <summary>What <paramref name="c"/> brings to a new game: its <see cref="Character.Items"/>, or its starting gear if it has none.</summary>
+    public static IReadOnlyList<ItemState> Kit(Character c) => c.Items.Count > 0 ? c.Items : StartingItems(c);
+
     /// <summary>Start with the pre-made party (when no party has been made); false if there is none.</summary>
     public static bool UsePremadeParty()
     {

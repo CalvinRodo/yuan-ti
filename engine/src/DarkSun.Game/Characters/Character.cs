@@ -4,6 +4,7 @@ using DarkSun.Data.Gff;
 using DarkSun.Data.Items;
 using DarkSun.Data.Text;
 using DarkSun.Game.Magic;
+using DarkSun.Game.World;
 
 namespace DarkSun.Game.Characters;
 
@@ -86,6 +87,14 @@ public sealed record Character
     /// again, and of no use until the current class's level exceeds it.
     /// </summary>
     public List<FormerClass> Former { get; set; } = [];
+
+    /// <summary>
+    /// The items it brings to a new game: its class's <see cref="StartingGear"/>,
+    /// given when DONE is clicked on the creation screen (<c>6ECD:1D48</c>; DSUN.EXE
+    /// keeps them with the character), worn ones in their slots. Empty for a
+    /// character made before it had any, which gets the gear when a game starts.
+    /// </summary>
+    public List<ItemState> Items { get; set; } = [];
 
     /// <summary>
     /// The item classes it counts as (DSUN.EXE's character record +0x12,
