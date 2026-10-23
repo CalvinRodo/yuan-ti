@@ -188,6 +188,18 @@ public sealed class ModSetTests : IDisposable
         GffFile gff = Gff();
         Assert.Same(gff, ModSet.Load([_root, null]).Apply(gff, "T.GFF"));
     }
+
+    [Theory]
+    [InlineData("better_shops", "Better Shops")]
+    [InlineData("BetterShops", "Better Shops")]
+    [InlineData("more-loot.v2", "More Loot V2")]
+    [InlineData("Tabletop", "Tabletop")]
+    [InlineData("___", "___")]
+    public void FolderNamesBecomeFriendlyNames(string folder, string name) => Assert.Equal(name, Mod.FriendlyName(folder));
+
+    [Fact]
+    public void ATitleIsUsedBeforeTheFolderName() =>
+        Assert.Equal("Shops", new Mod("better_shops", "/x/better_shops") { Title = "Shops" }.DisplayName);
 }
 
 public class AssetCacheTests

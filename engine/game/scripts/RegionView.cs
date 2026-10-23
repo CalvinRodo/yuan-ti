@@ -76,6 +76,7 @@ public partial class RegionView : Node2D
     private OptionsWindow _options = null!;
     private Control _hudPanel = null!;
     private GameMenu _gameMenu = null!;
+    private SavesView _saves = null!;
     private GameMenu.Cursor _cursor;
 
     /// <summary>Scripts to start once none is paused (the region's after the game-start script, …): see <see cref="WhenScriptsFree"/>.</summary>
@@ -289,6 +290,10 @@ public partial class RegionView : Node2D
             {
                 Callable.From(() => _gameMenu.Open()).CallDeferred();
             }
+            if (OS.GetCmdlineUserArgs().FirstOrDefault(a => a is "--open-save" or "--open-load") is { } saves)
+            {
+                Callable.From(() => _saves.Open(saves == "--open-save" ? SavesView.Mode.Save : SavesView.Mode.Load)).CallDeferred();
+            }
             if (OS.GetCmdlineUserArgs().Contains("--open-preferences"))
             {
                 Callable.From(() =>
@@ -493,8 +498,7 @@ public partial class RegionView : Node2D
         _gameMenu = new GameMenu
         {
             ShowCharacter = page => _character.Open(_world, _selected, page),
-            SaveGame = () => Save($"save-{DateTime.Now:yyyyMMdd-HHmmss}", $"{_region.Number}: {DateTime.Now:g}"),
-            LoadGame = () => GetTree().CallDeferred(SceneTree.MethodName.ChangeSceneToFile, SavesView.ScenePath),
+            OpenSaves = (mode, then) => _saves.Open(mode, then),
             ExitGame = () => GetTree().CallDeferred(SceneTree.MethodName.ChangeSceneToFile, MainMenu.ScenePath),
             OverheadMap = OverheadMap,
             CenterOnLeader = () => _follow = true,
@@ -502,6 +506,12 @@ public partial class RegionView : Node2D
             CursorChanged = SetCursor,
         };
         layer.AddChild(_gameMenu);
+        _saves = new SavesView
+        {
+            SaveTo = (name, file) => Save(file ?? $"save-{DateTime.Now:yyyyMMdd-HHmmss}", name),
+            LoadSave = save => LoadSaved(save),
+        };
+        layer.AddChild(_saves);
         _prompt = new Label { Visible = false, HorizontalAlignment = HorizontalAlignment.Center };
         _prompt.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.CenterTop);
         _prompt.GrowHorizontal = Control.GrowDirection.Both;
@@ -795,6 +805,9 @@ public partial class RegionView : Node2D
 
     /// <summary>The game menu is showing.</summary>
     public bool GameMenuOpen => _gameMenu?.IsOpen == true;
+
+    /// <summary>The LOAD or SAVE screen is showing.</summary>
+    public bool SavesOpen => _saves?.IsOpen == true;
 
     /// <summary>The leader button: <paramref name="slot"/> leads (the selected character, <c>gname[5]</c>).</summary>
     private void MakeLeader(int slot)
@@ -1239,7 +1252,7 @@ public partial class RegionView : Node2D
         UpdateFloor(delta);
     }
 
-    private bool KeyboardMovementLocked => MapLocked || _dialogueWindow.Visible || _gameMenu.IsOpen || _character.IsOpen
+    private bool KeyboardMovementLocked => MapLocked || _dialogueWindow.Visible || _gameMenu.IsOpen || _saves.IsOpen || _character.IsOpen
         || _journal.Visible || _options.Visible || _verbMenu.Visible || _containerWindow.Visible || _itemWindow.Visible || _debugger.Visible
         || GetNodeOrNull<KeyHelp>("/root/KeyHelp")?.IsOpen == true
         || GetViewport().GuiGetFocusOwner() is LineEdit or TextEdit;
@@ -1330,7 +1343,7 @@ public partial class RegionView : Node2D
         {
             _gameMenu.ResetCursor();
         }
-        else if (e.IsActionPressed(Controls.Back) && !_gameMenu.IsOpen && !_character.IsOpen)
+        else if (e.IsActionPressed(Controls.Back) && !_gameMenu.IsOpen && !_saves.IsOpen && !_character.IsOpen)
         {
             _gameMenu.Open();
         }
@@ -2961,7 +2974,11 @@ public partial class RegionView : Node2D
             _gameMenu.Press(11308);
             _gameMenu.Press(10302);
             Expect(_gameMenu.Showing == "ask: LOAD/SAVE GAME", $"LOAD/SAVE GAME asks ({_gameMenu.Showing})");
-            _gameMenu.Press(10308);
+            _gameMenu.Press(14001);
+            Expect(_saves.IsOpen && !_gameMenu.IsOpen, "its SAVE opens the save screen over the map");
+            _saves.Close();
+            Expect(!_saves.IsOpen, "which closes again");
+            _gameMenu.Open();
             _gameMenu.Press(10311);
             Expect(!_gameMenu.IsOpen && _cursor == GameMenu.Cursor.Look, "the eye is the LOOK cursor");
             _gameMenu.ResetCursor();
@@ -3297,21 +3314,26 @@ public partial class RegionView : Node2D
         var expected = (Region: _region.Number, Door: door?.DoorFlags, Leader: leader.Cell, Facing: leader.Facing,
             Flag: (byte)0x5A, Remembered: Session.Regions.States.Count(r => r.Region != _region.Number) + 1, Random: Session.Scripts.Random.State,
             Talk: Session.Scripts.Triggers.Count(GplTriggerList.TalkTo), Party: _party.Count);
-        string file = "check-" + Guid.NewGuid().ToString("N")[..8];
-        Save(file, "Check");
-        string path = Session.SavePath(file);
-        if (!File.Exists(path))
+        // Saved from the save screen, under a name of its own.
+        string name = "Check " + Guid.NewGuid().ToString("N")[..8];
+        _saves.Open(SavesView.Mode.Save);
+        _saves.Type(name);
+        _saves.Press(2057);
+        string? path = Session.ListSaves().FirstOrDefault(s => s.Save?.Name == name).Path;
+        if (path is null || _saves.IsOpen)
         {
-            GD.Print("save check: nothing was saved");
+            GD.Print($"save check: nothing was saved as {name} from the save screen");
             GetTree().Quit(1);
             return;
         }
 
-        // Change everything, then load.
+        // Change everything, then load it from the load screen.
         Session.Scripts.Memory.Area(GplArea.GlobalFlags)[50] = 0;
         ShowRegion(home + 2);
         AnswerForThePlayer();
-        LoadSaved(SaveGame.Read(path));
+        _saves.Open(SavesView.Mode.Load);
+        bool listed = _saves.SelectTitle(name);
+        _saves.Press(2057);
         File.Delete(path);
 
         var problems = new List<string>();
@@ -3322,6 +3344,7 @@ public partial class RegionView : Node2D
                 problems.Add($"{what}: {got} instead of {want}");
             }
         }
+        Expect("listed by its name", true, listed);
         Expect("region", expected.Region, _region.Number);
         Expect("door flags", expected.Door, door is null ? null : _world[door.Index]?.DoorFlags);
         Expect("leader's cell", expected.Leader, _party[0].Walker.Cell);

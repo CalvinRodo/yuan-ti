@@ -45,11 +45,8 @@ public partial class GameMenu : RetroScreen
     /// <summary>Open a character screen page.</summary>
     public Action<CharacterScreen.Page>? ShowCharacter { get; set; }
 
-    /// <summary>Save the game (to a new file); false if it couldn't be.</summary>
-    public Func<bool>? SaveGame { get; set; }
-
-    /// <summary>The load screen.</summary>
-    public Action? LoadGame { get; set; }
+    /// <summary>Open the LOAD or SAVE screen (<see cref="SavesView"/>); the action runs once a game is saved there.</summary>
+    public Action<SavesView.Mode, Action?>? OpenSaves { get; set; }
 
     /// <summary>Leave for the main menu.</summary>
     public Action? ExitGame { get; set; }
@@ -142,11 +139,8 @@ public partial class GameMenu : RetroScreen
         On(_menu, s, 11306, "USE PSIONIC", () => Character(CharacterScreen.Page.Psionics));
         On(_menu, s, 10301, "EXIT TO DOS", () => Ask("EXIT: SAVE GAME?", ("SAVE", () =>
         {
-            if (SaveGame?.Invoke() != false)
-            {
-                Close();
-                ExitGame?.Invoke();
-            }
+            Close();
+            OpenSaves?.Invoke(SavesView.Mode.Save, () => ExitGame?.Invoke());
         }), ("QUIT", () =>
         {
             Close();
@@ -154,13 +148,12 @@ public partial class GameMenu : RetroScreen
         }), ("CANCEL", ShowMenu)));
         On(_menu, s, 10302, "LOAD/SAVE GAME", () => Ask("LOAD/SAVE GAME", ("SAVE", () =>
         {
-            bool saved = SaveGame?.Invoke() != false;
-            ShowMenu();
-            _menuStatus.Text = saved ? "GAME SAVED" : "CAN'T SAVE NOW";
+            Close();
+            OpenSaves?.Invoke(SavesView.Mode.Save, null);
         }), ("LOAD", () =>
         {
             Close();
-            LoadGame?.Invoke();
+            OpenSaves?.Invoke(SavesView.Mode.Load, null);
         }), ("CANCEL", ShowMenu)));
         On(_menu, s, 10303, "SET PREFERENCES", ShowPreferences);
         On(_menu, s, 10305, "OVERHEAD MAP", () => Then(OverheadMap));
