@@ -161,9 +161,13 @@ closed, cells scripts blocked, objects moved, taken off the map or cloned,
 creatures' allegiance and script fields; its script then runs again, as in
 the original. Saved games keep it, with everything else.
 
-Saved games: F5 saves (a quick save), F9 loads it, and entering a region
-autosaves; Load Saved Game (L) on the main menu lists every save, newest
-first, to load or delete. A save is a JSON file in `saves` in the Godot user
+Saved games: F5 saves (a quick save, QUICKSAVE in the lists), F9 loads it,
+and entering a region autosaves (AUTOSAVE). The game menu's LOAD/SAVE GAME
+and Load Saved Game (L) on the main menu open the original's LOAD and SAVE
+screen (`WIND` 3009): every save, newest first, ten at a time, by name, with
+the selected one's date, time, region and party beside the list. Saving
+names the game (the first line is a new one; another is replaced after
+asking), and DELETE removes one after asking. A save is a JSON file in `saves` in the Godot user
 data folder holding the party (sprite, cell, facing, the selected member),
 the script globals and engine variables, the trigger table, the creatures'
 scripts, the random generator, and every region visited as it was left (the
@@ -219,7 +223,7 @@ leader button picks who leads (selected when the game starts), computer control 
 View Character and the inventory draw what DSUN.EXE draws in their frames: the hit point, psionic and
 status bars, hit points and status under the inventory's boxes, and the status line's texts.
 `--open-sheet`, `--open-items`, `--open-spells`, `--open-psionics`, `--open-store`, `--open-menu`,
-`--open-preferences` and `--open-body` (kills the first creature and opens its body) open them for
+`--open-preferences`, `--open-save`, `--open-load` and `--open-body` (kills the first creature and opens its body) open them for
 testing; `--check-character` clicks through them.
 The original screens (main menu, View Character, Character Generation, the text windows) are built
 from their windows' data (`UiWindowView`): each control where its `WIND` puts it, with its own art,
@@ -396,10 +400,13 @@ then shows every script as source and checks that each command maps to a line.
 
 A mod file that can't be read, parsed or assembled doesn't stop the game:
 the original resource is used, and the problem is logged and shown in the
-mod list. The mod list (M on the main menu) shows every mod with its
-`mod.json` details, how many resources it changes and its problems; it
-turns mods on and off (renaming the folder with a leading `_`) and moves
-them up and down (`load_order.txt`), applying changes at once.
+mod list. The mod list (M on the main menu), in the stone of the original's
+LOAD and SAVE window, shows every mod by its `mod.json` title (else its
+folder's name as words: `better_shops` is Better Shops), on or off; the
+selected one's version, author, description (as many lines as it takes),
+folder, how many resources it changes and its problems. It turns mods on
+and off (renaming the folder with a leading `_`) and raises and lowers
+them (`load_order.txt`), applying changes at once.
 `make engine-mod-check` reports problems from the command line.
 
 Decoded images and palettes are cached for the session
