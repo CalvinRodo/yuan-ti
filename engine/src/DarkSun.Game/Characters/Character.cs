@@ -4,6 +4,7 @@ using DarkSun.Data.Gff;
 using DarkSun.Data.Items;
 using DarkSun.Data.Text;
 using DarkSun.Game.Magic;
+using DarkSun.Game.World;
 
 namespace DarkSun.Game.Characters;
 
@@ -86,6 +87,14 @@ public sealed record Character
     /// again, and of no use until the current class's level exceeds it.
     /// </summary>
     public List<FormerClass> Former { get; set; } = [];
+
+    /// <summary>
+    /// The items it brings to a new game: its class's <see cref="StartingGear"/>,
+    /// given when DONE is clicked on the creation screen (<c>6ECD:1D48</c>; DSUN.EXE
+    /// keeps them with the character), worn ones in their slots. Empty for a
+    /// character made before it had any, which gets the gear when a game starts.
+    /// </summary>
+    public List<ItemState> Items { get; set; } = [];
 
     /// <summary>
     /// The item classes it counts as (DSUN.EXE's character record +0x12,
@@ -509,6 +518,15 @@ public sealed class CharacterCreation(CharacterRules rules, CharacterNames names
     /// <summary>Level in each class: experience is divided evenly among them.</summary>
     public IReadOnlyList<int> Levels(Character c) =>
         [.. c.Classes.Select(k => Rules.Class(k).Levels.Count(xp => c.Experience / Math.Max(1, c.Classes.Count) >= xp))];
+
+    /// <summary>The experience at which the next level comes, in whichever class is first (shared evenly, as <see cref="Levels"/>); null at the top of every class.</summary>
+    public int? NextLevelExperience(Character c)
+    {
+        var levels = Levels(c);
+        var next = c.Classes.Select((k, i) => Rules.Class(k).Levels is var table && levels[i] < table.Count ? table[levels[i]] * c.Classes.Count : (int?)null)
+            .OfType<int>().ToList();
+        return next.Count > 0 ? next.Min() : null;
+    }
 }
 
 /// <summary>

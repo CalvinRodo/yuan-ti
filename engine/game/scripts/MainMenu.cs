@@ -129,10 +129,7 @@ public partial class MainMenu : RetroScreen
             GetTree().Quit(_buttons.Count == 4 ? 0 : 1);
             return;
         }
-        if (_buttons.Count > 0)
-        {
-            _buttons[0].CallDeferred(Control.MethodName.GrabFocus);
-        }
+        // Nothing is highlighted until the pointer or a key picks a line, as in the original.
     }
 
     public override void _UnhandledInput(InputEvent e)
@@ -145,6 +142,14 @@ public partial class MainMenu : RetroScreen
         {
             GetViewport().SetInputAsHandled();
             _options.Open();
+            return;
+        }
+        if (_buttons.Count > 0 && GetViewport().GuiGetFocusOwner() is null
+            && (e.IsActionPressed("ui_down") || e.IsActionPressed("ui_up") || e.IsActionPressed("ui_accept")))
+        {
+            // The first arrow key (or Enter) highlights the first line; then the arrows move between them.
+            GetViewport().SetInputAsHandled();
+            _buttons[0].GrabFocus();
             return;
         }
         if (e is InputEventKey { Pressed: true, Echo: false, Keycode: Key.M })

@@ -7,7 +7,7 @@ namespace DarkSun.Engine;
 /// <summary>
 /// The game's font (<see cref="GameFont"/>, <c>FONT</c> 100, mods applied) as
 /// Godot bitmap fonts, one per text colour: letters in that colour, their
-/// shadow in palette colour 20, as DSUN.EXE draws text (<c>2BF9:055D</c>). Use
+/// shadow in <see cref="Shadow"/>, as DSUN.EXE draws text (<c>2BF9:055D</c>). Use
 /// it at <see cref="Size"/> (9, the font's height) in the 320 × 200
 /// screens' coordinates, with the control's font colour white. Characters
 /// are looked up as the DOS code page 437 glyphs they are (the font's
@@ -18,8 +18,13 @@ public static class GameFonts
     /// <summary>The font's height, the size to use it at.</summary>
     public const int Size = 9;
 
-    /// <summary>The shadow: colour 20, the same in every palette (56, 56, 84).</summary>
-    public static readonly Color Shadow = Color.Color8(56, 56, 84);
+    /// <summary>
+    /// The shadow as the original's screens show it: (32, 32, 56), palette
+    /// colour 17, measured under the text of Character Generation and View
+    /// Character in a recording of DSUN.EXE (the font's shadow pixel is 20,
+    /// (56, 56, 84) in palette 1001, so the game maps it darker when drawing).
+    /// </summary>
+    public static readonly Color Shadow = Color.Color8(32, 32, 56);
 
     /// <summary>The text window's colour, 199 (224, 192, 160) in every palette.</summary>
     public static readonly Color Tan = Color.Color8(224, 192, 160);

@@ -105,4 +105,12 @@ public static class CharacterSheet
         int warrior = active.Where(a => Of(a.Class, rules)?.Warrior == true).Select(a => a.Level).DefaultIfEmpty(0).Max();
         return rules.AttackSteps.Where(s => warrior >= s.WarriorLevel).Select(s => s.Halves).DefaultIfEmpty(rules.BaseAttackHalves).Last();
     }
+
+    /// <summary>
+    /// The damage as Character Generation and View Character write it: attacks
+    /// a round (from halves: 1, 1.5, 2 …), "x", the dice and the bonus, as in
+    /// "1.5x1D8+8"; no bonus, none written.
+    /// </summary>
+    public static string DamageText(int attackHalves, int dice, int sides, int bonus) =>
+        $"{attackHalves / 2}{(attackHalves % 2 == 1 ? ".5" : "")}x{dice}D{sides}{(bonus != 0 ? bonus.ToString("+0;-0") : "")}";
 }

@@ -199,7 +199,8 @@ public static class Session
     /// roster character, four of them): what START GAME plays with when no
     /// party has been made, as the manual's "Pregenerated Party" (shipped as a
     /// saved game, which this install hasn't). Each comes with a new id, so it
-    /// can sit in the roster beside earlier copies.
+    /// can sit in the roster beside earlier copies, and with its class's
+    /// starting gear unless the file gives it <c>Items</c>.
     /// </summary>
     public static List<Character> Premade()
     {
@@ -211,7 +212,12 @@ public static class Session
         try
         {
             var list = System.Text.Json.JsonSerializer.Deserialize<List<System.Text.Json.JsonElement>>(Godot.FileAccess.GetFileAsString(path)) ?? [];
-            return [.. list.Select(e => CharacterRoster.FromJson(e.GetRawText()) with { Id = Guid.NewGuid() }).Take(GameWorld.PartySize)];
+            List<Character> premade = [.. list.Select(e => CharacterRoster.FromJson(e.GetRawText()) with { Id = Guid.NewGuid() }).Take(GameWorld.PartySize)];
+            foreach (Character c in premade.Where(c => c.Items.Count == 0))
+            {
+                c.Items = StartingItems(c);
+            }
+            return premade;
         }
         catch (Exception e) when (e is System.Text.Json.JsonException or InvalidOperationException)
         {
@@ -219,6 +225,19 @@ public static class Session
             return [];
         }
     }
+
+    /// <summary>The item <c>RDFF</c>s (<c>SEGOBJEX.GFF</c>) and the item types and names (<c>GPLDATA.GFF</c>), as a world reads them.</summary>
+    public static IResourceSource ObjectData => new GffSet([Open("SEGOBJEX.GFF"), Open("GPLDATA.GFF")]);
+
+    /// <summary>The gear a character of <paramref name="c"/>'s class and race starts with (<see cref="StartingGear.Items"/>).</summary>
+    public static List<ItemState> StartingItems(Character c)
+    {
+        IResourceSource data = ObjectData;
+        return StartingGear.Items(c.ItemClasses, c.Race == Race.ThriKreen, data, DarkSun.Data.Items.ItemCatalog.Load(data));
+    }
+
+    /// <summary>What <paramref name="c"/> brings to a new game: its <see cref="Character.Items"/>, or its starting gear if it has none.</summary>
+    public static IReadOnlyList<ItemState> Kit(Character c) => c.Items.Count > 0 ? c.Items : StartingItems(c);
 
     /// <summary>Start with the pre-made party (when no party has been made); false if there is none.</summary>
     public static bool UsePremadeParty()
