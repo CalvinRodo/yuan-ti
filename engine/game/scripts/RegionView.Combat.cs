@@ -34,6 +34,9 @@ public partial class RegionView
     private const int LogLines = 12;
 
     private Battle? _battle;
+
+    /// <summary>The enemy chosen with Tab (<see cref="ChooseEnemy"/>), whom Enter attacks; its ring is the red one.</summary>
+    private Combatant? _chosenEnemy;
     private readonly Queue<CombatEvent> _combatEvents = new();
     private double _combatWait;
     private (Walker Walker, double Left)? _combatWalk;
@@ -720,6 +723,16 @@ public partial class RegionView
             ToggleAuto();
             return true;
         }
+        if (Settings.ChooseEnemyKeys && e.IsActionPressed(Controls.CombatChooseEnemy))
+        {
+            ChooseEnemy(e is InputEventWithModifiers { ShiftPressed: true } ? -1 : 1);
+            return true;
+        }
+        if (Settings.ChooseEnemyKeys && e.IsActionPressed(Controls.CombatAttackChosen) && _chosenEnemy is not null)
+        {
+            AttackChosen();
+            return true;
+        }
         if (e is InputEventMouseButton { ButtonIndex: MouseButton.Right, Pressed: true })
         {
             // 1587:01C7: a right-click puts an aimed spell away, else turns the pointer to the next cursor.
@@ -794,21 +807,109 @@ public partial class RegionView
         }
         if (battle.At(cell) is { } there && there != c && c.IsEnemyOf(there))
         {
-            bool missile = MissileClick(c, there);
-            if (!battle.CanAttack(c, there, missile) && (c.Flags & TurnFlags.MayMove) != 0 && battle.FreeCellNextTo(there, c) is { } next)
-            {
-                battle.MoveToward(c, next);
-            }
-            if (battle.Current == c && !battle.Attack(c, there, missile))
-            {
-                Notice(Battle.Distance(c, there) > Battle.Reach(c) ? $"{Who(there)} is out of reach." : $"{Who(c)} can't attack now.");
-            }
+            AttackOrApproach(c, there);
             return;
         }
         if ((c.Flags & TurnFlags.MayMove) != 0 && battle.MoveToward(c, cell) == 0)
         {
             Notice("Can't move there.");
         }
+    }
+
+    /// <summary>Attack an enemy: shoot it if a click would (<see cref="MissileClick"/>), else walk up to it first if it is out of reach.</summary>
+    private void AttackOrApproach(Combatant c, Combatant there)
+    {
+        Battle battle = _battle!;
+        bool missile = MissileClick(c, there);
+        if (!battle.CanAttack(c, there, missile) && (c.Flags & TurnFlags.MayMove) != 0 && battle.FreeCellNextTo(there, c) is { } next)
+        {
+            battle.MoveToward(c, next);
+        }
+        if (battle.Current == c && !battle.Attack(c, there, missile))
+        {
+            Notice(Battle.Distance(c, there) > Battle.Reach(c) ? $"{Who(there)} is out of reach." : $"{Who(c)} can't attack now.");
+        }
+    }
+
+    /// <summary>
+    /// Tab on a party member's turn: the next nearest living enemy is chosen
+    /// (<paramref name="step"/> −1, Shift+Tab: the one before), named in the log,
+    /// and the view goes to it if it is out of sight. After the Obsidian
+    /// Edition's (its FEATURES.md, "Choosing an enemy: Tab, Enter and the rings").
+    /// </summary>
+    private void ChooseEnemy(int step)
+    {
+        if (PlayerTurn is not { } c)
+        {
+            return;
+        }
+        List<Combatant> enemies = [.. _battle!.Combatants.Where(e => e.Alive && c.IsEnemyOf(e))
+            .OrderBy(e => Battle.Distance(c, e)).ThenBy(e => e.Cell.Y).ThenBy(e => e.Cell.X)];
+        if (enemies.Count == 0)
+        {
+            _chosenEnemy = null;
+            return;
+        }
+        int now = _chosenEnemy is null ? -1 : enemies.IndexOf(_chosenEnemy);
+        int index = now < 0 ? (step > 0 ? 0 : enemies.Count - 1) : (now + step + enemies.Count) % enemies.Count;
+        _chosenEnemy = enemies[index];
+        Log($"Chosen: {TipFor(c, _chosenEnemy.Cell)}");
+        if (SpriteOf(_chosenEnemy) is { } sprite)
+        {
+            Vector2 size = GetViewportRect().Size / _camera.Zoom;
+            if (!new Rect2(_camera.GetScreenCenterPosition() - size / 2, size).Grow(-16).HasPoint(sprite.Position))
+            {
+                _follow = false;
+                _camera.Position = sprite.Position;
+            }
+        }
+    }
+
+    /// <summary>Enter: the current member attacks the enemy chosen with Tab, as a click on it would, whatever stands in front of it.</summary>
+    private void AttackChosen()
+    {
+        if (_chosenEnemy is not { Alive: true } target || _battle?.Combatants.Contains(target) != true)
+        {
+            _chosenEnemy = null;
+            return;
+        }
+        PlayerAct(c =>
+        {
+            if (c.IsEnemyOf(target))
+            {
+                AttackOrApproach(c, target);
+            }
+        });
+    }
+
+    /// <summary>
+    /// The red rings under the enemies' feet, as the options say: none, the
+    /// chosen one's, or every enemy's (the chosen one's thicker and redder).
+    /// </summary>
+    private List<(Vector2 Feet, float Radius, bool Chosen)> EnemyRings()
+    {
+        if (_battle is not { } battle)
+        {
+            _chosenEnemy = null;
+            return [];
+        }
+        if (_chosenEnemy is { Alive: false })
+        {
+            _chosenEnemy = null;
+        }
+        int mode = Settings.EnemyRings;
+        List<Combatant> party = [.. battle.Combatants.Where(c => c.PartyMember)];
+        var rings = new List<(Vector2, float, bool)>();
+        foreach (Combatant enemy in battle.Combatants.Where(e => e.Alive && !e.PartyMember && party.Any(p => p.IsEnemyOf(e))))
+        {
+            bool chosen = enemy == _chosenEnemy;
+            if ((mode == 2 || mode == 1 && chosen) && SpriteOf(enemy) is { Visible: true } sprite)
+            {
+                int halfWidth = enemy.Source?.Walker?.Footprint.HalfWidth ?? 0;
+                rings.Add((sprite.Position + new Vector2(0, 1), 6 + halfWidth * 16, chosen));
+            }
+        }
+        return rings;
     }
 
     /// <summary>

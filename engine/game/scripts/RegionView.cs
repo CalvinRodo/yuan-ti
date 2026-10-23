@@ -66,6 +66,7 @@ public partial class RegionView : Node2D
     private Palette _palette = null!;
     private double _clock;
     private Node2D _ground = null!;
+    private FloorEffects _floor = null!;
     private Node2D _sorted = null!;
     private DebugOverlay _overlay = null!;
     private ScriptDebugger _debugger = null!;
@@ -143,6 +144,8 @@ public partial class RegionView : Node2D
         Walker.UseOriginalPathfinding = Settings.OriginalPathfinding;
         _ground = new Node2D();
         AddChild(_ground);
+        _floor = new FloorEffects();
+        AddChild(_floor);
         _marker = new SelectionMarker();
         AddChild(_marker);
         _sorted = new Node2D { YSortEnabled = true };
@@ -357,6 +360,11 @@ public partial class RegionView : Node2D
             if (OS.GetCmdlineUserArgs().Contains("--check-character"))
             {
                 CheckCharacter();
+                return;
+            }
+            if (OS.GetCmdlineUserArgs().Contains("--check-floor"))
+            {
+                CheckFloor();
                 return;
             }
             if (OS.GetCmdlineUserArgs().Contains("--check-items"))
@@ -606,6 +614,8 @@ public partial class RegionView : Node2D
             Session.ScriptHost.Dialogue.Append("THE PARTY RESTS", 98);
         };
         // Back in a region visited before: as the party left it (before its script runs, as in DSUN.EXE).
+        // What had an object in the files but not when the party left (killed, picked up) isn't drawn.
+        var inFiles = _world.Objects.Where(o => o.Source is not null && !o.IsClone).Select(o => o.Source!).ToHashSet();
         IReadOnlyList<WorldObject>? restored = _checking ? null : Session.Regions.Recall(_world);
         _world.Changed += OnWorldChanged;
         _world.Defeated += creature => Session.ScriptHost.AwardKill(_world, creature);
@@ -631,11 +641,20 @@ public partial class RegionView : Node2D
         Image groundImage = Image.CreateFromData((int)_mapSize.X, (int)_mapSize.Y, false, Image.Format.Rgb8, ground);
         _ground.AddChild(new Sprite2D { Texture = ImageTexture.CreateFromImage(groundImage), Centered = false, Name = "Ground" });
 
+        // The floor as the dust sees it: the ground with the flat objects on it.
+        Image floorImage = (Image)groundImage.Duplicate();
+        floorImage.Convert(Image.Format.Rgba8);
+
         // Each sprite's node sits at the point it is sorted by: an object's ETAB
         // position, a wall's cell bottom. The image hangs off it via Offset.
         // Creatures that can walk are drawn from their walker instead, like the party.
+        var flats = new List<Sprite2D>();
         foreach (RegionObject obj in _region.Objects)
         {
+            if (inFiles.Contains(obj) && !_worldObjects.ContainsKey(obj))
+            {
+                continue;
+            }
             if (_worldObjects.TryGetValue(obj, out WorldObject? wo) && wo.Walker is not null)
             {
                 var node = new Sprite2D { Centered = false };
@@ -644,10 +663,16 @@ public partial class RegionView : Node2D
                 DrawCreature(wo);
                 continue;
             }
-            Sprite2D? sprite = AddSprite(obj.Frame, new Vector2(obj.EtabX, obj.EtabY), new Vector2(obj.X, obj.Y), obj.Mirrored);
+            bool flat = LiesFlat(obj, wo);
+            Sprite2D? sprite = AddSprite(obj.Frame, new Vector2(obj.EtabX, obj.EtabY), new Vector2(obj.X, obj.Y), obj.Mirrored, flat ? _ground : null);
             if (sprite is not null)
             {
                 _objectSprites.Add((obj, sprite));
+                if (flat)
+                {
+                    flats.Add(sprite);
+                    LayOnGround(floorImage, sprite);
+                }
             }
             if (sprite is not null && obj.Scmd > 0 && objectData.TryRead("SCMD", obj.Scmd, out var data))
             {
@@ -657,6 +682,12 @@ public partial class RegionView : Node2D
                 _animated.Add(new AnimatedObject(sprite, obj, scmd, AnimatorFor(obj, scmd, start, obj.AnchorX, obj.AnchorY)));
             }
         }
+        // The flat ones in the order the sorting drew them: by their top edge, then table order.
+        foreach (Sprite2D flat in flats.OrderBy(f => f.Position.Y))
+        {
+            _ground.MoveChild(flat, -1);
+        }
+        _floor.SetGround(floorImage);
         // DSUN.EXE draws row by row (draw_objects_and_walls, 1DBD:0002): before
         // an object whose ETAB y is in row y >> 4 it draws the walls of every
         // row above. So a wall on cell row r sorts just before y = (r + 1) * 16,
@@ -679,7 +710,33 @@ public partial class RegionView : Node2D
         Animate();
     }
 
-    private Sprite2D? AddSprite(ImageFrame frame, Vector2 sortPoint, Vector2 topLeft, bool mirrored)
+    /// <summary>
+    /// Whether an object lies flat on the ground (paving, a rug, an item put
+    /// down): hung from its top edge, which DSUN.EXE sorts it by, so whatever
+    /// stands on it is drawn over it anyway. Drawn with the ground, under the
+    /// floor's shadows, dust and rings, which it would otherwise cover.
+    /// Animated objects (their hot spot moves) and creatures stay sorted.
+    /// </summary>
+    private static bool LiesFlat(RegionObject obj, WorldObject? wo) =>
+        obj.EtabY - obj.Y <= FlatAnchor && obj.Scmd == 0 && wo?.Kind != ObjectKind.Creature;
+
+    /// <summary>How far below its picture's top edge a flat object may hang from (<see cref="LiesFlat"/>).</summary>
+    private const int FlatAnchor = 2;
+
+    /// <summary>A flat object's picture into the ground's image, where the dust looks for the floor's colour.</summary>
+    private static void LayOnGround(Image ground, Sprite2D sprite)
+    {
+        Image picture = sprite.Texture.GetImage();
+        picture.Convert(ground.GetFormat());
+        if (sprite.FlipH)
+        {
+            picture.FlipX();
+        }
+        var at = (Vector2I)(sprite.Position + sprite.Offset);
+        ground.BlendRect(picture, new Rect2I(Vector2I.Zero, picture.GetSize()), at);
+    }
+
+    private Sprite2D? AddSprite(ImageFrame frame, Vector2 sortPoint, Vector2 topLeft, bool mirrored, Node2D? parent = null)
     {
         if (frame.Width == 0 || frame.Height == 0)
         {
@@ -693,7 +750,7 @@ public partial class RegionView : Node2D
             Position = sortPoint,
             Offset = topLeft - sortPoint,
         };
-        _sorted.AddChild(sprite);
+        (parent ?? _sorted).AddChild(sprite);
         return sprite;
     }
 
@@ -1160,6 +1217,7 @@ public partial class RegionView : Node2D
                 _camera.Position += pan * PanSpeed * (float)delta / _camera.Zoom.X;
             }
             FollowCharacter();
+            UpdateFloor(delta);
             return;
         }
         MoveWithKeyboard();
@@ -1179,6 +1237,7 @@ public partial class RegionView : Node2D
         }
         FollowCharacter();
         UpdateHover(force: false);
+        UpdateFloor(delta);
     }
 
     private bool KeyboardMovementLocked => MapLocked || _dialogueWindow.Visible || _gameMenu.IsOpen || _character.IsOpen
@@ -3281,7 +3340,7 @@ public partial class RegionView : Node2D
 
     /// <summary>
     /// For every region: open or close every door, send a creature off the
-    /// map, move another and clone a thing; leave for another region and come
+    /// map, kill another, move a third and clone a thing; leave for another region and come
     /// back; and check that all of it is as it was left (in the world, the
     /// map flags and the drawn sprites).
     /// </summary>
@@ -3305,6 +3364,13 @@ public partial class RegionView : Node2D
             {
                 // Off the map: to region 255, or (in region 255 itself) to another one.
                 _world.Teleport(gone.Index, _region.Number == Region.TestRegion ? 2 : Region.TestRegion, 0, 0);
+            }
+            // Killed: gone from the region, maybe a body left where it fell.
+            WorldObject? killed = creatures.Where(c => c != gone && c != moved && c.Source is not null && !c.IsClone).Skip(1).FirstOrDefault();
+            RegionObject? killedSource = killed?.Source;
+            if (killed is not null)
+            {
+                _world.Hurt(killed, killed.Vitals.Hp + 5);
             }
             Cell? movedTo = null;
             if (moved is not null && _world.NearestCell(new Cell(moved.Cell.X + 3, moved.Cell.Y), c => moved.Walker!.CanStand(c, _region.IsBlocked)) is { } target)
@@ -3344,6 +3410,10 @@ public partial class RegionView : Node2D
             {
                 problems.Add($"#{gone.Index} is still drawn");
             }
+            if (killedSource is not null && (_objectSprites.Any(o => o.Object == killedSource) || _creatureNodes.Keys.Any(c => c.Source == killedSource)))
+            {
+                problems.Add($"the killed {killed!.Name} (#{killed.Index}) is drawn again");
+            }
             if (movedTo is { } cell && moved is not null && _world[moved.Index]?.Cell != cell)
             {
                 problems.Add($"#{moved.Index} at {_world[moved.Index]?.Cell} instead of {cell}");
@@ -3358,7 +3428,7 @@ public partial class RegionView : Node2D
                 problems.Add("the cloned thing isn't drawn");
             }
             failures += problems.Count > 0 ? 1 : 0;
-            GD.Print($"{files[index]}: {doors.Count} doors, {(gone is null ? 0 : 1)} gone, {(movedTo is null ? 0 : 1)} moved, {clones} cloned: "
+            GD.Print($"{files[index]}: {doors.Count} doors, {(gone is null ? 0 : 1)} gone, {(killed is null ? 0 : 1)} killed, {(movedTo is null ? 0 : 1)} moved, {clones} cloned: "
                 + (problems.Count == 0 ? "as left" : string.Join("; ", problems)));
         }
         GD.Print($"region memory: {files.Count - failures}/{files.Count} regions came back as left");

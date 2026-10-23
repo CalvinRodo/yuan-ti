@@ -247,6 +247,9 @@ public sealed partial class GameWorld
     /// </summary>
     public const int MaxCreatures = 0x30;
     public const int PartySize = 4;
+
+    /// <summary>DSUN.EXE's table size, which this world once kept to: regions saved then have no objects from the map past it (<see cref="Restore"/>).</summary>
+    private const int OldTable = 0x140;
     public const int None = 9999;
 
     /// <summary>Ticks between a creature's re-plans while it follows a moving target (about 0.5 s).</summary>
@@ -1024,9 +1027,19 @@ public sealed partial class GameWorld
         {
             throw new ArgumentException($"state of region {state.Region}, not {Region.Number}");
         }
+        int keepFrom = int.MaxValue;
+        if (_objects.Count > OldTable && !state.Objects.Any(o => o.Index >= OldTable && o.Etab is >= 0 && this[o.Index]?.Source?.EtabIndex == o.Etab))
+        {
+            // Saved when the world held DSUN.EXE's 320 objects and no more: the
+            // map entries past them weren't objects then (drawn as scenery). They
+            // are kept, and what was made at run time in their slots moves after them.
+            int next = _objects.Count;
+            state = state with { Objects = [.. state.Objects.Select(o => o.Index < OldTable ? o : o with { Index = next++ })] };
+            keepFrom = OldTable;
+        }
         var saved = state.Objects.ToDictionary(o => o.Index);
         // Gone since the files: removed (the party keeps its slots).
-        for (int i = PartySize; i < _objects.Count; i++)
+        for (int i = PartySize; i < Math.Min(_objects.Count, keepFrom); i++)
         {
             if (_objects[i] is { } obj && !saved.ContainsKey(i))
             {

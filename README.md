@@ -57,7 +57,10 @@ The tools also read *Dark Sun: Wake of the Ravager*, and partly *Al-Qadim: The G
   - a journal of every conversation;
   - a list of keys on every screen (press `?`);
   - a script debugger;
-  - the option to repair the shipped scripts' known bugs.
+  - the option to repair the shipped scripts' known bugs;
+  - shadows under the figures, dust where they walk on sand, and in a fight
+    red rings under the enemies, with Tab to choose one and Enter to attack it
+    (after the [Obsidian Edition](https://github.com/daaki85/darksun-obsidian-edition)).
 
 It is a work in progress. The [roadmap](.github/instructions/dsun-rewrite-roadmap.md)
 lists what's done and what's left.
@@ -233,6 +236,9 @@ format. `.github/instructions/` holds the reverse-engineering notes on
   includes none of the game's files.
 - The GFF format work builds on John Glassmyer's original Java tools, and
   cross-checks the libgff and soloscuro C implementations.
+- The shadows, dust, enemy rings and Tab / Enter targeting follow the
+  [Obsidian Edition](https://github.com/daaki85/darksun-obsidian-edition)'s,
+  a mod for the original game.
 - [OpenDS](https://github.com/VirInvictus/opends) documented many of the
   shipped scripts' bugs that the engine repairs.
 - Music is synthesized with [MeltySynth](https://github.com/sinshu/meltysynth) (MIT).

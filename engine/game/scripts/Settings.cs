@@ -10,9 +10,11 @@ namespace DarkSun.Engine;
 /// them back, keeping the file's other keys (the game folder, the SoundFont).
 /// <list type="bullet">
 /// <item><c>[audio]</c> <c>music_volume</c>, <c>sound_volume</c> (0–1), <c>music_on</c>, <c>sound_on</c>;</item>
-/// <item><c>[display]</c> <c>fullscreen</c>, <c>debug_hud</c> (the region view's information lines);</item>
+/// <item><c>[display]</c> <c>fullscreen</c>, <c>debug_hud</c> (the region view's information lines), <c>shadows</c>,
+/// <c>dust</c>, <c>enemy_rings</c> (0 none, 1 under the enemy chosen with Tab, 2 under every enemy);</item>
 /// <item><c>[game]</c> <c>skip_intro</c>, <c>autosave</c> (on entering a region), <c>original_pathfinding</c>,
-/// <c>difficulty</c> (0–3: easy, balanced, hard, hideous), <c>animations</c> (the map's animated things);</item>
+/// <c>difficulty</c> (0–3: easy, balanced, hard, hideous), <c>animations</c> (the map's animated things),
+/// <c>choose_enemy_keys</c> (Tab and Enter choose and attack an enemy in a fight);</item>
 /// <item><c>[mods]</c> <c>bundled_on</c>: the mods that come with the game turned on (the tabletop rules).</item>
 /// <item><c>[keys]</c> an action's keys, as the key help names them (<c>quick_save = "F5"</c>, <c>"Shift+F11"</c>, several with " / ").</item>
 /// </list>
@@ -89,6 +91,34 @@ public static class Settings
     {
         get => Get("display", "debug_hud", true);
         set => Set("display", "debug_hud", value);
+    }
+
+    /// <summary>Living figures on the map cast shadows (<see cref="FloorEffects"/>; after the Obsidian Edition's).</summary>
+    public static bool Shadows
+    {
+        get => Get("display", "shadows", true);
+        set => Set("display", "shadows", value);
+    }
+
+    /// <summary>Walking on sand or dirt raises dust (<see cref="FloorEffects"/>; after the Obsidian Edition's).</summary>
+    public static bool Dust
+    {
+        get => Get("display", "dust", true);
+        set => Set("display", "dust", value);
+    }
+
+    /// <summary>Red rings in a fight: 0 none, 1 under the enemy chosen with Tab, 2 under every enemy (the chosen one's thicker).</summary>
+    public static int EnemyRings
+    {
+        get => Math.Clamp(Get("display", "enemy_rings", 1), 0, 2);
+        set => Set("display", "enemy_rings", Math.Clamp(value, 0, 2));
+    }
+
+    /// <summary>In a fight, Tab chooses an enemy (Shift+Tab goes back) and Enter attacks it (after the Obsidian Edition's).</summary>
+    public static bool ChooseEnemyKeys
+    {
+        get => Get("game", "choose_enemy_keys", true);
+        set => Set("game", "choose_enemy_keys", value);
     }
 
     public static bool SkipIntro

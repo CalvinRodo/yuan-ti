@@ -559,6 +559,43 @@ viewport grows to fill the rest (`PixelScaler`), so pixels stay square and
 sharp at any window size. `-- --check-display` prints the window, viewport
 and scale; `-- --new-game` goes straight into a new game.
 
+## Floor effects
+
+Not in DSUN.EXE, and each with a switch in the Options window (O); the
+ideas come from the [Obsidian Edition](https://github.com/daaki85/darksun-obsidian-edition)
+(its FEATURES.md, Graphics and Controls), drawn here with Godot instead of
+into the original's floor. `FloorEffects` is a layer between the ground and
+the sorted sprites, so every wall and figure stands on top of them. Objects
+that lie flat (paving, rugs, items put down: hung from their picture's top
+edge, which they are sorted by, and not animated) are drawn with the ground,
+under the layer; sorted, they would cover the shadows, dust and rings of
+whoever stands on or beside them.
+
+- **Shadows** (`[display] shadows`): every living figure on the map (the
+  party, people and monsters, walking or standing; not the dead, nor
+  items) casts its picture, flattened and laid toward the lower right (the
+  maps are lit from the upper left), darkened and see-through. They are
+  drawn as one group, so overlapping shadows darken the floor once.
+- **Dust** (`[display] dust`): walking raises a puff behind the feet, the
+  feet in turn, every 6 pixels; it spreads, rises and fades in a second.
+  Only warm, middling floor colours (sand, dirt) raise dust, in a lighter
+  colour of the floor under the feet; stone, water and lava don't. A puff
+  is single pixels thinned toward its edge and as it fades, by a pattern
+  fixed to the map, so it doesn't shimmer.
+- **Choosing an enemy** (`[game] choose_enemy_keys`; `[display] enemy_rings`):
+  on a party member's turn in a fight, Tab chooses the nearest living enemy,
+  then the next nearest (Shift+Tab goes back), names it in the combat log
+  with the chance to hit, and moves the view to it if it is out of sight;
+  Enter attacks it as a click on it would (walking up first if it is out of
+  reach), even when another figure stands in front of it. A red ring on the
+  floor marks the chosen enemy (thicker and redder); the rings can be off,
+  only under the chosen one (the default), or under every enemy.
+
+`-- --new-game --check-floor` checks that each living figure casts a shadow,
+walks a member across the arena's sand and checks for dust that fades,
+then in a fight presses Tab (the nearest enemy, its ring drawn) and Enter
+(an attack on it).
+
 ## Notes
 
 - Every project targets `net10.0`. `game/DarkSunEngine.csproj` repeats it,
