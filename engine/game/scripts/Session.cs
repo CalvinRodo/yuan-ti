@@ -199,7 +199,8 @@ public static class Session
     /// roster character, four of them): what START GAME plays with when no
     /// party has been made, as the manual's "Pregenerated Party" (shipped as a
     /// saved game, which this install hasn't). Each comes with a new id, so it
-    /// can sit in the roster beside earlier copies.
+    /// can sit in the roster beside earlier copies, and with its class's
+    /// starting gear unless the file gives it <c>Items</c>.
     /// </summary>
     public static List<Character> Premade()
     {
@@ -211,7 +212,12 @@ public static class Session
         try
         {
             var list = System.Text.Json.JsonSerializer.Deserialize<List<System.Text.Json.JsonElement>>(Godot.FileAccess.GetFileAsString(path)) ?? [];
-            return [.. list.Select(e => CharacterRoster.FromJson(e.GetRawText()) with { Id = Guid.NewGuid() }).Take(GameWorld.PartySize)];
+            List<Character> premade = [.. list.Select(e => CharacterRoster.FromJson(e.GetRawText()) with { Id = Guid.NewGuid() }).Take(GameWorld.PartySize)];
+            foreach (Character c in premade.Where(c => c.Items.Count == 0))
+            {
+                c.Items = StartingItems(c);
+            }
+            return premade;
         }
         catch (Exception e) when (e is System.Text.Json.JsonException or InvalidOperationException)
         {

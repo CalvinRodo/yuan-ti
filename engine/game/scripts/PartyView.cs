@@ -511,6 +511,10 @@ public partial class PartyView : RetroScreen
             {
                 problems.Add($"{c.Name}: {string.Join(" ", p)}");
             }
+            if (!c.Items.Any(i => i.Slot < Equipment.Slots))
+            {
+                problems.Add($"{c.Name} has no starting gear worn");
+            }
         }
         var keep = Session.Party.ToList();
         var fighter = new Character { Name = "Dual check", Race = Race.Human, Classes = [CharacterClass.Fighter], Rolled = [17, 12, 12, 17, 12, 12], Experience = 10000, Hp = 20 };
