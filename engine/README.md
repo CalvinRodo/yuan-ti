@@ -565,7 +565,11 @@ Not in DSUN.EXE, and each with a switch in the Options window (O); the
 ideas come from the [Obsidian Edition](https://github.com/daaki85/darksun-obsidian-edition)
 (its FEATURES.md, Graphics and Controls), drawn here with Godot instead of
 into the original's floor. `FloorEffects` is a layer between the ground and
-the sorted sprites, so every wall and figure stands on top of them.
+the sorted sprites, so every wall and figure stands on top of them. Objects
+that lie flat (paving, rugs, items put down: hung from their picture's top
+edge, which they are sorted by, and not animated) are drawn with the ground,
+under the layer; sorted, they would cover the shadows, dust and rings of
+whoever stands on or beside them.
 
 - **Shadows** (`[display] shadows`): every living figure on the map (the
   party, people and monsters, walking or standing; not the dead, nor

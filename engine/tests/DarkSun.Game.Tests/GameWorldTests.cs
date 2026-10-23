@@ -47,9 +47,10 @@ public class GameWorldTests
     /// <summary>
     /// A 20×10 open region with a creature (<c>OJFF</c> 100, which walks) at
     /// cell (10, 5), a thing (<c>OJFF</c> 200) at (2, 2), and the party at (1, 8).
+    /// <paramref name="things"/> more of the thing stand along row 0.
     /// </summary>
     internal static GameWorld World(byte[]? flags = null, byte? size = null, int width = Width, int height = Height,
-        Action<Dictionary<(string, int), byte[]>>? more = null)
+        Action<Dictionary<(string, int), byte[]>>? more = null, int things = 0)
     {
         var resources = new Resources();
         more?.Invoke(resources.Data);
@@ -77,6 +78,7 @@ public class GameWorldTests
         [
             new(0, 100, 10 * 16 + 8, 6 * 16 - 1, 0, 0, false, [Frame, Frame, Frame], 7),
             new(1, 200, 2 * 16 + 8, 3 * 16 - 1, 0, 0, false, [Frame], 0),
+            .. Enumerable.Range(0, things).Select(i => new RegionObject(2 + i, 200, i % width * 16 + 8, 15, 0, 0, false, [Frame], 0)),
         ];
         var world = new GameWorld(Region.Create(5, width, height, flags ?? new byte[width * height], objects), resources);
         var spec = new CharacterSpec(WalkerTests.Script(), [(10, 20), (12, 22), (14, 24)]);
@@ -447,6 +449,39 @@ public class GameWorldTests
         Assert.True(after.Region.IsBlocked(3, 3));
         Assert.Contains(copy, changed);
         Assert.Equal(4, after.Party.Count());
+    }
+
+    [Fact]
+    public void ARegionSavedWhenTheWorldHeld320ObjectsKeepsTheMapEntriesPastThem()
+    {
+        GameWorld before = World(things: 320);
+        RegionState full = before.Snapshot();
+        int killed = before.First(-100)!.Index;
+        // As saved then: nothing of the map past slot 320, where a copy made at run time was put.
+        ObjectState copy = full.Objects.Single(o => o.Index == 320) with { Etab = 1, Cell = new Cell(6, 6) };
+        RegionState old = full with { Objects = [.. full.Objects.Where(o => o.Index < 320 && o.Index != killed), copy] };
+
+        GameWorld after = World(things: 320), fresh = World(things: 320);
+        after.Restore(old);
+
+        Assert.Null(after[killed]);
+        Assert.All(Enumerable.Range(320, fresh.Objects.Max(o => o.Index) - 319), i => Assert.Equal(fresh[i]!.Source!.EtabIndex, after[i]?.Source?.EtabIndex));
+        WorldObject made = Assert.Single(after.Objects, o => o.IsClone);
+        Assert.Equal((new Cell(6, 6), true), (made.Cell, made.Index > fresh.Objects.Max(o => o.Index)));
+        Assert.Equal(fresh.Objects.Count(), after.Objects.Count()); // one killed, one made
+    }
+
+    [Fact]
+    public void ARegionSavedPast320ObjectsLosesWhatWasGone()
+    {
+        GameWorld before = World(things: 320);
+        before.Remove(before[330]!);
+        GameWorld after = World(things: 320);
+
+        after.Restore(before.Snapshot());
+
+        Assert.Null(after[330]);
+        Assert.NotNull(after[331]);
     }
 
     [Fact]
