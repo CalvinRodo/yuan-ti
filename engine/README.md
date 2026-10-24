@@ -208,8 +208,10 @@ body, to take or put in. The bar's other icons are spells and psionics, on View 
 nothing is memorized: a caster has a number of casts at each spell level (`DS:4B08` wizard, `DS:4B11`
 priest, a byte a level; `78A9:5344` takes one a cast), and every spell it knows at a level can be cast
 while that level has some left ("2 LEVEL 1 SPELLS TO CAST"). Click a spell, then a member's box, to
-cast it (outside combat only the healing ones work; in a fight CAST lists them all); a preserver
-LEARNs spells into the spellbook, a psionicist picks powers; a rest (REQUEST 1 or 4) fills the casts again. The small buttons by each box make that member leader
+cast it (outside combat only the healing ones work; in a fight CAST lists them all); a new preserver
+knows the original's starting spells for its preserver level (`6ECD:1977`: Grease and Magic Missile; at
+level 2, where the starting experience puts it, Shield and Wall of Fog too; at 3 Fog Cloud and Stinking
+Cloud; `CharacterRules.PreserverStartingSpells`) and LEARNs more into the spellbook, a psionicist picks powers; a rest (REQUEST 1 or 4) fills the casts again. The small buttons by each box make that member leader
 and turn computer control on or off. A script's SHOP opens the items as a store: click the goods then
 the pack to buy (at the item's value), put things in the six slots by SELL to sell (at half).
 Esc on the map, or the wide button, opens the original GAME MENU: the character screens, exit, save

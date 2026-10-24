@@ -63,10 +63,10 @@
   "Experience": 6000,
   "Adventured": false,
   "Spellbook": [
+    8,
     9,
-    1,
-    2,
-    10
+    10,
+    12
   ],
   "Cast": [],
   "Powers": [

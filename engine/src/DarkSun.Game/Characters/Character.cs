@@ -157,6 +157,7 @@ public sealed class CharacterCreation(CharacterRules rules, CharacterNames names
         c.Sprite = Icon(c);
         GiveStartingExperience(c);
         Roll(c);
+        GiveStartingSpells(c);
         return c;
     }
 
@@ -173,6 +174,26 @@ public sealed class CharacterCreation(CharacterRules rules, CharacterNames names
         if (!c.Adventured)
         {
             c.Experience = Rules.StartingExperience * Math.Max(1, c.Classes.Count);
+        }
+    }
+
+    /// <summary>
+    /// <c>6ECD:1977</c>: a preserver's wizard spells become those it starts with at its preserver
+    /// level (<see cref="CharacterRules.PreserverStartingSpells"/>, each level adding to the last);
+    /// anyone else's book is left alone.
+    /// </summary>
+    private void GiveStartingSpells(Character c)
+    {
+        int i = c.Classes.IndexOf(CharacterClass.Preserver);
+        if (i < 0)
+        {
+            return;
+        }
+        int level = Levels(c)[i];
+        c.Spellbook.RemoveAll(n => Spellcasting.Get(n)?.Kind == SpellKind.Wizard);
+        foreach (int n in Rules.PreserverStartingSpells.Take(level).SelectMany(s => s).Where(n => !c.Spellbook.Contains(n)))
+        {
+            c.Spellbook.Add(n);
         }
     }
 
@@ -372,6 +393,7 @@ public sealed class CharacterCreation(CharacterRules rules, CharacterNames names
             GiveStartingExperience(c);
             FixPowers(c);
             Fit(c);
+            GiveStartingSpells(c);
             return true;
         }
         if (!CanAdd(c, k))
@@ -384,6 +406,7 @@ public sealed class CharacterCreation(CharacterRules rules, CharacterNames names
         FixPowers(c);
         Fit(c);
         c.Hp = RollHp(c);
+        GiveStartingSpells(c);
         return true;
     }
 
@@ -472,6 +495,7 @@ public sealed class CharacterCreation(CharacterRules rules, CharacterNames names
         c.Experience = 0;
         c.Cast.Clear();
         FixPowers(c);
+        GiveStartingSpells(c);
         return true;
     }
 

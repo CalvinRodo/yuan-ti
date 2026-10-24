@@ -19,6 +19,41 @@ public class CharacterTests
         Assert.Equal(ItemClasses.None, new Character().ItemClasses);
     }
 
+    [Theory]
+    [InlineData(2000, new[] { 8, 9 })]
+    [InlineData(3000, new[] { 8, 9, 10, 12 })] // the original's starting experience: level 2
+    [InlineData(5000, new[] { 8, 9, 10, 12, 16, 23 })]
+    public void ANewPreserverKnowsTheOriginalsStartingSpells(int experience, int[] spells)
+    {
+        // 6ECD:1977: Grease and Magic Missile; at level 2 Shield and Wall of Fog; at 3 Fog Cloud and Stinking Cloud.
+        var cc = new CharacterCreation(CharacterRules.Default with { StartingExperience = experience }, new CharacterNames(["Garn"], ["Shandra"], ["T'kir'taap"]), new Random(1));
+        Character c = cc.New();
+        Assert.Empty(c.Spellbook);
+
+        Assert.True(cc.ToggleClass(c, CharacterClass.Fighter));
+        Assert.True(cc.ToggleClass(c, CharacterClass.Preserver));
+
+        Assert.Equal(spells, c.Spellbook.Order());
+    }
+
+    [Fact]
+    public void APreserversStartingSpellsFollowItsLevelAsClassesChange()
+    {
+        var cc = Creation();
+        Character c = cc.New();
+        cc.SetLooks(c, Race.Elf, Gender.Female);
+        cc.ToggleClass(c, CharacterClass.Fighter);
+        cc.ToggleClass(c, CharacterClass.Preserver);
+        c.Spellbook.Add(1); // a wizard spell from elsewhere goes: the book is set again
+        c.Spellbook.Add(70); // a priest spell stays
+
+        Assert.True(cc.ToggleClass(c, CharacterClass.Fighter)); // fighter/preserver: 3000 each, still level 2
+        Assert.Equal([8, 9, 10, 12, 70], c.Spellbook.Order());
+
+        Assert.True(cc.ToggleClass(c, CharacterClass.Preserver)); // no longer a preserver: the book is left as it is
+        Assert.Equal([8, 9, 10, 12, 70], c.Spellbook.Order());
+    }
+
     [Fact]
     public void LevelsFollowTheOriginalsExperienceTable()
     {
