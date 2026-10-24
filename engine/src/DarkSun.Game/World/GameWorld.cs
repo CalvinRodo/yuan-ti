@@ -913,7 +913,8 @@ public sealed partial class GameWorld
     {
         int ojff = door.Source!.Ojff;
         int other = ojff % 2 == 0 ? ojff - 1 : ojff + 1;
-        return Objects.FirstOrDefault(o => o.Index >= 5 && o != door && o.IsDoor && o.Source!.Ojff == other);
+        // A leaf taken off the map no longer swings with its partner.
+        return Objects.FirstOrDefault(o => o.Index >= 5 && o != door && o.IsDoor && !o.Hidden && o.Source!.Ojff == other);
     }
 
     /// <summary>
@@ -1043,10 +1044,15 @@ public sealed partial class GameWorld
         }
         var saved = state.Objects.ToDictionary(o => o.Index);
         // Gone since the files: removed (the party keeps its slots).
+        var goneDoors = new List<WorldObject>();
         for (int i = PartySize; i < Math.Min(_objects.Count, keepFrom); i++)
         {
             if (_objects[i] is { } obj && !saved.ContainsKey(i))
             {
+                if (obj.IsDoor)
+                {
+                    goneDoors.Add(obj);
+                }
                 obj.Walker?.Remove();
                 _objects[i] = null;
             }
@@ -1126,6 +1132,12 @@ public sealed partial class GameWorld
             changed.Add(obj);
         }
         Array.Copy(state.Flags, Region.Flags, Math.Min(state.Flags.Length, Region.Flags.Length));
+        // A door off the map leaves its cells as open (1DF3:0909 → 6BB8:0FF8); saves
+        // from before the engine did so kept them blocked, walling the party in.
+        foreach (WorldObject door in goneDoors.Concat(Objects.Where(o => o.IsDoor && o.Hidden)))
+        {
+            SetDoorCells(door, 0);
+        }
         return changed;
     }
 
