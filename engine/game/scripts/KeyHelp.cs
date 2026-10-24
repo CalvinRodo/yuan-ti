@@ -251,10 +251,11 @@ public partial class KeyHelp : CanvasLayer
 
     private static HelpSection MagicSection => new("Spells and psionics",
         new HelpLine("Click a spell, then a box", "Cast it on that member (any spell known, while its level has casts left); double-click: on yourself"),
-        new HelpLine("Click above", "LEARN: add the spell to the spellbook; psionics: pick a power"),
+        new HelpLine("Click a power above", "Pick it (psionics); a preserver chooses new spells on gaining a level"),
         new HelpLine("Right-click a spell", "What it does (the spell information window)"),
         new HelpLine("Click a power below, then a box", "Use it on that member; double-click: on yourself"),
-        new HelpLine("WIZ / PRI n, KINET…", "The next spell level or psionic discipline"));
+        new HelpLine("MAGE / CLERIC / PSIONIC", "The next kind of spell, or psionics"),
+        new HelpLine("LEVEL n, KINET…", "The next spell level or psionic discipline"));
 
     private static HelpSection GameMenuSection => new("Game menu",
         new HelpLine("Click an icon", "Its name shows on the bar below"),

@@ -388,18 +388,26 @@ public sealed class Walker
     /// </summary>
     public static bool UseOriginalPathfinding { get; set; }
 
-    private List<Cell> PathTo(Func<int, int, bool> blocked, bool avoidCreatures)
+    /// <summary>
+    /// Whether a way leads all the way to <paramref name="goal"/> on the map (creatures in the way
+    /// don't count): with none, DSUN.EXE says "NO PATH FROM HERE" (<c>1587:0427</c>).
+    /// </summary>
+    public bool CanReach(Cell goal, Func<int, int, bool> blocked) =>
+        goal == Cell || PathTo(blocked, avoidCreatures: false, goal) is { Count: > 0 } path && path[^1] == goal;
+
+    private List<Cell> PathTo(Func<int, int, bool> blocked, bool avoidCreatures, Cell? to = null)
     {
+        Cell goal = to ?? _goal!.Value;
         Func<int, int, bool> footprintBlocked = (x, y) => Footprint.Cells(new Cell(x, y)).Any(c => blocked(c.X, c.Y));
         if (UseOriginalPathfinding && !avoidCreatures
-            && OriginalPathfinder.FindPath(footprintBlocked, Cell, _goal!.Value) is { Count: > 0 } original)
+            && OriginalPathfinder.FindPath(footprintBlocked, Cell, goal) is { Count: > 0 } original)
         {
             return original;
         }
         return Pathfinder.FindPath(
             avoidCreatures ? (x, y) => !CanStand(new Cell(x, y), blocked) : footprintBlocked,
             Cell,
-            _goal!.Value);
+            goal);
     }
 
     private void SetPath(IEnumerable<Cell> path)

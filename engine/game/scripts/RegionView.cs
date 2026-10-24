@@ -76,6 +76,8 @@ public partial class RegionView : Node2D
     private OptionsWindow _options = null!;
     private Control _hudPanel = null!;
     private GameMenu _gameMenu = null!;
+    private MessageBox _message = null!;
+    private SpellStudyWindow _study = null!;
     private SavesView _saves = null!;
     private GameMenu.Cursor _cursor;
 
@@ -135,7 +137,7 @@ public partial class RegionView : Node2D
     /// <c>DS:11B8</c> = 1): LOOK, ATTACK and a held item hold everything still while one picks, until a
     /// chosen verb sends the character on its way.
     /// </summary>
-    private bool MapHeld => _cursor != GameMenu.Cursor.Move && _pendingUse is null;
+    private bool MapHeld => _cursor != GameMenu.Cursor.Move && _pendingUse is null || _message.IsOpen || _study.IsOpen;
 
     /// <summary>Make the next opening of the view start a new game (region 42).</summary>
     public static void StartNewGame() => _regionIndex = -1;
@@ -515,6 +517,10 @@ public partial class RegionView : Node2D
             CursorChanged = SetCursor,
         };
         layer.AddChild(_gameMenu);
+        _message = new MessageBox();
+        layer.AddChild(_message);
+        _study = new SpellStudyWindow();
+        layer.AddChild(_study);
         _saves = new SavesView
         {
             SaveTo = (name, file) =>
@@ -634,8 +640,8 @@ public partial class RegionView : Node2D
             {
                 DarkSun.Game.Magic.Spellcasting.Rest(c);
             }
-            // 87B3:073D says so (5F6D:05DE, as the doors' messages), from a fire pit or a script.
-            Session.ScriptHost.Dialogue.Append("THE PARTY RESTS", 98);
+            // 87B3:073D says so in the message box (5F6D:05DE, as the doors' messages), from a fire pit or a script.
+            _message.Show("THE PARTY RESTS");
         };
         // Back in a region visited before: as the party left it (before its script runs, as in DSUN.EXE).
         // What had an object in the files but not when the party left (killed, picked up) isn't drawn.
@@ -1284,6 +1290,7 @@ public partial class RegionView : Node2D
         MoveWithKeyboard();
         Animate();
         FinishApproach();
+        OfferSpellStudy();
         if (Session.ScriptHost.Dialogue.Prompt is GplShopPrompt shop && !_character.IsOpen && _world[shop.Merchant] is { } merchant
             && _world[_selected] is { } who)
         {
@@ -1301,7 +1308,31 @@ public partial class RegionView : Node2D
         UpdateFloor(delta);
     }
 
-    private bool KeyboardMovementLocked => MapLocked || _dialogueWindow.Visible || _gameMenu.IsOpen || _saves.IsOpen || _character.IsOpen
+    /// <summary>
+    /// When the map is free, a preserver with a level gained chooses a spell (<c>8CCC:0000</c>:
+    /// standing, condition below 5) in the study window; with nothing left to learn, the choice goes.
+    /// </summary>
+    private void OfferSpellStudy()
+    {
+        if (_study.IsOpen || KeyboardMovementLocked || _checking)
+        {
+            return;
+        }
+        for (int i = 0; i < Session.Party.Count && i < PartySize; i++)
+        {
+            if (Session.Party[i] is { SpellsToChoose: > 0 } c && _world[i] is { Kind: ObjectKind.Party, Hidden: false } member
+                && member.Vitals.Status < 5)
+            {
+                if (!_study.Open(c, c.Name, new DarkSun.Game.Magic.Spellcasting(Session.Rules)))
+                {
+                    c.SpellsToChoose = 0;
+                }
+                return;
+            }
+        }
+    }
+
+    private bool KeyboardMovementLocked => MapLocked || _message.IsOpen || _study.IsOpen || _dialogueWindow.Visible || _gameMenu.IsOpen || _saves.IsOpen || _character.IsOpen
         || _journal.Visible || _options.Visible || _verbMenu.Visible || _containerWindow.Visible || _itemWindow.Visible || _debugger.Visible
         || GetNodeOrNull<KeyHelp>("/root/KeyHelp")?.IsOpen == true
         || GetViewport().GuiGetFocusOwner() is LineEdit or TextEdit;
@@ -1370,6 +1401,10 @@ public partial class RegionView : Node2D
 
     public override void _UnhandledInput(InputEvent e)
     {
+        if (_message.IsOpen || _study.IsOpen)
+        {
+            return; // a key puts the message away (MessageBox); the study window takes its own
+        }
         if (CombatInput(e))
         {
             return;
@@ -1473,10 +1508,17 @@ public partial class RegionView : Node2D
         else if (e is InputEventMouseButton { ButtonIndex: MouseButton.Left, Pressed: true } click)
         {
             Vector2 at = GetGlobalMousePosition();
-            if (_cursor == GameMenu.Cursor.Look && ObjectAt(at) is not null)
+            if (_cursor == GameMenu.Cursor.Look && ObjectAt(at) is { } looked)
             {
                 // The eye opens what can be done with the thing (1587:06D8 mode 2 → 68BD:0040, the verb window).
-                OpenVerbMenu(at, click.Position);
+                if (Sees(looked))
+                {
+                    OpenVerbMenu(at, click.Position);
+                }
+                else
+                {
+                    _message.Show(NoLineOfSight);
+                }
             }
             else if (_cursor == GameMenu.Cursor.Attack && ObjectAt(at) is { } target)
             {
@@ -1484,7 +1526,7 @@ public partial class RegionView : Node2D
             }
             else
             {
-                WalkTo(new Cell((int)Math.Floor(at.X / Region.TileSize), (int)Math.Floor(at.Y / Region.TileSize)), click.ShiftPressed);
+                ClickToWalk(at, click.ShiftPressed);
             }
         }
         else if (e is InputEventMouseButton { ButtonIndex: MouseButton.Right, Pressed: true })
@@ -1718,9 +1760,42 @@ public partial class RegionView : Node2D
     /// the others once the selected character has walked up to it
     /// (<see cref="Approach"/>). Without a party it acts at once.
     /// </summary>
+    /// <summary>
+    /// A MOVE click at map point <paramref name="at"/> (<c>1587:0427</c>): nothing on a blocked
+    /// cell (the pointer is crossed out), "NO PATH FROM HERE" when no way leads there, else walk
+    /// (an object's cell: up to it).
+    /// </summary>
+    private void ClickToWalk(Vector2 at, bool wholeParty)
+    {
+        var cell = new Cell((int)Math.Floor(at.X / Region.TileSize), (int)Math.Floor(at.Y / Region.TileSize));
+        if (ObjectAt(at) is null && _region.IsBlocked(cell.X, cell.Y))
+        {
+            return;
+        }
+        if (ObjectAt(at) is null && Selected is { } leader && !leader.Walker.CanReach(cell, _region.IsBlocked))
+        {
+            _message.Show(NoPath);
+            return;
+        }
+        WalkTo(cell, wholeParty);
+    }
+
+    /// <summary>DSUN.EXE's words when a click can't be carried out (<c>DS:0BD9</c>, <c>DS:0BF8</c>), shown in the message box.</summary>
+    private const string NoPath = "NO PATH FROM HERE", NoLineOfSight = "NO LINE OF SIGHT";
+
+    /// <summary>Can the leader see <paramref name="target"/> (any of its cells; <c>0898:00A4</c>)? Without a leader, yes.</summary>
+    private bool Sees(WorldObject target) =>
+        Selected is not { } m || _world.CellsOf(target).Any(c => GplGeometry.LineOfSight(_region, m.Walker.Cell.X, m.Walker.Cell.Y, c.X, c.Y));
+
     private void StartVerb(WorldObject target, Verb verb, WorldObject? with)
     {
         _pendingUse = null;
+        if (verb != Verb.Look && !InCombat && !Sees(target))
+        {
+            // Out of sight, nothing is done: "NO LINE OF SIGHT".
+            _message.Show(NoLineOfSight);
+            return;
+        }
         if (verb == Verb.Look || Selected is not { } member)
         {
             Act(target, _selected, verb, with);
@@ -1965,7 +2040,7 @@ public partial class RegionView : Node2D
         if (_world.DoorRefusal(use) is { } message && !Session.Scripts.IsSuspended)
         {
             AddScriptLine($"    {message}");
-            Session.ScriptHost.Dialogue.Append(message, 98);
+            _message.Show(message); // 6BB8's door messages go to the message box (5F6D:05DE)
         }
         _overlay.QueueRedraw();
         return true;
@@ -2999,16 +3074,26 @@ public partial class RegionView : Node2D
             }
             screen.ClickSpell(false, SlotOf(false, CureLight));
             Expect(screen.PickedSpell is null && screen.Status.Contains("REST"), $"the level's casts used: rest first ({screen.Status})");
+            Expect(screen.CrossedOut(false, SlotOf(false, CureLight)), "and the level's spells are crossed out");
             _world.Rest(raiseDead: false);
             Expect(cleric.Cast.Count == 0, "resting gives the casts back");
+            Expect(_message.Shown == "THE PARTY RESTS", $"and the message box says THE PARTY RESTS ({_message.Shown})");
+            _message.Close();
 
-            // The preserver: learn, then cast what the book holds.
-            screen.ClickBox(1);
-            screen.Press(11320);
-            Expect(SlotOf(false, MagicMissile) >= 0, "LEARN shows Magic Missile");
-            screen.ClickSpell(false, SlotOf(false, MagicMissile));
-            Expect(preserver.Spellbook.Contains(MagicMissile), $"clicking it learns it ({screen.Status})");
-            screen.Press(11320);
+            // The preserver: a level gained opens the study window (8CCC:0000); a click learns, then it casts what the book holds.
+            screen.Close();
+            preserver.SpellsToChoose = 1;
+            _checking = false;
+            OfferSpellStudy();
+            _checking = true;
+            Expect(_study.IsOpen && _study.Lines == "CHOOSE A SPELL, PRESERVER" && _study.Offered.Contains(MagicMissile),
+                $"a level gained opens CHOOSE A SPELL with Magic Missile ({_study.Lines}; {_study.Offered.Count} offered)");
+            _study.Choose(_study.Offered.ToList().IndexOf(MagicMissile));
+            Expect(preserver.Spellbook.Contains(MagicMissile) && preserver.SpellsToChoose == 0 && _study.Lines == "MAGIC MISSILE IS LEARNED!",
+                $"clicking it learns it ({_study.Lines})");
+            _study.Exit();
+            Expect(!_study.IsOpen, "EXIT after choosing closes it");
+            screen.Open(_world, 1, CharacterScreen.Page.Spells);
             screen.ClickSpell(false, SlotOf(false, MagicMissile));
             Expect(screen.PickedSpell == MagicMissile, $"and it can be cast at once ({screen.Status})");
             screen.ClickSpell(false, SlotOf(false, MagicMissile), button: MouseButton.Right);
@@ -3745,6 +3830,7 @@ public partial class RegionView : Node2D
     /// <summary>With no player, answer every prompt: Continue, No (Yes if <paramref name="yes"/>), or each menu's first option.</summary>
     private void AnswerForThePlayer(bool yes = false)
     {
+        _message.Close();
         for (int i = 0; i < 50 && Session.Scripts.IsSuspended; i++)
         {
             int answer = Session.ScriptHost.Dialogue.Prompt switch

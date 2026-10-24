@@ -539,6 +539,23 @@ public class ItemTests
     }
 
     [Fact]
+    public void APreserverWhoGainsALevelHasASpellToChoose()
+    {
+        // 8CCC:0000: a preserver level gained opens the study window (WIND 17500) to choose a spell.
+        var (w, _) = World(armed: true);
+        var host = new WorldGplHost { Map = w };
+        var mage = new Characters.Character { Name = "Sadira", Experience = 2400 }; // preserver level 1 (2500 for 2)
+        mage.Classes.Add(Characters.CharacterClass.Preserver);
+        host.PartyCharacter = slot => slot == 0 ? mage : null;
+        w.Defeated += c => host.AwardKill(w, c);
+
+        w.Hurt(TemplarOf(w), 31);
+
+        Assert.Equal(2535, mage.Experience);
+        Assert.Equal(1, mage.SpellsToChoose);
+    }
+
+    [Fact]
     public void ScriptsGiveSearchAwardAndPay()
     {
         var (w, party) = World();

@@ -6,20 +6,25 @@ using Godot;
 namespace DarkSun.Engine;
 
 /// <summary>
-/// The spell and psionic pages: View Character's panel holds 35 slots
-/// (<c>APFM</c> 11213–11247), the 21 above (three rows of seven) for what can
-/// be chosen, the 14 below for what is ready; the two text buttons (11319,
-/// 11320) pick the level or discipline and, for a preserver, LEARN. Each
-/// spell is its <c>ICON</c> (20999 + n; a power 3000 + n − 139), its name on
-/// the status line while the pointer is on it and its description the
-/// tooltip (<c>SPIN</c> n). The status line says what is left, in DSUN.EXE's words.
+/// The spell and psionic pages (<c>8F23:19B6</c>): View Character's panel holds 35 slots
+/// (<c>APFM</c> 11213–11247), filled in their numbers' order (11213 is the second of
+/// the top row's seven), the first 21 above for what can be chosen, the 14 below
+/// for what is ready. A listed spell sits on frame 2 of <c>BMP</c> 13007 (an empty
+/// slot shows nothing) under its <c>ICON</c> (20999 + n; a power 3000 + n − 139),
+/// its description the tooltip (<c>SPIN</c> n). The two text buttons are
+/// DSUN.EXE's TOGGLE SPELLS &amp; PSIONICS (11319: MAGE, CLERIC or PSIONIC, the
+/// generic class names) and SELECT SPELL LEVEL / SELECT PSIONIC DISCIPLINE (11320:
+/// "LEVEL %d", <c>DS:2FCE</c>, or the discipline). The status line says what is
+/// left, in DSUN.EXE's words.
 /// <list type="bullet">
-/// <item>Spells: the spells the member knows at the level above, as DSUN.EXE
+/// <item>Spells: the spells the member knows at the level, as DSUN.EXE
 /// has them: nothing is memorized, every one of them can be cast while the
 /// level has casts left ("2 LEVEL 1 SPELLS TO CAST"; a rest fills them,
-/// <see cref="Spellcasting.CastsLeft"/>), dimmed when it has none. Click one,
+/// <see cref="Spellcasting.CastsLeft"/>), crossed out (frame 6) when it has none or the
+/// member isn't Okay (<c>8F23:1DED</c>); the pointer on one shows the level's line
+/// (<c>8F23:1111</c>: "YOU NEED TO REST" when none are left). Click one,
 /// then a member's box, to cast it on them (double-click: on the caster).
-/// LEARN shows the wizard spells not in the spellbook, click to learn.</item>
+/// A preserver learns new spells on gaining a level (<see cref="SpellStudyWindow"/>).</item>
 /// <item>A right-click on a spell above, or on a power, opens the spell
 /// information window (<see cref="ShowSpellInfo"/>).</item>
 /// <item>Psionics: the discipline's powers above, those not known dimmed:
@@ -37,6 +42,7 @@ public partial class CharacterScreen
         public required bool Ready { get; init; }
         public required int Index { get; init; }
         public required Control Control { get; init; }
+        public required TextureRect Back { get; init; }
         public required TextureRect Icon { get; init; }
         public required TextureRect Mark { get; init; }
         public required Label Count { get; init; }
@@ -47,18 +53,17 @@ public partial class CharacterScreen
     private readonly Dictionary<int, Texture2D?> _spellIcons = [];
     private readonly Random _random = new();
     private Spellcasting _magic = null!;
-    private TextureButton _choiceButton = null!, _learnButton = null!;
+    private TextureButton _choiceButton = null!, _levelButton = null!;
     private int _choice;
-    private bool _learning;
     private int? _pickedSpell;
+    private string _levelStatus = "";
     private string? _hoverSaved;
 
     private void BuildMagic(UiWindowView sheet)
     {
         _magic = new Spellcasting(Session.Rules);
         var places = Enumerable.Range(FirstSpellSlot, LastSpellSlot - FirstSpellSlot + 1)
-            .Select(n => sheet.Slot(n)).OfType<Control>()
-            .OrderBy(c => c.Position.Y).ThenBy(c => c.Position.X).ToList();
+            .Select(n => sheet.Slot(n)).OfType<Control>().ToList();
         for (int i = 0; i < places.Count; i++)
         {
             Control control = places[i];
@@ -75,6 +80,7 @@ public partial class CharacterScreen
                 Ready = i >= ChoiceSlots,
                 Index = i < ChoiceSlots ? i : i - ChoiceSlots,
                 Control = control,
+                Back = Layer(),
                 Icon = Layer(),
                 Mark = Layer(),
                 Count = new Label
@@ -86,11 +92,9 @@ public partial class CharacterScreen
                     MouseFilter = MouseFilterEnum.Ignore,
                 },
             };
-            var back = Layer();
-            back.Texture = SlotArtFrame(EmptyFrame);
             slot.Icon.Position = new Vector2(1, 1);
             slot.Icon.Size = control.Size - new Vector2(2, 2);
-            foreach (Control c in new Control[] { back, slot.Icon, slot.Mark, slot.Count })
+            foreach (Control c in new Control[] { slot.Back, slot.Icon, slot.Mark, slot.Count })
             {
                 control.AddChild(c);
             }
@@ -100,7 +104,8 @@ public partial class CharacterScreen
                 if (slot.Spell is int n)
                 {
                     _hoverSaved ??= _status.Text;
-                    _status.Text = Session.SpellName(n)?.ToUpperInvariant() ?? "";
+                    // 8F23:1111: on a spell, the level's line; on a power, its name.
+                    _status.Text = _page == Page.Spells && !slot.Ready ? _levelStatus : Session.SpellName(n)?.ToUpperInvariant() ?? "";
                 }
             };
             control.MouseExited += () =>
@@ -115,15 +120,10 @@ public partial class CharacterScreen
             _spellSlots.Add(slot);
         }
         _choiceButton = sheet.Button(FirstText)!;
-        _choiceButton.Pressed += NextChoice;
-        _learnButton = sheet.Button(SecondText)!;
-        _learnButton.Pressed += () =>
-        {
-            _learning = !_learning;
-            _pickedSpell = null;
-            RefreshMagic();
-        };
-        foreach (TextureButton b in new[] { _choiceButton, _learnButton })
+        _choiceButton.Pressed += NextKind;
+        _levelButton = sheet.Button(SecondText)!;
+        _levelButton.Pressed += NextLevel;
+        foreach (TextureButton b in new[] { _choiceButton, _levelButton })
         {
             b.Visible = false;
             if (b.GetNodeOrNull<Label>("Text") is { } t)
@@ -133,7 +133,7 @@ public partial class CharacterScreen
         }
     }
 
-    private void ResetMagic() => (_choice, _learning, _pickedSpell) = (0, false, null);
+    private void ResetMagic() => (_choice, _pickedSpell) = (0, null);
 
     private void ShowMagic(Page page)
     {
@@ -142,13 +142,8 @@ public partial class CharacterScreen
         {
             slot.Control.Visible = magic;
         }
-        _choiceButton.Visible = magic;
-        _learnButton.Visible = false;
+        _choiceButton.Visible = _levelButton.Visible = magic;
         _pickedSpell = null; // a spell picked on one page isn't cast from another
-        if (!magic)
-        {
-            _learning = false;
-        }
     }
 
     /// <summary>DSUN.EXE's spell information window (<c>91F7:1716</c>), <c>WIND</c> 15503 and its text box 15400.</summary>
@@ -226,12 +221,52 @@ public partial class CharacterScreen
     /// <summary>The spell levels the member can cast (a preserver-cleric has both kinds).</summary>
     private List<(SpellKind Kind, int Level)> SpellChoices(Character c) => [.. _magic.Levels(c)];
 
-    private void NextChoice()
+    /// <summary>The pages the first button goes round (TOGGLE SPELLS &amp; PSIONICS): each kind of spell the member casts, then psionics.</summary>
+    private List<(Page Page, SpellKind? Kind)> Kinds(Character c) =>
+        [.. SpellChoices(c).Select(x => x.Kind).Distinct().Select(k => (Page.Spells, (SpellKind?)k)),
+            .. c.Disciplines.Count > 0 ? [(Page.Psionics, (SpellKind?)null)] : Array.Empty<(Page, SpellKind?)>()];
+
+    /// <summary>The first button: the next kind of spell, or psionics, or back.</summary>
+    private void NextKind()
     {
-        _choice++;
         _pickedSpell = null;
+        if (CharacterOf(_member) is not { } c || Kinds(c) is not { Count: > 0 } kinds)
+        {
+            return;
+        }
+        List<(SpellKind Kind, int Level)> choices = SpellChoices(c);
+        SpellKind? now = _page == Page.Spells && choices.Count > 0 ? choices[_choice % choices.Count].Kind : null;
+        var (page, kind) = kinds[(kinds.IndexOf((_page, now)) + 1) % kinds.Count];
+        _choice = kind is { } k ? choices.FindIndex(x => x.Kind == k) : 0;
+        if (page != _page)
+        {
+            Show(page);
+        }
+        else
+        {
+            RefreshMagic();
+        }
+    }
+
+    /// <summary>The second button: the next level of the kind shown (or the next discipline).</summary>
+    private void NextLevel()
+    {
+        _pickedSpell = null;
+        if (_page == Page.Spells && CharacterOf(_member) is { } c && SpellChoices(c) is { Count: > 0 } choices)
+        {
+            SpellKind kind = choices[_choice % choices.Count].Kind;
+            List<int> same = [.. Enumerable.Range(0, choices.Count).Where(i => choices[i].Kind == kind)];
+            _choice = same[(same.IndexOf(_choice % choices.Count) + 1) % same.Count];
+        }
+        else
+        {
+            _choice++;
+        }
         RefreshMagic();
     }
+
+    /// <summary>The member can cast now (<c>8F23:1DED</c>): standing, and Okay.</summary>
+    private bool FitToCast => _world?[_member] is { Vitals: { Hp: > 0, Status: Vitals.Well } };
 
     private void RefreshMagic()
     {
@@ -263,28 +298,25 @@ public partial class CharacterScreen
         if (choices.Count == 0)
         {
             Fill([], []);
-            _choiceButton.Visible = _learnButton.Visible = false;
+            _choiceButton.Visible = c.Disciplines.Count > 0;
+            SetTextButtons("PSIONIC", null);
             _status.Text = "YOU CANNOT CAST SPELLS";
             return;
         }
         _choice %= choices.Count;
         var (kind, level) = choices[_choice];
-        bool preserver = kind == SpellKind.Wizard;
-        _learning &= preserver;
         _choiceButton.Visible = true;
-        SetTextButtons($"{(kind == SpellKind.Wizard ? "WIZ" : "PRI")} {level}", preserver ? (_learning ? "DONE" : "LEARN") : null);
-        var shown = (_learning ? _magic.Learnable(c, level) : _magic.Known(c, kind, level)).Select(s => s.Number).ToList();
+        SetTextButtons(kind == SpellKind.Wizard ? "MAGE" : "CLERIC", $"LEVEL {level}");
+        var shown = _magic.Known(c, kind, level).Select(s => s.Number).ToList();
         Fill(shown, []);
         int left = _magic.CastsLeft(c, kind, level);
-        foreach (SpellSlot slot in _spellSlots.Where(s => s.Spell is not null && !_learning))
+        bool cant = left == 0 || !FitToCast;
+        foreach (SpellSlot slot in _spellSlots.Where(s => s.Spell is not null && !s.Ready && s.Spell != _pickedSpell))
         {
-            slot.Icon.Modulate = left == 0 ? new Color(1, 1, 1, 0.4f) : Colors.White;
+            slot.Mark.Texture = cant ? SlotArtFrame(CantFrame) : null;
         }
-        _status.Text = _pickedSpell is int picked ? $"CAST {Session.SpellName(picked)?.ToUpperInvariant()} ON?"
-            : _learning ? $"BOOK: {c.Spellbook.Count(n => Spellcasting.Get(n)?.Level == level)} OF {_magic.SpellbookSize(c)} LEVEL {level}"
-            : shown.Count == 0 && preserver ? "NO SPELLS: LEARN SOME"
-            : left == 0 ? "YOU NEED TO REST"
-            : $"{left} LEVEL {level} SPELL{(left == 1 ? "" : "S")} TO CAST";
+        _levelStatus = left == 0 ? "YOU NEED TO REST" : $"{left} LEVEL {level} SPELL{(left == 1 ? "" : "S")} TO CAST";
+        _status.Text = _pickedSpell is int picked ? $"CAST {Session.SpellName(picked)?.ToUpperInvariant()} ON?" : _levelStatus;
     }
 
     private void RefreshPowers(Character c)
@@ -299,12 +331,12 @@ public partial class CharacterScreen
         }
         _choice %= disciplines.Count;
         Discipline d = disciplines[_choice];
-        SetTextButtons(d switch
+        SetTextButtons("PSIONIC", d switch
         {
             Discipline.Psychokinesis => "KINET",
             Discipline.Psychometabolism => "METAB",
             _ => "TELEP",
-        }, null);
+        });
         Fill([.. Spellcasting.PowersOf(c, d).Select(s => s.Number)], [.. c.Powers.OrderBy(n => n)]);
         foreach (SpellSlot slot in _spellSlots.Where(s => s.Spell is not null))
         {
@@ -316,14 +348,14 @@ public partial class CharacterScreen
             : $"PSI {_magic.Psp(c)}/{_magic.MaxPsp(c)}" + (picks > 0 ? $"  {picks} TO PICK" : "");
     }
 
-    /// <summary>Set the two text buttons: the choice's label, and LEARN (or none).</summary>
-    private void SetTextButtons(string choice, string? learn)
+    /// <summary>Set the two text buttons: the kind, and the level or discipline (none: hidden).</summary>
+    private void SetTextButtons(string kind, string? level)
     {
-        _sheetPage.Window.ButtonText(FirstText)!.Text = choice;
-        _learnButton.Visible = learn is not null;
-        if (learn is not null)
+        _sheetPage.Window.ButtonText(FirstText)!.Text = kind;
+        _levelButton.Visible = level is not null;
+        if (level is not null)
         {
-            _sheetPage.Window.ButtonText(SecondText)!.Text = learn;
+            _sheetPage.Window.ButtonText(SecondText)!.Text = level;
         }
     }
 
@@ -334,6 +366,7 @@ public partial class CharacterScreen
             List<int> from = slot.Ready ? ready : choices;
             slot.Spell = slot.Index < from.Count ? from[slot.Index] : null;
             slot.Icon.Texture = slot.Spell is int n ? SpellIcon(n) : null;
+            slot.Back.Texture = slot.Spell is not null ? SlotArtFrame(ListedFrame) : null;
             slot.Icon.Modulate = Colors.White;
             slot.Count.Text = "";
             slot.Control.TooltipText = slot.Spell is int t ? Tooltip(t) : "";
@@ -365,11 +398,7 @@ public partial class CharacterScreen
         string? message = null;
         if (_page == Page.Spells)
         {
-            if (_learning)
-            {
-                message = $"{name} {_magic.Learn(c, n)}";
-            }
-            else if (!_magic.CanCast(c, n))
+            if (!_magic.CanCast(c, n) || !FitToCast)
             {
                 _pickedSpell = null;
                 message = "YOU NEED TO REST";
@@ -433,6 +462,10 @@ public partial class CharacterScreen
             slot.Control.EmitSignal(Control.SignalName.GuiInput, new InputEventMouseButton { ButtonIndex = button, Pressed = true, DoubleClick = doubleClick });
         }
     }
+
+    /// <summary>Is the slot's spell crossed out (frame 6: it can't be cast now)?</summary>
+    public bool CrossedOut(bool ready, int index) =>
+        _spellSlots.FirstOrDefault(s => s.Ready == ready && s.Index == index) is { Mark.Texture: { } t } && t == SlotArtFrame(CantFrame);
 
     /// <summary>The spell in a slot, as <see cref="ClickSpell"/> numbers them.</summary>
     public int? SpellAt(bool ready, int index) => _spellSlots.FirstOrDefault(s => s.Ready == ready && s.Index == index)?.Spell;

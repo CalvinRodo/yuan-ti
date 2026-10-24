@@ -94,7 +94,7 @@ public partial class RegionView
         WorldObject? hit = ObjectAt(at);
         return _cursor switch
         {
-            GameMenu.Cursor.Look => hit is not null ? Pointers.Look : Pointers.CantLook,
+            GameMenu.Cursor.Look => hit is not null && Sees(hit) ? Pointers.Look : Pointers.CantLook,
             GameMenu.Cursor.Attack => hit is { Kind: ObjectKind.Creature } ? Pointers.Attack : Pointers.CantAttack,
             GameMenu.Cursor.Item when _useWith is not null => Pointers.Held,
             _ => hit is null && _region.IsBlocked(cell.X, cell.Y) ? Pointers.CantMove : Pointers.Move,

@@ -93,7 +93,62 @@ public partial class RegionView
         Expect(_world.Party.Select(p => p.Cell).Distinct().Count() == _party.Count, "spread-out members occupy different cells");
         Step(4000);
         CheckOriginalMovement();
+        CheckMessages();
         CheckBoxSelect();
+
+        // The original's message box (5F6D:05DE): a walk with no way there, a verb on something out of sight.
+        void CheckMessages()
+        {
+            Cell from = Selected!.Walker.Cell;
+            var reached = new HashSet<Cell> { from };
+            var queue = new Queue<Cell>([from]);
+            while (queue.Count > 0)
+            {
+                Cell c = queue.Dequeue();
+                foreach (Cell n in new[] { new Cell(c.X + 1, c.Y), new Cell(c.X - 1, c.Y), new Cell(c.X, c.Y + 1), new Cell(c.X, c.Y - 1) })
+                {
+                    if (n.X >= 0 && n.Y >= 0 && n.X < _region.Width && n.Y < _region.Height && !_region.IsBlocked(n.X, n.Y) && reached.Add(n))
+                    {
+                        queue.Enqueue(n);
+                    }
+                }
+            }
+            Vector2 Middle(Cell c) => new((c.X + 0.5f) * Region.TileSize, (c.Y + 0.5f) * Region.TileSize);
+            Cell? cutOff = Enumerable.Range(0, _region.Width * _region.Height).Select(i => new Cell(i % _region.Width, i / _region.Width))
+                .Where(c => !_region.IsBlocked(c.X, c.Y) && !reached.Contains(c) && ObjectAt(Middle(c)) is null)
+                .Select(c => (Cell?)c).FirstOrDefault(c => !Selected.Walker.CanReach(c!.Value, _region.IsBlocked));
+            if (cutOff is { } far)
+            {
+                ClickToWalk(Middle(far), wholeParty: false);
+                Expect(_message.Shown == NoPath, $"a click on {far}, cut off from {from}, says NO PATH FROM HERE ({_message.Shown})");
+                Expect(!Selected.Walker.IsWalking, "and nobody walks");
+                Clock();
+                Input.ParseInputEvent(new InputEventKey { Keycode = Key.Space, PhysicalKeycode = Key.Space, Pressed = true });
+                Input.FlushBufferedEvents();
+                Step(2);
+                Expect(!_message.IsOpen, "a key puts the message away");
+            }
+            else
+            {
+                problems.Add($"messages: no free cell cut off from {from} in region {_region.Number}");
+            }
+            if (_world.Objects.FirstOrDefault(o => o.Kind == ObjectKind.Thing && !o.Hidden && !o.IsDoor && !Sees(o)) is { } hidden)
+            {
+                StartVerb(hidden, Verb.Use, null);
+                Expect(_message.Shown == NoLineOfSight && _pendingUse is null, $"USE on {Describe(hidden)}, out of sight, says NO LINE OF SIGHT ({_message.Shown})");
+                _message.Close();
+            }
+            else
+            {
+                problems.Add($"messages: nothing out of sight in region {_region.Number}");
+            }
+            void Clock()
+            {
+                int clock = _world.Clock;
+                Step(4 * ScmdAnimator.TicksPerSecond);
+                Expect(_world.Clock == clock, "the map waits while the message shows");
+            }
+        }
 
         // As in the original: COLLAPSE PARTY again spreads the party out; the leader walks
         // (a click or the arrows) and the others follow, unless Settings.FollowLeader is off.
