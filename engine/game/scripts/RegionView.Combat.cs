@@ -1576,13 +1576,16 @@ public partial class RegionView
 
     /// <summary>
     /// The combat log step of <c>--check-combat</c>: every attack, wound and
-    /// save of the fight has its line (in short); the panel shows rows; its
+    /// save from the oldest the log still keeps (<see cref="CombatLog.Kept"/>: a long
+    /// fight's first go past <see cref="CombatLog.History"/>) has its line (in short); the panel shows rows; its
     /// level chip, + and L work (the settings put back after).
     /// </summary>
     private void CheckCombatLog(Battle battle, List<string> problems)
     {
         List<LogLine> lines = _combatLog.Log.At(LogLevel.Short);
         int Count(Func<LogLine, bool> which) => lines.Count(which);
+        CombatEvent? oldest = _combatLog.Log.Kept.FirstOrDefault();
+        List<CombatEvent> kept = [.. battle.Log.SkipWhile(e => !ReferenceEquals(e, oldest))];
         void Expect(string what, int want, int got)
         {
             if (want != got)
@@ -1590,10 +1593,10 @@ public partial class RegionView
                 problems.Add($"combat log: {got} {what} lines for {want}");
             }
         }
-        Expect("attack", battle.Log.OfType<AttackRolled>().Count(), Count(l => l.Kind is LogKind.Hit or LogKind.Miss && l.Text.Contains(" attacks ")));
-        Expect("hit point", battle.Log.OfType<Damaged>().Count(), Count(l => l.Kind == LogKind.Damage && l.Text.Contains(" HP (-")));
-        Expect("save", battle.Log.OfType<SaveRolled>().Count(), Count(l => l.Kind == LogKind.Save && l.Text.Contains("'s save vs ")));
-        if (_combatLog.Log.At(LogLevel.Detail).Count(l => l.Text.StartsWith("THAC0 ")) != battle.Log.OfType<AttackRolled>().Count())
+        Expect("attack", kept.OfType<AttackRolled>().Count(), Count(l => l.Kind is LogKind.Hit or LogKind.Miss && l.Text.Contains(" attacks ")));
+        Expect("hit point", kept.OfType<Damaged>().Count(), Count(l => l.Kind == LogKind.Damage && l.Text.Contains(" HP (-")));
+        Expect("save", kept.OfType<SaveRolled>().Count(), Count(l => l.Kind == LogKind.Save && l.Text.Contains("'s save vs ")));
+        if (_combatLog.Log.At(LogLevel.Detail).Count(l => l.Text.StartsWith("THAC0 ")) != kept.OfType<AttackRolled>().Count())
         {
             problems.Add("combat log: an attack in detail without its terms");
         }
