@@ -130,6 +130,13 @@ public partial class RegionView : Node2D
 
     private long Now => (long)(_clock * ScmdAnimator.TicksPerSecond);
 
+    /// <summary>
+    /// Out of a fight the map runs only under the MOVE pointer (<c>1DF3:29E8</c> counts the clock while
+    /// <c>DS:11B8</c> = 1): LOOK, ATTACK and a held item hold everything still while one picks, until a
+    /// chosen verb sends the character on its way.
+    /// </summary>
+    private bool MapHeld => _cursor != GameMenu.Cursor.Move && _pendingUse is null;
+
     /// <summary>Make the next opening of the view start a new game (region 42).</summary>
     public static void StartNewGame() => _regionIndex = -1;
 
@@ -872,8 +879,8 @@ public partial class RegionView : Node2D
         _cursor = cursor; // the pointer follows (UpdatePointer)
         Notice(cursor switch
         {
-            GameMenu.Cursor.Look => "LOOK CURSOR: a click shows what can be done (Esc: back to moving)",
-            GameMenu.Cursor.Attack => "ATTACK CURSOR: a click attacks (Esc: back to moving)",
+            GameMenu.Cursor.Look => "LOOK CURSOR: the game waits; a click shows what can be done (Esc: back to moving)",
+            GameMenu.Cursor.Attack => "ATTACK CURSOR: the game waits; a click attacks (Esc: back to moving)",
             GameMenu.Cursor.Item => _useWith is { } held ? $"USE {Called(held).ToUpperInvariant()} WITH: click what to use it on" : "MOVE CURSOR",
             _ => "MOVE CURSOR",
         });
@@ -1227,7 +1234,10 @@ public partial class RegionView : Node2D
         {
             return; // fading to the next region, or a script's cinematic plays over the map
         }
-        _clock += delta;
+        if (InCombat || !MapHeld)
+        {
+            _clock += delta;
+        }
         UpdatePointer();
         if (InCombat)
         {

@@ -215,6 +215,9 @@ the pack to buy (at the item's value), put things in the six slots by SELL to se
 Esc on the map, or the wide button, opens the original GAME MENU: the character screens, exit, save
 and load, preferences (music and sound, GAME DIFFICULTY scaling creatures' hit points, animations),
 the overhead map, centre on the leader, the move, look and attack cursors, and collapse party.
+A right-click on the map turns the pointer the same way (MOVE, ATTACK, LOOK, a held item). As in
+DSUN.EXE (the clock runs only under the move pointer, `1DF3:29E8`), out of a fight the map holds still
+under any pointer but MOVE (creatures, animations, the clock) until a chosen verb sends the character on.
 COLLAPSE PARTY makes the other members walk into the selected leader and disappear;
 they travel with that character, still present for scripts, dialogue and character screens.
 Shift+click, selecting a different map character or starting combat spreads the party

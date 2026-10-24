@@ -532,6 +532,10 @@ public sealed partial class GameWorld
         }
         obj.Hidden = true;
         obj.Walker?.Remove();
+        if (obj.IsDoor)
+        {
+            SetDoorCells(obj, 0); // 1DF3:0909: a door taken off the map leaves its cells as open (6BB8:0FF8)
+        }
         _objects[obj.Index] = null;
         Changed?.Invoke(obj, null);
     }

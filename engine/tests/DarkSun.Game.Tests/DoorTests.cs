@@ -128,6 +128,71 @@ public class DoorTests
     }
 
     [Fact]
+    public void ADoorTakenOffTheMapLeavesItsCellsAsOpen()
+    {
+        GameWorld w = World();
+
+        // GPL 138's "Take the hinges off the door": TELEPORT both leaves to region 255 (1DF3:0909 → 6BB8:0FF8).
+        w.Teleport(-2051, 255, 20, 20);
+        w.Teleport(-2052, 255, 20, 20);
+
+        Assert.False(w.Region.IsBlocked(6, 4));
+        Assert.False(w.Region.IsBlocked(7, 4));
+        Assert.False(w.Region.BlocksSight(6, 4));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ASaveThatKeptARemovedDoorsCellsBlockedLoadsWithThemOpen(bool removed)
+    {
+        void TakeOff(GameWorld w)
+        {
+            foreach (int ojff in new[] { 2051, 2052 })
+            {
+                if (removed)
+                {
+                    w.Remove(Door(w, ojff));
+                }
+                else
+                {
+                    w.Teleport(-ojff, 255, 20, 20);
+                }
+            }
+        }
+        GameWorld live = World();
+        TakeOff(live);
+        GameWorld before = World();
+        TakeOff(before);
+        // As the engine saved it before it freed them.
+        foreach (int x in new[] { 5, 6, 7, 8 })
+        {
+            before.SetCellFlags(x, 4, CellFlags.Blocked | CellFlags.BlocksSight, true);
+        }
+
+        GameWorld after = World();
+        after.Restore(before.Snapshot());
+
+        Assert.False(after.Region.IsBlocked(6, 4));
+        Assert.False(after.Region.IsBlocked(7, 4));
+        Assert.All(new[] { 5, 6, 7, 8 }, x => Assert.Equal(live.Region.IsBlocked(x, 4), after.Region.IsBlocked(x, 4)));
+    }
+
+    [Fact]
+    public void ADoorLeafTakenOffTheMapNoLongerSwingsWithItsPartner()
+    {
+        GameWorld w = World();
+        w.Teleport(-2052, 255, 20, 20);
+        Assert.False(w.Region.IsBlocked(8, 4));
+
+        Assert.True(w.SetDoor(Door(w, 2051), 0, force: true));
+        Assert.True(w.SetDoor(Door(w, 2051), Doors.Closed, force: true));
+
+        Assert.True(w.Region.IsBlocked(6, 4));
+        Assert.False(w.Region.IsBlocked(8, 4));
+    }
+
+    [Fact]
     public void OpenDoorsStartOpen()
     {
         GameWorld w = World(flags: 0);

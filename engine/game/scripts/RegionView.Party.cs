@@ -164,6 +164,18 @@ public partial class RegionView
         }
         Expect(seen.SequenceEqual([GameMenu.Cursor.Attack, GameMenu.Cursor.Look, GameMenu.Cursor.Move]),
             $"right-clicks on the map: ATTACK, LOOK, MOVE ({string.Join(", ", seen)})");
+        foreach (GameMenu.Cursor held in new[] { GameMenu.Cursor.Attack, GameMenu.Cursor.Look })
+        {
+            _gameMenu.SetCursor(held);
+            int clock = _world.Clock;
+            long ticks = Now;
+            Step(4 * ScmdAnimator.TicksPerSecond);
+            Expect(_world.Clock == clock && Now == ticks, $"the {held} pointer holds the map and its clock still");
+        }
+        _gameMenu.ResetCursor();
+        int moving = _world.Clock;
+        Step(4 * ScmdAnimator.TicksPerSecond);
+        Expect(_world.Clock > moving, "the MOVE pointer runs the clock again");
         if (_world.Objects.FirstOrDefault(o => o.Kind == ObjectKind.Thing && !o.Hidden && o.Source is not null) is { } thing)
         {
             SetUseWith(thing);
