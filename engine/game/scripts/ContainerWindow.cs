@@ -113,6 +113,22 @@ public partial class ContainerWindow : Control
         (Container, Opener) = (null, null);
     }
 
+    /// <summary>
+    /// An item's icon in a slot of <paramref name="box"/>'s size, at its own size, as DSUN.EXE draws it
+    /// (<c>6527:075C</c>, and the items page's <c>74F1:20EF</c>): up to 16 × 16 it is centred in the
+    /// 16 × 16 inside the slot's border; a bigger one is drawn from that corner, cut to the slot.
+    /// </summary>
+    public static void PlaceIcon(TextureRect icon, Vector2 box)
+    {
+        Vector2 size = icon.Texture?.GetSize() ?? Vector2.Zero;
+        bool small = size.X <= IconSize && size.Y <= IconSize;
+        icon.ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize;
+        icon.StretchMode = TextureRect.StretchModeEnum.Keep;
+        icon.ClipContents = !small;
+        icon.Position = small ? new Vector2((int)(IconSize - size.X) / 2 + 1, (int)(IconSize - size.Y) / 2 + 1) : Vector2.One;
+        icon.Size = small ? size : box - new Vector2(2, 2);
+    }
+
     /// <summary>The item shown in slot <paramref name="slot"/> (0–5), or null.</summary>
     public Item? ItemAt(int slot) => Container?.Items.ElementAtOrDefault(slot) is { } item && slot < Slots ? item : null;
 
@@ -129,11 +145,7 @@ public partial class ContainerWindow : Control
             Item? item = ItemAt(n);
             Texture2D? texture = item is null ? null : ItemIcon(item.Rdff);
             icon.Texture = texture;
-            // 6527:075C: an icon up to 16 × 16 is centred in the slot; a bigger one is drawn from its corner, cut to the slot.
-            bool small = texture is not null && texture.GetWidth() <= IconSize && texture.GetHeight() <= IconSize;
-            icon.StretchMode = small ? TextureRect.StretchModeEnum.KeepCentered : TextureRect.StretchModeEnum.Keep;
-            icon.ClipContents = !small;
-            icon.Position = small ? Vector2.Zero : Vector2.One;
+            PlaceIcon(icon, _slots[n].Control.Size);
             count.Text = item is { Quantity: > 1 } many ? many.Quantity.ToString() : "";
         }
     }

@@ -476,8 +476,6 @@ public partial class CharacterScreen : RetroScreen
                 MouseFilter = MouseFilterEnum.Ignore,
             },
         };
-        slot.Icon.Position = new Vector2(2, 2);
-        slot.Icon.Size = control.Size - new Vector2(4, 4);
         foreach (Control c in new Control[] { slot.Back, slot.Icon, slot.Mark, slot.Count })
         {
             control.AddChild(c);
@@ -759,6 +757,7 @@ public partial class CharacterScreen : RetroScreen
             // The picked item is on the pointer (HeldIcon): its place shows empty.
             bool picked = slot.Item is not null && _picked?.Item == slot.Item;
             slot.Icon.Texture = slot.Item is { } item && !picked ? ItemIcon(item.Rdff) : null;
+            ContainerWindow.PlaceIcon(slot.Icon, slot.Control.Size); // at its own size, not stretched to the slot
             slot.Count.Text = slot.Item is { Quantity: > 1 } many && !picked ? many.Quantity.ToString() : "";
             bool cant = slot.Item is not null && member is not null && slot.Where != Where.Worn && !_world!.CanUse(member, slot.Item);
             slot.Mark.Texture = !picked && cant ? SlotArtFrame(CantFrame) : null;
