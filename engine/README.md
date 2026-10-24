@@ -218,9 +218,10 @@ the overhead map, centre on the leader, the move, look and attack cursors, and c
 A right-click on the map turns the pointer the same way (MOVE, ATTACK, LOOK, a held item). As in
 DSUN.EXE (the clock runs only under the move pointer, `1DF3:29E8`), out of a fight the map holds still
 under any pointer but MOVE (creatures, animations, the clock) until a chosen verb sends the character on.
-COLLAPSE PARTY makes the other members walk into the selected leader and disappear;
+COLLAPSE PARTY makes the other members walk into the selected leader and disappear
+(as in the original, quickly: three times their walking pace; Options → Quick collapse off walks them in);
 they travel with that character, still present for scripts, dialogue and character screens.
-Shift+click, selecting a different map character or starting combat spreads the party
+COLLAPSE PARTY again, Shift+click, selecting a different map character or starting combat spreads the party
 onto separate free cells again. Saved games and region changes keep a collapsed party.
 START GAME without a party made plays the pre-made party (`game/party/premade.json`, editable:
 the roster's JSON); Create Characters' right-click menu has PRE-MADE PARTY on an empty box and DUAL for
@@ -270,6 +271,10 @@ the next character; N: add a character; C: change the selected character's
 sprite. Characters cover a footprint of cells (estimated from the sprite's
 width until the game's size data is traced) and, except when gathering into the leader, never overlap: one blocked by
 another waits, goes round if that's short, or gives up after about 4 s.
+As in the original, a click or the arrow keys walk the selected character and the others
+follow it, each keeping to the free cell next to it nearest to them (DSUN.EXE's chase target
+chooser); Options → Party follows off makes each walk alone, as box selection and Shift+click
+(the whole party to the click) do anyway.
 Hold the arrow keys to walk the selected character (two arrows walk diagonally);
 releasing them stops after the current step. They move the active combatant one
 cell per key press in combat, using its movement allowance. Menus and dialogue
@@ -522,7 +527,8 @@ leave, then walks the whole party through the gate and checks for the
 "Citizens of Draj!" announcement.
 `-- --new-game --check-party-movement` checks the collapse menu, follower
 visibility and occupancy, arrow-key movement, modal input blocking, loading a
-collapsed party, and spreading it out again.
+collapsed party, spreading it out again (also with COLLAPSE PARTY a second time),
+and the others following the leader on a click and the arrows (and not with Party follows off).
 
 `make engine-mod-rules MOD=mods/MyMod` writes all four rule files (`characters.json`,
 `creatures.json`, `combat.json`, `spells.json`) with the original's values to start from, keeping any

@@ -197,6 +197,8 @@ public partial class OptionsWindow : RetroScreen
             Toggle("Dust", () => Settings.Dust, v => Settings.Dust = v, "Dust when walking on sand"),
             new("Enemy rings", () => rings[Settings.EnemyRings], step => Settings.EnemyRings = (Settings.EnemyRings + step + 3) % 3,
                 "Rings under enemies in a fight"),
+            Toggle("Party follows", () => Settings.FollowLeader, v => Settings.FollowLeader = v, "The others follow whoever walks (off: each alone)"),
+            Toggle("Quick collapse", () => Settings.QuickCollapse, v => Settings.QuickCollapse = v, "The party gathers fast (off: at a walk)"),
             Toggle("Box selection", () => Settings.BoxSelect, v => Settings.BoxSelect = v, "Drag a box to pick who walks"),
             Toggle("Tab picks enemies", () => Settings.ChooseEnemyKeys, v => Settings.ChooseEnemyKeys = v, "In a fight Tab chooses, Enter attacks"),
         ];

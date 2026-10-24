@@ -855,7 +855,10 @@ public partial class RegionView : Node2D
         ClampCamera();
     }
 
-    /// <summary>COLLAPSE PARTY: walk into the leader, then travel as one character.</summary>
+    /// <summary>How many times as fast as a walk the members gather with <see cref="Settings.QuickCollapse"/>.</summary>
+    private const int QuickCollapseSpeed = 3;
+
+    /// <summary>COLLAPSE PARTY: walk into the leader, then travel as one character; again, spread out.</summary>
     private void CollapseParty()
     {
         if (MapLocked || InCombat)
@@ -863,12 +866,18 @@ public partial class RegionView : Node2D
             Notice("The party cannot collapse during combat or a waiting script.");
             return;
         }
+        if (_world.CollapsedLeader is not null)
+        {
+            _world.ExpandParty();
+            Notice("THE PARTY SPREADS OUT");
+            return;
+        }
         if (Selected is not null)
         {
             _keyboardWalker = null;
             _pendingUse = null;
             ClearPicked();
-            _world.CollapseParty(_selected);
+            _world.CollapseParty(_selected, Settings.QuickCollapse ? QuickCollapseSpeed : 1);
             _follow = true;
         }
     }
@@ -1095,11 +1104,26 @@ public partial class RegionView : Node2D
         {
             _world.ExpandParty();
         }
-        foreach (PartyMember member in wholeParty ? _party : Picked.Count > 0 ? Picked : Selected is { } m ? [m] : [])
+        List<PartyMember> walking = wholeParty ? _party : Picked.Count > 0 ? Picked : Selected is { } m ? [m] : [];
+        foreach (PartyMember member in walking)
         {
             member.Walker.WalkTo(goal, _region.IsBlocked);
         }
+        LeadOrWalkAlone(!wholeParty && walking.Count == 1 && walking[0] == Selected);
         _follow = true;
+    }
+
+    /// <summary>The leader walking on its own: with <see cref="Settings.FollowLeader"/> the others follow it (UpdateFollowers); else, or when several were sent, each walks alone.</summary>
+    private void LeadOrWalkAlone(bool leaderAlone)
+    {
+        if (leaderAlone && Settings.FollowLeader && !InCombat)
+        {
+            _world.FollowLeader(_selected);
+        }
+        else
+        {
+            _world.StopFollowing();
+        }
     }
 
 
@@ -1136,6 +1160,10 @@ public partial class RegionView : Node2D
             PlaySounds(member.Walker.TakeSounds(), member.Node.Position);
         }
         _world.UpdateCollapsedParty();
+        if (!InCombat)
+        {
+            _world.UpdateFollowers();
+        }
         for (int i = 0; i < _party.Count && _region.Number == region && !_transitioning; i++)
         {
             PartyMember member = _party[i];
@@ -1296,6 +1324,7 @@ public partial class RegionView : Node2D
             _keyboardWalker = walker;
             _pendingUse = null;
             SetUseWith(null);
+            LeadOrWalkAlone(leaderAlone: true);
         }
         _follow = true;
         if (walker.IsWalking)

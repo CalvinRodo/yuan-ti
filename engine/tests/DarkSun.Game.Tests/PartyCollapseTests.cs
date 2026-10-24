@@ -36,7 +36,73 @@ public class PartyCollapseTests
                 member.Walker!.Update(tick, world.Region.IsBlocked);
             }
             world.UpdateCollapsedParty();
+            world.UpdateFollowers();
         }
+    }
+
+    /// <summary>Ticks until every follower has gathered into the leader.</summary>
+    private static int TicksToGather(GameWorld world)
+    {
+        for (int tick = 0; tick < 4000; tick += 10)
+        {
+            if (world.Party.Skip(1).All(p => p.Collapsed))
+            {
+                return tick;
+            }
+            Walk(world, tick, 10);
+        }
+        return int.MaxValue;
+    }
+
+    [Fact]
+    public void AQuickCollapseGathersFasterAndLeavesTheirPaceAsItWas()
+    {
+        GameWorld walking = Party();
+        walking.CollapseParty(0);
+        GameWorld quick = Party();
+        quick.CollapseParty(0, speed: 3);
+
+        int slow = TicksToGather(walking), fast = TicksToGather(quick);
+
+        Assert.True(fast < slow && fast * 2 < slow, $"quick {fast} ticks, walking {slow}");
+        Assert.All(quick.Party, p => Assert.Equal(1, p.Walker!.Speed));
+    }
+
+    [Fact]
+    public void TheOthersFollowTheLeaderAndKeepCloseOnFreeCells()
+    {
+        GameWorld world = Party();
+        world.FollowLeader(0);
+        world[0]!.Walker!.WalkTo(new Cell(16, 8), world.Region.IsBlocked);
+
+        Walk(world, 0, 4000);
+
+        Assert.Equal(new Cell(16, 8), world[0]!.Cell);
+        Assert.All(world.Party.Skip(1), p => Assert.True(Math.Max(Math.Abs(p.Cell.X - 16), Math.Abs(p.Cell.Y - 8)) <= 2, $"member {p.Index} at {p.Cell}"));
+        Assert.Equal(4, world.Party.Select(p => p.Cell).Distinct().Count());
+        Assert.All(world.Party, p => Assert.False(p.Walker!.IsWalking));
+    }
+
+    [Fact]
+    public void WithoutFollowingTheOthersStayWhereTheyAre()
+    {
+        GameWorld world = Party();
+        world[0]!.Walker!.WalkTo(new Cell(16, 8), world.Region.IsBlocked);
+
+        Walk(world, 0, 4000);
+
+        Assert.Equal(new Cell(16, 8), world[0]!.Cell);
+        Assert.All(world.Party.Skip(1), p => Assert.Equal(new Cell(7 - p.Index, 8), p.Cell));
+    }
+
+    [Fact]
+    public void CollapsingEndsFollowing()
+    {
+        GameWorld world = Party();
+        world.FollowLeader(0);
+        world.CollapseParty(0);
+
+        Assert.Null(world.FollowedLeader);
     }
 
     [Fact]
