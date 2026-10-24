@@ -149,6 +149,8 @@ public partial class RegionView : Node2D
         AddChild(_floor);
         _marker = new SelectionMarker();
         AddChild(_marker);
+        _box = new BoxSelection();
+        AddChild(_box);
         _sorted = new Node2D { YSortEnabled = true };
         AddChild(_sorted);
         _overlay = new DebugOverlay { Visible = false };
@@ -534,6 +536,7 @@ public partial class RegionView : Node2D
         IReadOnlyList<string> files = Session.Install!.RegionFiles;
         _regionIndex = (index % files.Count + files.Count) % files.Count;
         _pendingUse = null;
+        ClearPicked();
         _verbMenu.Close();
         _containerWindow.Close();
         _itemWindow.Close();
@@ -821,6 +824,7 @@ public partial class RegionView : Node2D
             return;
         }
         Session.SetLeader(slot);
+        ClearPicked();
         if (slot != _selected)
         {
             _world.ExpandParty();
@@ -856,6 +860,7 @@ public partial class RegionView : Node2D
         {
             _keyboardWalker = null;
             _pendingUse = null;
+            ClearPicked();
             _world.CollapseParty(_selected);
             _follow = true;
         }
@@ -1083,7 +1088,7 @@ public partial class RegionView : Node2D
         {
             _world.ExpandParty();
         }
-        foreach (PartyMember member in wholeParty ? _party : Selected is { } m ? [m] : [])
+        foreach (PartyMember member in wholeParty ? _party : Picked.Count > 0 ? Picked : Selected is { } m ? [m] : [])
         {
             member.Walker.WalkTo(goal, _region.IsBlocked);
         }
@@ -1162,6 +1167,8 @@ public partial class RegionView : Node2D
             _overlay.QueueRedraw();
         }
         _marker.Follow(Selected?.Walker);
+        _box.Show(_boxFrom is { } from ? new Rect2(from, Vector2.Zero).Expand(_boxTo) : null,
+            [.. Picked.Where(p => p != Selected).Select(p => p.Walker)]);
     }
 
     /// <summary>
@@ -1389,6 +1396,7 @@ public partial class RegionView : Node2D
         else if (e.IsActionPressed(Controls.NextCharacter) && _party.Count > 0)
         {
             _world.ExpandParty();
+            ClearPicked();
             _selected = (_selected + 1) % _party.Count;
             _follow = true;
             UpdateHud();
@@ -1418,6 +1426,10 @@ public partial class RegionView : Node2D
         else if ((_dialogueWindow.Visible || MapLocked) && e is InputEventMouseButton { ButtonIndex: MouseButton.Left or MouseButton.Right })
         {
             // The dialogue is modal, and a waiting script holds the party: the map takes no clicks.
+        }
+        else if (BoxInput(e))
+        {
+            // A box is being dragged, or one was let go (BoxSelect).
         }
         else if (e is InputEventMouseButton { ButtonIndex: MouseButton.Left, Pressed: true } click)
         {
@@ -2904,15 +2916,15 @@ public partial class RegionView : Node2D
 
         GD.Print(problems.Count == 0
             ? "character: wore and took off, refused by class, gave, split, looted a body, used a lemon, a wand and a scroll, turned to the sheet; "
-              + "memorized, cast, rested, learned, picked a power, leader, computer control, game menu, preferences, store: OK"
+              + "cast, rested, learned, picked a power, leader, computer control, game menu, preferences, store: OK"
             : "character: " + string.Join("; ", problems));
         GetTree().Quit(problems.Count > 0 ? 1 : 0);
     }
 
     /// <summary>
     /// The rest of <c>--check-character</c>, with characters of its own (the
-    /// party's are put back after): a water cleric memorizes Cure Light Wounds
-    /// and heals the next member; a preserver learns Magic Missile; a
+    /// party's are put back after): a water cleric casts Cure Light Wounds on
+    /// the next member, nothing memorized; a preserver learns Magic Missile; a
     /// psionicist picks Detonate; the leader and computer-control buttons; the
     /// game menu, its preferences and questions; a store.
     /// </summary>
@@ -2932,23 +2944,26 @@ public partial class RegionView : Node2D
         int SlotOf(bool ready, int spell) => Enumerable.Range(0, 21).FirstOrDefault(i => screen.SpellAt(ready, i) == spell, -1);
         try
         {
-            // The cleric: memorize, then cast on the hurt second member.
+            // The cleric: no memorizing, a click picks Cure Light Wounds and the hurt second member's box casts it.
             screen.Open(_world, 0, CharacterScreen.Page.Spells);
-            Expect(SlotOf(false, CureLight) >= 0, $"a water cleric may memorize Cure Light Wounds ({screen.Status})");
-            screen.ClickSpell(false, SlotOf(false, CureLight));
-            Expect(cleric.Memorized.Contains(CureLight) && SlotOf(true, CureLight) >= 0, $"clicking it memorizes it ({screen.Status})");
+            Expect(SlotOf(false, CureLight) >= 0 && screen.Status.EndsWith("LEVEL 1 SPELLS TO CAST"),
+                $"a water cleric's 1st level shows Cure Light Wounds and the casts left ({screen.Status})");
             Vitals hurt = _world[1]!.Vitals;
-            (hurt.MaxHp, hurt.Hp, hurt.Status) = (20, 5, Vitals.Well);
-            screen.ClickSpell(true, SlotOf(true, CureLight));
-            Expect(screen.PickedSpell == CureLight, "clicking the ready spell picks it to cast");
-            screen.ClickBox(1);
-            Expect(hurt.Hp > 5 && cleric.Cast.Contains(CureLight), $"then the second member's box heals them ({hurt.Hp} hit points; {screen.Status})");
-            screen.ClickSpell(true, SlotOf(true, CureLight));
-            Expect(screen.PickedSpell is null && screen.Status.Contains("REST"), $"cast already: rest first ({screen.Status})");
+            int casts = new DarkSun.Game.Magic.Spellcasting(Session.Rules).CastsLeft(cleric, DarkSun.Game.Magic.SpellKind.Priest, 1);
+            for (int i = 0; i < casts; i++)
+            {
+                (hurt.MaxHp, hurt.Hp, hurt.Status) = (20, 5, Vitals.Well);
+                screen.ClickSpell(false, SlotOf(false, CureLight));
+                Expect(screen.PickedSpell == CureLight, $"clicking the spell picks it to cast ({screen.Status})");
+                screen.ClickBox(1);
+                Expect(hurt.Hp > 5 && cleric.Cast.Count == i + 1, $"then the second member's box heals them ({hurt.Hp} hit points; {screen.Status})");
+            }
+            screen.ClickSpell(false, SlotOf(false, CureLight));
+            Expect(screen.PickedSpell is null && screen.Status.Contains("REST"), $"the level's casts used: rest first ({screen.Status})");
             _world.Rest(raiseDead: false);
-            Expect(cleric.Cast.Count == 0, "resting makes it ready again");
+            Expect(cleric.Cast.Count == 0, "resting gives the casts back");
 
-            // The preserver: learn, then memorize.
+            // The preserver: learn, then cast what the book holds.
             screen.ClickBox(1);
             screen.Press(11320);
             Expect(SlotOf(false, MagicMissile) >= 0, "LEARN shows Magic Missile");
@@ -2956,14 +2971,11 @@ public partial class RegionView : Node2D
             Expect(preserver.Spellbook.Contains(MagicMissile), $"clicking it learns it ({screen.Status})");
             screen.Press(11320);
             screen.ClickSpell(false, SlotOf(false, MagicMissile));
-            Expect(preserver.Memorized.Contains(MagicMissile), "and it can be memorized");
+            Expect(screen.PickedSpell == MagicMissile, $"and it can be cast at once ({screen.Status})");
             screen.ClickSpell(false, SlotOf(false, MagicMissile), button: MouseButton.Right);
-            Expect(screen.SpellInfo?.StartsWith("MAGIC MISSILE:") == true && preserver.Memorized.Contains(MagicMissile),
-                $"right-clicking it in the book shows what it does ({screen.SpellInfo})");
+            Expect(screen.SpellInfo?.StartsWith("MAGIC MISSILE:") == true, $"right-clicking it shows what it does ({screen.SpellInfo})");
             screen._Input(new InputEventKey { Keycode = Key.Escape, PhysicalKeycode = Key.Escape, Pressed = true });
             Expect(screen.SpellInfo is null && screen.Visible, "Esc closes it, not the screen");
-            screen.ClickSpell(true, SlotOf(true, MagicMissile), button: MouseButton.Right);
-            Expect(!preserver.Memorized.Contains(MagicMissile), $"right-clicking the memorized copy forgets it ({screen.Status})");
 
             // The psionicist: pick a power.
             screen.Press(11306);
@@ -3294,6 +3306,11 @@ public partial class RegionView : Node2D
         _options.Open();
         await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
         Expect(_journal.Visible && _options.Visible, "the journal and options windows open");
+        bool shadows = Settings.Shadows;
+        Expect(_options.Press("Shadows") == OnOffWord(!shadows) && Settings.Shadows == !shadows
+            && _options.Press("Shadows") == OnOffWord(shadows) && Settings.Shadows == shadows, "an options bar turns its option over and back");
+        Expect(_options.WindowFits, "the options window is inside the 320 × 200 screen");
+        static string OnOffWord(bool on) => on ? "ON" : "OFF";
         _journal.Close();
         _options.Visible = false; // closing would save the settings
         Controls.Rebind(Controls.QuickSave, new InputEventKey { PhysicalKeycode = Key.F7 });

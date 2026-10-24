@@ -52,10 +52,7 @@ public sealed record Character
     /// <summary>A preserver's spellbook: the wizard spells (<c>SPIN</c> numbers) learned (<see cref="Magic.Spellcasting"/>).</summary>
     public List<int> Spellbook { get; set; } = [];
 
-    /// <summary>The spells memorized, one entry per memorized copy.</summary>
-    public List<int> Memorized { get; set; } = [];
-
-    /// <summary>The memorized spells cast since the last rest (a spell can be cast as often as it is memorized).</summary>
+    /// <summary>The spells cast since the last rest: each takes one of its level's casts (<see cref="Magic.Spellcasting.CastsLeft"/>).</summary>
     public List<int> Cast { get; set; } = [];
 
     /// <summary>The psionic powers learned (<c>SPIN</c> 139–172).</summary>
@@ -473,7 +470,6 @@ public sealed class CharacterCreation(CharacterRules rules, CharacterNames names
         c.Former.Add(new FormerClass(c.Classes[0], Levels(c)[0]));
         c.Classes = [k];
         c.Experience = 0;
-        c.Memorized.Clear();
         c.Cast.Clear();
         FixPowers(c);
         return true;

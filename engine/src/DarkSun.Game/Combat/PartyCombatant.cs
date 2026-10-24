@@ -19,7 +19,8 @@ public static class PartyCombatant
     /// (<see cref="CharacterCreation.ActiveLevels"/>); armour class from what it
     /// wears, without Dexterity (the battle adds that), shields apart; the
     /// weapon in hand (slot 3), a missile weapon (slot 2) and its ammunition
-    /// (slot 1); its memorized spells not yet cast, its powers, ranks and
+    /// (slot 1); the spells it knows at the levels with casts left (and those
+    /// casts, <see cref="Combatant.CastsLeft"/>), its powers, ranks and
     /// psionic points. Without a weapon it fights as the new-character
     /// template has it (<see cref="CharacterRules.UnarmedDice"/>: its attacks a
     /// round of 1d1), or with its race's <see cref="RaceRules.NaturalAttacks"/>
@@ -39,11 +40,10 @@ public static class PartyCombatant
         int shields = member.Items.Where(i => i.Equipped && catalog.TypeOf(i.Record) is { Weapon: var w } && (w & WeaponKind.Shield) != 0)
             .Sum(i => catalog.TypeOf(i.Record)!.ArmorClass + Math.Max(0, (int)i.Record.Bonus));
         int dex = stats[(int)Ability.Dex];
-        List<int> ready = [.. c.Memorized];
-        foreach (int cast in c.Cast)
-        {
-            ready.Remove(cast);
-        }
+        static int LevelKey(SpellKind kind, int level) => (int)kind * 16 + level;
+        Dictionary<int, int> castsLeft = magic.Levels(c).Where(l => magic.CastsLeft(c, l.Kind, l.Level) > 0)
+            .ToDictionary(l => LevelKey(l.Kind, l.Level), l => magic.CastsLeft(c, l.Kind, l.Level));
+        Dictionary<int, int> spellLevels = magic.Castable(c).ToDictionary(s => s.Number, s => LevelKey(s.Kind, s.Level));
         int psp = magic.Psp(c);
         RaceRules? race = rules.Races.FirstOrDefault(r => r.Race == c.Race);
         int halves = CharacterSheet.AttackHalves(active, rules);
@@ -73,8 +73,9 @@ public static class PartyCombatant
             MissileWeapon = WornIn(2),
             Ammunition = member.Items.FirstOrDefault(i => i.Slot == 1)?.Quantity ?? 0,
             ThiefLevel = magic.Level(c, CharacterClass.Thief),
-            Spells = ready,
-            SpellsAtStart = [.. ready],
+            Spells = [.. spellLevels.Keys],
+            SpellLevels = spellLevels,
+            CastsLeft = castsLeft,
             Powers = [.. c.Powers],
             PowerRanks = Combatant.PowerRanksOf(c),
             Psp = psp,

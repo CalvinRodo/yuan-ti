@@ -14,10 +14,12 @@ namespace DarkSun.Engine;
 /// the status line while the pointer is on it and its description the
 /// tooltip (<c>SPIN</c> n). The status line says what is left, in DSUN.EXE's words.
 /// <list type="bullet">
-/// <item>Spells: the level's spells above, click to memorize a copy; LEARN shows
-/// the wizard spells not in the spellbook, click to learn. Below, the memorized
-/// spells ready (with how many): click one, then a member's box, to cast it on
-/// them (double-click: on the caster); right-click to forget a copy.</item>
+/// <item>Spells: the spells the member knows at the level above, as DSUN.EXE
+/// has them: nothing is memorized, every one of them can be cast while the
+/// level has casts left ("2 LEVEL 1 SPELLS TO CAST"; a rest fills them,
+/// <see cref="Spellcasting.CastsLeft"/>), dimmed when it has none. Click one,
+/// then a member's box, to cast it on them (double-click: on the caster).
+/// LEARN shows the wizard spells not in the spellbook, click to learn.</item>
 /// <item>A right-click on a spell above, or on a power, opens the spell
 /// information window (<see cref="ShowSpellInfo"/>).</item>
 /// <item>Psionics: the discipline's powers above, those not known dimmed:
@@ -142,9 +144,9 @@ public partial class CharacterScreen
         }
         _choiceButton.Visible = magic;
         _learnButton.Visible = false;
+        _pickedSpell = null; // a spell picked on one page isn't cast from another
         if (!magic)
         {
-            _pickedSpell = null;
             _learning = false;
         }
     }
@@ -221,7 +223,7 @@ public partial class CharacterScreen
     private string Tooltip(int number) =>
         Session.SpellName(number) is { } name ? $"{name}\n{Session.SpellDescription(number)}" : $"Spell {number}";
 
-    /// <summary>The spell levels the member can memorize (a preserver-cleric has both kinds).</summary>
+    /// <summary>The spell levels the member can cast (a preserver-cleric has both kinds).</summary>
     private List<(SpellKind Kind, int Level)> SpellChoices(Character c) => [.. _magic.Levels(c)];
 
     private void NextChoice()
@@ -258,10 +260,9 @@ public partial class CharacterScreen
     private void RefreshSpells(Character c)
     {
         List<(SpellKind Kind, int Level)> choices = SpellChoices(c);
-        var ready = c.Memorized.Distinct().OrderBy(n => n).ToList();
         if (choices.Count == 0)
         {
-            Fill([], ready);
+            Fill([], []);
             _choiceButton.Visible = _learnButton.Visible = false;
             _status.Text = "YOU CANNOT CAST SPELLS";
             return;
@@ -272,20 +273,18 @@ public partial class CharacterScreen
         _learning &= preserver;
         _choiceButton.Visible = true;
         SetTextButtons($"{(kind == SpellKind.Wizard ? "WIZ" : "PRI")} {level}", preserver ? (_learning ? "DONE" : "LEARN") : null);
-        var shown = (_learning ? _magic.Learnable(c, level) : _magic.Memorizable(c, kind, level)).Select(s => s.Number).ToList();
-        Fill(shown, ready);
-        foreach (SpellSlot slot in _spellSlots.Where(s => s.Spell is not null))
+        var shown = (_learning ? _magic.Learnable(c, level) : _magic.Known(c, kind, level)).Select(s => s.Number).ToList();
+        Fill(shown, []);
+        int left = _magic.CastsLeft(c, kind, level);
+        foreach (SpellSlot slot in _spellSlots.Where(s => s.Spell is not null && !_learning))
         {
-            int n = slot.Spell!.Value;
-            int copies = slot.Ready ? Spellcasting.Ready(c, n) : c.Memorized.Count(m => m == n);
-            slot.Count.Text = slot.Ready || (copies > 0 && !_learning) ? copies.ToString() : "";
-            slot.Icon.Modulate = slot.Ready && copies == 0 ? new Color(1, 1, 1, 0.4f) : Colors.White;
+            slot.Icon.Modulate = left == 0 ? new Color(1, 1, 1, 0.4f) : Colors.White;
         }
-        int left = _magic.Slots(c, kind, level) - _magic.MemorizedAt(c, kind, level);
         _status.Text = _pickedSpell is int picked ? $"CAST {Session.SpellName(picked)?.ToUpperInvariant()} ON?"
             : _learning ? $"BOOK: {c.Spellbook.Count(n => Spellcasting.Get(n)?.Level == level)} OF {_magic.SpellbookSize(c)} LEVEL {level}"
             : shown.Count == 0 && preserver ? "NO SPELLS: LEARN SOME"
-            : $"{left} LEVEL {level} SPELL{(left == 1 ? "" : "S")} TO MEMORIZE";
+            : left == 0 ? "YOU NEED TO REST"
+            : $"{left} LEVEL {level} SPELL{(left == 1 ? "" : "S")} TO CAST";
     }
 
     private void RefreshPowers(Character c)
@@ -338,7 +337,7 @@ public partial class CharacterScreen
             slot.Icon.Modulate = Colors.White;
             slot.Count.Text = "";
             slot.Control.TooltipText = slot.Spell is int t ? Tooltip(t) : "";
-            slot.Mark.Texture = slot.Spell is not null && slot.Spell == _pickedSpell && slot.Ready == (_page == Page.Spells) ? SlotArtFrame(SelectedFrame) : null;
+            slot.Mark.Texture = slot.Spell is not null && slot.Spell == _pickedSpell && !slot.Ready ? SlotArtFrame(SelectedFrame) : null;
         }
     }
 
@@ -354,14 +353,6 @@ public partial class CharacterScreen
             return;
         }
         string name = Session.SpellName(n)?.ToUpperInvariant() ?? $"SPELL {n}";
-        if (click.ButtonIndex == MouseButton.Right && _page == Page.Spells && slot.Ready)
-        {
-            // A memorized copy, below: forget it.
-            bool forgot = _magic.Forget(c, n);
-            RefreshMagic();
-            _status.Text = forgot ? $"{name} FORGOTTEN" : name;
-            return;
-        }
         if (click.ButtonIndex == MouseButton.Right)
         {
             ShowSpellInfo(n);
@@ -378,9 +369,10 @@ public partial class CharacterScreen
             {
                 message = $"{name} {_magic.Learn(c, n)}";
             }
-            else if (!slot.Ready)
+            else if (!_magic.CanCast(c, n))
             {
-                message = _magic.Memorize(c, n) ? $"{name} MEMORIZED" : "NO MORE SPELLS OF THAT LEVEL";
+                _pickedSpell = null;
+                message = "YOU NEED TO REST";
             }
             else if (click.DoubleClick)
             {
@@ -389,8 +381,7 @@ public partial class CharacterScreen
             }
             else
             {
-                _pickedSpell = Spellcasting.Ready(c, n) > 0 ? (_pickedSpell == n ? null : n) : null;
-                message = _pickedSpell is null && Spellcasting.Ready(c, n) == 0 ? "YOU NEED TO REST" : null;
+                _pickedSpell = _pickedSpell == n ? null : n;
             }
         }
         else if (!c.Powers.Contains(n))

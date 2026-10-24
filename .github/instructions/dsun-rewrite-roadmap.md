@@ -472,7 +472,7 @@ this milestone brings most of the game's content.
       AD&D 2nd edition (DSUN.EXE's formulas aren't traced).
 - [x] The spell and psionic pages (View Character's 35 spell slots; the
       spells' levels and spheres from DSUN.EXE's table at `DS:019C`;
-      `DarkSun.Game.Magic.Spellcasting`: memorize, learn, cast the healing
+      `DarkSun.Game.Magic.Spellcasting`: casts per spell level, learn, cast the healing
       spells outside combat, rest; pick and use powers), the leader and
       computer-control buttons, the GAME MENU (`WIND` 10500) with
       preferences (16500) and its questions (14000), and the store on the

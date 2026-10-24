@@ -129,6 +129,10 @@ public partial class MainMenu : RetroScreen
             GetTree().Quit(_buttons.Count == 4 ? 0 : 1);
             return;
         }
+        if (OS.GetCmdlineUserArgs().Contains("--show-options"))
+        {
+            Callable.From(() => _options.Open()).CallDeferred(); // development: the options at start (screenshots)
+        }
         // Nothing is highlighted until the pointer or a key picks a line, as in the original.
     }
 

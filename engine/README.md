@@ -117,7 +117,7 @@ on; thief skills, ability rolls and traps are rolled as the EXE rolls them
 (the skill tables are in `characters.json`). The shipped scripts' known bugs
 found by the OpenDS project (Darkhold's dead triggers, the Lava Rifts ranger,
 Linara's conversation) are repaired as they load; the Options window's
-"Repair the shipped scripts' known bugs" (`script_repairs`) turns that off.
+"Repair scripts" (`script_repairs`) turns that off.
 PgUp/PgDn browse the other regions, with the party in the middle
 of the map. The party is four placeholder sprites (any object whose `SCMD`
 can walk). Entering a region
@@ -145,7 +145,7 @@ Right-click an item, in the inventory or a container, for the item window
 INFO turns it to who in the party may use it. Its USE (in the inventory, `91F7:03D0`) uses
 the item: a scroll teaches its spell or power; a wand, a necklace or fruit casts its spell at level 6
 and uses a charge (the item is gone at 0): in a fight, on the member's turn, a spell on oneself at once
-and any other aimed like CAST's; outside one, as for memorized spells, only healing works (and a lemon
+and any other aimed like CAST's; outside one, as for a member's own spells, only healing works (and a lemon
 makes its eater whole). Worn things whose spell helps work by being worn and have no USE. Get and Attack say so when there's no script, since items
 and combat aren't in yet. Dialogue (text, portraits, Continue, Yes/No,
 menus) opens in a window and pauses the script until answered; TELEPORT moves
@@ -203,10 +203,12 @@ experience, psionics), I the items (`WIND` 13500: the body with its 14 equipment
 and SPLIT), and the bottom icons switch between them. Click a thing, then where it goes (a slot to
 wear it, the pack, another member's box to give it); double-click wears or takes off; right-click
 opens the item window (and describes it in the panel). A carried bag or box opens in place of the
-body, to take or put in. The bar's other icons are spells and psionics, on View Character's panel: memorize a spell
-by clicking it, cast one by clicking it below and then a member's box (outside combat only the
-healing ones work); a preserver LEARNs spells into the spellbook, a psionicist picks powers; a rest
-(REQUEST 1 or 4) makes every spell ready again. The small buttons by each box make that member leader
+body, to take or put in. The bar's other icons are spells and psionics, on View Character's panel. As in DSUN.EXE
+nothing is memorized: a caster has a number of casts at each spell level (`DS:4B08` wizard, `DS:4B11`
+priest, a byte a level; `78A9:5344` takes one a cast), and every spell it knows at a level can be cast
+while that level has some left ("2 LEVEL 1 SPELLS TO CAST"). Click a spell, then a member's box, to
+cast it (outside combat only the healing ones work; in a fight CAST lists them all); a preserver
+LEARNs spells into the spellbook, a psionicist picks powers; a rest (REQUEST 1 or 4) fills the casts again. The small buttons by each box make that member leader
 and turn computer control on or off. A script's SHOP opens the items as a store: click the goods then
 the pack to buy (at the item's value), put things in the six slots by SELL to sell (at half).
 Esc on the map, or the wide button, opens the original GAME MENU: the character screens, exit, save
@@ -235,8 +237,12 @@ Conversations use the original's text windows (`WIND` 3007 and 3008): the portra
 with MORE (Space, Enter or a click) and the up arrow, choices on five stone bars (1–9, Y and N);
 `-- --new-game --talk` starts one, `--check-dialogue` reads a conversation through and pages a long text.
 Options (O on the main menu and the map) set the music and sound volume, full screen, skipping the
-opening, autosave, the map's information lines and the original pathfinding, and rebind every key;
-they are kept in `user://settings.cfg`. The journal (J) keeps every conversation (speaker, portrait,
+opening, autosave, the map's information lines, the original pathfinding and the rest below (GAME),
+and rebind every key (KEYS); they are kept in `user://settings.cfg`. The original has no options
+screen: it is drawn in the stone of its LOAD and SAVE window (`WIND` 3009, as the mods screen), one
+option to a slot bar with its value on the right, ten to a page; a click changes it, a right-click
+steps back, the line under the window says what the bar under the pointer does
+(`-- --show-options` opens it at start). The journal (J) keeps every conversation (speaker, portrait,
 your replies), events (items, experience, money, new regions) and a quest log. Quests are JSON, in
 `journal/quests.json` (a mod's replaces the engine's, `game/journal/quests.json`):
 
@@ -251,7 +257,11 @@ A stage shows once its condition holds: global variables (`gflag[n]`, `gnum[n]`,
 variables a script sets. `--check-journal` checks it all with a real conversation.
 On any screen, `?` lists every key and click that screen takes, with the keys as they are bound now
 (`KeyHelp`; `--check-help` fails if a `Controls` action is listed nowhere, `--show-keys` opens it at start). Click: the selected character (green ring) walks there;
-Shift+click: the whole party; Tab: select
+Shift+click: the whole party; with "Box selection" on in Options
+(`[game] box_select`, off by default: DSUN.EXE has no such thing), dragging a box out of a fight picks
+the characters it touches (faint green rings; the leader becomes one of them) and a click walks only
+them while the rest stay; a box round no one, choosing another leader, collapsing, a fight or a new
+region drops the picks. Tab: select
 the next character; N: add a character; C: change the selected character's
 sprite. Characters cover a footprint of cells (estimated from the sprite's
 width until the game's size data is traced) and, except when gathering into the leader, never overlap: one blocked by
@@ -486,7 +496,7 @@ What rides on a creature's hits is `CreatureRules.OnHit`. `Battle.Log` lists wha
 Fights happen on the region map. FIGHT, or attacking a creature that has no attack trigger, starts one
 (`Encounter.Start`): the party members standing, each built from the character sheet
 (`PartyCombatant`: THAC0, saving throws and attacks of the classes in use, armour from what is worn,
-the weapons in hand and missile slot, memorized spells, powers and their ranks), and the creatures of a
+the weapons in hand and missile slot, the spells known with their levels' casts left, powers and their ranks), and the creatures of a
 fighting allegiance within 24 cells. The battle plays back step by step as DSUN.EXE shows it:
 attackers play their attack animation with its sound, missiles and spell projectiles fly to their
 targets, spells show their graphics over caster and target with their sounds, blows that hurt sound

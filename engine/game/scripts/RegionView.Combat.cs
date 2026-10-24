@@ -138,6 +138,7 @@ public partial class RegionView
         }
         var dice = new BorlandDice(new BorlandRandom((uint)System.Environment.TickCount));
         _keyboardWalker = null;
+        ClearPicked();
         Battle? battle = Encounter.Start(_world, slot => slot < Session.Party.Count ? Session.Party[slot] : null, dice, Session.Rules,
             Session.CombatRules, Session.SpellRules, Session.CreatureRules, attacked, fallsWhenShown: true);
         if (battle is null)
@@ -975,7 +976,7 @@ public partial class RegionView
         _ => "No line of sight",
     };
 
-    /// <summary>CAST: the spells this member still has ready and, with points, its powers.</summary>
+    /// <summary>CAST: the spells this member can still cast (with its level's casts left) and, with points, its powers.</summary>
     private void OpenCastMenu()
     {
         if (PlayerTurn is not { } c)
@@ -983,9 +984,10 @@ public partial class RegionView
             return;
         }
         _castMenu.Clear();
-        foreach (var g in c.Spells.GroupBy(n => n).OrderBy(g => g.Key))
+        foreach (int spell in c.Spells.Distinct().Order())
         {
-            _castMenu.AddItem($"{EffectName(g.Key)}{(g.Count() > 1 ? $" ×{g.Count()}" : "")}", g.Key);
+            int casts = c.CastsOf(spell);
+            _castMenu.AddItem($"{EffectName(spell)}{(casts > 1 ? $" ×{casts}" : "")}", spell);
         }
         foreach (int p in c.Powers.Distinct().Order())
         {

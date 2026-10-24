@@ -1664,8 +1664,12 @@ These are AD&D 2nd edition's, but 18 has no percentile strength (+2 to hit,
   targets (`0980:337C`, colours 0xFE and 0x34). The engine: `Pointers`,
   `RegionView.Pointer.cs` (the targets flash black instead of being framed).
 * Casting needs the caster active ("ONLY ACTIVE CHAR CAN CAST"); being hit
-  interrupts it ("YOU WERE HIT"). The memorized spells per level are
-  `DS:4B08` (wizard) and `DS:4B11` (priest), 0x1E bytes per character.
+  interrupts it ("YOU WERE HIT"). Nothing is memorized spell by spell: the
+  casts left per spell level are `DS:4B08` (wizard) and `DS:4B11` (priest),
+  one byte a level (indexed by the spell's level, `DS:019C`), 0x1E bytes per
+  character. A spell can be cast while its level's byte is not 0
+  (`6F6D:0B51`, `6527` case 4: else "YOU NEED TO REST"), and a cast takes one
+  (`78A9:5344`): every spell the character knows at a level shares them.
 * The record before spell 1 (−0x03 to −0x01 of record 0, `3CB4:0034`) is
   read too, so the records really start 3 bytes earlier; the offsets here
   are kept as they were.

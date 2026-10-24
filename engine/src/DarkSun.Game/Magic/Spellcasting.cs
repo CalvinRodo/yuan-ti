@@ -22,15 +22,18 @@ public sealed record Spell(int Number, int Level, uint Casters, SpellKind Kind, 
 }
 
 /// <summary>
-/// Spells, memorizing and psionics for the party's characters. From DSUN.EXE:
-/// the spells' levels and casters (<see cref="Spell"/>). A caster mask has
+/// Spells and psionics for the party's characters. From DSUN.EXE: the
+/// spells' levels and casters (<see cref="Spell"/>), and that nothing is
+/// memorized: a character has a number of casts at each spell level
+/// (<c>DS:4B08</c> wizard, <c>DS:4B11</c> priest, one byte a level, 0x1E a
+/// character), any spell it knows at a level is cast while that level has some
+/// left, each cast takes one (<c>78A9:5344</c>), and a rest fills them again. A caster mask has
 /// bit <c>code + 1</c> for each class code (<c>38D4:00ED</c>: 1–4 cleric of
 /// air, earth, fire, water, 5–8 druid, 11 preserver, 13–16 ranger; the same
 /// codes as items' classes). So it holds the spheres: Magical Stone is earth
 /// only, Dust Devil air and earth, and at levels 4 and 5 the spells of no one
 /// sphere are the druids'. The rest is the engine's, from AD&amp;D 2nd edition
-/// where DSUN.EXE's tables (<c>DS:4B08</c>, <c>DS:4B11</c>: a character's
-/// wizard and priest spells per level) aren't traced: spells per day by level
+/// where DSUN.EXE's numbers aren't traced: the casts a day by level
 /// (<see cref="CharacterRules.WizardSlots"/>, …), priests' Wisdom bonus, the
 /// spellbook's size by Intelligence, and psionic strength points and powers.
 /// </summary>
@@ -115,7 +118,7 @@ public sealed class Spellcasting(CharacterRules rules)
 
     /// <summary>
     /// How many spells of <paramref name="kind"/> and <paramref name="level"/>
-    /// (1–5) the character may memorize: the wizard table at its preserver
+    /// (1–5) the character may cast between rests: the wizard table at its preserver
     /// level; the priest table at its best cleric or druid level (or the
     /// ranger's), plus Wisdom's bonus where it has a spell of that level already.
     /// </summary>
@@ -143,7 +146,7 @@ public sealed class Spellcasting(CharacterRules rules)
         return slots;
     }
 
-    /// <summary>Spell levels the character can memorize at all, by kind.</summary>
+    /// <summary>Spell levels the character can cast at all, by kind.</summary>
     public IEnumerable<(SpellKind Kind, int Level)> Levels(Character c) =>
         from kind in new[] { SpellKind.Wizard, SpellKind.Priest }
         from level in Enumerable.Range(1, MaxSpellLevel)
@@ -154,11 +157,11 @@ public sealed class Spellcasting(CharacterRules rules)
     public static bool Allows(Character c, Spell s) => s.Kind != SpellKind.Psionic && (s.Casters & CasterBits(c)) != 0;
 
     /// <summary>
-    /// The spells the character may memorize at <paramref name="kind"/> and
+    /// The spells the character knows at <paramref name="kind"/> and
     /// <paramref name="level"/>: a priest's every spell its classes and sphere
     /// allow; a preserver's those in its spellbook.
     /// </summary>
-    public IEnumerable<Spell> Memorizable(Character c, SpellKind kind, int level) =>
+    public IEnumerable<Spell> Known(Character c, SpellKind kind, int level) =>
         Slots(c, kind, level) == 0 ? []
             : All.Where(s => s.Kind == kind && s.Level == level && Allows(c, s) && (kind != SpellKind.Wizard || c.Spellbook.Contains(s.Number)));
 
@@ -196,36 +199,17 @@ public sealed class Spellcasting(CharacterRules rules)
         return "IS LEARNED!";
     }
 
-    public int MemorizedAt(Character c, SpellKind kind, int level) =>
-        c.Memorized.Count(n => Get(n) is { } s && s.Kind == kind && s.Level == level);
+    /// <summary>The casts left at <paramref name="kind"/> and <paramref name="level"/> until a rest.</summary>
+    public int CastsLeft(Character c, SpellKind kind, int level) =>
+        Math.Max(0, Slots(c, kind, level) - c.Cast.Count(n => Get(n) is { } s && s.Kind == kind && s.Level == level));
 
-    /// <summary>Memorize a copy of <paramref name="number"/> if a slot of its level is free.</summary>
-    public bool Memorize(Character c, int number)
-    {
-        if (Get(number) is not { } s || !Memorizable(c, s.Kind, s.Level).Contains(s) || MemorizedAt(c, s.Kind, s.Level) >= Slots(c, s.Kind, s.Level))
-        {
-            return false;
-        }
-        c.Memorized.Add(number);
-        return true;
-    }
+    /// <summary>Can the character cast <paramref name="number"/> now: does it know it, with a cast of its level left?</summary>
+    public bool CanCast(Character c, int number) =>
+        Get(number) is { Kind: not SpellKind.Psionic } s && CastsLeft(c, s.Kind, s.Level) > 0 && Known(c, s.Kind, s.Level).Contains(s);
 
-    /// <summary>Forget one memorized copy (one not yet cast first).</summary>
-    public bool Forget(Character c, int number)
-    {
-        if (!c.Memorized.Remove(number))
-        {
-            return false;
-        }
-        if (c.Cast.Count(n => n == number) > c.Memorized.Count(n => n == number))
-        {
-            c.Cast.Remove(number);
-        }
-        return true;
-    }
-
-    /// <summary>The memorized copies of <paramref name="number"/> not yet cast.</summary>
-    public static int Ready(Character c, int number) => c.Memorized.Count(n => n == number) - c.Cast.Count(n => n == number);
+    /// <summary>Every spell the character could cast now, in number order.</summary>
+    public IEnumerable<Spell> Castable(Character c) =>
+        Levels(c).Where(l => CastsLeft(c, l.Kind, l.Level) > 0).SelectMany(l => Known(c, l.Kind, l.Level)).OrderBy(s => s.Number);
 
     // -- psionics -------------------------------------------------------------------------
 
@@ -317,7 +301,7 @@ public sealed class Spellcasting(CharacterRules rules)
     // -- casting out of combat --------------------------------------------------------------
 
     /// <summary>
-    /// Cast memorized spell (or use power) <paramref name="number"/> on
+    /// Cast spell (or use power) <paramref name="number"/> on
     /// <paramref name="target"/> outside combat. Only the healing ones do
     /// anything yet (cure light, serious and critical wounds, raise dead,
     /// cell adjustment); the rest need combat. Returns what happened, as
@@ -330,9 +314,9 @@ public sealed class Spellcasting(CharacterRules rules)
             return NothingHappens;
         }
         bool power = s.Kind == SpellKind.Psionic;
-        if (power ? !caster.Powers.Contains(number) : Ready(caster, number) < 1)
+        if (power ? !caster.Powers.Contains(number) : !CanCast(caster, number))
         {
-            return power ? "CAN'T START THAT PSIONIC" : "NO SUCH SPELL TO CAST";
+            return power ? "CAN'T START THAT PSIONIC" : Known(caster, s.Kind, s.Level).Contains(s) ? "YOU NEED TO REST" : "NO SUCH SPELL TO CAST";
         }
         if (power && Psp(caster) < Rules.PowerCost)
         {
@@ -403,7 +387,7 @@ public sealed class Spellcasting(CharacterRules rules)
         return $"HEALED {target.Hp - before}";
     }
 
-    /// <summary>A rest: every memorized spell is ready again and psionic strength is full.</summary>
+    /// <summary>A rest: every level's casts are back and psionic strength is full.</summary>
     public static void Rest(Character c)
     {
         c.Cast.Clear();

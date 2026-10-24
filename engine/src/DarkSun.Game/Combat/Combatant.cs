@@ -197,8 +197,24 @@ public sealed class Combatant
     /// <summary>A party member's character sheet, which the fight's end updates (<see cref="Battle.SyncSheets"/>).</summary>
     public Character? Sheet { get; init; }
 
-    /// <summary>The spells it came with (for what the fight used up).</summary>
-    internal IReadOnlyList<int> SpellsAtStart { get; set; } = [];
+    /// <summary>
+    /// A party member's spells by level, as DSUN.EXE counts them: the level of
+    /// each spell in <see cref="Spells"/> (a key of <see cref="CastsLeft"/>), whose
+    /// casts all its spells share. Null for a creature: then <see cref="Spells"/>
+    /// has one entry a cast.
+    /// </summary>
+    public IReadOnlyDictionary<int, int>? SpellLevels { get; init; }
+
+    /// <summary>A party member's casts left at each level of <see cref="SpellLevels"/>.</summary>
+    public Dictionary<int, int>? CastsLeft { get; init; }
+
+    /// <summary>How many more times it can cast <paramref name="spell"/> this fight.</summary>
+    public int CastsOf(int spell) =>
+        CastsLeft is { } left && SpellLevels!.TryGetValue(spell, out int level) && Spells.Contains(spell)
+            ? left.GetValueOrDefault(level) : Spells.Count(n => n == spell);
+
+    /// <summary>The spells it cast of its own this fight (for its character sheet).</summary>
+    internal List<int> SpellsCast { get; } = [];
 
     /// <summary>Its psionic points when the fight began.</summary>
     internal int PspAtStart { get; set; }
@@ -319,7 +335,8 @@ public sealed class Combatant
             Cell = cell,
             Facing = facing,
             PartyMember = party,
-            ComputerControlled = r?.ComputerControlled ?? !party,
+            // A creature not on the party's side is the AI's whatever its flag (the arena's Legcrusher has it clear): no one else could play it.
+            ComputerControlled = (r?.ComputerControlled ?? !party) || !party && (side & 1) == 0,
             ArmorClass = source?.SheetField(WorldObject.SheetBaseArmorClass) ?? ch?.BaseArmorClass ?? r?.Ac ?? 10,
             Thac0 = r?.Thac0 ?? 20,
             Move = r?.Move ?? 12,
