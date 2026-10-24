@@ -77,6 +77,22 @@ public class CombatLogTests
     }
 
     [Fact]
+    public void ALongFightKeepsTheLastLinesAndSaysWhoseEventsTheyAre()
+    {
+        var log = new CombatLog(n => $"spell {n}", _ => "item");
+        log.Note("Combat! 1 enemy");
+        List<CombatEvent> rounds = [.. Enumerable.Range(1, CombatLog.History + 10).Select(r => new RoundStarted(r))];
+        foreach (CombatEvent r in rounds)
+        {
+            log.Add(r);
+        }
+        log.Reveal(rounds[^1]);
+
+        Assert.Equal(rounds[^CombatLog.History..], log.Kept);
+        Assert.Equal("ROUND 11", log.At(LogLevel.Short)[0].Text);
+    }
+
+    [Fact]
     public void LinesWaitForThePlaybackAndKeepTheHitPointsOfTheirTime()
     {
         Combatant a = Fighter("a", 1, 5, 5), t = Fighter("t", 2, 6, 5, hp: 30);

@@ -39,6 +39,9 @@ public sealed class CombatLog(Func<int, string> effectName, Func<Item, string> i
 
     private sealed record Entry(LogLine[] Least, LogLine[] Short, LogLine[] Detail, Combatant? JoinsAttackOf = null)
     {
+        /// <summary>The event the lines are of (none for a <see cref="Note"/>).</summary>
+        public CombatEvent? Event { get; init; }
+
         public LogLine[] At(LogLevel level) => level switch { LogLevel.Least => Least, LogLevel.Short => Short, _ => Detail };
     }
 
@@ -49,6 +52,9 @@ public sealed class CombatLog(Func<int, string> effectName, Func<Item, string> i
     public int Version { get; private set; }
 
     public bool IsEmpty => _shown.Count == 0;
+
+    /// <summary>The events whose lines are shown and still kept (the oldest go past <see cref="History"/>).</summary>
+    public IEnumerable<CombatEvent> Kept => _shown.Select(s => s.Event).OfType<CombatEvent>();
 
     /// <summary>The round shown last (0 before the first).</summary>
     public int Round { get; private set; }
@@ -95,7 +101,7 @@ public sealed class CombatLog(Func<int, string> effectName, Func<Item, string> i
             }
             if (p.Entry is { } entry)
             {
-                Show(entry);
+                Show(entry with { Event = p.Event });
                 words.AddRange(entry.Short.Select(l => l.Text));
             }
             if (ReferenceEquals(p.Event, e))
