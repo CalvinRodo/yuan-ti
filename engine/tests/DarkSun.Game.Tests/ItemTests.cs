@@ -243,7 +243,7 @@ public class ItemTests
 
         Assert.True(use.Rested);
         Assert.Equal((20, 1), (party[0].Vitals.Hp, rested));
-        Assert.Equal(8 * 60, w.Clock - before); // 87B3:073D(0, 8): PASS_TIME 8
+        Assert.Equal(8 * 60 * 60, w.Clock - before); // 87B3:073D(0, 8): 8053:0A02(8 × 60), eight hours
         Assert.False(w.UseObject(w.First(-Torch)!).Rested);
     }
 

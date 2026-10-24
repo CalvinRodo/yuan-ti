@@ -652,8 +652,9 @@ public sealed partial class GameWorld
     /// the party rests. Members who are down (status 2 or 3) get up; with
     /// <paramref name="raiseDead"/> (REQUEST 1) the dead too. Those standing
     /// are healed to full (the original's spell and healing details aren't
-    /// traced). <paramref name="time"/> passes as PASS_TIME's would
-    /// (<c>8053:0A02(time × 60)</c>).
+    /// traced). <paramref name="time"/> hours pass: <c>8053:0A02(time × 60)</c>,
+    /// PASS_TIME's minutes, each 60 of the clock's seconds (a fire pit's 8 hours
+    /// bring Kurzak's call, GPL 136's 8 h 05 min, nearly due).
     /// </summary>
     public void Rest(bool raiseDead, int time = 0)
     {
@@ -669,7 +670,7 @@ public sealed partial class GameWorld
                 v.Hp = v.MaxHp;
             }
         }
-        PassTime(time * 60);
+        PassTime(time * 60 * 60);
         Rested?.Invoke();
     }
 
