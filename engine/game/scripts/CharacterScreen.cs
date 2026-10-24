@@ -2,6 +2,7 @@ using DarkSun.Data.Gff;
 using DarkSun.Data.Images;
 using DarkSun.Data.Items;
 using DarkSun.Game.Characters;
+using DarkSun.Game.Combat;
 using DarkSun.Game.Magic;
 using DarkSun.Game.World;
 using Godot;
@@ -23,6 +24,10 @@ namespace DarkSun.Engine;
 /// equipment slots around it (<c>APFM</c> 11216–11229, slot n at 11216 + n,
 /// each with its silhouette, <c>BMP</c> 13007 frame 9 + n); the pack
 /// (<c>APFM</c> 11230–11241, 12 at a time, MORE for the rest); DROP and SPLIT.
+/// On the right <c>BMP</c> 13004 with the member's abilities, PSI, AC and attacks
+/// (<see cref="RefreshStats"/>); the money under the window (<c>74F1:1C92</c>);
+/// the member's box and the items icon drawn pressed. What happens, or the item
+/// picked, shows in the description box under the figure.
 /// A carried bag or box double-clicked opens in place of the body
 /// (<c>6527:12BD</c>): first shut (<c>BMP</c> 20104 a bag, 20105 a box) for 15
 /// screen refreshes, then open (13003, 13002, at <c>APFM</c> 13200), its six
@@ -62,7 +67,17 @@ public partial class CharacterScreen : RetroScreen
     private const int ContainerSlots = ContainerWindow.Slots;
     private const int FirstSellSlot = 11242, SellSlots = 6;
     private const int SlotArt = 13007, EmptyFrame = 0, SelectedFrame = 4, CantFrame = 6, FirstSilhouette = 9;
-    private const int ChestArt = 13002, BagArt = 13003, ParchmentArt = 13005, Bars = 13000;
+    private const int ChestArt = 13002, BagArt = 13003, ParchmentArt = 13005, Bars = 13000, PanelArt = 13004;
+
+    /// <summary>
+    /// The right-hand panel out of a store (<c>74F1:37B3</c>): <c>BMP</c> 13004 at
+    /// (233, 4); STR: … CHR: at (236, 53 + 7i), their values at (260, …); PSI: at
+    /// (236, 99), "%d/%d" centred on 281 (<c>6CCA:1A9D</c>); "AC: %2d" at (236, 113);
+    /// the attacks from (236, 120), 7 a line (<c>78A9:28DC</c>).
+    /// </summary>
+    private static readonly Vector2 PanelAt = new(233, 4);
+    private const int StatsLeft = 236, StatsValues = 260, StatsTop = 53, PsiTop = 99, PsiCentre = 281, ArmourTop = 113, AttacksTop = 120, Line = 7;
+    private static readonly string[] AbilityNames = ["STR:", "DEX:", "CON:", "INT:", "WIS:", "CHR:"];
 
     /// <summary>The figures in the body's place: <c>BMP</c> 20000 + the member's look (0 human male … 13 thri-kreen, as the map icons <c>OJFF</c> 300–313).</summary>
     private const int FirstFigure = 20000, Figures = 14;
@@ -109,7 +124,10 @@ public partial class CharacterScreen : RetroScreen
     private Palette _palette = null!;
     private PageView _sheetPage = null!, _itemsPage = null!;
     private Label _sheet = null!, _sheetMore = null!, _info = null!, _status = null!, _itemsStatus = null!;
-    private TextureRect _body = null!, _figure = null!, _containerArt = null!;
+    private TextureRect _body = null!, _figure = null!, _containerArt = null!, _panel = null!;
+    private Control _stats = null!;
+    private readonly Label[] _abilities = new Label[6];
+    private Label _psp = null!, _armour = null!, _attacks = null!, _money = null!;
     private ItemWindow _itemWindow = null!;
     private readonly List<ItemSlot> _slots = [];
     private readonly Dictionary<int, Texture2D?> _slotArt = [];
@@ -218,6 +236,14 @@ public partial class CharacterScreen : RetroScreen
         Rect2 statusAt = items.RectOf("APFM", 11270);
         _itemsStatus = Text(items, statusAt.Position - new Vector2(0, 1), 176, "", HorizontalAlignment.Center);
         _itemsStatus.ClipText = true;
+        // 74F1:1C92: the money on BMP 13000's frame 0 at (57, 183), "%12d$" at (60, 185) ($ is the ceramic piece).
+        items.AddChild(new TextureRect { Texture = Art("BMP ", Bars, 0), Position = new Vector2(57, 183), MouseFilter = MouseFilterEnum.Ignore });
+        _money = Text(items, new Vector2(60, 185), 100, "");
+        _money.LabelSettings = GameFonts.Settings(ViewCharacterText.Yellow);
+        _panel = new TextureRect { Texture = Art("BMP ", PanelArt, 0), Position = PanelAt, MouseFilter = MouseFilterEnum.Ignore };
+        items.AddChild(_panel);
+        items.MoveChild(_panel, 5); // under the window's buttons (MORE is over it)
+        BuildStats(items);
         _sheetPage.Frames = new PartyFrames(sheet, _status, MemberView, Leader);
         _itemsPage.Frames = new PartyFrames(items, _itemsStatus, MemberView, Leader);
         for (int n = 0; n < Equipment.Slots; n++)
@@ -258,6 +284,81 @@ public partial class CharacterScreen : RetroScreen
         Canvas.AddChild(_itemWindow);
     }
 
+    /// <summary>The labels of the right-hand panel (<see cref="PanelAt"/>), in colour 47 (<c>DS:326E</c>).</summary>
+    private void BuildStats(UiWindowView items)
+    {
+        _stats = new Control { MouseFilter = MouseFilterEnum.Ignore };
+        items.AddChild(_stats);
+        Label Add(Vector2 at, float width, string text = "", HorizontalAlignment align = HorizontalAlignment.Left)
+        {
+            Label label = Text(_stats, at, width, text, align);
+            label.LabelSettings = GameFonts.Settings(ViewCharacterText.Yellow, lineSpacing: Line - GameFonts.Size);
+            return label;
+        }
+        for (int i = 0; i < 6; i++)
+        {
+            Add(new Vector2(StatsLeft, StatsTop + Line * i), StatsValues - StatsLeft, AbilityNames[i]);
+            _abilities[i] = Add(new Vector2(StatsValues, StatsTop + Line * i), 24);
+        }
+        Add(new Vector2(StatsLeft, PsiTop), 30, "PSI:");
+        _psp = Add(new Vector2(PsiCentre - 20, PsiTop), 40, "", HorizontalAlignment.Center);
+        _armour = Add(new Vector2(StatsLeft, ArmourTop), 80);
+        _attacks = Add(new Vector2(StatsLeft, AttacksTop), Width - StatsLeft - 2);
+        _attacks.Size = new Vector2(_attacks.Size.X, Line * 8);
+    }
+
+    /// <summary>The right-hand panel for the member (<c>74F1:37B3</c>): nothing for a box without a character.</summary>
+    private void RefreshStats()
+    {
+        _panel.Visible = _store is null;
+        _stats.Visible = _store is null && Member is not null && CharacterOf(_member) is not null;
+        if (!_stats.Visible)
+        {
+            return;
+        }
+        Character c = CharacterOf(_member)!;
+        Combatant fighter = PartyCombatant.From(c, Member!, _world!.Items, Session.Rules);
+        for (int i = 0; i < 6; i++)
+        {
+            _abilities[i].Text = fighter.Stats[i].ToString();
+        }
+        _psp.Text = $"{_magic.Psp(c)}/{_magic.MaxPsp(c)}";
+        _armour.Text = $"AC: {CharacterSheet.ArmorClass(fighter.Stats[(int)Ability.Dex], Member!.Items, _world.Items, Session.Rules),2}";
+        _attacks.Text = string.Join("\n", AttackLines(fighter));
+    }
+
+    /// <summary>
+    /// The attack lines (<c>78A9:28DC</c>): each weapon in hand and the missile
+    /// weapon, its name ("%+d %Fs" with a bonus) and its damage
+    /// (<c>78A9:2A9F</c>); then the natural attacks in &lt; &gt; (the first not
+    /// while a weapon is in hand). Strength adds to all but missiles'.
+    /// </summary>
+    private IEnumerable<string> AttackLines(Combatant fighter)
+    {
+        int strDamage = Session.Rules.Abilities.StrDamageOf(fighter.Stats[(int)Ability.Str]);
+        foreach (Weapon? w in new[] { fighter.Weapon, fighter.MissileWeapon })
+        {
+            if (w is null)
+            {
+                continue;
+            }
+            string name = w.Item is { } item ? ItemText.Name(_world!, item) : "";
+            yield return w.Bonus != 0 ? $"{w.Bonus:+0;-0} {name}" : name;
+            yield return Damage(fighter.AttackHalves, w.Type.DamageDice, w.Type.DamageSides, w.Type.DamageBonus + w.Bonus + (w.IsMissile ? 0 : strDamage));
+        }
+        foreach (var (attack, n) in fighter.NaturalAttacks.Select((a, n) => (a, n)))
+        {
+            if (n > 0 || fighter.Weapon is null)
+            {
+                yield return $"<{Damage(attack.Halves, attack.Dice, attack.Sides, attack.Bonus + strDamage)}>";
+            }
+        }
+    }
+
+    /// <summary><c>78A9:2CE1</c>: under three halves (one attack a round or less) the dice alone, else with the attacks (<see cref="CharacterSheet.DamageText"/>).</summary>
+    private static string Damage(int halves, int dice, int sides, int bonus) =>
+        halves < 3 ? $"{dice}D{sides}{(bonus != 0 ? bonus.ToString("+0;-0") : "")}" : CharacterSheet.DamageText(halves, dice, sides, bonus);
+
     private Texture2D? Art(string tag, int number, int frame) =>
         _resources.TryRead(tag, number, out var data) && Session.Assets.Frames(data) is var frames && frame < frames.Count
             ? Textures.ToTexture(frames[frame], _palette)
@@ -277,11 +378,13 @@ public partial class CharacterScreen : RetroScreen
         UiWindowView window = UiWindowView.Build(number, _palette, backdrop)!;
         window.Visible = false;
         Canvas.AddChild(window);
-        Rect2 bar = window.RectOf("BUTN", NameBar);
-        var page = new PageView { Window = window, Root = window, Name = Text(window, bar.Position + new Vector2(0, 1), bar.Size.X, "", HorizontalAlignment.Center) };
+        // 74F1:001C writes the name into the name bar's text box (EBOX 4003), from its left, in upper case.
+        Rect2 nameAt = window.RectOf("EBOX", 4003);
+        var page = new PageView { Window = window, Root = window, Name = Text(window, nameAt.Position, nameAt.Size.X, "") };
+        page.Name.LabelSettings = GameFonts.Settings(ViewCharacterText.Yellow);
         if (window.TextBox(4003) is { } nameBox)
         {
-            nameBox.Visible = false; // the name is drawn centred on the bar instead
+            nameBox.Visible = false; // the label above draws the name
         }
         for (int i = 0; i < GameWorld.PartySize; i++)
         {
@@ -535,6 +638,12 @@ public partial class CharacterScreen : RetroScreen
                 page.Hp[i].Text = there ? $"{_world[i]!.Vitals.Hp}/{_world[i]!.Vitals.MaxHp}" : "";
                 page.States[i].Text = there ? PartyFrames.StatusName(_world[i]!.Vitals.Status) : "";
             }
+            if (page == _itemsPage && page.Window.Button(FirstBox + i) is { } box)
+            {
+                // 74F1:001C sets the member's box to state 4, as the page's icon (74F1:042B): drawn pressed.
+                box.ToggleMode = true;
+                box.SetPressedNoSignal(i == _member);
+            }
             if (page.Window.Button(FirstLeader + i) is { } l)
             {
                 l.Visible = there;
@@ -548,7 +657,12 @@ public partial class CharacterScreen : RetroScreen
                 cc.TooltipText = $"Computer control is {(CharacterOf(i) is null ? "locked" : CharacterOf(i)!.ComputerControl ? "on" : "off")}";
             }
         }
-        page.Name.Text = MemberName(_member);
+        page.Name.Text = MemberName(_member).ToUpperInvariant();
+        if (page == _itemsPage)
+        {
+            page.Window.Button(ItemsButton)!.ToggleMode = true;
+            page.Window.Button(ItemsButton)!.SetPressedNoSignal(true);
+        }
         page.Frames.Refresh();
         switch (_page)
         {
@@ -654,7 +768,10 @@ public partial class CharacterScreen : RetroScreen
         bool stack = _picked is { } p && _world!.Stacks(p.Item.Record) && p.Item.Quantity > 1 && p.Holder == member;
         Enable(items.Button(SplitButton)!, stack);
         Enable(items.Button(DropButton)!, _picked is { } d && d.Holder == member);
-        Enable(items.Button(MoreButton)!, Pages(pack, PackSlots) > 1);
+        // DSUN.EXE's pack is the twelve slots; MORE (a page of the engine's bigger pack) only when there is more.
+        items.Button(MoreButton)!.Visible = Pages(pack, PackSlots) > 1;
+        _money.Text = $"{Money(),12}$";
+        RefreshStats();
         items.Button(SellButton)!.Visible = _store is not null;
         if (_store is not null)
         {
@@ -841,23 +958,22 @@ public partial class CharacterScreen : RetroScreen
             text = $"{ItemText.Name(_world, item)}\n" + (holder == _store ? $"PRICE {Shop.Price(item)}$" : Shop.Offer(item) > 0 ? $"WORTH {Shop.Offer(item)}$" : "I COULDN'T SELL THAT");
             _itemsPage.Window.Button(SellButton)!.TooltipText = ItemText.Describe(_world, item, Member, MemberName(_member), SpellName);
         }
-        else if (item is not null)
-        {
-            text = ItemText.Describe(_world, item, holder ?? Member, MemberName(_member), SpellName);
-        }
         else if (_store is not null)
         {
             text = StoreText();
         }
         else
         {
-            int count = Pack.Count, pages = Math.Max(1, (count + PackSlots - 1) / PackSlots);
-            text = $"MONEY {Money()}\n\nPACK {count}" + (pages > 1 ? $" (page {_packPage + 1}/{pages})" : "")
-                + (_container is { } c ? $"\n\n{(c.Name.Length > 0 ? c.Name.ToUpperInvariant() : "CONTAINER")}: {c.Items.Count}" : "")
-                + "\n\nClick a thing, then where it goes. Right-click: what it is.";
+            // Out of a store the panel is the member's (RefreshStats): what happened, or the item
+            // picked, goes in the description box under the figure; right-click describes an item.
+            _info.Visible = false;
+            _itemsPage.Frames.Resting = note
+                ?? (item is not null ? ItemText.Name(_world, item) + (item.Quantity > 1 ? $" ×{item.Quantity}" : "") : "");
+            return;
         }
-        _info.ClipText = _store is not null;
-        _info.Text = note is null ? text : _store is not null ? $"{note}\n{text}" : $"{note}\n\n{text}";
+        _info.Visible = true;
+        _info.ClipText = true;
+        _info.Text = note is null ? text : $"{note}\n{text}";
     }
 
     /// <summary>A party box's picture: the character's map sprite standing, facing forwards.</summary>
@@ -921,7 +1037,7 @@ public partial class CharacterScreen : RetroScreen
     /// <summary>The member's item that was picked up when the screen closed, for Use with… on the map; null if none.</summary>
     public Item? HeldOnClose { get; private set; }
 
-    public string Info => _info.Text;
+    public string Info => _store is not null ? _info.Text : _itemsPage.Frames.Resting;
 
     public string Sheet => _sheet.Text + "\n" + _sheetMore.Text;
 
