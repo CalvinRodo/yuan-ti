@@ -128,6 +128,20 @@ public class DoorTests
     }
 
     [Fact]
+    public void ADoorTakenOffTheMapLeavesItsCellsAsOpen()
+    {
+        GameWorld w = World();
+
+        // GPL 138's "Take the hinges off the door": TELEPORT both leaves to region 255 (1DF3:0909 → 6BB8:0FF8).
+        w.Teleport(-2051, 255, 20, 20);
+        w.Teleport(-2052, 255, 20, 20);
+
+        Assert.False(w.Region.IsBlocked(6, 4));
+        Assert.False(w.Region.IsBlocked(7, 4));
+        Assert.False(w.Region.BlocksSight(6, 4));
+    }
+
+    [Fact]
     public void OpenDoorsStartOpen()
     {
         GameWorld w = World(flags: 0);
