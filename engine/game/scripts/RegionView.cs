@@ -640,8 +640,8 @@ public partial class RegionView : Node2D
             {
                 DarkSun.Game.Magic.Spellcasting.Rest(c);
             }
-            // 87B3:073D says so (5F6D:05DE, as the doors' messages), from a fire pit or a script.
-            Session.ScriptHost.Dialogue.Append("THE PARTY RESTS", 98);
+            // 87B3:073D says so in the message box (5F6D:05DE, as the doors' messages), from a fire pit or a script.
+            _message.Show("THE PARTY RESTS");
         };
         // Back in a region visited before: as the party left it (before its script runs, as in DSUN.EXE).
         // What had an object in the files but not when the party left (killed, picked up) isn't drawn.
@@ -2040,7 +2040,7 @@ public partial class RegionView : Node2D
         if (_world.DoorRefusal(use) is { } message && !Session.Scripts.IsSuspended)
         {
             AddScriptLine($"    {message}");
-            Session.ScriptHost.Dialogue.Append(message, 98);
+            _message.Show(message); // 6BB8's door messages go to the message box (5F6D:05DE)
         }
         _overlay.QueueRedraw();
         return true;
@@ -3077,6 +3077,8 @@ public partial class RegionView : Node2D
             Expect(screen.CrossedOut(false, SlotOf(false, CureLight)), "and the level's spells are crossed out");
             _world.Rest(raiseDead: false);
             Expect(cleric.Cast.Count == 0, "resting gives the casts back");
+            Expect(_message.Shown == "THE PARTY RESTS", $"and the message box says THE PARTY RESTS ({_message.Shown})");
+            _message.Close();
 
             // The preserver: a level gained opens the study window (8CCC:0000); a click learns, then it casts what the book holds.
             screen.Close();
@@ -3828,6 +3830,7 @@ public partial class RegionView : Node2D
     /// <summary>With no player, answer every prompt: Continue, No (Yes if <paramref name="yes"/>), or each menu's first option.</summary>
     private void AnswerForThePlayer(bool yes = false)
     {
+        _message.Close();
         for (int i = 0; i < 50 && Session.Scripts.IsSuspended; i++)
         {
             int answer = Session.ScriptHost.Dialogue.Prompt switch
