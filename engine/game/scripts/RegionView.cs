@@ -76,6 +76,7 @@ public partial class RegionView : Node2D
     private OptionsWindow _options = null!;
     private Control _hudPanel = null!;
     private GameMenu _gameMenu = null!;
+    private MessageBox _message = null!;
     private SavesView _saves = null!;
     private GameMenu.Cursor _cursor;
 
@@ -135,7 +136,7 @@ public partial class RegionView : Node2D
     /// <c>DS:11B8</c> = 1): LOOK, ATTACK and a held item hold everything still while one picks, until a
     /// chosen verb sends the character on its way.
     /// </summary>
-    private bool MapHeld => _cursor != GameMenu.Cursor.Move && _pendingUse is null;
+    private bool MapHeld => _cursor != GameMenu.Cursor.Move && _pendingUse is null || _message.IsOpen;
 
     /// <summary>Make the next opening of the view start a new game (region 42).</summary>
     public static void StartNewGame() => _regionIndex = -1;
@@ -515,6 +516,8 @@ public partial class RegionView : Node2D
             CursorChanged = SetCursor,
         };
         layer.AddChild(_gameMenu);
+        _message = new MessageBox();
+        layer.AddChild(_message);
         _saves = new SavesView
         {
             SaveTo = (name, file) =>
@@ -1301,7 +1304,7 @@ public partial class RegionView : Node2D
         UpdateFloor(delta);
     }
 
-    private bool KeyboardMovementLocked => MapLocked || _dialogueWindow.Visible || _gameMenu.IsOpen || _saves.IsOpen || _character.IsOpen
+    private bool KeyboardMovementLocked => MapLocked || _message.IsOpen || _dialogueWindow.Visible || _gameMenu.IsOpen || _saves.IsOpen || _character.IsOpen
         || _journal.Visible || _options.Visible || _verbMenu.Visible || _containerWindow.Visible || _itemWindow.Visible || _debugger.Visible
         || GetNodeOrNull<KeyHelp>("/root/KeyHelp")?.IsOpen == true
         || GetViewport().GuiGetFocusOwner() is LineEdit or TextEdit;
@@ -1370,6 +1373,10 @@ public partial class RegionView : Node2D
 
     public override void _UnhandledInput(InputEvent e)
     {
+        if (_message.IsOpen)
+        {
+            return; // a key puts it away (MessageBox)
+        }
         if (CombatInput(e))
         {
             return;
@@ -1473,10 +1480,17 @@ public partial class RegionView : Node2D
         else if (e is InputEventMouseButton { ButtonIndex: MouseButton.Left, Pressed: true } click)
         {
             Vector2 at = GetGlobalMousePosition();
-            if (_cursor == GameMenu.Cursor.Look && ObjectAt(at) is not null)
+            if (_cursor == GameMenu.Cursor.Look && ObjectAt(at) is { } looked)
             {
                 // The eye opens what can be done with the thing (1587:06D8 mode 2 → 68BD:0040, the verb window).
-                OpenVerbMenu(at, click.Position);
+                if (Sees(looked))
+                {
+                    OpenVerbMenu(at, click.Position);
+                }
+                else
+                {
+                    _message.Show(NoLineOfSight);
+                }
             }
             else if (_cursor == GameMenu.Cursor.Attack && ObjectAt(at) is { } target)
             {
@@ -1484,7 +1498,7 @@ public partial class RegionView : Node2D
             }
             else
             {
-                WalkTo(new Cell((int)Math.Floor(at.X / Region.TileSize), (int)Math.Floor(at.Y / Region.TileSize)), click.ShiftPressed);
+                ClickToWalk(at, click.ShiftPressed);
             }
         }
         else if (e is InputEventMouseButton { ButtonIndex: MouseButton.Right, Pressed: true })
@@ -1718,9 +1732,42 @@ public partial class RegionView : Node2D
     /// the others once the selected character has walked up to it
     /// (<see cref="Approach"/>). Without a party it acts at once.
     /// </summary>
+    /// <summary>
+    /// A MOVE click at map point <paramref name="at"/> (<c>1587:0427</c>): nothing on a blocked
+    /// cell (the pointer is crossed out), "NO PATH FROM HERE" when no way leads there, else walk
+    /// (an object's cell: up to it).
+    /// </summary>
+    private void ClickToWalk(Vector2 at, bool wholeParty)
+    {
+        var cell = new Cell((int)Math.Floor(at.X / Region.TileSize), (int)Math.Floor(at.Y / Region.TileSize));
+        if (ObjectAt(at) is null && _region.IsBlocked(cell.X, cell.Y))
+        {
+            return;
+        }
+        if (ObjectAt(at) is null && Selected is { } leader && !leader.Walker.CanReach(cell, _region.IsBlocked))
+        {
+            _message.Show(NoPath);
+            return;
+        }
+        WalkTo(cell, wholeParty);
+    }
+
+    /// <summary>DSUN.EXE's words when a click can't be carried out (<c>DS:0BD9</c>, <c>DS:0BF8</c>), shown in the message box.</summary>
+    private const string NoPath = "NO PATH FROM HERE", NoLineOfSight = "NO LINE OF SIGHT";
+
+    /// <summary>Can the leader see <paramref name="target"/> (any of its cells; <c>0898:00A4</c>)? Without a leader, yes.</summary>
+    private bool Sees(WorldObject target) =>
+        Selected is not { } m || _world.CellsOf(target).Any(c => GplGeometry.LineOfSight(_region, m.Walker.Cell.X, m.Walker.Cell.Y, c.X, c.Y));
+
     private void StartVerb(WorldObject target, Verb verb, WorldObject? with)
     {
         _pendingUse = null;
+        if (verb != Verb.Look && !InCombat && !Sees(target))
+        {
+            // Out of sight, nothing is done: "NO LINE OF SIGHT".
+            _message.Show(NoLineOfSight);
+            return;
+        }
         if (verb == Verb.Look || Selected is not { } member)
         {
             Act(target, _selected, verb, with);
