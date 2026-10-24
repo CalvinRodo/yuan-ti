@@ -52,6 +52,12 @@ public sealed record Character
     /// <summary>A preserver's spellbook: the wizard spells (<c>SPIN</c> numbers) learned (<see cref="Magic.Spellcasting"/>).</summary>
     public List<int> Spellbook { get; set; } = [];
 
+    /// <summary>
+    /// Spells a preserver may still choose for the levels gained (<c>8CCC:0000</c>: on
+    /// gaining a preserver level the study window opens, <c>WIND</c> 17500, CHOOSE A SPELL).
+    /// </summary>
+    public int SpellsToChoose { get; set; }
+
     /// <summary>The spells cast since the last rest: each takes one of its level's casts (<see cref="Magic.Spellcasting.CastsLeft"/>).</summary>
     public List<int> Cast { get; set; } = [];
 
@@ -534,6 +540,9 @@ public sealed class CharacterCreation(CharacterRules rules, CharacterNames names
         }
         return problems;
     }
+
+    /// <summary>Level in class <paramref name="k"/> (0 if the character isn't of that class).</summary>
+    public int LevelIn(Character c, CharacterClass k) => c.Classes.IndexOf(k) is >= 0 and var i ? Levels(c)[i] : 0;
 
     /// <summary>Level in each class: experience is divided evenly among them.</summary>
     public IReadOnlyList<int> Levels(Character c) =>

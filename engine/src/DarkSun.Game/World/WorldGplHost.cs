@@ -1,4 +1,5 @@
 using DarkSun.Data.Regions;
+using DarkSun.Game.Characters;
 using DarkSun.Game.Scripting;
 
 namespace DarkSun.Game.World;
@@ -193,13 +194,18 @@ public sealed partial class WorldGplHost : DialogueGplHost
         }
     }
 
-    /// <summary><c>7372:1467</c>: a living member gains <paramref name="xp"/> ÷ their classes in each, up to 2 000 000 000 in all.</summary>
+    /// <summary>
+    /// <c>7372:1467</c>: a living member gains <paramref name="xp"/> ÷ their classes in each, up to 2 000 000 000 in all.
+    /// A preserver level gained is a spell to choose (<see cref="Character.SpellsToChoose"/>, <c>8CCC:0000</c>).
+    /// </summary>
     private void GiveExperience(GameWorld world, int slot, int xp)
     {
         if (world[slot] is { Vitals.Alive: true } && PartyCharacter(slot) is { } c)
         {
             int classes = Math.Max(1, c.Classes.Count);
+            int before = Creation.LevelIn(c, CharacterClass.Preserver);
             c.Experience = (int)Math.Min(2_000_000_000L, c.Experience + (long)(xp / classes) * classes);
+            c.SpellsToChoose += Math.Max(0, Creation.LevelIn(c, CharacterClass.Preserver) - before);
         }
     }
 

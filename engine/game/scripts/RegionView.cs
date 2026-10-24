@@ -77,6 +77,7 @@ public partial class RegionView : Node2D
     private Control _hudPanel = null!;
     private GameMenu _gameMenu = null!;
     private MessageBox _message = null!;
+    private SpellStudyWindow _study = null!;
     private SavesView _saves = null!;
     private GameMenu.Cursor _cursor;
 
@@ -136,7 +137,7 @@ public partial class RegionView : Node2D
     /// <c>DS:11B8</c> = 1): LOOK, ATTACK and a held item hold everything still while one picks, until a
     /// chosen verb sends the character on its way.
     /// </summary>
-    private bool MapHeld => _cursor != GameMenu.Cursor.Move && _pendingUse is null || _message.IsOpen;
+    private bool MapHeld => _cursor != GameMenu.Cursor.Move && _pendingUse is null || _message.IsOpen || _study.IsOpen;
 
     /// <summary>Make the next opening of the view start a new game (region 42).</summary>
     public static void StartNewGame() => _regionIndex = -1;
@@ -518,6 +519,8 @@ public partial class RegionView : Node2D
         layer.AddChild(_gameMenu);
         _message = new MessageBox();
         layer.AddChild(_message);
+        _study = new SpellStudyWindow();
+        layer.AddChild(_study);
         _saves = new SavesView
         {
             SaveTo = (name, file) =>
@@ -1287,6 +1290,7 @@ public partial class RegionView : Node2D
         MoveWithKeyboard();
         Animate();
         FinishApproach();
+        OfferSpellStudy();
         if (Session.ScriptHost.Dialogue.Prompt is GplShopPrompt shop && !_character.IsOpen && _world[shop.Merchant] is { } merchant
             && _world[_selected] is { } who)
         {
@@ -1304,7 +1308,31 @@ public partial class RegionView : Node2D
         UpdateFloor(delta);
     }
 
-    private bool KeyboardMovementLocked => MapLocked || _message.IsOpen || _dialogueWindow.Visible || _gameMenu.IsOpen || _saves.IsOpen || _character.IsOpen
+    /// <summary>
+    /// When the map is free, a preserver with a level gained chooses a spell (<c>8CCC:0000</c>:
+    /// standing, condition below 5) in the study window; with nothing left to learn, the choice goes.
+    /// </summary>
+    private void OfferSpellStudy()
+    {
+        if (_study.IsOpen || KeyboardMovementLocked || _checking)
+        {
+            return;
+        }
+        for (int i = 0; i < Session.Party.Count && i < PartySize; i++)
+        {
+            if (Session.Party[i] is { SpellsToChoose: > 0 } c && _world[i] is { Kind: ObjectKind.Party, Hidden: false } member
+                && member.Vitals.Status < 5)
+            {
+                if (!_study.Open(c, c.Name, new DarkSun.Game.Magic.Spellcasting(Session.Rules)))
+                {
+                    c.SpellsToChoose = 0;
+                }
+                return;
+            }
+        }
+    }
+
+    private bool KeyboardMovementLocked => MapLocked || _message.IsOpen || _study.IsOpen || _dialogueWindow.Visible || _gameMenu.IsOpen || _saves.IsOpen || _character.IsOpen
         || _journal.Visible || _options.Visible || _verbMenu.Visible || _containerWindow.Visible || _itemWindow.Visible || _debugger.Visible
         || GetNodeOrNull<KeyHelp>("/root/KeyHelp")?.IsOpen == true
         || GetViewport().GuiGetFocusOwner() is LineEdit or TextEdit;
@@ -1373,9 +1401,9 @@ public partial class RegionView : Node2D
 
     public override void _UnhandledInput(InputEvent e)
     {
-        if (_message.IsOpen)
+        if (_message.IsOpen || _study.IsOpen)
         {
-            return; // a key puts it away (MessageBox)
+            return; // a key puts the message away (MessageBox); the study window takes its own
         }
         if (CombatInput(e))
         {
@@ -3046,16 +3074,24 @@ public partial class RegionView : Node2D
             }
             screen.ClickSpell(false, SlotOf(false, CureLight));
             Expect(screen.PickedSpell is null && screen.Status.Contains("REST"), $"the level's casts used: rest first ({screen.Status})");
+            Expect(screen.CrossedOut(false, SlotOf(false, CureLight)), "and the level's spells are crossed out");
             _world.Rest(raiseDead: false);
             Expect(cleric.Cast.Count == 0, "resting gives the casts back");
 
-            // The preserver: learn, then cast what the book holds.
-            screen.ClickBox(1);
-            screen.Press(11320);
-            Expect(SlotOf(false, MagicMissile) >= 0, "LEARN shows Magic Missile");
-            screen.ClickSpell(false, SlotOf(false, MagicMissile));
-            Expect(preserver.Spellbook.Contains(MagicMissile), $"clicking it learns it ({screen.Status})");
-            screen.Press(11320);
+            // The preserver: a level gained opens the study window (8CCC:0000); a click learns, then it casts what the book holds.
+            screen.Close();
+            preserver.SpellsToChoose = 1;
+            _checking = false;
+            OfferSpellStudy();
+            _checking = true;
+            Expect(_study.IsOpen && _study.Lines == "CHOOSE A SPELL, PRESERVER" && _study.Offered.Contains(MagicMissile),
+                $"a level gained opens CHOOSE A SPELL with Magic Missile ({_study.Lines}; {_study.Offered.Count} offered)");
+            _study.Choose(_study.Offered.ToList().IndexOf(MagicMissile));
+            Expect(preserver.Spellbook.Contains(MagicMissile) && preserver.SpellsToChoose == 0 && _study.Lines == "MAGIC MISSILE IS LEARNED!",
+                $"clicking it learns it ({_study.Lines})");
+            _study.Exit();
+            Expect(!_study.IsOpen, "EXIT after choosing closes it");
+            screen.Open(_world, 1, CharacterScreen.Page.Spells);
             screen.ClickSpell(false, SlotOf(false, MagicMissile));
             Expect(screen.PickedSpell == MagicMissile, $"and it can be cast at once ({screen.Status})");
             screen.ClickSpell(false, SlotOf(false, MagicMissile), button: MouseButton.Right);

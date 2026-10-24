@@ -21,6 +21,10 @@ public sealed record PartyMemberView(string Name, int Hp, int MaxHp, int Psp, in
 /// ON / OFF / LOCKED"; INACTIVE CHARACTER for an empty box's buttons.</item>
 /// </list>
 /// The leader and computer-control buttons show their state pressed.
+/// With <c>selected</c> (the map's View Character, as DSUN.EXE draws it in the
+/// game) the frames write each member's points and status under its box
+/// instead of bars, as <see cref="ViewCharacterText"/> does, the selected
+/// member's in yellow; the bar frames still name themselves.
 /// Without <c>bars</c> (Create Characters' View Character, whose
 /// <c>8F23:1E30</c> writes the points and status under the boxes instead,
 /// <see cref="ViewCharacterText"/>) the bar frames stay empty.
@@ -39,11 +43,36 @@ public sealed class PartyFrames
     private readonly Func<int, PartyMemberView?> _member;
     private readonly Func<int> _leader;
     private readonly ColorRect[,] _fills = new ColorRect[3, 4];
+    private readonly Func<int>? _selected;
+    private readonly Label[,] _numbers = new Label[3, 4];
     private string? _saved;
 
-    public PartyFrames(UiWindowView window, Label status, Func<int, PartyMemberView?> member, Func<int> leader, bool bars = true)
+    public PartyFrames(UiWindowView window, Label status, Func<int, PartyMemberView?> member, Func<int> leader, bool bars = true,
+        Func<int>? selected = null)
     {
-        (_window, _status, _member, _leader) = (window, status, member, leader);
+        (_window, _status, _member, _leader, _selected) = (window, status, member, leader, selected);
+        if (selected is not null)
+        {
+            for (int slot = 0; slot < 4; slot++)
+            {
+                // Where ViewCharacterText writes them: hit points, psionic points, status.
+                int column = slot % 2 == 0 ? 54 : 105, row = slot < 2 ? 30 : 90;
+                Vector2[] at = [new(column - 12, row + 33), new(column - 12, row + 40), new(column - 13, row + 47)];
+                for (int line = 0; line < 3; line++)
+                {
+                    var label = new Label
+                    {
+                        Position = at[line],
+                        Size = new Vector2(50, GameFonts.Size),
+                        HorizontalAlignment = HorizontalAlignment.Center,
+                        MouseFilter = Control.MouseFilterEnum.Ignore,
+                        LabelSettings = GameFonts.Settings(line == 1 ? ViewCharacterText.Blue : ViewCharacterText.Grey),
+                    };
+                    window.AddChild(label);
+                    _numbers[line, slot] = label;
+                }
+            }
+        }
         for (int bar = 0; bar < (bars ? 3 : 0); bar++)
         {
             for (int row = 0; row < 2; row++)
@@ -60,10 +89,10 @@ public sealed class PartyFrames
                     {
                         Position = new Vector2(side * half + 1, 0),
                         Size = new Vector2(half - 2, frame.Size.Y),
-                        Color = new Color(0.08f, 0.08f, 0.12f),
+                        Color = selected is null ? new Color(0.08f, 0.08f, 0.12f) : Colors.Transparent,
                         MouseFilter = Control.MouseFilterEnum.Stop,
                     };
-                    var fill = new ColorRect { Size = track.Size, MouseFilter = Control.MouseFilterEnum.Ignore };
+                    var fill = new ColorRect { Size = track.Size, MouseFilter = Control.MouseFilterEnum.Ignore, Visible = selected is null };
                     track.AddChild(fill);
                     frame.AddChild(track);
                     track.MouseEntered += () => Hover(BarText(b, slot));
@@ -141,6 +170,14 @@ public sealed class PartyFrames
         for (int slot = 0; slot < 4; slot++)
         {
             PartyMemberView? m = _member(slot);
+            if (_selected is not null)
+            {
+                Color ink = slot == _selected() ? ViewCharacterText.Yellow : ViewCharacterText.Grey;
+                _numbers[0, slot].Text = m is null ? "" : $"{m.Hp}/{m.MaxHp}";
+                _numbers[1, slot].Text = m is null ? "" : $"{m.Psp}/{m.MaxPsp}";
+                _numbers[2, slot].Text = m is null ? "" : StatusName(m.Status);
+                _numbers[0, slot].LabelSettings = _numbers[2, slot].LabelSettings = GameFonts.Settings(ink);
+            }
             Fill(0, slot, m is null ? 0 : Ratio(m.Hp, m.MaxHp), new Color(0.75f, 0.2f, 0.15f));
             Fill(1, slot, m is null ? 0 : Ratio(m.Psp, m.MaxPsp), new Color(0.3f, 0.45f, 0.85f));
             Fill(2, slot, m is null ? 0 : 1, m?.Status switch

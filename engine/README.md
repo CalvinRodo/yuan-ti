@@ -207,12 +207,19 @@ opens the item window (and describes it in the panel). A carried bag or box open
 body, to take or put in. The bar's other icons are spells and psionics, on View Character's panel. As in DSUN.EXE
 nothing is memorized: a caster has a number of casts at each spell level (`DS:4B08` wizard, `DS:4B11`
 priest, a byte a level; `78A9:5344` takes one a cast), and every spell it knows at a level can be cast
-while that level has some left ("2 LEVEL 1 SPELLS TO CAST"). Click a spell, then a member's box, to
+while that level has some left ("2 LEVEL 1 SPELLS TO CAST"; the spells of a level with none left, or
+of a member not Okay, are crossed out, and the pointer on one says YOU NEED TO REST). The spells fill the
+panel's slots in their numbers' order, as DSUN.EXE does (`8F23:19B6`); MAGE / CLERIC / PSIONIC goes round
+the kinds and LEVEL n round the levels, and the points and status show under the boxes. Click a spell, then a member's box, to
 cast it (outside combat only the healing ones work; in a fight CAST lists them all); a new preserver
 knows the original's starting spells for its preserver level (`6ECD:1977`: Grease and Magic Missile; at
 level 2, where the starting experience puts it, Shield and Wall of Fog too; at 3 Fog Cloud and Stinking
-Cloud; `CharacterRules.PreserverStartingSpells`) and LEARNs more into the spellbook, a psionicist picks powers; a rest (REQUEST 1 or 4) fills the casts again. The small buttons by each box make that member leader
-and turn computer control on or off. A script's SHOP opens the items as a store: click the goods then
+Cloud; `CharacterRules.PreserverStartingSpells`) and, on gaining a preserver level, chooses one more in DSUN.EXE's
+study window (`WIND` 17500, CHOOSE A SPELL: the spells it doesn't know up to level (preserver level + 1) ÷ 2;
+EXIT before choosing asks YOU HAVEN'T CHOSEN and gives the choice up), a psionicist picks powers; a rest (REQUEST 1 or 4) fills the casts again. The small buttons by each box make that member leader
+and turn computer control on or off. A walk click where no way leads says NO PATH FROM HERE, and a verb on
+something out of the leader's sight NO LINE OF SIGHT, in the original's message box (`WIND` 10501 over `BMP`
+10001), until a click or a key. A script's SHOP opens the items as a store: click the goods then
 the pack to buy (at the item's value), put things in the six slots by SELL to sell (at half).
 Esc on the map, or the wide button, opens the original GAME MENU: the character screens, exit, save
 and load, preferences (music and sound, GAME DIFFICULTY scaling creatures' hit points, animations),

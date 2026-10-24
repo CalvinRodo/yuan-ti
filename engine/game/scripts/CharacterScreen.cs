@@ -66,7 +66,7 @@ public partial class CharacterScreen : RetroScreen
     private const int FirstWorn = 11216, FirstPackSlot = 11230, PackSlots = 12, ContainerArea = 13200, FirstInside = 11248, InsideSlots = 12;
     private const int ContainerSlots = ContainerWindow.Slots;
     private const int FirstSellSlot = 11242, SellSlots = 6;
-    private const int SlotArt = 13007, EmptyFrame = 0, SelectedFrame = 4, CantFrame = 6, FirstSilhouette = 9;
+    private const int SlotArt = 13007, EmptyFrame = 0, ListedFrame = 2, SelectedFrame = 4, CantFrame = 6, FirstSilhouette = 9;
     private const int ChestArt = 13002, BagArt = 13003, ParchmentArt = 13005, Bars = 13000, PanelArt = 13004;
 
     /// <summary>
@@ -244,7 +244,7 @@ public partial class CharacterScreen : RetroScreen
         items.AddChild(_panel);
         items.MoveChild(_panel, 5); // under the window's buttons (MORE is over it)
         BuildStats(items);
-        _sheetPage.Frames = new PartyFrames(sheet, _status, MemberView, Leader);
+        _sheetPage.Frames = new PartyFrames(sheet, _status, MemberView, Leader, selected: () => _member);
         _itemsPage.Frames = new PartyFrames(items, _itemsStatus, MemberView, Leader);
         for (int n = 0; n < Equipment.Slots; n++)
         {
