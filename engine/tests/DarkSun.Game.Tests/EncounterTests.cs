@@ -134,14 +134,19 @@ public class EncounterTests
     public void SpellsCastGoBackToTheSheet()
     {
         var (world, _) = Hostile(2);
-        var mage = new Character { Name = "M", Race = Race.Human, Classes = [CharacterClass.Preserver], Rolled = [10, 14, 12, 16, 10, 10], Memorized = [9, 9] };
+        var mage = new Character { Name = "M", Race = Race.Human, Classes = [CharacterClass.Preserver], Rolled = [10, 14, 12, 16, 10, 10], Spellbook = [9, 1], Experience = 2500 };
         Battle b = Encounter.Start(world, i => i == 0 ? mage : null, new ScriptedDice(), Rules)!;
         Combatant m = b.Combatants.Single(c => c.Name == "M");
-        Assert.Equal([9, 9], m.Spells);
+        // Level 2: two 1st-level casts, shared by every 1st-level spell in the book.
+        Assert.Equal([1, 9], m.Spells);
+        Assert.Equal(2, m.CastsOf(9));
 
         b.StartRound();
         b.Cast(m, 9, 1, b.Combatants.Single(c => !c.PartyMember).Cell);
+        Assert.Equal((1, 1), (m.CastsOf(9), m.CastsOf(1)));
+        b.Cast(m, 1, 1, b.Combatants.Single(c => !c.PartyMember).Cell);
+        Assert.Empty(m.Spells);
         b.SyncSheets();
-        Assert.Equal([9], mage.Cast);
+        Assert.Equal([9, 1], mage.Cast);
     }
 }

@@ -121,6 +121,13 @@ public static class Settings
         set => Set("game", "choose_enemy_keys", value);
     }
 
+    /// <summary>Out of a fight, dragging a box on the map picks the characters in it; a click walks only them.</summary>
+    public static bool BoxSelect
+    {
+        get => Get("game", "box_select", false);
+        set => Set("game", "box_select", value);
+    }
+
     public static bool SkipIntro
     {
         get => Get("game", "skip_intro", false);

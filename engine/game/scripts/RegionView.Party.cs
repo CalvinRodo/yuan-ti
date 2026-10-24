@@ -91,6 +91,67 @@ public partial class RegionView
         WalkTo(new Cell(30, 34), wholeParty: true);
         Expect(_world.CollapsedLeader is null && _party.All(p => p.Node.Visible), "whole-party movement spreads everyone out");
         Expect(_world.Party.Select(p => p.Cell).Distinct().Count() == _party.Count, "spread-out members occupy different cells");
+        Step(4000);
+        CheckBoxSelect();
+
+        // Box selection (Settings.BoxSelect): a drag picks the figures it touches, a click walks only them.
+        void CheckBoxSelect()
+        {
+            bool was = Settings.BoxSelect;
+            _gameMenu.ResetCursor();
+            // Apart, four cells between each, so a box can take some and not others.
+            Cell start = Selected!.Walker.Cell;
+            List<Cell> spots = [.. Enumerable.Range(-12, 25).Where(dx => dx % 4 == 0).Select(dx => new Cell(start.X + dx, start.Y))
+                .Where(c => c.X > 0 && c.X < _region.Width && !_region.IsBlocked(c.X, c.Y))];
+            for (int i = 0; i < _party.Count && i < spots.Count; i++)
+            {
+                _party[i].Walker.Teleport(spots[i], (_, _) => false);
+                DrawMember(_party[i]);
+            }
+            Step(10);
+            Rect2 FigureOf(PartyMember p) => p.Node.GetGlobalTransform() * p.Node.GetRect();
+            Vector2 Screen(Vector2 map) => GetCanvasTransform() * map;
+            void Drag(Rect2 box)
+            {
+                Vector2 from = Screen(box.Position), to = Screen(box.End);
+                _UnhandledInput(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = true, Position = from });
+                _UnhandledInput(new InputEventMouseMotion { ButtonMask = MouseButtonMask.Left, Position = to });
+                _UnhandledInput(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = false, Position = to });
+            }
+            // Two members whose figures a box can cover without touching anyone else's, the second not the leader.
+            (PartyMember A, PartyMember B, Rect2 Both)? pair = _party.SelectMany(a => _party.Where(b => b != a && _party.IndexOf(b) != _selected)
+                    .Select(b => (A: a, B: b, Both: FigureOf(a).Merge(FigureOf(b)))))
+                .Where(t => _party.Where(o => o != t.A && o != t.B).All(o => !FigureOf(o).Intersects(t.Both, includeBorders: true)))
+                .Select(t => ((PartyMember, PartyMember, Rect2)?)t).FirstOrDefault();
+            if (pair is not var (a, b, both))
+            {
+                problems.Add("box select: no two members stand apart from the rest");
+                return;
+            }
+            Settings.BoxSelect = true;
+            Drag(FigureOf(b).Grow(-2));
+            Expect(_selected == _party.IndexOf(b) && Picked.SequenceEqual([b]), "box select: a box round one member makes it leader and picks it");
+            Drag(both.Grow(1));
+            Expect(Picked.Count == 2 && Picked.Contains(a) && Picked.Contains(b), $"box select: a box round two picks both ({Picked.Count})");
+            List<PartyMember> others = [.. _party.Where(p => p != a && p != b)];
+            List<Cell> stay = [.. others.Select(o => o.Walker.Cell)];
+            Cell goal = new[] { (6, 0), (-6, 0), (0, 6), (0, -6) }.Select(d => new Cell(b.Walker.Cell.X + d.Item1, b.Walker.Cell.Y + d.Item2))
+                .FirstOrDefault(c => c.X > 0 && c.Y > 0 && c.X < _region.Width && c.Y < _region.Height && !_region.IsBlocked(c.X, c.Y), b.Walker.Cell);
+            Vector2 click = Screen(new Vector2((goal.X + 0.5f) * Region.TileSize, (goal.Y + 0.5f) * Region.TileSize));
+            _UnhandledInput(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = true, Position = click });
+            _UnhandledInput(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = false, Position = click });
+            Expect(a.Walker.IsWalking && b.Walker.IsWalking, "box select: a click walks the picked members");
+            Step(4000);
+            Expect(others.Select(o => o.Walker.Cell).SequenceEqual(stay), "box select: the others stay where they were");
+            Expect(Battle.Distance(a.Walker.Cell, goal) <= 2 && Battle.Distance(b.Walker.Cell, goal) <= 2,
+                $"box select: the picked reach the click ({a.Walker.Cell}, {b.Walker.Cell} for {goal})");
+            Drag(new Rect2(Selected!.Node.GlobalPosition + new Vector2(200, 200), new Vector2(10, 10)));
+            Expect(_picked.Count == 0, "box select: a box round no one drops the picks");
+            Settings.BoxSelect = false;
+            Drag(FigureOf(a).Merge(FigureOf(b)));
+            Expect(_picked.Count == 0, "box select: off, a drag picks no one");
+            Settings.BoxSelect = was;
+        }
 
         // Out of a fight a right-click on the map turns the pointer too (1587:01C7), and a held item joins the turn.
         var turn = new InputEventMouseButton { ButtonIndex = MouseButton.Right, Pressed = true };

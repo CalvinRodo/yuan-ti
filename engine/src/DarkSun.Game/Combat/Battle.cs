@@ -312,12 +312,8 @@ public sealed partial class Battle
     {
         foreach (Combatant c in _all.Where(c => c.Sheet is not null))
         {
-            List<int> used = [.. c.SpellsAtStart];
-            foreach (int left in c.Spells)
-            {
-                used.Remove(left);
-            }
-            c.Sheet!.Cast.AddRange(used);
+            c.Sheet!.Cast.AddRange(c.SpellsCast);
+            c.SpellsCast.Clear();
             c.Sheet.PspSpent += Math.Max(0, c.PspAtStart - c.Psp);
             if (c.Items.FirstOrDefault(i => i.Slot == 1) is { } ammo && ammo.Quantity != c.Ammunition)
             {
@@ -327,7 +323,6 @@ public sealed partial class Battle
                     c.Items.Remove(ammo);
                 }
             }
-            c.SpellsAtStart = [.. c.Spells];
             c.PspAtStart = c.Psp;
         }
     }

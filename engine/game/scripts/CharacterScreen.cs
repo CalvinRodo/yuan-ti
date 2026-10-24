@@ -328,7 +328,7 @@ public partial class CharacterScreen : RetroScreen
         window.Button(ItemsButton)!.Pressed += () => Show(Page.Items);
         window.Button(ItemsButton)!.TooltipText = "Items (I)";
         window.Button(SpellsButton)!.Pressed += () => Show(Page.Spells);
-        window.Button(SpellsButton)!.TooltipText = "Spells: memorize and cast";
+        window.Button(SpellsButton)!.TooltipText = "Spells: cast and learn";
         window.Button(PsionicsButton)!.Pressed += () => Show(Page.Psionics);
         window.Button(PsionicsButton)!.TooltipText = "Psionics: pick and use powers";
         window.Button(MenuButton)!.Pressed += () =>
@@ -749,8 +749,8 @@ public partial class CharacterScreen : RetroScreen
     /// USE in the item window (<c>91F7:03D0</c>, <see cref="ItemMagic.Plan"/>): a scroll or
     /// book teaches its spell or power; any other spell is cast at level 6, using one of the
     /// item's charges. In a fight that is the map's (<see cref="CastInFight"/>: on the
-    /// member's turn, aimed there if it needs a target). Outside one, as for memorized
-    /// spells, only healing works, on the member using it (and a lemon makes them whole);
+    /// member's turn, aimed there if it needs a target). Outside one, as for the member's
+    /// own spells, only healing works, on the member using it (and a lemon makes them whole);
     /// anything else waits for a fight.
     /// </summary>
     private void UseItem(Item item)

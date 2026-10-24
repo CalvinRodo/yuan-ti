@@ -93,43 +93,44 @@ public class SpellcastingTests
     }
 
     [Fact]
-    public void MemorizeCastAndRest()
+    public void AnyKnownSpellIsCastWhileItsLevelHasCastsAndARestFillsThem()
     {
         Character c = Cleric(Sphere.Water);
-        Assert.True(Magic.Memorize(c, 72));
-        Assert.True(Magic.Memorize(c, 72));
-        Assert.False(Magic.Memorize(c, 72)); // two 1st-level slots
-        Assert.False(Magic.Memorize(c, 9)); // a wizard spell
-        Assert.True(Magic.Memorize(c, 87)); // Hold Person, 2nd level
+        Assert.Equal(2, Magic.CastsLeft(c, SpellKind.Priest, 1)); // two 1st-level casts, nothing memorized
+        Assert.True(Magic.CanCast(c, 72) && Magic.CanCast(c, 70) && Magic.CanCast(c, 87)); // Cure Light Wounds, Bless, Hold Person
+        Assert.False(Magic.CanCast(c, 9)); // a wizard spell
 
         var target = new Vitals { Hp = 2, MaxHp = 20, Status = Vitals.Down };
         string result = Magic.CastOutside(c, 72, target, new Random(1));
         Assert.StartsWith("HEALED", result);
         Assert.True(target.Hp > 2);
         Assert.Equal(Vitals.Well, target.Status);
-        Assert.Equal(1, Spellcasting.Ready(c, 72));
-        Assert.Equal("NO SUCH SPELL TO CAST", Magic.CastOutside(c, 70, target, new Random(1))); // Bless: not memorized
+        Assert.Equal(1, Magic.CastsLeft(c, SpellKind.Priest, 1));
+        int second = Magic.CastsLeft(c, SpellKind.Priest, 2);
         Assert.Equal("ONLY IN COMBAT", Magic.CastOutside(c, 87, target, new Random(1)));
+        Assert.Equal(second, Magic.CastsLeft(c, SpellKind.Priest, 2)); // nothing happened: no cast used
         Magic.CastOutside(c, 72, new Vitals { Hp = 1, MaxHp = 20 }, new Random(1));
-        Assert.Equal("NO SUCH SPELL TO CAST", Magic.CastOutside(c, 72, target, new Random(1)));
+        Assert.Equal(0, Magic.CastsLeft(c, SpellKind.Priest, 1));
+        Assert.False(Magic.CanCast(c, 70)); // the level's casts are shared
+        Assert.Equal("YOU NEED TO REST", Magic.CastOutside(c, 72, target, new Random(1)));
+        Assert.Equal("NO SUCH SPELL TO CAST", Magic.CastOutside(c, 9, target, new Random(1)));
+        Assert.DoesNotContain(Magic.Castable(c), s => s.Level == 1);
 
         Spellcasting.Rest(c);
-        Assert.Equal(2, Spellcasting.Ready(c, 72));
-        Assert.True(Magic.Forget(c, 72));
-        Assert.Equal([72, 87], c.Memorized);
+        Assert.Equal(2, Magic.CastsLeft(c, SpellKind.Priest, 1));
     }
 
     [Fact]
     public void APreserverLearnsIntoItsBook()
     {
         var p = new Character { Classes = [CharacterClass.Preserver], Rolled = [12, 12, 12, 9, 12, 12], Experience = 3000 };
-        Assert.Empty(Magic.Memorizable(p, SpellKind.Wizard, 1));
+        Assert.Empty(Magic.Known(p, SpellKind.Wizard, 1));
         Assert.Contains(Spellcasting.Get(9)!, Magic.Learnable(p, 1));
         Assert.Equal("IS LEARNED!", Magic.Learn(p, 9));
         Assert.Equal("YOU ALREADY KNOW THIS SPELL", Magic.Learn(p, 9));
         Assert.Equal("CANNOT LEARN THIS SPELL", Magic.Learn(p, 28)); // Fireball: 3rd level
         Assert.Equal(Spellcasting.All.Count, Magic.SpellbookSize(p)); // DSUN.EXE: no limit
-        Assert.True(Magic.Memorize(p, 9));
+        Assert.True(Magic.CanCast(p, 9));
 
         // The tabletop rules: six a level at Intelligence 9.
         var tabletop = new Spellcasting(Tabletop);

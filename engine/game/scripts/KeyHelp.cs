@@ -250,10 +250,10 @@ public partial class KeyHelp : CanvasLayer
         HelpLine.For(Controls.Back, "Put the chosen thing back, or close", "Esc"));
 
     private static HelpSection MagicSection => new("Spells and psionics",
-        new HelpLine("Click above", "Memorize a copy of that spell (LEARN: add it to the spellbook; psionics: pick a power)"),
-        new HelpLine("Right-click a spell above", "What it does (the spell information window)"),
-        new HelpLine("Right-click a spell below", "Forget that memorized copy"),
-        new HelpLine("Click below, then a box", "Cast that spell on the member (use the power); double-click: on yourself"),
+        new HelpLine("Click a spell, then a box", "Cast it on that member (any spell known, while its level has casts left); double-click: on yourself"),
+        new HelpLine("Click above", "LEARN: add the spell to the spellbook; psionics: pick a power"),
+        new HelpLine("Right-click a spell", "What it does (the spell information window)"),
+        new HelpLine("Click a power below, then a box", "Use it on that member; double-click: on yourself"),
         new HelpLine("WIZ / PRI n, KINET…", "The next spell level or psionic discipline"));
 
     private static HelpSection GameMenuSection => new("Game menu",
@@ -283,6 +283,7 @@ public partial class KeyHelp : CanvasLayer
         new HelpSection("Party",
             new HelpLine("Click", "The selected character walks there"),
             new HelpLine("Shift+click", "Spread out a collapsed party and walk everyone there"),
+            new HelpLine("Drag a box", "Pick the characters in it: a click walks only them (Options: off by default)"),
             HelpLine.For(Controls.MoveUp, "Walk north (hold two arrows for a diagonal)"),
             HelpLine.For(Controls.MoveDown, "Walk south"),
             HelpLine.For(Controls.MoveLeft, "Walk west"),

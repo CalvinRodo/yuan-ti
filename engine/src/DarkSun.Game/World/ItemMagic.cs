@@ -31,7 +31,7 @@ public readonly record struct ItemUse(ItemUseKind Kind, int Spell);
 /// spell is its record's +0x0F (the copy <see cref="ItemRecord.PowerFor"/>
 /// checks against); it is cast at level 6 whoever uses it, and each cast
 /// uses a charge (<see cref="GameWorld.UseItemCharge"/>). A member's own
-/// memorized spells and psionic strength aren't touched.
+/// spell casts and psionic strength aren't touched.
 /// </summary>
 public static class ItemMagic
 {

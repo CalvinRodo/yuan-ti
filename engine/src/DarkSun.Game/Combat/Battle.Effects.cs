@@ -10,6 +10,27 @@ namespace DarkSun.Game.Combat;
 public sealed partial class Battle
 {
     /// <summary>
+    /// A cast of the caster's own: a creature's copy of the spell is gone; a
+    /// party member's level has one cast less, and at none every spell of that
+    /// level is gone for the fight (<c>78A9:5344</c>).
+    /// </summary>
+    private static void UseCast(Combatant caster, int effect)
+    {
+        if (caster.CastsLeft is { } left && caster.SpellLevels!.TryGetValue(effect, out int level) && caster.Spells.Contains(effect))
+        {
+            caster.SpellsCast.Add(effect);
+            if (--left[level] <= 0)
+            {
+                caster.Spells.RemoveAll(s => caster.SpellLevels.GetValueOrDefault(s) == level);
+            }
+        }
+        else if (caster.Spells.Remove(effect))
+        {
+            caster.SpellsCast.Add(effect);
+        }
+    }
+
+    /// <summary>
     /// Casting (<c>7D80:003B</c>): <paramref name="effect"/> (a <c>SPIN</c> number)
     /// at <paramref name="at"/> for a caster of <paramref name="level"/>. An area
     /// that lingers becomes a field (<see cref="Fields"/>), acting on those in it
@@ -27,7 +48,7 @@ public sealed partial class Battle
         }
         if (ownSpell)
         {
-            caster.Spells.Remove(effect);
+            UseCast(caster, effect);
         }
         Note(new Cast(caster, effect, at));
         if (e.Damaging || e.Condition != Condition.None && !OnSide(caster, at))
