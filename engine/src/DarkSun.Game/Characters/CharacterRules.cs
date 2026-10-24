@@ -136,6 +136,14 @@ public sealed record CharacterRules
     /// <summary>Experience a new character has in each of its classes (DSUN.EXE's template, <c>38D4:0048</c>: 3000).</summary>
     public int StartingExperience { get; init; } = 3000;
 
+    /// <summary>
+    /// The wizard spells a new preserver knows, by its preserver level (<c>6ECD:1977</c>, set again
+    /// whenever creation changes that level): level 1 Grease and Magic Missile; 2 adds Shield and Wall
+    /// of Fog; 3 adds Fog Cloud and Stinking Cloud. A level past the list keeps them all (DSUN.EXE's
+    /// switch gives none past level 3, which its starting experience never reaches).
+    /// </summary>
+    public IReadOnlyList<IReadOnlyList<int>> PreserverStartingSpells { get; init; } = [[8, 9], [10, 12], [16, 23]];
+
     /// <summary>The map icons: <c>OJFF</c> this + the look's place in the portrait order (300–313, all walking with <c>SCMD</c> 174).</summary>
     public int IconBase { get; init; } = 300;
 
