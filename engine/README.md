@@ -200,7 +200,8 @@ holding what it carried.
 The character screens (`CharacterScreen`) are the original's windows and art: C shows the
 character sheet (View Character, `WIND` 11500: abilities, hit points, armour class, THAC0,
 experience, psionics), I the items (`WIND` 13500: the body with its 14 equipment slots, the pack, DROP
-and SPLIT), and the bottom icons switch between them. Click a thing, then where it goes (a slot to
+and SPLIT; on the right `BMP` 13004 with the abilities, PSI, AC and the attacks, `74F1:37B3`; the money
+under the window, `74F1:1C92`; what happens in the description box), and the bottom icons switch between them. Click a thing, then where it goes (a slot to
 wear it, the pack, another member's box to give it); double-click wears or takes off; right-click
 opens the item window (and describes it in the panel). A carried bag or box opens in place of the
 body, to take or put in. The bar's other icons are spells and psionics, on View Character's panel. As in DSUN.EXE
