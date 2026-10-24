@@ -13,7 +13,7 @@ namespace DarkSun.Engine;
 /// <item>EXIT TO DOS (10301: "EXIT: SAVE GAME?" SAVE / QUIT / CANCEL; here, back to the main menu),
 /// LOAD/SAVE GAME (10302), SET PREFERENCES (10303);</item>
 /// <item>OVERHEAD MAP (10305: the whole region), CENTER ON LEADER (10306);</item>
-/// <item>MOVE, LOOK and ATTACK CURSOR (10310–10312: what a left click on the map does), COLLAPSE PARTY (10313: everyone to the leader);</item>
+/// <item>MOVE, LOOK and ATTACK CURSOR (10310–10312: what a left click on the map does), COLLAPSE PARTY (10313: everyone to the leader; again, spread out);</item>
 /// <item>RETURN TO GAME (10308).</item>
 /// </list>
 /// SET PREFERENCES is <c>WIND</c> 16500 over the same frame (<c>870B</c>): music

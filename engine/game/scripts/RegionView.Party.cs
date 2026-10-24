@@ -92,7 +92,59 @@ public partial class RegionView
         Expect(_world.CollapsedLeader is null && _party.All(p => p.Node.Visible), "whole-party movement spreads everyone out");
         Expect(_world.Party.Select(p => p.Cell).Distinct().Count() == _party.Count, "spread-out members occupy different cells");
         Step(4000);
+        CheckOriginalMovement();
         CheckBoxSelect();
+
+        // As in the original: COLLAPSE PARTY again spreads the party out; the leader walks
+        // (a click or the arrows) and the others follow, unless Settings.FollowLeader is off.
+        void CheckOriginalMovement()
+        {
+            bool follow = Settings.FollowLeader;
+            _gameMenu.ResetCursor();
+            _gameMenu.Open();
+            _gameMenu.Press(10313);
+            Step(4000);
+            Expect(_world.CollapsedLeader == _selected, "collapse gathers the party");
+            _gameMenu.Open();
+            _gameMenu.Press(10313);
+            Expect(_world.CollapsedLeader is null && _party.All(p => p.Node.Visible), "COLLAPSE PARTY again spreads the party out");
+            Expect(_world.Party.Select(p => p.Cell).Distinct().Count() == _party.Count, "spread out on different cells");
+
+            int Gap(PartyMember p) => Math.Max(Math.Abs(p.Walker.Cell.X - Selected!.Walker.Cell.X), Math.Abs(p.Walker.Cell.Y - Selected.Walker.Cell.Y));
+            Cell? Away(int by) => new[] { (by, 0), (-by, 0), (0, by), (0, -by) }
+                .Select(d => new Cell(Selected!.Walker.Cell.X + d.Item1, Selected.Walker.Cell.Y + d.Item2))
+                .Where(c => c.X > 0 && c.Y > 0 && c.X < _region.Width && c.Y < _region.Height && Selected!.Walker.CanStand(c, _region.IsBlocked))
+                .Select(c => (Cell?)c).FirstOrDefault();
+
+            Settings.FollowLeader = true;
+            if (Away(8) is not { } goal)
+            {
+                problems.Add("follow: no open cell 8 away from the leader");
+                return;
+            }
+            WalkTo(goal, wholeParty: false);
+            Step(4000);
+            Expect(Selected!.Walker.Cell == goal, $"follow: the leader walks to the click ({Selected.Walker.Cell}, not {goal})");
+            Expect(_party.All(p => Gap(p) <= 2), $"follow: the others follow the leader ({string.Join(", ", _party.Select(Gap))} cells off)");
+
+            Cell before = Selected.Walker.Cell;
+            Input.ActionPress(Controls.MoveRight);
+            Step(200);
+            Input.ActionRelease(Controls.MoveRight);
+            Step(1500);
+            Expect(Selected.Walker.Cell != before, "follow: the arrows walk the leader");
+            Expect(_party.All(p => Gap(p) <= 2), $"follow: the others follow the arrows ({string.Join(", ", _party.Select(Gap))} cells off)");
+
+            Settings.FollowLeader = false;
+            List<Cell> stay = [.. _party.Where(p => p != Selected).Select(p => p.Walker.Cell)];
+            if (Away(6) is { } alone)
+            {
+                WalkTo(alone, wholeParty: false);
+                Step(3000);
+                Expect(_party.Where(p => p != Selected).Select(p => p.Walker.Cell).SequenceEqual(stay), "follow off: only the leader walks");
+            }
+            Settings.FollowLeader = follow;
+        }
 
         // Box selection (Settings.BoxSelect): a drag picks the figures it touches, a click walks only them.
         void CheckBoxSelect()

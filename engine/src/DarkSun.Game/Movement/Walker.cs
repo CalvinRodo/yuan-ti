@@ -242,6 +242,10 @@ public sealed class Walker
     /// <param name="blocked">Whether the region map blocks a cell (<c>GMAP</c> 0x40, off-map cells included).</param>
     public bool Update(long now, Func<int, int, bool> blocked)
     {
+        // Its own clock, run Speed times as fast as the game's.
+        _clock += _lastNow is { } last ? Math.Max(0, now - last) * Speed : now;
+        _lastNow = now;
+        now = _clock;
         if (_joining is { } leader && _target is null && _goal != leader.Cell)
         {
             _goal = leader.Cell;
@@ -302,6 +306,12 @@ public sealed class Walker
         }
         return changed;
     }
+
+    /// <summary>How many times as fast as its script it walks and animates: 1, or more for members walking into a collapsing party.</summary>
+    public int Speed { get; set; } = 1;
+
+    private long? _lastNow;
+    private long _clock;
 
     private int Moved => Math.Max(Math.Abs(Animator.OffsetX), Math.Abs(Animator.OffsetY));
 

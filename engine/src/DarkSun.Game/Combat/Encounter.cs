@@ -30,6 +30,7 @@ public static class Encounter
     {
         rules ??= CombatRules.Default;
         world.ExpandParty();
+        world.StopFollowing();
         if (attacked is { Kind: not ObjectKind.Party } && (attacked.Allegiance & 3) == 0)
         {
             attacked.Allegiance = 2;

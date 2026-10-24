@@ -263,7 +263,7 @@ public partial class KeyHelp : CanvasLayer
         new HelpLine("Sliders", "Preferences: music, sound, difficulty, animations"),
         new HelpLine("Map, centre", "The overhead map; centre on the leader"),
         new HelpLine("Arrow, eye, swords", "What a left click on the map does: move, look, attack"),
-        new HelpLine("The party", "Collapse the party onto the leader"),
+        new HelpLine("The party", "Collapse the party onto the leader; again: spread out"),
         HelpLine.For(Controls.Back, "Close (from the preferences: back to the menu)", "Esc"));
 
     private static HelpSection CharacterGenSection => new("Character Generation",

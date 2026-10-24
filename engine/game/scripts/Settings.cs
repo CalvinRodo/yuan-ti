@@ -14,7 +14,8 @@ namespace DarkSun.Engine;
 /// <c>dust</c>, <c>enemy_rings</c> (0 none, 1 under the enemy chosen with Tab, 2 under every enemy);</item>
 /// <item><c>[game]</c> <c>skip_intro</c>, <c>autosave</c> (on entering a region), <c>original_pathfinding</c>,
 /// <c>difficulty</c> (0–3: easy, balanced, hard, hideous), <c>animations</c> (the map's animated things),
-/// <c>choose_enemy_keys</c> (Tab and Enter choose and attack an enemy in a fight);</item>
+/// <c>choose_enemy_keys</c> (Tab and Enter choose and attack an enemy in a fight), <c>follow_leader</c> (the others
+/// follow the member who walks, as in the original), <c>quick_collapse</c> (COLLAPSE PARTY gathers them quickly);</item>
 /// <item><c>[mods]</c> <c>bundled_on</c>: the mods that come with the game turned on (the tabletop rules).</item>
 /// <item><c>[keys]</c> an action's keys, as the key help names them (<c>quick_save = "F5"</c>, <c>"Shift+F11"</c>, several with " / ").</item>
 /// </list>
@@ -183,6 +184,20 @@ public static class Settings
             names.Add(name);
         }
         Set("mods", "bundled_on", string.Join(",", names));
+    }
+
+    /// <summary>As in the original: a click or the arrow keys walk the leader and the others follow; off, each walks alone.</summary>
+    public static bool FollowLeader
+    {
+        get => Get("game", "follow_leader", true);
+        set => Set("game", "follow_leader", value);
+    }
+
+    /// <summary>As in the original: COLLAPSE PARTY's members walk into the leader quickly; off, at their walking pace.</summary>
+    public static bool QuickCollapse
+    {
+        get => Get("game", "quick_collapse", true);
+        set => Set("game", "quick_collapse", value);
     }
 
     public static bool OriginalPathfinding
