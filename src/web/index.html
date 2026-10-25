@@ -184,33 +184,48 @@
             <!-- Region tile-map viewer -->
             <div id="region-nodes-view" class="hidden"></div>
             <div id="rmap-view" class="hidden">
-              <div id="map-toolbar">
-                <select id="rmap-select" class="hidden"></select>
-                <input  id="map-width-input" class="hidden" type="number" min="1" max="2048">
-                <span   id="map-size-label"  class="hidden"></span>
-                <div class="map-ctrl-group">
-                  <label class="control-label">Zoom</label>
-                  <button id="map-zoom-out" class="map-btn" title="Zoom out">&#8722;</button>
-                  <span id="map-zoom-label" class="map-zoom-label">16px</span>
-                  <button id="map-zoom-in"  class="map-btn" title="Zoom in">+</button>
+              <aside id="map-region-pane" aria-label="Regions">
+                <input id="map-region-filter" type="search" placeholder="Filter regions&#8230;" autocomplete="off" spellcheck="false" aria-label="Filter regions">
+                <ul id="map-region-list"></ul>
+              </aside>
+              <div id="map-main">
+                <div id="map-toolbar">
+                  <select id="rmap-select" class="hidden"></select>
+                  <input  id="map-width-input" class="hidden" type="number" min="1" max="2048">
+                  <span   id="map-size-label"  class="hidden"></span>
+                  <div class="map-ctrl-group">
+                    <label class="control-label">Zoom</label>
+                    <button id="map-zoom-out" class="map-btn" title="Zoom out">&#8722;</button>
+                    <span id="map-zoom-label" class="map-zoom-label">16px</span>
+                    <button id="map-zoom-in"  class="map-btn" title="Zoom in">+</button>
+                  </div>
+                  <div class="map-ctrl-group">
+                    <button id="map-reset-pan" class="map-btn map-btn-text" title="Reset pan">&#8962; Reset</button>
+                  </div>
+                  <div class="map-ctrl-group">
+                    <label for="map-environment" class="control-label">Environment</label>
+                    <select id="map-environment" disabled>
+                      <option value="outdoors">Outdoors</option>
+                      <option value="indoors">Indoors</option>
+                    </select>
+                    <span id="map-environment-status" class="dim" role="status" aria-live="polite"></span>
+                  </div>
+                  <div class="map-ctrl-group" id="map-debug-layers">
+                    <span class="control-label">Debug</span>
+                    <label title="Cell grid, coordinates every 8 cells"><input type="checkbox" data-layer="grid"> Grid</label>
+                    <label title="GMAP flags: red blocks movement, blue outline blocks sight"><input type="checkbox" data-layer="collision"> Collision</label>
+                    <label title="Script move triggers: tiles filled, boxes outlined"><input type="checkbox" data-layer="triggers"> Triggers</label>
+                    <label title="ETAB objects: index and OJFF number (creatures yellow, doors cyan)"><input type="checkbox" data-layer="objects"> Objects</label>
+                  </div>
                 </div>
-                <div class="map-ctrl-group">
-                  <button id="map-reset-pan" class="map-btn map-btn-text" title="Reset pan">&#8962; Reset</button>
-                </div>
-                <div class="map-ctrl-group">
-                  <label for="map-environment" class="control-label">Environment</label>
-                  <select id="map-environment" disabled>
-                    <option value="outdoors">Outdoors</option>
-                    <option value="indoors">Indoors</option>
-                  </select>
-                  <span id="map-environment-status" class="dim" role="status" aria-live="polite"></span>
-                </div>
-              </div>
-              <div id="map-canvas-wrap">
-                <img id="map-render-img" alt="Region map">
-                <div id="map-spinner" class="hidden">
-                  <div class="spinner"></div>
-                  <span>Loading map&#8230;</span>
+                <div id="map-canvas-wrap">
+                  <img id="map-render-img" alt="Region map">
+                  <canvas id="map-debug-canvas" class="hidden"></canvas>
+                  <div id="map-debug-info" class="hidden" role="status" aria-live="polite"></div>
+                  <div id="map-spinner" class="hidden">
+                    <div class="spinner"></div>
+                    <span>Loading map&#8230;</span>
+                  </div>
                 </div>
               </div>
             </div>

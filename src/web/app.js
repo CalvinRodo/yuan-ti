@@ -13,6 +13,7 @@
 const PREFS_KEY = 'yuan-ti-prefs-v2';
 const PREFS_DEFAULTS = {
   spriteScale: 1,
+  mapDebugLayers: {},   // map view overlays: { grid, collision, triggers, objects }
 };
 const prefs = (() => {
   try {
@@ -117,6 +118,11 @@ const dom = {
   mapEnvironmentStatus: $('map-environment-status'),
   rmapSelect:       $('rmap-select'),
   mapSpinner:       $('map-spinner'),
+  mapRegionFilter:  $('map-region-filter'),
+  mapRegionList:    $('map-region-list'),
+  mapDebugLayers:   $('map-debug-layers'),
+  mapDebugCanvas:   $('map-debug-canvas'),
+  mapDebugInfo:     $('map-debug-info'),
 
   // Resource table filters
   resFilterTag:     $('res-filter-tag'),
@@ -441,7 +447,7 @@ async function activateMode(mode) {
   closeDetailPane();
 
   // Show/hide toolbar groups
-  dom.modeGffGroup.classList.toggle('hidden', mode === 'regions' || mode === 'spells' || mode === 'palette' || mode === 'cinematic' || mode === 'data' || mode === 'scripts' || mode === 'sprite' || mode === 'prefs');
+  dom.modeGffGroup.classList.toggle('hidden', mode === 'map' || mode === 'regions' || mode === 'spells' || mode === 'palette' || mode === 'cinematic' || mode === 'data' || mode === 'scripts' || mode === 'sprite' || mode === 'prefs');
   dom.imgViewGroup.classList.toggle('hidden', mode !== 'images');
   // Palette selector is not useful in text or palette or music/sfx/cinematic/data/scripts/sprite modes
   dom.palGroup.classList.toggle('hidden', mode === 'regions' || mode === 'text' || mode === 'palette' || mode === 'music' || mode === 'sfx' || mode === 'cinematic' || mode === 'data' || mode === 'scripts' || mode === 'sprite' || mode === 'prefs');
@@ -509,6 +515,8 @@ async function activateMode(mode) {
     await ensureGffList(mode);
     populateModeGffSelect(mode);
   }
+  // The map view's region list replaces the file picker, so open a region straight away.
+  if (mode === 'map' && !state.gffByMode.map) state.gffByMode.map = state.gffListByMode.map[0] || null;
 
   const gff = state.gffByMode[mode];
   if (gff) {
