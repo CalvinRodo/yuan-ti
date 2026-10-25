@@ -16,6 +16,8 @@ SRC_DIR  = os.path.dirname(os.path.abspath(__file__))
 BASE_DIR = os.path.dirname(SRC_DIR)
 WEB_DIR  = os.path.join(SRC_DIR, 'web')
 DATA_DIR = os.path.join(SRC_DIR, 'data')
+MAP_ENVIRONMENTS_PATH = os.path.join(BASE_DIR, 'engine', 'game', 'data', 'map_environments.json')
+MAP_NAMES_PATH = os.path.join(SRC_DIR, 'json', 'map_names.json')
 
 
 def _load_toml(filename: str) -> dict:

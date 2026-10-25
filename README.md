@@ -22,6 +22,49 @@ The repository also holds the tools the engine grew out of:
 
 The tools also read *Dark Sun: Wake of the Ravager*, and partly *Al-Qadim: The Genie's Curse*.
 
+### Region Node Map
+
+Run `make serve` and choose **Regions** in the Python viewer to explore the
+connections between maps. Arrows indicate possible party travel; select a node
+to inspect incoming/outgoing connections and the script addresses behind them,
+or open its rendered map. Scroll to zoom, drag the background to pan, and use
+**Reset view** to see the whole graph.
+The grid is centered on DS1's starting arena (region 42, `RGN2A.GFF`), with
+connected regions placed outward from it. Connections run only horizontally
+and vertically around nodes; two arrowheads indicate two-way travel.
+Each node shows a server-rendered miniature of its map, with its name and
+filename below. Previews preserve the whole map's aspect ratio and are cached
+as small PNGs; the graph does not download full-size maps for its icons.
+`/api/gff/<filename>/map-render?game=<game_id>&thumbnail=1` returns a preview
+fitting within 192 x 112 pixels. Preview failures are shown on the node.
+Select a region, enter a **Map name**, then choose **Save name**. Names appear
+on nodes and in connection lists; GFF filenames remain visible. Clear the field
+and save to restore the default region label. Names persist per game in
+[`src/json/map_names.json`](src/json/map_names.json), without changing game files.
+`GET` / `POST /api/gff/<filename>/map-name?game=<game_id>` reads/saves
+`{"name":"Draj Arena"}`.
+
+`GET /api/region-connections?game=dark_sun` (or `dark_sun_2`) supplies the graph.
+It traces each region's `MAS` startup script through calls and registered
+triggers, collecting party `TELEPORT` destinations. This is static analysis:
+conditional routes are included, not guaranteed to be open, and dynamic
+destinations or decoding gaps are reported under **Static analysis notes**.
+Positions express connectivity, not geographic coordinates. Maps without
+connections remain visible; destinations without installed maps are dashed.
+Al-Qadim's LIB-based maps are not supported.
+DS2 script decoding is currently incomplete, so its graph is partial.
+
+Map PNGs are rendered on the server and saved automatically under
+`precomputed/<game>/maps/rendered/`, including custom palettes. Repeat requests
+reuse the PNG, and browsers revalidate it instead of forcing a fresh download.
+Changed GFF files or renderer sources invalidate the cached render. To prepare
+default map images in advance, use `make precompute-maps`.
+Connection analysis is cached per game in memory and under
+`precomputed/<game>/maps/connections/`; node positions and cardinal routes are
+reused in the browser until connectivity changes.
+Map names are read fresh, so editing names does not repeat script analysis
+or graph routing. Rendered PNGs and connection analysis survive server restarts.
+
 ## Screenshots
 
 | | |

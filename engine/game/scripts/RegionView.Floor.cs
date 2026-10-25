@@ -1,3 +1,4 @@
+using System.Text.Json;
 using DarkSun.Game.Combat;
 using DarkSun.Game.Movement;
 using DarkSun.Game.World;
@@ -8,13 +9,33 @@ namespace DarkSun.Engine;
 /// <summary>The map's floor effects (<see cref="FloorEffects"/>): shadows, dust and the enemies' rings.</summary>
 public partial class RegionView
 {
+    private bool _indoors;
+
+    private void LoadMapEnvironment(string file)
+    {
+        const string path = "res://data/map_environments.json";
+        using JsonDocument metadata = JsonDocument.Parse(Godot.FileAccess.GetFileAsString(path));
+        _indoors = false;
+        if (metadata.RootElement.TryGetProperty("dark_sun", out JsonElement maps)
+            && maps.TryGetProperty(file.ToUpperInvariant(), out JsonElement value))
+        {
+            string? environment = value.GetString();
+            _indoors = environment switch
+            {
+                "indoors" => true,
+                "outdoors" => false,
+                _ => throw new InvalidDataException($"{path}: invalid environment for {file}: {environment}"),
+            };
+        }
+    }
+
     /// <summary>
     /// The floor's shadows and dust follow the living figures as drawn this
     /// frame, and in a fight the enemies' rings (<see cref="FloorEffects"/>).
     /// </summary>
     private void UpdateFloor(double delta)
     {
-        (_floor.Shadows, _floor.Dust) = (Settings.Shadows, Settings.Dust);
+        (_floor.Shadows, _floor.Dust) = (Settings.Shadows, Settings.Dust && !_indoors);
         _floor.Follow(delta, FloorFigures());
         _floor.ShowRings(EnemyRings());
     }
@@ -115,6 +136,14 @@ public partial class RegionView
         if (!Settings.Dust)
         {
             GD.Print("floor: dust is off in the options; not checked");
+        }
+        else if (_indoors)
+        {
+            if (most > 0)
+            {
+                problems.Add($"{most} puffs of dust on an indoor map");
+            }
+            GD.Print("floor: indoor map; walking must not raise dust");
         }
         else if (most == 0)
         {

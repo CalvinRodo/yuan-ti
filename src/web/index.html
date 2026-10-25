@@ -35,6 +35,10 @@
           <span class="mode-icon">&#8862;</span>
           <span class="mode-label">Map</span>
         </button>
+        <button class="mode-btn" data-mode="regions" title="Region Node Map">
+          <span class="mode-icon">&#9678;</span>
+          <span class="mode-label">Regions</span>
+        </button>
         <button class="mode-btn" data-mode="resources" title="Resource Viewer">
           <span class="mode-icon">&#8801;</span>
           <span class="mode-label">Resources</span>
@@ -178,6 +182,7 @@
             </div>
 
             <!-- Region tile-map viewer -->
+            <div id="region-nodes-view" class="hidden"></div>
             <div id="rmap-view" class="hidden">
               <div id="map-toolbar">
                 <select id="rmap-select" class="hidden"></select>
@@ -191,6 +196,14 @@
                 </div>
                 <div class="map-ctrl-group">
                   <button id="map-reset-pan" class="map-btn map-btn-text" title="Reset pan">&#8962; Reset</button>
+                </div>
+                <div class="map-ctrl-group">
+                  <label for="map-environment" class="control-label">Environment</label>
+                  <select id="map-environment" disabled>
+                    <option value="outdoors">Outdoors</option>
+                    <option value="indoors">Indoors</option>
+                  </select>
+                  <span id="map-environment-status" class="dim" role="status" aria-live="polite"></span>
                 </div>
               </div>
               <div id="map-canvas-wrap">
@@ -335,6 +348,7 @@
   <script src="app.js"></script>
   <script src="view-images.js"></script>
   <script src="view-map.js"></script>
+  <script src="view-regions.js"></script>
   <script src="view-spells.js"></script>
   <script src="view-text.js"></script>
   <script src="view-palette.js"></script>

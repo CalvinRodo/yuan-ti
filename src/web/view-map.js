@@ -27,6 +27,8 @@ const mapState = {
   dirty:       false,
   rmapList:    [],
   rmapNumber:  null,
+  environment: 'outdoors',
+  environmentRequest: 0,
 };
 
 // ---------------------------------------------------------------------------
@@ -37,6 +39,7 @@ function showMapView() {
   dom.content.classList.add('map-active');
   dom.mapView.classList.remove('hidden');
   applyTransform();
+  loadMapEnvironment();
 
   const url = _buildRenderUrl();
   if (url && url !== mapState.loadedUrl) {
@@ -59,6 +62,56 @@ function _buildRenderUrl() {
        + `?game=${state.game}${palParams()}`;
 }
 
+function _mapEnvironmentUrl() {
+  return `/api/gff/${encodeURIComponent(state.currentGff)}/map-environment?game=${encodeURIComponent(state.game)}`;
+}
+
+async function loadMapEnvironment() {
+  const id = ++mapState.environmentRequest;
+  dom.mapEnvironment.disabled = true;
+  dom.mapEnvironmentStatus.textContent = 'Loading...';
+  try {
+    const res = await fetch(_mapEnvironmentUrl(), { cache: 'no-store' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    if (id !== mapState.environmentRequest) return;
+    mapState.environment = data.environment;
+    dom.mapEnvironment.value = data.environment;
+    dom.mapEnvironment.disabled = false;
+    dom.mapEnvironmentStatus.textContent = data.configured ? 'Saved' : 'Default: outdoors';
+  } catch (err) {
+    if (id !== mapState.environmentRequest) return;
+    dom.mapEnvironmentStatus.textContent = `Unable to load environment: ${err.message}`;
+    console.error('Failed to load map environment:', err);
+  }
+}
+
+async function saveMapEnvironment() {
+  const id = ++mapState.environmentRequest;
+  const environment = dom.mapEnvironment.value;
+  dom.mapEnvironment.disabled = true;
+  dom.mapEnvironmentStatus.textContent = 'Saving...';
+  try {
+    const res = await fetch(_mapEnvironmentUrl(), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ environment }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    if (id !== mapState.environmentRequest) return;
+    mapState.environment = data.environment;
+    dom.mapEnvironmentStatus.textContent = 'Saved';
+  } catch (err) {
+    if (id !== mapState.environmentRequest) return;
+    dom.mapEnvironment.value = mapState.environment;
+    dom.mapEnvironmentStatus.textContent = `Unable to save environment: ${err.message}`;
+    console.error('Failed to save map environment:', err);
+  } finally {
+    if (id === mapState.environmentRequest) dom.mapEnvironment.disabled = false;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Load rendered map image from server
 // ---------------------------------------------------------------------------
@@ -68,11 +121,8 @@ async function loadMapRender(url) {
   dom.mapRenderImg.style.display = 'none';
   mapState.loadedUrl = null;
 
-  // Append a cache-bust so palette changes always reload
-  const fetchUrl = url + `&_v=${Date.now()}`;
-
   try {
-    const res = await fetch(fetchUrl);
+    const res = await fetch(url, { cache: 'no-cache' });
     if (!res.ok) {
       console.error(`map-render failed: HTTP ${res.status}`);
       return;
@@ -160,6 +210,8 @@ function updateZoomLabel() {
 // ---------------------------------------------------------------------------
 
 function bindMapEvents() {
+  dom.mapEnvironment.addEventListener('change', saveMapEnvironment);
+
   dom.mapZoomIn.addEventListener('click', () => {
     const cx = dom.mapCanvasWrap.clientWidth  / 2;
     const cy = dom.mapCanvasWrap.clientHeight / 2;
@@ -236,5 +288,3 @@ function bindMapEvents() {
     mapState.drag.active = false;
   });
 }
-
-

@@ -46,6 +46,43 @@ body            { font-family: var(--font); background: var(--bg); color: var(--
 .hidden         { display: none !important; }
 .dim            { color: var(--text-dim); }
 
+#region-nodes-view { padding: 14px; height: 100%; overflow: auto; }
+.region-graph-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 8px; }
+.region-graph-toolbar button, .region-graph-details button {
+  background: var(--surface3); color: var(--text); border: 1px solid var(--border2);
+  border-radius: var(--radius); padding: 4px 9px; cursor: pointer;
+}
+.region-graph-details a { color: var(--primary-lt); }
+.region-graph-body { display: flex; gap: 14px; margin-top: 10px; min-height: 480px; }
+.region-graph { flex: 1; min-width: 0; height: 65vh; background: var(--surface); border: 1px solid var(--border); touch-action: none; }
+.region-graph-details { width: 260px; flex-shrink: 0; max-height: 65vh; overflow: auto; }
+.region-graph-details h4 { margin-top: 16px; }
+.region-name-form { margin-top: 12px; }
+.region-name-form label, .region-name-form input, .region-name-form [role="status"] { display: block; }
+.region-name-form input {
+  width: 100%; padding: 6px; background: var(--surface); color: var(--text);
+  border: 1px solid var(--border2); border-radius: var(--radius);
+}
+.region-graph-details button { display: block; margin: 8px 0; }
+.region-graph-details ul, .region-graph-warnings ul { padding-left: 20px; font-size: 12px; overflow-wrap: anywhere; }
+.region-graph-warnings { margin-top: 12px; }
+.region-edge { stroke: var(--border2); stroke-width: 1.5; fill: none; }
+.region-edge.selected { stroke: var(--primary-lt); stroke-width: 2.5; }
+.region-node { cursor: pointer; }
+.region-node rect { fill: var(--surface3); stroke: var(--border2); stroke-width: 2; }
+.region-node.starting rect { fill: #47371e; stroke: var(--primary); stroke-width: 3; }
+.region-node.selected rect, .region-node:focus rect, .region-node:hover rect { stroke: var(--primary-lt); }
+.region-node.missing rect { stroke-dasharray: 5 3; }
+.region-node text { fill: var(--text); font-size: 13px; pointer-events: none; }
+.region-node .region-file { fill: var(--text-dim); font-size: 11px; }
+.region-node .region-preview-status { fill: var(--text-dim); font-size: 10px; }
+.region-preview { pointer-events: none; }
+@media (max-width: 800px) {
+  .region-graph-body { flex-direction: column; }
+  .region-graph { flex: none; width: 100%; height: 55vh; }
+  .region-graph-details { width: 100%; max-height: none; }
+}
+
 /* ================================================================
    HEADER
    ================================================================ */
