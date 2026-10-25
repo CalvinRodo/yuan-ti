@@ -189,7 +189,8 @@ goes straight back to the start). Each code has a name in `GplRequests`
 the host dispatches by name, and the script log (`REQUEST(SET_DOOR=2, …)`)
 and the debugger show it. F2 shows the script log, F6 the script debugger (see Mods).
 Items: party members, creatures and containers carry items that scripts give, take, drop and search
-for; Get picks an item up; a script's
+for; Get picks an item up; Open shows a container's contents in its own window, and so does Use
+on a chest or other container it swaps to its open picture (DSUN.EXE's Use only swaps the picture); a script's
 SHOP opens a store (below) and waits for it to close; the party's money
 is `gname[10]`. AWARD gives experience to the party's characters, DAMAGE and PHYS_DAMAGE hurt and kill,
 REQUEST 1 and 4 rest the party. Party items and hit points are saved; regions remember what their

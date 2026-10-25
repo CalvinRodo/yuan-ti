@@ -2042,8 +2042,31 @@ public partial class RegionView : Node2D
             AddScriptLine($"    {message}");
             _message.Show(message); // 6BB8's door messages go to the message box (5F6D:05DE)
         }
+        ShowOpenedContainer(obj, actor, use);
         _overlay.QueueRedraw();
         return true;
+    }
+
+    /// <summary>
+    /// A container used open (a chest's second picture) shows what it holds, as
+    /// Open does; used shut, its window goes. DSUN.EXE's USE only swaps the picture
+    /// (<c>6BB8:0B56</c>), and its verb window has no button for a usable
+    /// container's contents.
+    /// </summary>
+    private void ShowOpenedContainer(WorldObject obj, int actor, DoorUse use)
+    {
+        if (!use.Toggled || obj.IsDoor || !_world.IsContainer(obj) || Session.Scripts.IsSuspended)
+        {
+            return;
+        }
+        if (obj.SecondState && _world[actor] is { } opener)
+        {
+            _containerWindow.Open(obj, opener, _palette, _menuAt);
+        }
+        else if (_containerWindow.Container == obj)
+        {
+            _containerWindow.Close();
+        }
     }
 
     private static string Describe(WorldObject obj) =>
@@ -2748,6 +2771,13 @@ public partial class RegionView : Node2D
             Expect(_itemWindow.Visible && _itemWindow.Item?.Rdff == PlusThreeArrows && _containerWindow.Visible, "right-clicking the arrows shows them in the item window");
             _itemWindow.Close();
             _containerWindow.Close();
+            // Used, the chest swaps to its open picture and shows what it holds; used again, it shuts.
+            Expect(VerbsOf(chest).Contains(Verb.Use), "the chest offers Use");
+            Act(chest, 0, Verb.Use);
+            Expect(chest.SecondState && _containerWindow.Visible && _containerWindow.Container == chest && _containerWindow.ItemAt(0)?.Rdff == PlusThreeArrows,
+                "using the chest opens it and shows the arrows left in it");
+            Act(chest, 0, Verb.Use);
+            Expect(!chest.SecondState && !_containerWindow.Visible, "using it again shuts it and its window");
             Act(coffin, 0, Verb.Open);
             int money = Session.ScriptHost.Money;
             _containerWindow.Click(1);
