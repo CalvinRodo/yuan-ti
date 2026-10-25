@@ -5,8 +5,7 @@ const regionGeometryCache = new Map();
 const REGION_DIRECTIONS = { north: [0, -1], east: [1, 0], south: [0, 1], west: [-1, 0] };
 const OPPOSITE_SIDE = { north: 'south', south: 'north', east: 'west', west: 'east' };
 
-function regionLinks(nodes, edges) {
-  const byId = new Map(nodes.map(node => [node.id, node]));
+function regionLinks(edges) {
   const pairs = new Map();
   edges.forEach(edge => {
     const key = [edge.source, edge.target].sort((a, b) => a - b).join(',');
@@ -19,14 +18,7 @@ function regionLinks(nodes, edges) {
     const primary = candidates[0];
     let sourceExit = null, targetExit = null;
     if (primary) {
-      const destination = byId.get(primary.target);
-      const arrival = primary.transitions.find(t => t.trigger
-        && t.trigger.width * t.trigger.height === primary.exit.area) || primary.transitions[0];
-      const entry = {
-        side: OPPOSITE_SIDE[primary.exit.side],
-        x: arrival.x === null ? 0.5 : arrival.x / Math.max(1, (destination.width || 128) - 1),
-        y: arrival.y === null ? 0.5 : arrival.y / Math.max(1, (destination.height || 98) - 1),
-      };
+      const entry = { side: OPPOSITE_SIDE[primary.exit.side] };
       [sourceExit, targetExit] = primary === edge ? [primary.exit, entry] : [entry, primary.exit];
     }
     return { edge, reverse: Boolean(back), sourceExit, targetExit };
@@ -62,7 +54,7 @@ function layoutRegionNodes(graph, startingRegion) {
     neighbours.get(target).add(source);
   });
   const directions = [[1, 0], [0, 1], [-1, 0], [0, -1]];
-  const geographic = regionLinks(nodes, graph.edges).filter(link => link.sourceExit);
+  const geographic = regionLinks(graph.edges).filter(link => link.sourceExit);
   const placed = new Map();
   const occupied = new Set();
   const frontier = new Map([['0,0', { x: 0, y: 0 }]]);
@@ -172,60 +164,113 @@ function routeRegionLinks(nodes, edges) {
   const maxX = Math.max(8, ...nodes.map(node => Math.abs(node.x / 25))) + 6;
   const maxY = Math.max(8, ...nodes.map(node => Math.abs(node.y / 15))) + 6;
   const directions = [[1, 0], [0, 1], [-1, 0], [0, -1]];
+  // Reusing another link's cells is discouraged; one extra bend costs more than any path.
+  const usedCost = 200;
+  const bendCost = (maxX * 2 + 1) * (maxY * 2 + 1) * (25 + usedCost);
   const used = new Set();
-  return regionLinks(nodes, edges).map(link => {
+  // Links sharing a side spread out from its middle: 0, +1, -1, +2, -2 grid steps.
+  const sideUse = new Map();
+  const spread = [0, 1, -1, 2, -2];
+  // Short geographic links claim edge middles first so they stay straight.
+  const span = link => {
+    const a = byId.get(link.edge.source), b = byId.get(link.edge.target);
+    return Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
+  };
+  const links = regionLinks(edges).sort((p, q) =>
+    Number(Boolean(q.sourceExit)) - Number(Boolean(p.sourceExit)) || span(p) - span(q));
+  return links.map(link => {
     const a = byId.get(link.edge.source), b = byId.get(link.edge.target);
     const ports = (node, exit) => (exit ? [exit.side] : Object.keys(REGION_DIRECTIONS)).map(side => {
       const [dx, dy] = REGION_DIRECTIONS[side];
-      const offsetX = exit && !dx ? Math.max(-1, Math.min(1, Math.round((exit.x - 0.5) * 2))) : 0;
-      const offsetY = exit && !dy ? Math.max(-2, Math.min(2, Math.round((exit.y - 0.5) * 4))) : 0;
-      return { side, x: node.x / 25 + dx * 3 + offsetX, y: node.y / 15 + dy * 4 + offsetY };
+      const offset = spread[Math.min(sideUse.get(`${node.id},${side}`) || 0, spread.length - 1)];
+      return {
+        side, x: node.x / 25 + dx * 3 + (dx ? 0 : offset), y: node.y / 15 + dy * 4 + (dy ? 0 : offset),
+        direction: directions.findIndex(([x, y]) => x === dx && y === dy),
+      };
     });
     const sourcePorts = ports(a, link.sourceExit), targetPorts = ports(b, link.targetExit);
-    const targets = new Set(targetPorts.map(p => key(p.x, p.y)));
-    const previous = new Map();
-    const queue = sourcePorts;
-    queue.forEach(p => previous.set(key(p.x, p.y), null));
+    const costs = new Map(), queue = [];
+    const stateKey = p => `${p.x},${p.y},${p.direction}`;
+    const compare = (p, q) => p.priority - q.priority || q.cost - p.cost;
+    const enqueue = point => {
+      point.priority = point.cost + Math.min(...targetPorts.map(p => {
+        const arrival = (p.direction + 2) % 4, [dx, dy] = directions[arrival];
+        const ahead = dx ? p.y === point.y && (p.x - point.x) * dx >= 0 : p.x === point.x && (p.y - point.y) * dy >= 0;
+        // Fewest bends still needed: none straight ahead, one if perpendicular, else two.
+        const bends = point.direction === arrival ? (ahead ? 0 : 2) : point.direction % 2 === arrival % 2 ? 2 : 1;
+        return bends * bendCost + Math.abs(p.x - point.x) * 25 + Math.abs(p.y - point.y) * 15;
+      }));
+      queue.push(point);
+      let index = queue.length - 1;
+      while (index > 0) {
+        const parent = Math.floor((index - 1) / 2);
+        if (compare(queue[parent], point) <= 0) break;
+        queue[index] = queue[parent];
+        index = parent;
+      }
+      queue[index] = point;
+    };
+    const dequeue = () => {
+      const first = queue[0], last = queue.pop();
+      if (queue.length) {
+        let index = 0;
+        while (index * 2 + 1 < queue.length) {
+          let child = index * 2 + 1;
+          if (child + 1 < queue.length && compare(queue[child + 1], queue[child]) < 0) child++;
+          if (compare(last, queue[child]) <= 0) break;
+          queue[index] = queue[child];
+          index = child;
+        }
+        queue[index] = last;
+      }
+      return first;
+    };
+    sourcePorts.forEach(port => {
+      costs.set(stateKey(port), 0);
+      enqueue({ ...port, cost: 0, previous: null });
+    });
     let end = null;
-    for (let index = 0; index < queue.length; index++) {
-      const at = queue[index];
-      if (targets.has(key(at.x, at.y))) { end = at; break; }
-      const steps = directions.map(([dx, dy]) => ({ x: at.x + dx, y: at.y + dy }))
-        .sort((p, q) => Number(used.has(key(p.x, p.y))) - Number(used.has(key(q.x, q.y))));
-      steps.forEach(next => {
-        const id = key(next.x, next.y);
-        if (Math.abs(next.x) > maxX || Math.abs(next.y) > maxY || blocked.has(id) || previous.has(id)) return;
-        previous.set(id, at);
-        queue.push(next);
+    while (queue.length) {
+      const at = dequeue();
+      if (at.cost !== costs.get(stateKey(at))) continue;
+      if (targetPorts.some(p => p.x === at.x && p.y === at.y && (p.direction + 2) % 4 === at.direction)) {
+        end = at;
+        break;
+      }
+      directions.forEach(([dx, dy], direction) => {
+        if (direction === (at.direction + 2) % 4) return;
+        const next = { x: at.x + dx, y: at.y + dy, direction };
+        if (Math.abs(next.x) > maxX || Math.abs(next.y) > maxY || blocked.has(key(next.x, next.y))) return;
+        const cost = at.cost + (dx ? 25 : 15) + (direction === at.direction ? 0 : bendCost)
+          + (used.has(key(next.x, next.y)) ? usedCost : 0);
+        const id = stateKey(next);
+        if (cost >= (costs.get(id) ?? Infinity)) return;
+        costs.set(id, cost);
+        enqueue({ ...next, cost, previous: at });
       });
     }
     if (!end) throw new Error(`Unable to route connection ${a.id} -> ${b.id}`);
     const points = [];
-    for (let at = end; at; at = previous.get(key(at.x, at.y))) {
+    for (let at = end; at; at = at.previous) {
       used.add(key(at.x, at.y));
       points.push({ x: at.x * 25, y: at.y * 15 });
     }
     points.reverse();
-    const attachment = (node, point, ports, exit, gap) => {
+    const boundary = (node, point, ports, gap) => {
       const port = ports.find(p => p.x * 25 === point.x && p.y * 15 === point.y);
+      const side = `${node.id},${port.side}`;
+      sideUse.set(side, (sideUse.get(side) || 0) + 1);
       const [dx, dy] = REGION_DIRECTIONS[port.side];
-      const mapWidth = node.width || 128, mapHeight = node.height || 98;
-      const scale = Math.min(96 / mapWidth, 56 / mapHeight);
-      const offsetX = exit ? Math.max(-44, Math.min(44, (exit.x - 0.5) * mapWidth * scale)) : 0;
-      const offsetY = exit ? Math.max(-40, Math.min(8, -16 + (exit.y - 0.5) * mapHeight * scale)) : 0;
-      const boundary = {
-        x: dx ? node.x + dx * (52 + gap) : node.x + offsetX,
-        y: dy ? node.y + dy * (48 + gap) : node.y + offsetY,
+      return {
+        x: dx ? node.x + dx * (52 + gap) : point.x,
+        y: dy ? node.y + dy * (48 + gap) : point.y,
       };
-      return [boundary, { x: dx ? point.x : boundary.x, y: dy ? point.y : boundary.y }];
     };
-    points.unshift(...attachment(a, points[0], sourcePorts, link.sourceExit, link.reverse ? 5 : 1));
-    points.push(...attachment(b, points[points.length - 1], targetPorts, link.targetExit, 5).reverse());
-    const distinct = points.filter((p, index) => index === 0
-      || p.x !== points[index - 1].x || p.y !== points[index - 1].y);
-    const corners = distinct.filter((p, index) => {
-      if (index === 0 || index === distinct.length - 1) return true;
-      const before = distinct[index - 1], after = distinct[index + 1];
+    points.unshift(boundary(a, points[0], sourcePorts, link.reverse ? 5 : 1));
+    points.push(boundary(b, points[points.length - 1], targetPorts, 5));
+    const corners = points.filter((p, index) => {
+      if (index === 0 || index === points.length - 1) return true;
+      const before = points[index - 1], after = points[index + 1];
       return !((before.x === p.x && p.x === after.x) || (before.y === p.y && p.y === after.y));
     });
     return { ...link, points: corners };
