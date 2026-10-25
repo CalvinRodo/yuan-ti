@@ -391,15 +391,14 @@ public partial class CharacterScreen : RetroScreen
         {
             int slot = i;
             TextureButton box = window.Button(FirstBox + i)!;
+            // The member's standing figure at its own size, as Create Characters draws it (PartyView).
             var picture = new TextureRect
             {
-                Position = new Vector2(1, 1),
-                Size = box.Size - new Vector2(2, 2),
                 ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
-                StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
-                ClipContents = true,
+                StretchMode = TextureRect.StretchModeEnum.Keep,
                 MouseFilter = MouseFilterEnum.Ignore,
             };
+            box.ClipContents = true;
             box.AddChild(picture);
             box.GuiInput += e =>
             {
@@ -633,7 +632,14 @@ public partial class CharacterScreen : RetroScreen
         for (int i = 0; i < GameWorld.PartySize; i++)
         {
             bool there = _world[i] is { Kind: ObjectKind.Party };
-            page.Pictures[i].Texture = there && CharacterOf(i) is { } c ? Portrait(c) : null;
+            TextureRect picture = page.Pictures[i];
+            picture.Texture = there && CharacterOf(i) is { } c ? Portrait(c) : null;
+            if (picture.Texture is { } figure && picture.GetParent() is Control frame)
+            {
+                // Centred across the box, its top a pixel down; a tall figure (a half-giant) is cut at the box's foot.
+                picture.Size = figure.GetSize();
+                picture.Position = new Vector2(MathF.Floor((frame.Size.X - figure.GetWidth()) / 2), 1);
+            }
             if (i < page.Hp.Count)
             {
                 // The active member in palette colour 47, the others in 52 (DS:326E).
