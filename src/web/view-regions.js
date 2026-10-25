@@ -2,11 +2,41 @@
 
 let regionGraphRequest = 0;
 const regionGeometryCache = new Map();
+const REGION_DIRECTIONS = { north: [0, -1], east: [1, 0], south: [0, 1], west: [-1, 0] };
+const OPPOSITE_SIDE = { north: 'south', south: 'north', east: 'west', west: 'east' };
+
+function regionLinks(nodes, edges) {
+  const byId = new Map(nodes.map(node => [node.id, node]));
+  const pairs = new Map();
+  edges.forEach(edge => {
+    const key = [edge.source, edge.target].sort((a, b) => a - b).join(',');
+    if (pairs.has(key)) pairs.get(key).back = edge;
+    else pairs.set(key, { edge });
+  });
+  return [...pairs.values()].map(({ edge, back }) => {
+    const candidates = [edge, back].filter(candidate => candidate?.geographic && candidate.exit);
+    candidates.sort((a, b) => b.exit.area - a.exit.area);
+    const primary = candidates[0];
+    let sourceExit = null, targetExit = null;
+    if (primary) {
+      const destination = byId.get(primary.target);
+      const arrival = primary.transitions.find(t => t.trigger
+        && t.trigger.width * t.trigger.height === primary.exit.area) || primary.transitions[0];
+      const entry = {
+        side: OPPOSITE_SIDE[primary.exit.side],
+        x: arrival.x === null ? 0.5 : arrival.x / Math.max(1, (destination.width || 128) - 1),
+        y: arrival.y === null ? 0.5 : arrival.y / Math.max(1, (destination.height || 98) - 1),
+      };
+      [sourceExit, targetExit] = primary === edge ? [primary.exit, entry] : [entry, primary.exit];
+    }
+    return { edge, reverse: Boolean(back), sourceExit, targetExit };
+  });
+}
 
 function regionGraphGeometry(graph, game) {
   const key = JSON.stringify([
-    graph.nodes.map(node => node.id),
-    graph.edges.map(edge => [edge.source, edge.target]),
+    graph.nodes.map(node => [node.id, node.width, node.height, node.test_region]),
+    graph.edges.map(edge => [edge.source, edge.target, edge.geographic, edge.exit, edge.transitions]),
   ]);
   const cached = regionGeometryCache.get(game);
   if (cached?.key === key) {
@@ -32,21 +62,46 @@ function layoutRegionNodes(graph, startingRegion) {
     neighbours.get(target).add(source);
   });
   const directions = [[1, 0], [0, 1], [-1, 0], [0, -1]];
+  const geographic = regionLinks(nodes, graph.edges).filter(link => link.sourceExit);
   const placed = new Map();
   const occupied = new Set();
   const frontier = new Map([['0,0', { x: 0, y: 0 }]]);
   const queue = start ? [start.id] : [];
   const queued = new Set(queue);
+  const constraintsFor = id => geographic.flatMap(link => {
+    if (link.edge.source === id && placed.has(link.edge.target)) {
+      return [{ other: placed.get(link.edge.target), side: link.targetExit.side }];
+    }
+    if (link.edge.target === id && placed.has(link.edge.source)) {
+      return [{ other: placed.get(link.edge.source), side: link.sourceExit.side }];
+    }
+    return [];
+  });
+  const scoreFor = (id, cell) => constraintsFor(id).reduce((sum, { other, side }) => {
+    const [dx, dy] = REGION_DIRECTIONS[side];
+    const along = (cell.x - other.x) * dx + (cell.y - other.y) * dy;
+    const across = Math.abs((cell.x - other.x) * dy - (cell.y - other.y) * dx);
+    return sum + (along <= 0 ? 1000 + Math.abs(along) * 100 : (along - 1) * 5) + across * 30;
+  }, 0) + [...neighbours.get(id)].filter(other => placed.has(other)).reduce((sum, other) => {
+    const point = placed.get(other);
+    return sum + Math.abs(cell.x - point.x) + Math.abs(cell.y - point.y);
+  }, 0) + (Math.abs(cell.x) + Math.abs(cell.y)) * 0.2;
   while (placed.size < nodes.length) {
     if (!queue.length) queue.push(nodes.find(node => !placed.has(node.id)).id);
     const id = queue.shift();
     queued.add(id);
-    const adjacent = [...neighbours.get(id)].filter(other => placed.has(other)).map(other => placed.get(other));
+    const constraints = constraintsFor(id);
     const candidates = [...frontier.values()];
-    const score = cell => adjacent.reduce((sum, other) =>
-      sum + Math.abs(cell.x - other.x) + Math.abs(cell.y - other.y), 0)
-      + (Math.abs(cell.x) + Math.abs(cell.y)) * 0.2;
-    candidates.sort((a, b) => score(a) - score(b));
+    if (constraints.length) {
+      constraints.forEach(({ other, side }) => {
+        const [dx, dy] = REGION_DIRECTIONS[side];
+        for (let distance = 1; distance <= nodes.length; distance++) {
+          const cell = { x: other.x + dx * distance, y: other.y + dy * distance };
+          if (!occupied.has(`${cell.x},${cell.y}`)) { candidates.push(cell); break; }
+        }
+      });
+    }
+    candidates.sort((a, b) => scoreFor(id, a) - scoreFor(id, b));
     const cell = candidates[0];
     placed.set(id, cell);
     occupied.add(`${cell.x},${cell.y}`);
@@ -56,17 +111,51 @@ function layoutRegionNodes(graph, startingRegion) {
       const key = `${next.x},${next.y}`;
       if (!occupied.has(key)) frontier.set(key, next);
     });
-    [...neighbours.get(id)].sort((a, b) => a - b).forEach(other => {
+    const isGeographic = other => geographic.some(link =>
+      (link.edge.source === id && link.edge.target === other) || (link.edge.target === id && link.edge.source === other));
+    [...neighbours.get(id)].sort((a, b) => Number(isGeographic(b)) - Number(isGeographic(a)) || a - b).forEach(other => {
       if (!queued.has(other)) {
         queued.add(other);
         queue.push(other);
       }
     });
   }
+  // Revisit early placements once all of their neighbours are known.
+  for (let pass = 0; pass < 8; pass++) {
+    let moved = false;
+    nodes.filter(node => node !== start && !node.test_region).forEach(node => {
+      const current = placed.get(node.id);
+      const candidates = [current];
+      for (const other of placed.values()) {
+        directions.forEach(([dx, dy]) => {
+          for (let distance = 1; distance <= 3; distance++) {
+            const cell = { x: other.x + dx * distance, y: other.y + dy * distance };
+            if (!occupied.has(`${cell.x},${cell.y}`)) candidates.push(cell);
+          }
+        });
+      }
+      let best = current, bestScore = scoreFor(node.id, current);
+      candidates.forEach(cell => {
+        const score = scoreFor(node.id, cell);
+        if (score < bestScore) { best = cell; bestScore = score; }
+      });
+      if (best !== current) {
+        occupied.delete(`${current.x},${current.y}`);
+        occupied.add(`${best.x},${best.y}`);
+        placed.set(node.id, best);
+        moved = true;
+      }
+    });
+    if (!moved) break;
+  }
   nodes.forEach(node => {
     const cell = placed.get(node.id);
     node.x = cell.x * 200;
     node.y = cell.y * 180;
+  });
+  nodes.filter(node => node.test_region).forEach((node, index) => {
+    node.x = Math.max(0, ...nodes.filter(other => !other.test_region).map(other => other.x)) + 200 * (index + 1);
+    node.y = 0;
   });
   return { nodes, start };
 }
@@ -84,20 +173,18 @@ function routeRegionLinks(nodes, edges) {
   const maxY = Math.max(8, ...nodes.map(node => Math.abs(node.y / 15))) + 6;
   const directions = [[1, 0], [0, 1], [-1, 0], [0, -1]];
   const used = new Set();
-  const pairs = new Map();
-  edges.forEach(edge => {
-    const pair = [edge.source, edge.target].sort((a, b) => a - b).join(',');
-    if (pairs.has(pair)) pairs.get(pair).reverse = true;
-    else pairs.set(pair, { edge, reverse: false });
-  });
-  return [...pairs.values()].map(link => {
+  return regionLinks(nodes, edges).map(link => {
     const a = byId.get(link.edge.source), b = byId.get(link.edge.target);
-    const ports = node => directions.map(([dx, dy]) => ({
-      x: node.x / 25 + dx * 3, y: node.y / 15 + dy * 4,
-    }));
-    const targets = new Set(ports(b).map(p => key(p.x, p.y)));
+    const ports = (node, exit) => (exit ? [exit.side] : Object.keys(REGION_DIRECTIONS)).map(side => {
+      const [dx, dy] = REGION_DIRECTIONS[side];
+      const offsetX = exit && !dx ? Math.max(-1, Math.min(1, Math.round((exit.x - 0.5) * 2))) : 0;
+      const offsetY = exit && !dy ? Math.max(-2, Math.min(2, Math.round((exit.y - 0.5) * 4))) : 0;
+      return { side, x: node.x / 25 + dx * 3 + offsetX, y: node.y / 15 + dy * 4 + offsetY };
+    });
+    const sourcePorts = ports(a, link.sourceExit), targetPorts = ports(b, link.targetExit);
+    const targets = new Set(targetPorts.map(p => key(p.x, p.y)));
     const previous = new Map();
-    const queue = ports(a);
+    const queue = sourcePorts;
     queue.forEach(p => previous.set(key(p.x, p.y), null));
     let end = null;
     for (let index = 0; index < queue.length; index++) {
@@ -119,15 +206,26 @@ function routeRegionLinks(nodes, edges) {
       points.push({ x: at.x * 25, y: at.y * 15 });
     }
     points.reverse();
-    const boundary = (node, port, gap) => ({
-      x: node.x + Math.sign(port.x - node.x) * (52 + gap),
-      y: node.y + Math.sign(port.y - node.y) * (48 + gap),
-    });
-    points.unshift(boundary(a, points[0], link.reverse ? 5 : 1));
-    points.push(boundary(b, points[points.length - 1], 5));
-    const corners = points.filter((p, index) => {
-      if (index === 0 || index === points.length - 1) return true;
-      const before = points[index - 1], after = points[index + 1];
+    const attachment = (node, point, ports, exit, gap) => {
+      const port = ports.find(p => p.x * 25 === point.x && p.y * 15 === point.y);
+      const [dx, dy] = REGION_DIRECTIONS[port.side];
+      const mapWidth = node.width || 128, mapHeight = node.height || 98;
+      const scale = Math.min(96 / mapWidth, 56 / mapHeight);
+      const offsetX = exit ? Math.max(-44, Math.min(44, (exit.x - 0.5) * mapWidth * scale)) : 0;
+      const offsetY = exit ? Math.max(-40, Math.min(8, -16 + (exit.y - 0.5) * mapHeight * scale)) : 0;
+      const boundary = {
+        x: dx ? node.x + dx * (52 + gap) : node.x + offsetX,
+        y: dy ? node.y + dy * (48 + gap) : node.y + offsetY,
+      };
+      return [boundary, { x: dx ? point.x : boundary.x, y: dy ? point.y : boundary.y }];
+    };
+    points.unshift(...attachment(a, points[0], sourcePorts, link.sourceExit, link.reverse ? 5 : 1));
+    points.push(...attachment(b, points[points.length - 1], targetPorts, link.targetExit, 5).reverse());
+    const distinct = points.filter((p, index) => index === 0
+      || p.x !== points[index - 1].x || p.y !== points[index - 1].y);
+    const corners = distinct.filter((p, index) => {
+      if (index === 0 || index === distinct.length - 1) return true;
+      const before = distinct[index - 1], after = distinct[index + 1];
       return !((before.x === p.x && p.x === after.x) || (before.y === p.y && p.y === after.y));
     });
     return { ...link, points: corners };
@@ -163,7 +261,9 @@ function buildRegionGraph(host, graph) {
       <button type="button" data-zoom="out" aria-label="Zoom out">-</button>
       <button type="button" data-zoom="reset">Reset view</button>
     </div>
-    <p class="dim">Arrows show possible party travel, not geographic positions. Two arrowheads mean travel in both directions.
+    <p class="dim">Exit triggers guide map placement and arrow attachment where possible. Two arrowheads mean travel in both directions.
+      Dashed connections are non-geographic travel.
+      ${graph.nodes.some(node => node.test_region) ? 'Region 255 is an isolated test map.' : ''}
       The starting region is centered. Select a region for its connections.
       Drag the background to pan; scroll to zoom.
       ${graph.warnings.length ? 'Partial graph: see the static analysis notes below.' : ''}</p>
@@ -204,6 +304,7 @@ function buildRegionGraph(host, graph) {
     const path = element('path', {
       d: points.map((point, index) => `${index ? 'L' : 'M'} ${point.x} ${point.y}`).join(' '),
       class: 'region-edge', 'marker-end': 'url(#region-arrow)',
+      ...(edge.geographic === false ? { 'stroke-dasharray': '6 4' } : {}),
       ...(reverse ? { 'marker-start': 'url(#region-arrow)' } : {}),
     });
     element('title', {}, path).textContent = `${edge.source} ${reverse ? '<->' : '->'} ${edge.target}`;
@@ -240,6 +341,11 @@ function buildRegionGraph(host, graph) {
     const heading = document.createElement('h3');
     heading.textContent = `${node.name ? `${node.name} - ` : ''}Region ${node.id} (0x${node.id.toString(16).toUpperCase()})`;
     details.appendChild(heading);
+    if (node.test_region) {
+      const note = document.createElement('p');
+      note.textContent = 'Test region - not connected to the game world.';
+      details.appendChild(note);
+    }
     if (node.file) {
       details.appendChild(mapLink(node, `Open ${node.file}`));
       const form = document.createElement('form');
@@ -312,7 +418,9 @@ function buildRegionGraph(host, graph) {
         edge.transitions.forEach(transition => {
           const item = document.createElement('li');
           item.textContent = `${transition.script} ${transition.number} @${transition.address.toString(16).toUpperCase().padStart(4, '0')}`
-            + ` -> (${transition.x ?? '?'}, ${transition.y ?? '?'})`;
+            + (transition.trigger ? ` trigger (${transition.trigger.x}, ${transition.trigger.y}; ${transition.trigger.width} x ${transition.trigger.height})` : '')
+            + ` -> (${transition.x ?? '?'}, ${transition.y ?? '?'})`
+            + (edge.geographic === false ? ' [non-geographic]' : '');
           evidence.appendChild(item);
         });
         details.appendChild(evidence);

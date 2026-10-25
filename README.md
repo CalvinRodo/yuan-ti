@@ -32,6 +32,16 @@ or open its rendered map. Scroll to zoom, drag the background to pan, and use
 The grid is centered on DS1's starting arena (region 42, `RGN2A.GFF`), with
 connected regions placed outward from it. Connections run only horizontally
 and vertically around nodes; two arrowheads indicate two-way travel.
+Move/door trigger coordinates guide relative placement and edge attachment,
+carried through script calls to the party teleport. Broader exit zones take
+priority when several triggers lead to the same map. The destination attaches
+on the opposite edge, with offsets based on the arrival coordinates. Arrow
+offsets follow the map previews' aspect ratio. Placement
+is best-effort when the scripts imply conflicting spatial relationships.
+DS1's Temple Ruins links to Teaquetzl, Wagon Train, Cedrilte and Gedron,
+Teaquetzl–Korbnor, and Korbnor–White Sands are non-geographic: shown dashed
+without constraining placement. These exceptions use region IDs, not editable
+names. Region 255 remains visible separately as an unconnected test map.
 Each node shows a server-rendered miniature of its map, with its name and
 filename below. Previews preserve the whole map's aspect ratio and are cached
 as small PNGs; the graph does not download full-size maps for its icons.
