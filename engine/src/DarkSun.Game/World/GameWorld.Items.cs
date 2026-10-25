@@ -274,12 +274,12 @@ public sealed partial class GameWorld
 
     /// <summary>
     /// Put <paramref name="quantity"/> of <paramref name="item"/> on the map at
-    /// <paramref name="holder"/>'s cell (<c>7372:04E4</c>): a new object of the
-    /// item's <c>OJFF</c>. Null if it can't be made.
+    /// <paramref name="at"/>, or <paramref name="holder"/>'s cell (<c>7372:04E4</c>):
+    /// a new object of the item's <c>OJFF</c>. Null if it can't be made.
     /// </summary>
-    public WorldObject? DropItem(WorldObject holder, Item item, int quantity)
+    public WorldObject? DropItem(WorldObject holder, Item item, int quantity, Cell? at = null)
     {
-        if (Spawn(item.Rdff, holder.Cell) is not { } ground)
+        if (Spawn(item.Rdff, at ?? holder.Cell) is not { } ground)
         {
             return null;
         }

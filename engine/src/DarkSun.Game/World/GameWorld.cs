@@ -887,6 +887,21 @@ public sealed partial class GameWorld
     }
 
     /// <summary>
+    /// Opening a container whose picture has an open state (a chest that USE
+    /// swaps, <see cref="UseObject"/>) shows it open, as using it does; one
+    /// already open stays so. Returns whether it changed.
+    /// </summary>
+    public bool ShowOpen(WorldObject obj)
+    {
+        if (obj.IsDoor || obj.SecondState || obj.Item is not { } item || Items.TypeOf(item) is not { } type || (type.Kind & ItemTypeFlags.Usable) == 0)
+        {
+            return false;
+        }
+        ToggleState(obj);
+        return obj.SecondState;
+    }
+
+    /// <summary>
     /// After using a door and running its use trigger: the message DSUN.EXE
     /// shows if it stayed as it was (<c>6BB8:0B56</c>). Revealing a secret
     /// door clears its secret flag.

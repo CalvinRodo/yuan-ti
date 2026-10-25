@@ -133,11 +133,19 @@ public partial class RegionView : Node2D
 
     private long Now => (long)(_clock * ScmdAnimator.TicksPerSecond);
 
+    /// <summary>Ticks of the time the view has run, held map or not (<see cref="AnimatedObject.OwnClock"/>).</summary>
+    private long RunningNow => (long)(_running * ScmdAnimator.TicksPerSecond);
+
+    private double _running;
+
     /// <summary>
     /// Out of a fight the map runs only under the MOVE pointer (<c>1DF3:29E8</c> counts the clock while
     /// <c>DS:11B8</c> = 1): LOOK, ATTACK and a held item hold everything still while one picks, until a
     /// chosen verb sends the character on its way. Text in the dialogue window holds it too, until read.
     /// </summary>
+    /// <summary>The game menu, the save and load screen or the preferences are up: nothing on the map moves, in a fight or out.</summary>
+    private bool GamePaused => _gameMenu.IsOpen || _saves.IsOpen || _options.Visible;
+
     private bool MapHeld => _cursor != GameMenu.Cursor.Move && _pendingUse is null || _message.IsOpen || _study.IsOpen || _dialogueWindow.Visible;
 
     /// <summary>Make the next opening of the view start a new game (region 42).</summary>
@@ -1157,7 +1165,7 @@ public partial class RegionView : Node2D
         foreach (AnimatedObject animated in Settings.Animations || _checking ? _animated : [])
         {
             (Sprite2D sprite, RegionObject obj, ScmdAnimator animator) = (animated.Sprite, animated.Object, animated.Animator);
-            if (!animator.Update(now))
+            if (!animator.Update(animated.OwnClock ? RunningNow : now))
             {
                 continue;
             }
@@ -1283,10 +1291,15 @@ public partial class RegionView : Node2D
         {
             return; // fading to the next region, or a script's cinematic plays over the map
         }
+        if (GamePaused)
+        {
+            return; // the game menu (or saving, loading, the preferences) stops the game, a fight too
+        }
         if (InCombat || !MapHeld)
         {
             _clock += delta;
         }
+        _running += delta;
         UpdatePointer();
         if (InCombat)
         {
@@ -1431,12 +1444,17 @@ public partial class RegionView : Node2D
         else if (_useWith is not null && _cursor == GameMenu.Cursor.Item && !_dialogueWindow.Visible
             && e is InputEventMouseButton { ButtonIndex: MouseButton.Left, Pressed: true })
         {
-            // Use with…: the held item's pointer picks the second object.
+            // Use with…: the held item's pointer picks the second object; on the bare ground, an item held from a pack is put down there.
             WorldObject first = _useWith;
+            Item? heldItem = _useWithItem;
             SetUseWith(null);
             if (ObjectAt(GetGlobalMousePosition()) is { } second && second != first)
             {
                 StartVerb(second, Verb.UseWith, first);
+            }
+            else if (heldItem is not null)
+            {
+                DropHeld(heldItem, GetGlobalMousePosition());
             }
         }
         else if (e.IsActionPressed(Controls.Back) && _cursor != GameMenu.Cursor.Move)
@@ -1760,6 +1778,32 @@ public partial class RegionView : Node2D
         _useWithItem = item;
     }
 
+    /// <summary>
+    /// Put <paramref name="item"/>, held on the pointer from a member's pack, on the
+    /// ground under map point <paramref name="at"/>; not on a blocked cell or off the map.
+    /// </summary>
+    private void DropHeld(Item item, Vector2 at)
+    {
+        var cell = new Cell((int)Math.Floor(at.X / Region.TileSize), (int)Math.Floor(at.Y / Region.TileSize));
+        if (_world.Party.FirstOrDefault(m => m.Items.Contains(item)) is not { } holder)
+        {
+            return;
+        }
+        string name = ItemText.Name(_world, item);
+        if (_region.IsBlocked(cell.X, cell.Y))
+        {
+            Say($"drop {name}", $"{name} can't be put down there.");
+            return;
+        }
+        item.Slot = Equipment.Pack;
+        if (_world.DropItem(holder, item, Math.Max(1, item.Quantity), cell) is null)
+        {
+            Say($"drop {name}", $"{name} can't be put down there.");
+            return;
+        }
+        AddScriptLine($"> {holder.Name} drops {name} at ({cell.X},{cell.Y})");
+    }
+
     /// <summary>Use with…: wait for the second object (null: stop waiting).</summary>
     private void SetUseWith(WorldObject? first)
     {
@@ -1911,6 +1955,7 @@ public partial class RegionView : Node2D
         {
             // 6527:002C: the container's own window on the map.
             AddScriptLine($"> {opener.Name} opens {Describe(target)}");
+            _world.ShowOpen(target); // a chest shows open while its window is up, as USE leaves it
             _containerWindow.Open(target, opener, _palette, _menuAt);
             return;
         }
@@ -2337,6 +2382,9 @@ public partial class RegionView : Node2D
         {
             ScmdAnimator old = animated.Animator;
             animated.Animator = AnimatorFor(source, animated.Script, start, old.HotX, old.HotY);
+            // A change of state (a chest opening) plays out even while the pointer holds the map: under USE
+            // the window over it shows the chest open, not waiting for the window to go.
+            animated.OwnClock = true;
         }
     }
 
@@ -2786,6 +2834,9 @@ public partial class RegionView : Node2D
             Expect(_containerWindow.Visible && _containerWindow.Container == chest && _containerWindow.GetNodeOrNull("WIND 13501") is not null
                 && _containerWindow.ItemAt(0)?.Rdff == ScaleChestArmor && _containerWindow.ItemAt(1)?.Rdff == PlusThreeArrows,
                 "Open shows the chest's armour and arrows in its window");
+            Expect(chest.SecondState, "Open shows the chest open while its window is up");
+            Expect(_animated.FirstOrDefault(a => a.Object == chest.Source) is not { } opening || opening.OwnClock,
+                "the chest's opening plays while the pointer holds the map");
             int packed = me.Items.Count;
             _containerWindow.Click(0);
             Expect(me.Items.Any(i => i.Rdff == ScaleChestArmor) && me.Items.Count == packed + 1 && _containerWindow.ItemAt(0)?.Rdff == PlusThreeArrows,
@@ -2794,13 +2845,15 @@ public partial class RegionView : Node2D
             Expect(_itemWindow.Visible && _itemWindow.Item?.Rdff == PlusThreeArrows && _containerWindow.Visible, "right-clicking the arrows shows them in the item window");
             _itemWindow.Close();
             _containerWindow.Close();
-            // Used, the chest swaps to its open picture and shows what it holds; used again, it shuts.
+            Expect(chest.SecondState, "the chest stays open when its window goes");
+            // Used, the open chest shuts; used again, it swaps to its open picture and shows what it holds.
             Expect(VerbsOf(chest).Contains(Verb.Use), "the chest offers Use");
             Act(chest, 0, Verb.Use);
-            Expect(chest.SecondState && _containerWindow.Visible && _containerWindow.Container == chest && _containerWindow.ItemAt(0)?.Rdff == PlusThreeArrows,
-                "using the chest opens it and shows the arrows left in it");
+            Expect(!chest.SecondState && !_containerWindow.Visible, "using the open chest shuts it");
             Act(chest, 0, Verb.Use);
-            Expect(!chest.SecondState && !_containerWindow.Visible, "using it again shuts it and its window");
+            Expect(chest.SecondState && _containerWindow.Visible && _containerWindow.Container == chest && _containerWindow.ItemAt(0)?.Rdff == PlusThreeArrows,
+                "using it again opens it and shows the arrows left in it");
+            _containerWindow.Close();
             Act(coffin, 0, Verb.Open);
             int money = Session.ScriptHost.Money;
             _containerWindow.Click(1);
@@ -2813,6 +2866,32 @@ public partial class RegionView : Node2D
         {
             problems.Add("no chest or coffin");
         }
+
+        // An item held on the pointer from the pack (pointer mode 3) and clicked on the bare ground is put down there.
+        Cell free = new[] { new Cell(1, 0), new Cell(-1, 0), new Cell(0, 1), new Cell(0, -1) }
+            .Select(d => new Cell(me.Cell.X + d.X, me.Cell.Y + d.Y))
+            .FirstOrDefault(c => !_region.IsBlocked(c.X, c.Y) && !_world.Objects.Any(o => !o.Hidden && o.Cell == c), me.Cell);
+        if (me.Items.FirstOrDefault(i => !i.Equipped && i.Rdff is not (Boots or Water)) is { } held)
+        {
+            SetUseWithItem(held);
+            int heldRdff = held.Rdff;
+            DropHeld(held, new Vector2((free.X + 0.5f) * Region.TileSize, (free.Y + 0.5f) * Region.TileSize));
+            Expect(!me.Items.Contains(held) && _world.Objects.Any(o => !o.Hidden && o.Cell == free && o.Item is not null && o.Source?.Ojff == heldRdff),
+                $"a held item clicked on the ground at ({free.X},{free.Y}) is put down there");
+        }
+        else
+        {
+            problems.Add("nothing in the pack to hold and drop");
+        }
+
+        // The game menu stops the game: the map's clock doesn't run under it.
+        _gameMenu.Open();
+        double clockBefore = _clock;
+        _Process(0.5);
+        Expect(_clock == clockBefore, $"the map's clock stands still while the game menu is open ({clockBefore} → {_clock})");
+        _gameMenu.Close();
+        _Process(0.5);
+        Expect(_clock > clockBefore || MapHeld, "and runs again when it closes");
 
         Item boots = party[0].Items.First(i => i.Rdff == Boots);
         Expect(_world.Equip(me, boots) == EquipResult.Worn && boots.Slot == 13, $"boots worn on the feet (slot {boots.Slot})");
@@ -3900,6 +3979,7 @@ public partial class RegionView : Node2D
                     for (int tick = 0; tick < 600 && _region.Number == number && (w.IsWalking || Session.Scripts.IsSuspended); tick++)
                     {
                         _clock += 1.0 / ScmdAnimator.TicksPerSecond;
+                        _running += 1.0 / ScmdAnimator.TicksPerSecond;
                         Animate();
                         AnswerForThePlayer(yes: true);
                     }
@@ -3953,6 +4033,7 @@ public partial class RegionView : Node2D
                 for (int tick = 0; tick < 30 * ScmdAnimator.TicksPerSecond && _region.Number == number && (_pendingUse is not null || w.IsWalking || Session.Scripts.IsSuspended); tick++)
                 {
                     _clock += 1.0 / ScmdAnimator.TicksPerSecond;
+                    _running += 1.0 / ScmdAnimator.TicksPerSecond;
                     Animate();
                     FinishApproach();
                     AnswerForThePlayer(yes: true);
@@ -4065,6 +4146,9 @@ public sealed class AnimatedObject(Sprite2D sprite, RegionObject obj, Scmd scrip
     public RegionObject Object { get; } = obj;
     public Scmd Script { get; } = script;
     public ScmdAnimator Animator { get; set; } = animator;
+
+    /// <summary>Its animation runs on the view's running time, not the map's clock (a change of state, not held by the pointer).</summary>
+    public bool OwnClock { get; set; }
 }
 
 /// <summary>A character on the map: its movement, its sprite set, and its node.</summary>
