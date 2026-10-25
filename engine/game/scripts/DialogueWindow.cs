@@ -387,6 +387,18 @@ public partial class DialogueWindow : Control
     /// <summary>The <paramref name="n"/>th choice offered (0-based).</summary>
     public void Pick(int n) => Choose(n);
 
+    /// <summary>
+    /// A click on the map while the text shows goes on as MORE does, as in DSUN.EXE, where the
+    /// text window waits for any click; choices and typed answers still wait for their own.
+    /// </summary>
+    public void ClickOutside()
+    {
+        if (Visible && !_menuShown && _dialogue?.Prompt is not GplTextPrompt)
+        {
+            More();
+        }
+    }
+
     // -- the player ----------------------------------------------------------------
 
     private void More()

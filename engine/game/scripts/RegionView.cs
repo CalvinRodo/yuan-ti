@@ -135,9 +135,9 @@ public partial class RegionView : Node2D
     /// <summary>
     /// Out of a fight the map runs only under the MOVE pointer (<c>1DF3:29E8</c> counts the clock while
     /// <c>DS:11B8</c> = 1): LOOK, ATTACK and a held item hold everything still while one picks, until a
-    /// chosen verb sends the character on its way.
+    /// chosen verb sends the character on its way. Text in the dialogue window holds it too, until read.
     /// </summary>
-    private bool MapHeld => _cursor != GameMenu.Cursor.Move && _pendingUse is null || _message.IsOpen || _study.IsOpen;
+    private bool MapHeld => _cursor != GameMenu.Cursor.Move && _pendingUse is null || _message.IsOpen || _study.IsOpen || _dialogueWindow.Visible;
 
     /// <summary>Make the next opening of the view start a new game (region 42).</summary>
     public static void StartNewGame() => _regionIndex = -1;
@@ -1497,9 +1497,13 @@ public partial class RegionView : Node2D
         {
             Zoom(-1);
         }
+        else if (_dialogueWindow.Visible && e is InputEventMouseButton { ButtonIndex: MouseButton.Left, Pressed: true })
+        {
+            _dialogueWindow.ClickOutside(); // the dialogue is modal: a click on the map reads on
+        }
         else if ((_dialogueWindow.Visible || MapLocked) && e is InputEventMouseButton { ButtonIndex: MouseButton.Left or MouseButton.Right })
         {
-            // The dialogue is modal, and a waiting script holds the party: the map takes no clicks.
+            // A waiting script holds the party: the map takes no clicks.
         }
         else if (BoxInput(e))
         {
@@ -3321,6 +3325,19 @@ public partial class RegionView : Node2D
             await Frames(3);
             Expect(_dialogueWindow.Visible && !_dialogueWindow.ShowingChoices && dialogue.Text.Count > 0, "the text window shows the text first");
             Expect(dialogue.Portrait is not null, "with a portrait");
+            // A click on the map (away from the window) reads on; the map holds while the text shows.
+            var (version, paging, choices) = (dialogue.Version, _dialogueWindow.Paging, _dialogueWindow.ShowingChoices);
+            Vector2 onMap = GetViewportRect().Size * new Vector2(0.5f, 0.35f);
+            foreach (bool down in new[] { true, false })
+            {
+                GetViewport().PushInput(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = down, Position = onMap, GlobalPosition = onMap });
+            }
+            await Frames(3);
+            Expect(choices || dialogue.Version != version || _dialogueWindow.Paging != paging || _dialogueWindow.ShowingChoices || !_dialogueWindow.Visible,
+                "a click on the map reads on");
+            int clock = _world.Clock;
+            await ToSignal(GetTree().CreateTimer(1.5), Godot.Timer.SignalName.Timeout);
+            Expect(!_dialogueWindow.Visible || _world.Clock == clock, $"the map holds while the text shows (clock {clock} → {_world.Clock})");
             said = string.Concat(dialogue.Text.Select(t => t.Text)).Trim();
             for (int i = 0; i < 10 && !_dialogueWindow.ShowingChoices && dialogue.Prompt is not GplMenuPrompt; i++)
             {

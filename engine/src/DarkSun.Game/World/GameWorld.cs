@@ -854,7 +854,7 @@ public sealed partial class GameWorld
     /// <summary>The fire pits (<c>OJFF</c> 1307, 1310): using one rests the party (<c>6BB8:0B56</c>).</summary>
     public static bool IsRestingPlace(WorldObject obj) => obj.Source?.Ojff is 1307 or 1310;
 
-    /// <summary>The time a rest at a fire pit takes (<c>87B3:073D(0, 8)</c>), in PASS_TIME's units.</summary>
+    /// <summary>The hours a rest at a fire pit takes (<c>87B3:073D(0, 8)</c>).</summary>
     public const int FirePitRest = 8;
 
     /// <summary>
