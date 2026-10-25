@@ -67,7 +67,8 @@ public sealed class Item
 }
 
 /// <summary>What came of <see cref="GameWorld.Equip"/>.</summary>
-public enum EquipResult { Worn, NotWearable, WrongClass, NoFreeSlot }
+/// <summary>What wearing an item came to; <see cref="WrongRace"/>: the race wears only weapons (a thri-kreen, <see cref="RaceRules.WeaponsOnly"/>).</summary>
+public enum EquipResult { Worn, NotWearable, WrongClass, NoFreeSlot, WrongRace }
 
 /// <summary>An item as saved: its <c>RDFF</c> number, quantity and slot.</summary>
 public sealed record ItemState(int Rdff, int Quantity, int Slot, int? Charges = null, int? Cell = null, IReadOnlyList<ItemState>? Contents = null);

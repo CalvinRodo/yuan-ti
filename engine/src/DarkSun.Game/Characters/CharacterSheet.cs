@@ -30,10 +30,14 @@ public static class CharacterSheet
     public static int DexterityDefence(int dex, CharacterRules? rules = null) =>
         (rules ?? CharacterRules.Default).Abilities.DexDefenceOf(dex);
 
-    /// <summary>Armour class wearing <paramref name="items"/> (the worn ones count) with Dexterity <paramref name="dex"/>.</summary>
-    public static int ArmorClass(int dex, IEnumerable<Item> items, ItemCatalog catalog, CharacterRules? rules = null)
+    /// <summary>A race's armour class before Dexterity and armour (<see cref="RaceRules.ArmorClass"/>: 10, a thri-kreen 5).</summary>
+    public static int BaseArmorClassOf(Race race, CharacterRules? rules = null) =>
+        (rules ?? CharacterRules.Default).Races.FirstOrDefault(r => r.Race == race)?.ArmorClass ?? BaseArmorClass;
+
+    /// <summary>Armour class wearing <paramref name="items"/> (the worn ones count) with Dexterity <paramref name="dex"/>, from <paramref name="baseArmorClass"/> (the race's, <see cref="BaseArmorClassOf"/>).</summary>
+    public static int ArmorClass(int dex, IEnumerable<Item> items, ItemCatalog catalog, CharacterRules? rules = null, int baseArmorClass = BaseArmorClass)
     {
-        int ac = BaseArmorClass + DexterityDefence(dex, rules);
+        int ac = baseArmorClass + DexterityDefence(dex, rules);
         foreach (Item item in items.Where(i => i.Equipped))
         {
             if (catalog.TypeOf(item.Record) is { ArmorClass: > 0 } type)

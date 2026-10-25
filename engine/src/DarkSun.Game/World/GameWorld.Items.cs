@@ -115,6 +115,17 @@ public sealed partial class GameWorld
     /// <summary>A party member's item classes (by slot; the session's characters), or null to let it use anything.</summary>
     public Func<int, ItemClasses?> PartyClasses { get; set; } = _ => null;
 
+    /// <summary>Whether the party member in a slot wears only weapons (a thri-kreen, <see cref="RaceRules.WeaponsOnly"/>).</summary>
+    public Func<int, bool> PartyWeaponsOnly { get; set; } = _ => false;
+
+    /// <summary>
+    /// May <paramref name="holder"/> wear an item of <paramref name="type"/> for its race? A thri-kreen
+    /// only weapons (not shields) and ammunition (the guide: "Thri-kreen can equip only weapons").
+    /// </summary>
+    private bool RaceWears(WorldObject holder, ItemType type) =>
+        holder.Kind != ObjectKind.Party || !PartyWeaponsOnly(holder.Index)
+        || type.IsWeapon && (type.Weapon & WeaponKind.Shield) == 0 || type.Placement == ItemPlacement.Ammunition;
+
     /// <summary>Can <paramref name="obj"/> hold items: a creature, a party member, or an item (a container)?</summary>
     private static bool Holds(WorldObject? obj) => obj is { Kind: ObjectKind.Party or ObjectKind.Creature } or { Item: not null };
 
@@ -386,6 +397,10 @@ public sealed partial class GameWorld
         {
             return EquipResult.NotWearable;
         }
+        if (!RaceWears(holder, type))
+        {
+            return EquipResult.WrongRace;
+        }
         if (!CanUse(holder, item))
         {
             return EquipResult.WrongClass;
@@ -409,6 +424,10 @@ public sealed partial class GameWorld
             || slot is < 0 or >= Equipment.Slots || Equipment.Placements[slot] != type.Placement)
         {
             return EquipResult.NotWearable;
+        }
+        if (!RaceWears(holder, type))
+        {
+            return EquipResult.WrongRace;
         }
         if (!CanUse(holder, item))
         {

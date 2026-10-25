@@ -333,7 +333,7 @@ public partial class CharacterScreen : RetroScreen
             _abilities[i].Text = fighter.Stats[i].ToString();
         }
         _psp.Text = $"{_magic.Psp(c)}/{_magic.MaxPsp(c)}";
-        _armour.Text = $"AC: {CharacterSheet.ArmorClass(fighter.Stats[(int)Ability.Dex], Member!.Items, _world.Items, Session.Rules),2}";
+        _armour.Text = $"AC: {CharacterSheet.ArmorClass(fighter.Stats[(int)Ability.Dex], Member!.Items, _world.Items, Session.Rules, CharacterSheet.BaseArmorClassOf(c.Race, Session.Rules)),2}";
         _attacks.Text = string.Join("\n", AttackLines(fighter));
     }
 
@@ -1249,6 +1249,7 @@ public partial class CharacterScreen : RetroScreen
     {
         EquipResult.Worn => null,
         EquipResult.WrongClass => $"{MemberName(_member)}'s class can't use {ItemText.Name(_world!, item)}.",
+        EquipResult.WrongRace => $"{MemberName(_member)} can only use weapons.",
         EquipResult.NotWearable => $"{ItemText.Name(_world!, item)} isn't worn there.",
         _ => $"No free place to wear {ItemText.Name(_world!, item)}.",
     };

@@ -121,11 +121,12 @@ public sealed class ViewCharacterText
         var rules = Session.Rules;
         int str = cc.Adjusted(c, Ability.Str), dex = cc.Adjusted(c, Ability.Dex);
         int halves = CharacterSheet.AttackHalves(cc.ActiveLevels(c), rules), strDamage = rules.Abilities.StrDamageOf(str);
-        int armorClass = CharacterSheet.BaseArmorClass + CharacterSheet.DexterityDefence(dex, rules);
+        int baseArmorClass = CharacterSheet.BaseArmorClassOf(c.Race, rules);
+        int armorClass = baseArmorClass + CharacterSheet.DexterityDefence(dex, rules);
         string? damage = null;
         if (catalog is not null && carried.Count > 0)
         {
-            armorClass = CharacterSheet.ArmorClass(dex, carried, catalog, rules);
+            armorClass = CharacterSheet.ArmorClass(dex, carried, catalog, rules, baseArmorClass);
             if (carried.FirstOrDefault(i => i.Slot == 3) is { } held && catalog.TypeOf(held.Record) is { IsWeapon: true } weapon)
             {
                 damage = CharacterSheet.DamageText(halves, weapon.DamageDice, weapon.DamageSides, weapon.DamageBonus + held.Record.Bonus + strDamage);

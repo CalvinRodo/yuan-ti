@@ -170,7 +170,9 @@ public sealed partial class Battle
     /// <summary>
     /// <paramref name="a"/>'s attacks on <paramref name="t"/> this turn
     /// (<c>612E:1359</c>, <c>612E:1B7A</c>): with its weapon (missile weapons
-    /// use ammunition), else each natural attack. Each is a d20: 20 hits, 1
+    /// use ammunition), else each natural attack. A thri-kreen with a weapon in
+    /// hand swings it with its limbs and still bites (its last natural attack;
+    /// the guide: five attacks a round, the poison bite the one left extra). Each is a d20: 20 hits, 1
     /// misses, otherwise it hits at the number needed. Afterwards it can
     /// neither attack nor move again this round, and its invisibility ends.
     /// </summary>
@@ -198,6 +200,15 @@ public sealed partial class Battle
                     a.Ammunition--;
                 }
                 Swing(a, t, w, null, i == 0, false);
+            }
+            if (!missile && a.NaturalAttacks.Count > 1 && t.Alive)
+            {
+                NaturalAttack bite = a.NaturalAttacks[^1];
+                int bites = AttacksThisRound(a, bite.Halves);
+                for (int i = 0; i < bites && t.Alive; i++)
+                {
+                    Swing(a, t, null, bite, false, i == bites - 1);
+                }
             }
         }
         else
