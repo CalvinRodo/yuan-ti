@@ -60,9 +60,16 @@ public sealed record SpellEffect(
     [JsonIgnore]
     public bool SaveCancels => (Flags & SpellFlags.NoDamageIfSaved) != 0;
 
-    /// <summary>Spells of one creature or one cell (touch, a creature, self).</summary>
+    /// <summary>Spells of one creature or one cell (touch, a creature, self); not a summoning.</summary>
     [JsonIgnore]
-    public bool SingleTarget => Template < 0 || Target is 3 or 4 or 5 or 7 or 8;
+    public bool SingleTarget => !Summons && (Template < 0 || Target is 3 or 4 or 5 or 7 or 8);
+
+    /// <summary>
+    /// A summoning: no area and the summons flag (<c>7D80:003B</c> then calls <c>80F5:2687</c>
+    /// with the point aimed at, a creature's middle if one was clicked).
+    /// </summary>
+    [JsonIgnore]
+    public bool Summons => Template < 0 && (Flags & SpellFlags.Summons) != 0;
 
     /// <summary>Damage steps for a caster of <paramref name="level"/>: (level + bonus) / levels a step, at least 1.</summary>
     public int Steps(int level) => Math.Max(1, (Math.Min(level, MaxLevel) + LevelBonus) / Math.Max(1, LevelsPerStep));

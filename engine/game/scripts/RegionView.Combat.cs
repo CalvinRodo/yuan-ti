@@ -1506,6 +1506,22 @@ public partial class RegionView
         {
             problems.Add("no member's turn came");
         }
+        for (int frame = 0; frame < 20_000 && PlayerTurn is null && InCombat; frame++)
+        {
+            CombatProcess(1.0 / 60);
+        }
+        if (PlayerTurn is { } summoner)
+        {
+            CheckSummonInFight(summoner, problems);
+        }
+        for (int frame = 0; frame < 20_000 && PlayerTurn is null && InCombat; frame++)
+        {
+            CombatProcess(1.0 / 60);
+        }
+        if (PlayerTurn is { } priest)
+        {
+            CheckConjuredWeaponInFight(priest, problems);
+        }
         foreach (Combatant c in battle.Combatants.Where(c => c.PartyMember))
         {
             c.ComputerControlled = true;
@@ -1633,6 +1649,75 @@ public partial class RegionView
         GD.Print($"combat log: {lines.Count} lines in short, {_combatLog.Log.At(LogLevel.Detail).Count} in detail");
         (Settings.CombatLogOpen, Settings.CombatLogLevel, Settings.CombatLogSize) = (open, level, size);
         Settings.Save();
+    }
+
+    /// <summary>
+    /// The summoning step of <c>--check-combat</c>: Monster Summoning I (at level 5)
+    /// aimed at an empty cell beside <paramref name="caster"/> brings a creature onto the map, on
+    /// the party's side, with a sprite of its own (<c>80F5:2687</c>).
+    /// </summary>
+    private void CheckSummonInFight(Combatant caster, List<string> problems)
+    {
+        const int MonsterSummoning = 36;
+        Battle battle = _battle!;
+        int before = battle.Combatants.Count;
+        Cell[] around = [new(0, -1), new(1, 0), new(0, 1), new(-1, 0), new(1, -1), new(1, 1), new(-1, 1), new(-1, -1)];
+        if (around.Select(d => caster.Cell + d).Where(battle.Free).Cast<Cell?>().FirstOrDefault() is not { } empty)
+        {
+            GD.Print("combat: no empty cell beside the summoner");
+            return;
+        }
+        if (!CastAt(caster, new CastChoice(MonsterSummoning, 5), empty))
+        {
+            problems.Add($"Monster Summoning I at the empty cell {empty} wasn't cast");
+            return;
+        }
+        if (battle.Combatants.Count != before + 1 || battle.Combatants[^1] is not { Side: 1, Source: { Allegiance: 1 } summoned } creature
+            || !_creatureNodes.ContainsKey(summoned))
+        {
+            problems.Add($"Monster Summoning I brought no creature on the party's side with a sprite ({battle.Combatants.Count - before} new)");
+            return;
+        }
+        GD.Print($"combat: {Who(caster)} summons {Who(creature)} at {creature.Cell}");
+    }
+
+    /// <summary>
+    /// The conjured weapon step of <c>--check-combat</c>: with its hand emptied, a member casts
+    /// Spiritual Hammer (90) on itself; the hammer (<c>RDFF</c> 30026) is in its hand (slot 3), its
+    /// weapon in the fight, and on the inventory's body.
+    /// </summary>
+    private void CheckConjuredWeaponInFight(Combatant caster, List<string> problems)
+    {
+        const int SpiritualHammer = 90, Hammer = 30026, Hand = 3;
+        if (caster.Source is not { } member)
+        {
+            return;
+        }
+        foreach (Item held in member.Items.Where(i => i.Slot == Hand))
+        {
+            held.Slot = Equipment.Pack;
+        }
+        caster.Weapon = null;
+        if (!CastAt(caster, new CastChoice(SpiritualHammer, 5), caster.Cell))
+        {
+            problems.Add("Spiritual Hammer wasn't cast");
+            return;
+        }
+        Item? hammer = member.Items.FirstOrDefault(i => i.Rdff == Hammer);
+        if (hammer is not { Slot: Hand } || caster.Weapon?.Item != hammer)
+        {
+            problems.Add($"Spiritual Hammer put no hammer in {Who(caster)}'s hand ({string.Join(", ", member.Items.Select(i => $"{i.Rdff}@{i.Slot}"))})");
+            return;
+        }
+        _character.Open(_world, member.Index, CharacterScreen.Page.Items);
+        bool shown = Enumerable.Range(0, 14).Any(n => _character.ItemAt(0, n) == hammer);
+        _character.Close();
+        if (!shown)
+        {
+            problems.Add("the conjured hammer isn't on the inventory's body");
+            return;
+        }
+        GD.Print($"combat: {Who(caster)} casts Spiritual Hammer and holds the hammer");
     }
 
     /// <summary>

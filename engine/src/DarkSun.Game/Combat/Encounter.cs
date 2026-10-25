@@ -66,6 +66,8 @@ public static class Encounter
             Characters = characterRules,
             Difficulty = world.Difficulty,
             NewItem = rdff => world.NewItem(rdff, 1, 3),
+            MakeCreature = (ojff, cell) => world.Spawn(ojff, cell) is { } summoned
+                ? Combatant.FromCreature(Summoned(summoned), world.Items) : null,
         };
         if (!fallsWhenShown)
         {
@@ -78,6 +80,13 @@ public static class Encounter
             };
         }
         return battle;
+    }
+
+    /// <summary>A summoned creature is on the party's side out of the fight too (allegiance 1, as DSUN.EXE leaves slot 4).</summary>
+    private static WorldObject Summoned(WorldObject creature)
+    {
+        creature.Allegiance = 1;
+        return creature;
     }
 
     /// <summary>
