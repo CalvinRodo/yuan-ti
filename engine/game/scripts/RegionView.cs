@@ -610,6 +610,7 @@ public partial class RegionView : Node2D
     /// <summary>Replace the map's nodes with <paramref name="file"/>'s region.</summary>
     private void LoadRegion(string file)
     {
+        LoadMapEnvironment(file);
         Sounds.Instance?.StopRepeating();
         foreach (Node child in _ground.GetChildren().Concat(_sorted.GetChildren()))
         {

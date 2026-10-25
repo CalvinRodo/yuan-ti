@@ -619,6 +619,8 @@ whoever stands on or beside them.
   colour of the floor under the feet; stone, water and lava don't. A puff
   is single pixels thinned toward its edge and as it fades, by a pattern
   fixed to the map, so it doesn't shimmer.
+  Maps marked **Indoors** in the GFF viewer never raise dust; outdoors still
+  uses the floor-colour test and the Dust option.
 - **Choosing an enemy** (`[game] choose_enemy_keys`; `[display] enemy_rings`):
   on a party member's turn in a fight, Tab chooses the nearest living enemy,
   then the next nearest (Shift+Tab goes back), names it in the combat log
@@ -632,6 +634,25 @@ whoever stands on or beside them.
 walks a member across the arena's sand and checks for dust that fades,
 then in a fight presses Tab (the nearest enemy, its ring drawn) and Enter
 (an attack on it).
+
+### Map environments
+
+In the web viewer's map toolbar, choose **Environment: Indoors / Outdoors**.
+Changes save immediately to [game/data/map_environments.json](game/data/map_environments.json),
+not to the installed GFF files. The JSON maps game IDs to uppercase GFF filenames
+and `"indoors"` / `"outdoors"` values, for example:
+
+```json
+{"dark_sun": {"RGN02.GFF": "indoors"}, "dark_sun_2": {}}
+```
+
+An absent entry defaults to outdoors, preserving existing behavior. The viewer
+uses `GET` / `POST /api/gff/<name>/map-environment?game=<game_id>`; POST accepts
+`{"environment":"indoors"}` (or `"outdoors"`). Godot reads the shared file
+as `res://data/map_environments.json` whenever a region loads, so re-enter the
+region to pick up viewer changes. The file is included in exports; rebuild an
+export to ship updated classifications. The current engine consumes `dark_sun`;
+the viewer keeps DS2 classifications separately.
 
 ## Combat log
 
