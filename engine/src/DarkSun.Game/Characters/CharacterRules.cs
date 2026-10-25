@@ -144,6 +144,22 @@ public sealed record CharacterRules
     /// </summary>
     public IReadOnlyList<IReadOnlyList<int>> PreserverStartingSpells { get; init; } = [[8, 9], [10, 12], [16, 23]];
 
+    /// <summary>
+    /// The psionic powers a new character who isn't a psionicist knows, by its discipline
+    /// (<c>6ECD:1871</c>, 11 power indexes a discipline at <c>38D4:0006</c>, −1 for none; here
+    /// <c>SPIN</c> numbers, 139 + index): four of the discipline's and power 169, the same for all.
+    /// Nothing is chosen: DSUN.EXE forgets every power and teaches these.
+    /// </summary>
+    public IReadOnlyList<IReadOnlyList<int>> DisciplineStartingPowers { get; init; } =
+        [[139, 142, 143, 144, 169], [147, 150, 156, 155, 169], [162, 164, 170, 166, 169]];
+
+    /// <summary>
+    /// A new psionicist's powers by its psionicist level (<c>6ECD:1871</c>, <c>38D4:001C</c> + 11 × level).
+    /// The table ends at level 3, which its starting experience never passes; a level past it keeps the last.
+    /// </summary>
+    public IReadOnlyList<IReadOnlyList<int>> PsionicistStartingPowers { get; init; } =
+        [[139, 147, 162, 144, 169], [139, 147, 162, 144, 170], [139, 142, 143, 147, 150, 156, 162, 164, 170, 144, 169]];
+
     /// <summary>The map icons: <c>OJFF</c> this + the look's place in the portrait order (300–313, all walking with <c>SCMD</c> 174).</summary>
     public int IconBase { get; init; } = 300;
 
@@ -235,9 +251,6 @@ public sealed record CharacterRules
 
     /// <summary>Psionic strength points of a character who isn't a psionicist (its wild talent).</summary>
     public int WildTalentPsp { get; init; } = 10;
-
-    /// <summary>The powers a first-level psionicist knows (one more each level; others know one).</summary>
-    public int PowersAtFirstLevel { get; init; } = 3;
 
     /// <summary>Psionic strength points a power costs.</summary>
     public int PowerCost { get; init; } = 5;

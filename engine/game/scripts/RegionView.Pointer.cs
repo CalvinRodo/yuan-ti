@@ -27,11 +27,12 @@ public partial class RegionView
     private (int Spell, Cell At, Combatant Caster)? _aimed;
     private IReadOnlyList<Combatant> _aimTargets = [];
 
-    /// <summary>Other screens have the system's pointer, and a repeating sound stops with the map.</summary>
+    /// <summary>Other screens have the system's pointer, and a repeating sound and the colour cycling stop with the map.</summary>
     public override void _ExitTree()
     {
         Pointers.Reset();
         Sounds.Instance?.StopRepeating();
+        ColourCycling.Instance?.Stop();
     }
 
     /// <summary>The pointer for where the mouse is, and the aimed spell's targets and outline.</summary>

@@ -37,9 +37,10 @@ namespace DarkSun.Engine;
 /// it. A container doesn't go in another. (Containers on the map open in
 /// their own window, <see cref="ContainerWindow"/>.)</item>
 /// </list>
-/// <item><b>Spells</b> and <b>Psionics</b>: View Character again, its panel
-/// holding the slots DSUN.EXE draws spells into (<c>APFM</c> 11213–11247;
-/// <see cref="CharacterScreen"/>'s other part).</item>
+/// <item><b>Spells</b> and <b>Psionics</b> (CAST SPELL/USE PSIONIC, 11305; the first
+/// text button goes from one to the other) and <b>Effects</b> (CURRENT SPELL EFFECTS,
+/// 11306): View Character again, its panel holding the slots DSUN.EXE draws spells
+/// into (<c>APFM</c> 11213–11247; <see cref="CharacterScreen"/>'s other part).</item>
 /// <item>A <b>store</b> (SHOP): the items page with the merchant's goods in
 /// the container's place and the six slots by SELL (<c>APFM</c> 11242–11247)
 /// for what the party offers.</item>
@@ -55,12 +56,12 @@ namespace DarkSun.Engine;
 /// </summary>
 public partial class CharacterScreen : RetroScreen
 {
-    public enum Page { Character, Items, Spells, Psionics }
+    public enum Page { Character, Items, Spells, Psionics, Effects }
 
     private const int PaletteNumber = 1001;
     private const int SheetWindow = 11500, SheetBackdrop = 11000, ItemsWindow = 13500, ItemsBackdrop = 13001;
     private const int FirstBox = 11300, FirstLeader = 11309, FirstComputerControl = 11313, NameBar = 11318;
-    private const int CharacterButton = 10300, ItemsButton = 11304, SpellsButton = 11305, PsionicsButton = 11306, MenuButton = 11308, ReturnButton = 10308;
+    private const int CharacterButton = 10300, ItemsButton = 11304, SpellsButton = 11305, EffectsButton = 11306, MenuButton = 11308, ReturnButton = 10308;
     private const int SheetArea = 11269, SheetDivider = 104, FirstText = 11319, SecondText = 11320;
     private const int DropButton = 13300, SplitButton = 13302, MoreButton = 13303, SellButton = 13304;
     private const int FirstWorn = 11216, FirstPackSlot = 11230, PackSlots = 12, ContainerArea = 13200, FirstInside = 11248, InsideSlots = 12;
@@ -431,9 +432,9 @@ public partial class CharacterScreen : RetroScreen
         window.Button(ItemsButton)!.Pressed += () => Show(Page.Items);
         window.Button(ItemsButton)!.TooltipText = "Items (I)";
         window.Button(SpellsButton)!.Pressed += () => Show(Page.Spells);
-        window.Button(SpellsButton)!.TooltipText = "Spells: cast and learn";
-        window.Button(PsionicsButton)!.Pressed += () => Show(Page.Psionics);
-        window.Button(PsionicsButton)!.TooltipText = "Psionics: pick and use powers";
+        window.Button(SpellsButton)!.TooltipText = "Cast a spell or use a psionic power";
+        window.Button(EffectsButton)!.Pressed += () => Show(Page.Effects);
+        window.Button(EffectsButton)!.TooltipText = "Current spell effects";
         window.Button(MenuButton)!.Pressed += () =>
         {
             Close();
@@ -540,6 +541,11 @@ public partial class CharacterScreen : RetroScreen
 
     private void Show(Page page)
     {
+        // CAST SPELL/USE PSIONIC shows the member's first kind: its spells, or its powers if it casts none.
+        if (page == Page.Spells && CharacterOf(_member) is { } c && Kinds(c) is [var (first, _), ..])
+        {
+            page = first;
+        }
         _page = page;
         _sheetPage.Window.Visible = page != Page.Items;
         _itemsPage.Window.Visible = page == Page.Items;
@@ -933,6 +939,9 @@ public partial class CharacterScreen : RetroScreen
     /// <summary>Is the party fighting (USE casts on the map then)?</summary>
     public Func<bool> Fighting { get; set; } = () => false;
 
+    /// <summary>The effects on a member now (<c>SPIN</c> numbers): in a fight its combatant's, else none.</summary>
+    public Func<int, IReadOnlyList<int>> EffectsOf { get; set; } = _ => [];
+
     /// <summary>
     /// USE in a fight: member, item, its holder and what it does; null when it was cast or
     /// is waiting for its target (the screens close), else why not.
@@ -996,7 +1005,7 @@ public partial class CharacterScreen : RetroScreen
 
     /// <summary>
     /// Press <c>BUTN</c> <paramref name="number"/> of the page showing (10300
-    /// Character, 11304 Items, 11305 Spells, 11306 Psionics, 11308 the game
+    /// Character, 11304 Items, 11305 Spells (or Psionics), 11306 Effects, 11308 the game
     /// menu, 11309+ leader, 11313+ computer control, 11319 / 11320 the text
     /// buttons, 13300 DROP, 13302 SPLIT, 13303 MORE, 13304 SELL, 10308 Return).
     /// </summary>
@@ -1436,6 +1445,12 @@ public partial class CharacterScreen : RetroScreen
     {
         _member = slot;
         (_picked, _packPage) = (null, 0);
+        if (_page is Page.Spells or Page.Psionics)
+        {
+            ResetMagic();
+            Show(Page.Spells); // the member's own first kind
+            return;
+        }
         Refresh();
     }
 

@@ -164,6 +164,7 @@ public sealed class CharacterCreation(CharacterRules rules, CharacterNames names
         GiveStartingExperience(c);
         Roll(c);
         GiveStartingSpells(c);
+        GiveStartingPowers(c);
         return c;
     }
 
@@ -359,6 +360,7 @@ public sealed class CharacterCreation(CharacterRules rules, CharacterNames names
         GiveStartingExperience(c);
         FixPowers(c);
         Fit(c);
+        GiveStartingPowers(c);
     }
 
     public void CycleAlignment(Character c, int by)
@@ -400,6 +402,7 @@ public sealed class CharacterCreation(CharacterRules rules, CharacterNames names
             FixPowers(c);
             Fit(c);
             GiveStartingSpells(c);
+            GiveStartingPowers(c);
             return true;
         }
         if (!CanAdd(c, k))
@@ -413,10 +416,26 @@ public sealed class CharacterCreation(CharacterRules rules, CharacterNames names
         Fit(c);
         c.Hp = RollHp(c);
         GiveStartingSpells(c);
+        GiveStartingPowers(c);
         return true;
     }
 
     // -- psionics and spheres -------------------------------------------------------------
+
+    /// <summary>
+    /// <c>6ECD:1871</c>, when a character is made and for each member when a game starts
+    /// (<c>6BB8:064C</c>): every power is forgotten, then a psionicist learns those of its
+    /// psionicist level (<see cref="CharacterRules.PsionicistStartingPowers"/>) and anyone else
+    /// those of its discipline (<see cref="CharacterRules.DisciplineStartingPowers"/>), each at rank 1.
+    /// </summary>
+    public void GiveStartingPowers(Character c)
+    {
+        int level = LevelIn(c, CharacterClass.Psionicist);
+        IReadOnlyList<int> powers = level > 0 ? Rules.PsionicistStartingPowers[Math.Min(level, Rules.PsionicistStartingPowers.Count) - 1]
+            : c.Disciplines.Count > 0 ? Rules.DisciplineStartingPowers[(int)c.Disciplines[^1]] : [];
+        c.Powers = [.. powers];
+        c.PowerRanks.Clear();
+    }
 
     public bool NeedsSphere(Character c) => c.Classes.Any(k => Rules.Class(k).ChoosesSphere);
 
@@ -428,6 +447,7 @@ public sealed class CharacterCreation(CharacterRules rules, CharacterNames names
         if (!AllDisciplines(c))
         {
             c.Disciplines = [d];
+            GiveStartingPowers(c);
         }
     }
 

@@ -384,6 +384,25 @@ public static class Session
         return host;
     }
 
+    /// <summary>
+    /// START GAME (and <c>--new-game</c>): the pre-made party if none has been made, each
+    /// member's starting powers again, as DSUN.EXE's <c>6BB8:064C</c> gives them
+    /// (<see cref="CharacterCreation.GiveStartingPowers"/>), then a fresh game.
+    /// </summary>
+    public static void StartNewGame()
+    {
+        if (Party.Count == 0)
+        {
+            UsePremadeParty();
+        }
+        var creation = new CharacterCreation(Rules, Names, new Random());
+        foreach (Character c in Party)
+        {
+            creation.GiveStartingPowers(c);
+        }
+        NewGame();
+    }
+
     /// <summary>Forget the current game: fresh scripts, globals and triggers.</summary>
     public static void NewGame()
     {

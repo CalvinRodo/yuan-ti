@@ -27,9 +27,13 @@ namespace DarkSun.Engine;
 /// A preserver learns new spells on gaining a level (<see cref="SpellStudyWindow"/>).</item>
 /// <item>A right-click on a spell above, or on a power, opens the spell
 /// information window (<see cref="ShowSpellInfo"/>).</item>
-/// <item>Psionics: the discipline's powers above, those not known dimmed:
-/// click one to pick it (while the character may know more), or a known
-/// one, then a box, to use it. Below, every power known.</item>
+/// <item>Psionics: the powers the member knows in the discipline shown
+/// (<c>8F23:1CEF</c>; <c>ICON</c> 3000 + index), crossed out when it hasn't the
+/// points for one or isn't Okay. Nothing is picked: a character knows the powers
+/// creation gave it (<see cref="CharacterCreation.GiveStartingPowers"/>)
+/// and those items teach. Click one, then a box, to use it.</item>
+/// <item>Effects (CURRENT SPELL EFFECTS): the spells and powers on the member now,
+/// which only a fight keeps (<see cref="EffectsOf"/>).</item>
 /// </list>
 /// Outside combat only the healing spells and powers do anything (<see cref="Spellcasting.CastOutside"/>).
 /// </summary>
@@ -137,12 +141,12 @@ public partial class CharacterScreen
 
     private void ShowMagic(Page page)
     {
-        bool magic = page is Page.Spells or Page.Psionics;
+        bool magic = page is Page.Spells or Page.Psionics or Page.Effects;
         foreach (SpellSlot slot in _spellSlots)
         {
             slot.Control.Visible = magic;
         }
-        _choiceButton.Visible = _levelButton.Visible = magic;
+        _choiceButton.Visible = _levelButton.Visible = page is Page.Spells or Page.Psionics;
         _pickedSpell = null; // a spell picked on one page isn't cast from another
     }
 
@@ -282,15 +286,24 @@ public partial class CharacterScreen
             _status.Text = "INACTIVE CHARACTER";
             return;
         }
-        if (_page == Page.Spells)
+        switch (_page)
         {
-            RefreshSpells(c);
-        }
-        else
-        {
-            RefreshPowers(c);
+            case Page.Spells:
+                RefreshSpells(c);
+                break;
+            case Page.Psionics:
+                RefreshPowers(c);
+                break;
+            default:
+                Fill([.. EffectsOf(_member).Distinct()], []);
+                _status.Text = "CURRENT SPELL EFFECTS";
+                break;
         }
     }
+
+    /// <summary>The disciplines of the powers the member knows, in order (the second text button goes round them).</summary>
+    private static List<Discipline> KnownDisciplines(Character c) =>
+        [.. c.Powers.Select(n => Spellcasting.Get(n)?.Discipline).OfType<Discipline>().Distinct().Order()];
 
     private void RefreshSpells(Character c)
     {
@@ -321,12 +334,12 @@ public partial class CharacterScreen
 
     private void RefreshPowers(Character c)
     {
-        var disciplines = c.Disciplines.Distinct().ToList();
+        List<Discipline> disciplines = KnownDisciplines(c);
         if (disciplines.Count == 0)
         {
             Fill([], []);
-            _choiceButton.Visible = false;
-            _status.Text = "NO PSIONIC DISCIPLINE";
+            SetTextButtons("PSIONIC", null);
+            _status.Text = "CAN'T START THAT PSIONIC";
             return;
         }
         _choice %= disciplines.Count;
@@ -337,15 +350,14 @@ public partial class CharacterScreen
             Discipline.Psychometabolism => "METAB",
             _ => "TELEP",
         });
-        Fill([.. Spellcasting.PowersOf(c, d).Select(s => s.Number)], [.. c.Powers.OrderBy(n => n)]);
-        foreach (SpellSlot slot in _spellSlots.Where(s => s.Spell is not null))
+        Fill([.. c.Powers.Where(n => Spellcasting.Get(n)?.Discipline == d).Order()], []);
+        bool cant = _magic.Psp(c) < Session.Rules.PowerCost || !FitToCast;
+        foreach (SpellSlot slot in _spellSlots.Where(s => s.Spell is not null && s.Spell != _pickedSpell))
         {
-            slot.Icon.Modulate = c.Powers.Contains(slot.Spell!.Value) ? Colors.White : new Color(1, 1, 1, 0.4f);
-            slot.Count.Text = "";
+            slot.Mark.Texture = cant ? SlotArtFrame(CantFrame) : null;
         }
-        int picks = _magic.PowersAllowed(c) - c.Powers.Count;
         _status.Text = _pickedSpell is int picked ? $"USE {Session.SpellName(picked)?.ToUpperInvariant()} ON?"
-            : $"PSI {_magic.Psp(c)}/{_magic.MaxPsp(c)}" + (picks > 0 ? $"  {picks} TO PICK" : "");
+            : $"PSI {_magic.Psp(c)}/{_magic.MaxPsp(c)}";
     }
 
     /// <summary>Set the two text buttons: the kind, and the level or discipline (none: hidden).</summary>
@@ -391,7 +403,7 @@ public partial class CharacterScreen
             ShowSpellInfo(n);
             return;
         }
-        if (click.ButtonIndex != MouseButton.Left)
+        if (click.ButtonIndex != MouseButton.Left || _page == Page.Effects)
         {
             return;
         }
@@ -412,10 +424,6 @@ public partial class CharacterScreen
             {
                 _pickedSpell = _pickedSpell == n ? null : n;
             }
-        }
-        else if (!c.Powers.Contains(n))
-        {
-            message = $"{name} {_magic.Pick(c, n)}";
         }
         else if (click.DoubleClick)
         {

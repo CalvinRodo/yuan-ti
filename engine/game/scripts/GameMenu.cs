@@ -9,11 +9,13 @@ namespace DarkSun.Engine;
 /// button): <c>WIND</c> 10500 over <c>BMP</c> 10000, its buttons named as the
 /// original's status line names them (<c>DS:0C4A</c>):
 /// <list type="bullet">
-/// <item>the character screens: VIEW CHARACTER, VIEW INVENTORY, spells and psionics (10300, 11304–11306);</item>
+/// <item>the character screens: VIEW CHARACTER, VIEW INVENTORY, CAST SPELL/USE PSIONIC, CURRENT SPELL EFFECTS (10300, 11304–11306);</item>
 /// <item>EXIT TO DOS (10301: "EXIT: SAVE GAME?" SAVE / QUIT / CANCEL; here, back to the main menu),
 /// LOAD/SAVE GAME (10302), SET PREFERENCES (10303);</item>
 /// <item>OVERHEAD MAP (10305: the whole region), CENTER ON LEADER (10306);</item>
-/// <item>MOVE, LOOK and ATTACK CURSOR (10310–10312: what a left click on the map does), COLLAPSE PARTY (10313: everyone to the leader; again, spread out);</item>
+/// <item>MOVE, LOOK and ATTACK CURSOR (10310–10312: what a left click on the map does), COLLAPSE PARTY (10313: everyone to the leader; again, spread out),
+/// its icon (<c>ICON</c> 10113) the party (frame 2) while it is spread out and one figure (frame 3) while it is gathered
+/// or only one member is on the map (frames 0 and 1 are the stone without them);</item>
 /// <item>RETURN TO GAME (10308).</item>
 /// </list>
 /// SET PREFERENCES is <c>WIND</c> 16500 over the same frame (<c>870B</c>): music
@@ -57,6 +59,12 @@ public partial class GameMenu : RetroScreen
 
     public Action? CollapseParty { get; set; }
 
+    /// <summary>The party is gathered on its leader, or one member is all there is: COLLAPSE PARTY shows one figure.</summary>
+    public Func<bool> PartyGathered { get; set; } = () => false;
+
+    private const int CollapseButton = 10313, CollapseIcon = 10113, PartyFrame = 2, OneFrame = 3;
+    private Texture2D? _partyIcon, _oneIcon;
+
     /// <summary>What a left click on the map does now.</summary>
     public Action<Cursor>? CursorChanged { get; set; }
 
@@ -77,6 +85,11 @@ public partial class GameMenu : RetroScreen
         _menu = Place(UiWindowView.Build(MenuWindow, palette, Frame)!);
         _preferences = Place(UiWindowView.Build(PreferencesWindow, palette, Frame)!);
         _ask = Place(UiWindowView.Build(AskWindow, palette)!);
+        IReadOnlyList<ImageFrame> collapse = Session.Assets.Frames(resources.Read("ICON", CollapseIcon));
+        if (collapse.Count > OneFrame)
+        {
+            (_partyIcon, _oneIcon) = (Textures.ToTexture(collapse[PartyFrame], palette), Textures.ToTexture(collapse[OneFrame], palette));
+        }
         _menuStatus = StatusLine(_menu);
         _preferencesStatus = StatusLine(_preferences);
         BuildMenu();
@@ -135,8 +148,8 @@ public partial class GameMenu : RetroScreen
         On(_menu, s, ReturnButton, "RETURN TO GAME", Close);
         On(_menu, s, 10300, "VIEW CHARACTER", () => Character(CharacterScreen.Page.Character));
         On(_menu, s, 11304, "VIEW INVENTORY", () => Character(CharacterScreen.Page.Items));
-        On(_menu, s, 11305, "CAST SPELL", () => Character(CharacterScreen.Page.Spells));
-        On(_menu, s, 11306, "USE PSIONIC", () => Character(CharacterScreen.Page.Psionics));
+        On(_menu, s, 11305, "CAST SPELL/USE PSIONIC", () => Character(CharacterScreen.Page.Spells));
+        On(_menu, s, 11306, "CURRENT SPELL EFFECTS", () => Character(CharacterScreen.Page.Effects));
         On(_menu, s, 10301, "EXIT TO DOS", () => Ask("EXIT: SAVE GAME?", ("SAVE", () =>
         {
             Close();
@@ -161,7 +174,7 @@ public partial class GameMenu : RetroScreen
         On(_menu, s, 10310, "MOVE CURSOR", () => SetCursor(Cursor.Move));
         On(_menu, s, 10311, "LOOK CURSOR", () => SetCursor(Cursor.Look));
         On(_menu, s, 10312, "ATTACK CURSOR", () => SetCursor(Cursor.Attack));
-        On(_menu, s, 10313, "COLLAPSE PARTY", () => Then(CollapseParty));
+        On(_menu, s, CollapseButton, "COLLAPSE PARTY", () => Then(CollapseParty));
         foreach (int n in new[] { 10310, 10311, 10312 })
         {
             _menu.Button(n)!.ToggleMode = true;
@@ -231,8 +244,15 @@ public partial class GameMenu : RetroScreen
     public void Open()
     {
         Visible = true;
+        if (_menu.Button(CollapseButton) is { } collapse && (PartyGathered() ? _oneIcon : _partyIcon) is { } icon)
+        {
+            collapse.TextureNormal = collapse.TextureHover = collapse.TextureFocused = collapse.TexturePressed = icon;
+        }
         ShowMenu();
     }
+
+    /// <summary>The COLLAPSE PARTY button's icon now (for the checks): "party", "one" or "other".</summary>
+    public string CollapseShows => _menu.Button(CollapseButton)?.TextureNormal is { } t ? t == _oneIcon ? "one" : t == _partyIcon ? "party" : "other" : "other";
 
     public void Close() => Visible = false;
 

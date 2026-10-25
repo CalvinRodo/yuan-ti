@@ -55,6 +55,31 @@ public class CharacterTests
     }
 
     [Fact]
+    public void ANewCharacterIsGivenTheOriginalsPowersNotAChoice()
+    {
+        // 6ECD:1871: four of the discipline's powers and 169; a psionicist those of its level, whatever it knew.
+        var cc = Creation();
+        Character c = cc.New();
+        Assert.Equal([139, 142, 143, 144, 169], c.Powers); // a fighter, psychokinesis
+        cc.ChooseDiscipline(c, Discipline.Telepathy);
+        Assert.Equal([162, 164, 170, 166, 169], c.Powers);
+
+        c.Powers.Add(152);
+        c.PowerRanks[162] = 4;
+        Assert.True(cc.ToggleClass(c, CharacterClass.Fighter)); // a human has one class: off, then the psionicist's
+        Assert.True(cc.ToggleClass(c, CharacterClass.Psionicist)); // 3000: psionicist level 2
+        Assert.Equal(2, cc.LevelIn(c, CharacterClass.Psionicist));
+        Assert.Equal([139, 147, 162, 144, 170], c.Powers);
+        Assert.Empty(c.PowerRanks);
+
+        cc = new CharacterCreation(CharacterRules.Default with { StartingExperience = 1000 }, new CharacterNames(["Garn"], ["Shandra"], ["T'kir'taap"]), new Random(1));
+        c = cc.New();
+        cc.ToggleClass(c, CharacterClass.Fighter);
+        cc.ToggleClass(c, CharacterClass.Psionicist);
+        Assert.Equal([139, 147, 162, 144, 169], c.Powers);
+    }
+
+    [Fact]
     public void LevelsFollowTheOriginalsExperienceTable()
     {
         // 38F0:027C: a gladiator levels as a fighter; druids, rangers and thieves have their own rows.

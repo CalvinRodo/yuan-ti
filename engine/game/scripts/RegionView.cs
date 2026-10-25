@@ -344,6 +344,11 @@ public partial class RegionView : Node2D
                 CheckDialogue();
                 return;
             }
+            if (OS.GetCmdlineUserArgs().Contains("--check-colours"))
+            {
+                CheckColours();
+                return;
+            }
             if (OS.GetCmdlineUserArgs().Contains("--check-prisoners"))
             {
                 CheckPrisoners();
@@ -486,6 +491,8 @@ public partial class RegionView : Node2D
             Money = () => Session.ScriptHost.Money,
             SetMoney = money => Session.ScriptHost.Money = money,
             Fighting = () => InCombat,
+            EffectsOf = slot => _battle?.Combatants.FirstOrDefault(c => c.PartyMember && c.Source == _world[slot]) is { } member
+                ? [.. member.Effects.Select(e => e.Effect)] : [],
             CastInFight = CastItemInFight,
             SpellName = Session.SpellName,
             Did = text => AddScriptLine($"> {text}"),
@@ -515,6 +522,7 @@ public partial class RegionView : Node2D
             OverheadMap = OverheadMap,
             CenterOnLeader = () => _follow = true,
             CollapseParty = CollapseParty,
+            PartyGathered = () => _world.CollapsedLeader is not null || _world.Party.Count(p => !p.Hidden && p.Vitals.Alive) <= 1,
             CursorChanged = SetCursor,
         };
         layer.AddChild(_gameMenu);
@@ -662,13 +670,18 @@ public partial class RegionView : Node2D
         _palette = _region.LoadPalette(Session.Open("GPLDATA.GFF"), Session.Open("RESOURCE.GFF"), Session.Assets);
 
         // The region's music (RDAT +0x2F), changed with the original's 5-second fades.
-        if (!_checking && RegionInfo.Read(Session.Open("RESOURCE.GFF"), _region.Number) is { Music: > 0 } info)
+        RegionInfo? regionInfo = RegionInfo.Read(Session.Open("RESOURCE.GFF"), _region.Number);
+        if (!_checking && regionInfo is { Music: > 0 } info)
         {
             Music.Instance?.ChangeTo("RESOURCE.GFF", info.Music);
         }
+        // Its colour cycling and the game's, over the map and the screens drawn in PAL 1000 and 1001.
+        ColourCycling.Instance?.Start(regionInfo, [_palette, .. new[] { 1000, 1001 }
+            .Where(n => Session.Open("RESOURCE.GFF").Contains("PAL ", n))
+            .Select(n => Session.Assets.Palette(Session.Open("RESOURCE.GFF").Read("PAL ", n)))]);
         _mapSize = new Vector2(_region.Width, _region.Height) * Region.TileSize;
 
-        byte[] ground = RegionRenderer.RenderRgb(_region, _palette, RegionLayers.Ground);
+        byte[] ground = RegionRenderer.RenderRgb(_region, ColourCycling.Keyed(_palette), RegionLayers.Ground);
         Image groundImage = Image.CreateFromData((int)_mapSize.X, (int)_mapSize.Y, false, Image.Format.Rgb8, ground);
         _ground.AddChild(new Sprite2D { Texture = ImageTexture.CreateFromImage(groundImage), Centered = false, Name = "Ground" });
 
@@ -3069,7 +3082,7 @@ public partial class RegionView : Node2D
 
         GD.Print(problems.Count == 0
             ? "character: wore and took off, refused by class, gave, split, looted a body, used a lemon, a wand and a scroll, turned to the sheet; "
-              + "cast, rested, learned, picked a power, leader, computer control, game menu, preferences, store: OK"
+              + "cast, rested, learned, chose a power to use, effects, leader, computer control, game menu, preferences, store: OK"
             : "character: " + string.Join("; ", problems));
         GetTree().Quit(problems.Count > 0 ? 1 : 0);
     }
@@ -3088,6 +3101,7 @@ public partial class RegionView : Node2D
         var cleric = new DarkSun.Game.Characters.Character { Name = "Cleric", Classes = [DarkSun.Game.Characters.CharacterClass.Cleric], Sphere = DarkSun.Game.Characters.Sphere.Water, Rolled = [12, 12, 12, 12, 16, 12], Experience = 3000 };
         var preserver = new DarkSun.Game.Characters.Character { Name = "Preserver", Classes = [DarkSun.Game.Characters.CharacterClass.Preserver], Rolled = [12, 12, 12, 16, 12, 12], Experience = 3000 };
         var psionicist = new DarkSun.Game.Characters.Character { Name = "Psionicist", Classes = [DarkSun.Game.Characters.CharacterClass.Psionicist], Disciplines = [.. Enum.GetValues<DarkSun.Game.Characters.Discipline>()], Rolled = [12, 12, 12, 12, 12, 12], Experience = 3000 };
+        new DarkSun.Game.Characters.CharacterCreation(Session.Rules, Session.Names, new Random()).GiveStartingPowers(psionicist);
         Session.Party.Clear();
         Session.Party.AddRange([cleric, preserver, psionicist]);
         while (_party.Count < 3 && AddCharacter(_world[0]!.Cell) is not null)
@@ -3140,12 +3154,19 @@ public partial class RegionView : Node2D
             screen._Input(new InputEventKey { Keycode = Key.Escape, PhysicalKeycode = Key.Escape, Pressed = true });
             Expect(screen.SpellInfo is null && screen.Visible, "Esc closes it, not the screen");
 
-            // The psionicist: pick a power.
-            screen.Press(11306);
+            // The psionicist: CAST SPELL/USE PSIONIC shows the powers it was given; a click picks one to use.
+            screen.ClickSpell(false, SlotOf(false, MagicMissile)); // put Magic Missile down: a box click would cast it
             screen.ClickBox(2);
-            Expect(SlotOf(false, Detonate) >= 0, "the psionicist's psychokinesis shows Detonate");
+            Expect(screen.Showing == CharacterScreen.Page.Psionics && SlotOf(false, Detonate) >= 0
+                && Enumerable.Range(0, 21).All(i => screen.SpellAt(false, i) is not int n || psionicist.Powers.Contains(n)),
+                $"the psionicist's page shows the powers it knows, Detonate first ({screen.Showing}, {screen.Status})");
             screen.ClickSpell(false, SlotOf(false, Detonate));
-            Expect(psionicist.Powers.Contains(Detonate), $"clicking it picks it ({screen.Status})");
+            Expect(screen.PickedSpell == Detonate && psionicist.Powers.Count == 5, $"clicking one picks it to use, learning nothing ({screen.Status})");
+
+            // CURRENT SPELL EFFECTS: out of a fight, none.
+            screen.Press(11306);
+            Expect(screen.Showing == CharacterScreen.Page.Effects && screen.SpellAt(false, 0) is null && screen.Status == "CURRENT SPELL EFFECTS",
+                $"the fourth button shows the current spell effects, none out of a fight ({screen.Showing}, {screen.Status})");
 
             // Leader and computer control.
             screen.Press(11310);
@@ -3295,6 +3316,74 @@ public partial class RegionView : Node2D
             GD.Print($"  PROBLEM: {p}");
         }
         GD.Print(problems.Count == 0 ? "prisoners: OK" : $"prisoners: {problems.Count} problems");
+        GetTree().Quit(problems.Count == 0 ? 0 : 1);
+    }
+
+    /// <summary>
+    /// <c>--check-colours</c> (best with <c>--region=41</c>): the colour cycling runs on the map
+    /// with the original's ranges and speeds, an icon's turning colours carry their codes, and,
+    /// with a window (not headless), the screen changes as they turn and shows no code.
+    /// </summary>
+    private async void CheckColours()
+    {
+        var problems = new List<string>();
+        void Expect(bool ok, string what)
+        {
+            if (!ok)
+            {
+                problems.Add(what);
+            }
+        }
+        ColourCycling cycling = ColourCycling.Instance!;
+        Expect(cycling.Running, "the colour cycling runs on the map");
+        // 1587:1F83: 11–15 turn every step, 240–248 every second step.
+        int blue = cycling.ShownAt(11), lava = cycling.ShownAt(240);
+        cycling.Step();
+        Expect(cycling.ShownAt(11) != blue, $"colours 11–15 turn every step ({blue} → {cycling.ShownAt(11)})");
+        cycling.Step();
+        Expect(cycling.ShownAt(240) != lava, $"colours 240–248 turn every second step ({lava} → {cycling.ShownAt(240)})");
+        if (RegionInfo.Read(Session.Open("RESOURCE.GFF"), _region.Number) is { Cycle1: { Count: > 1, Speed: > 0 } first })
+        {
+            int was = cycling.ShownAt(first.First);
+            for (int i = 0; i < first.Speed; i++)
+            {
+                cycling.Step();
+            }
+            Expect(cycling.ShownAt(first.First) != was, $"the region's first range turns every {first.Speed} steps");
+        }
+        // The spell button's highlighted icon (ICON 11103 frame 1, its flames 242–247) is drawn in colours that turn: its texture carries their codes.
+        GffFile resources = Session.Open("RESOURCE.GFF");
+        Palette ui = Session.Assets.Palette(resources.Read("PAL ", 1001));
+        Image icon = Textures.ToImage(Session.Assets.Frames(resources.Read("ICON", 11103))[1], ui);
+        static int Code(Color c) => (c.R8 & 3) | (c.G8 & 3) << 2 | (c.B8 & 3) << 4;
+        int coded = Enumerable.Range(0, icon.GetWidth() * icon.GetHeight()).Count(i => Code(icon.GetPixel(i % icon.GetWidth(), i / icon.GetWidth())) is > 0 and <= 40);
+        Expect(coded > 0, "the spell icon's turning colours carry their codes");
+        string screen = "headless: not looked at";
+        if (DisplayServer.GetName() != "headless")
+        {
+            await ToSignal(GetTree().CreateTimer(1), SceneTreeTimer.SignalName.Timeout);
+            Image before = GetViewport().GetTexture().GetImage();
+            await ToSignal(GetTree().CreateTimer(0.4), SceneTreeTimer.SignalName.Timeout);
+            Image after = GetViewport().GetTexture().GetImage();
+            int changed = 0, codes = 0;
+            for (int y = 0; y < before.GetHeight(); y++)
+            {
+                for (int x = 0; x < before.GetWidth(); x++)
+                {
+                    changed += before.GetPixel(x, y) != after.GetPixel(x, y) ? 1 : 0;
+                    codes += cycling.ShowsCode(after.GetPixel(x, y)) ? 1 : 0;
+                }
+            }
+            Expect(changed > 0, "the screen changes as the colours turn");
+            Expect(codes == 0, $"no code shows on the screen ({codes} pixels)");
+            screen = $"{changed} pixels changed in 0.4 s";
+        }
+        GD.Print($"colours: region {_region.Number}, {coded} coded pixels in the spell icon, {screen}");
+        foreach (string p in problems)
+        {
+            GD.Print($"  PROBLEM: {p}");
+        }
+        GD.Print(problems.Count == 0 ? "colours: OK" : $"colours: {problems.Count} problems");
         GetTree().Quit(problems.Count == 0 ? 0 : 1);
     }
 
