@@ -32,8 +32,9 @@ namespace DarkSun.Engine;
 /// change its sprite; arrows walk; WASD or middle-drag scroll; wheel or +/- zoom;
 /// PgUp/PgDn change region; Esc returns to the main menu; F1 shows the <c>GMAP</c> flags, occupied cells and
 /// triggers, F3 a grid, F4 object numbers, and with any of them on the
-/// hovered cell is described (<see cref="DebugOverlay"/>; <c>-- --debug-overlay</c>
-/// starts with all three). Run with <c>-- --check-regions</c> to load every region, run its
+/// hovered cell is described (<see cref="DebugOverlay"/>); F7 the map information
+/// lines (region, objects, triggers), hidden at first; <c>-- --debug-overlay</c>
+/// starts with all four. Run with <c>-- --check-regions</c> to load every region, run its
 /// scripts, animate it and walk the party in it, then quit.
 /// </summary>
 public partial class RegionView : Node2D
@@ -174,7 +175,7 @@ public partial class RegionView : Node2D
         AddChild(BuildHud());
         if (OS.GetCmdlineUserArgs().Contains("--debug-overlay"))
         {
-            (_overlay.Flags, _overlay.Grid, _overlay.Numbers) = (true, true, true);
+            (_overlay.Flags, _overlay.Grid, _overlay.Numbers, _hudPanel.Visible) = (true, true, true, true);
         }
 
         if (OS.GetCmdlineUserArgs().Contains("--break-on-start"))
@@ -421,7 +422,7 @@ public partial class RegionView : Node2D
     private CanvasLayer BuildHud()
     {
         var layer = new CanvasLayer();
-        var panel = new PanelContainer { Position = new Vector2(4, 4), Visible = Settings.DebugHud };
+        var panel = new PanelContainer { Position = new Vector2(4, 4), Visible = false };
         _hud = new Label { LabelSettings = new LabelSettings { FontSize = 10 } };
         panel.AddChild(_hud);
         layer.AddChild(panel);
@@ -475,7 +476,7 @@ public partial class RegionView : Node2D
         layer.AddChild(_debugger);
         _journal = new JournalWindow { Portraits = n => Portrait(n) };
         layer.AddChild(_journal);
-        _options = new OptionsWindow { Closed = () => _hudPanel.Visible = Settings.DebugHud };
+        _options = new OptionsWindow();
         layer.AddChild(_options);
         _character = new CharacterScreen
         {
@@ -1458,6 +1459,10 @@ public partial class RegionView : Node2D
         {
             _overlay.Numbers = !_overlay.Numbers;
             UpdateHover(force: true);
+        }
+        else if (e.IsActionPressed(Controls.ToggleMapInfo))
+        {
+            _hudPanel.Visible = !_hudPanel.Visible;
         }
         else if (e.IsActionPressed(Controls.NextRegion))
         {
@@ -3430,6 +3435,14 @@ public partial class RegionView : Node2D
                 problems.Add(what);
             }
         }
+        // The map information lines are a debug helper: hidden at first, F7 shows and hides them.
+        bool infoHidden = !_hudPanel.Visible;
+        foreach (bool down in new[] { true, false })
+        {
+            GetViewport().PushInput(new InputEventKey { Keycode = Key.F7, PhysicalKeycode = Key.F7, Pressed = down });
+        }
+        Expect(infoHidden && _hudPanel.Visible, "the map information starts hidden and F7 shows it");
+        _hudPanel.Visible = false;
         DarkSun.Game.History.Journal journal = Session.ScriptHost.Journal;
         Expect(journal.Events.Any(e => e.Text.Contains($"region {_region.Number}")), "the first region is in the events");
         if (_world.Objects.FirstOrDefault(o => Session.Scripts.Triggers.MatchObject(GplTriggerList.TalkTo, o.Id) is not null) is { } talker)
@@ -3484,8 +3497,8 @@ public partial class RegionView : Node2D
         static string OnOffWord(bool on) => on ? "ON" : "OFF";
         _journal.Close();
         _options.Visible = false; // closing would save the settings
-        Controls.Rebind(Controls.QuickSave, new InputEventKey { PhysicalKeycode = Key.F7 });
-        Expect(KeyHelp.Keys(Controls.QuickSave) == "F7", $"quick save rebinds to F7 ({KeyHelp.Keys(Controls.QuickSave)})");
+        Controls.Rebind(Controls.QuickSave, new InputEventKey { PhysicalKeycode = Key.F12 });
+        Expect(KeyHelp.Keys(Controls.QuickSave) == "F12", $"quick save rebinds to F12 ({KeyHelp.Keys(Controls.QuickSave)})");
         Controls.ResetKeys();
         Expect(KeyHelp.Keys(Controls.QuickSave) == "F5", "and goes back to F5");
 

@@ -10,7 +10,7 @@ namespace DarkSun.Engine;
 /// them back, keeping the file's other keys (the game folder, the SoundFont).
 /// <list type="bullet">
 /// <item><c>[audio]</c> <c>music_volume</c>, <c>sound_volume</c> (0–1), <c>music_on</c>, <c>sound_on</c>;</item>
-/// <item><c>[display]</c> <c>fullscreen</c>, <c>debug_hud</c> (the region view's information lines), <c>shadows</c>,
+/// <item><c>[display]</c> <c>fullscreen</c>, <c>shadows</c>,
 /// <c>dust</c>, <c>enemy_rings</c> (0 none, 1 under the enemy chosen with Tab, 2 under every enemy);</item>
 /// <item><c>[game]</c> <c>skip_intro</c>, <c>autosave</c> (on entering a region), <c>original_pathfinding</c>,
 /// <c>difficulty</c> (0–3: easy, balanced, hard, hideous), <c>animations</c> (the map's animated things),
@@ -86,12 +86,6 @@ public static class Settings
     {
         get => Get("display", "fullscreen", false);
         set => Set("display", "fullscreen", value);
-    }
-
-    public static bool DebugHud
-    {
-        get => Get("display", "debug_hud", true);
-        set => Set("display", "debug_hud", value);
     }
 
     /// <summary>Living figures on the map cast shadows (<see cref="FloorEffects"/>; after the Obsidian Edition's).</summary>

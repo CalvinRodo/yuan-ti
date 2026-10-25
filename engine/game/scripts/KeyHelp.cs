@@ -340,6 +340,7 @@ public partial class KeyHelp : CanvasLayer
             HelpLine.For(Controls.ToggleScriptLog, "Script log"),
             HelpLine.For(Controls.ToggleGrid, "Cell grid"),
             HelpLine.For(Controls.ToggleObjectNumbers, "Object numbers"),
+            HelpLine.For(Controls.ToggleMapInfo, "Map information: region, objects, triggers"),
             HelpLine.For(Controls.NextRegion, "Next region"),
             HelpLine.For(Controls.PreviousRegion, "Previous region")),
         new HelpSection("Script debugger",
