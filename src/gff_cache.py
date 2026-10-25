@@ -18,6 +18,7 @@ from config import DEFAULT_GAME, resolve_game_dir, find_file_nocase
 # Evicts the oldest entry when the maximum size is reached.
 # ---------------------------------------------------------------------------
 _gff_cache: dict = {}
+_gff_signatures: dict = {}
 MAX_CACHE = 30
 
 
@@ -25,15 +26,21 @@ def load_gff(name: str, game_id: str = DEFAULT_GAME) -> GffFile:
     """Load (and cache) a GFF file from the game's data directory."""
     name = name.upper()
     cache_key = (game_id, name)
-    if cache_key not in _gff_cache:
-        path = os.path.join(resolve_game_dir(game_id), name)
-        if not os.path.isfile(path):
-            abort(404, description=f"GFF file not found: {name}")
+    path = os.path.join(resolve_game_dir(game_id), name)
+    try:
+        stat = os.stat(path)
+    except FileNotFoundError:
+        abort(404, description=f"GFF file not found: {name}")
+    signature = (path, stat.st_mtime_ns, stat.st_size)
+    if cache_key not in _gff_cache or _gff_signatures.get(cache_key) != signature:
         with open(path, 'rb') as fh:
             data = fh.read()
-        if len(_gff_cache) >= MAX_CACHE:
-            _gff_cache.pop(next(iter(_gff_cache)))
+        if cache_key not in _gff_cache and len(_gff_cache) >= MAX_CACHE:
+            oldest = next(iter(_gff_cache))
+            _gff_cache.pop(oldest)
+            _gff_signatures.pop(oldest, None)
         _gff_cache[cache_key] = GffFile.create(data)
+        _gff_signatures[cache_key] = signature
     return _gff_cache[cache_key]
 
 

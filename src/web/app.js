@@ -113,6 +113,8 @@ const dom = {
   mapZoomIn:        $('map-zoom-in'),
   mapZoomOut:       $('map-zoom-out'),
   mapResetPan:      $('map-reset-pan'),
+  mapEnvironment:   $('map-environment'),
+  mapEnvironmentStatus: $('map-environment-status'),
   rmapSelect:       $('rmap-select'),
   mapSpinner:       $('map-spinner'),
 
@@ -439,16 +441,21 @@ async function activateMode(mode) {
   closeDetailPane();
 
   // Show/hide toolbar groups
-  dom.modeGffGroup.classList.toggle('hidden', mode === 'spells' || mode === 'palette' || mode === 'cinematic' || mode === 'data' || mode === 'scripts' || mode === 'sprite' || mode === 'prefs');
+  dom.modeGffGroup.classList.toggle('hidden', mode === 'regions' || mode === 'spells' || mode === 'palette' || mode === 'cinematic' || mode === 'data' || mode === 'scripts' || mode === 'sprite' || mode === 'prefs');
   dom.imgViewGroup.classList.toggle('hidden', mode !== 'images');
   // Palette selector is not useful in text or palette or music/sfx/cinematic/data/scripts/sprite modes
-  dom.palGroup.classList.toggle('hidden', mode === 'text' || mode === 'palette' || mode === 'music' || mode === 'sfx' || mode === 'cinematic' || mode === 'data' || mode === 'scripts' || mode === 'sprite' || mode === 'prefs');
+  dom.palGroup.classList.toggle('hidden', mode === 'regions' || mode === 'text' || mode === 'palette' || mode === 'music' || mode === 'sfx' || mode === 'cinematic' || mode === 'data' || mode === 'scripts' || mode === 'sprite' || mode === 'prefs');
 
   // Tear down music player when leaving music or sfx mode
   if (mode !== 'music' && mode !== 'sfx' && typeof teardownMusicView === 'function') teardownMusicView();
   if (mode !== 'sfx' && typeof teardownSfxView === 'function') teardownSfxView();
 
   // Palette mode renders directly from state.allPals — no GFF selection needed
+  if (mode === 'regions') {
+    renderContent();
+    return;
+  }
+
   if (mode === 'palette') {
     renderContent();
     return;
@@ -748,6 +755,7 @@ function hideAllViews() {
   const pv = document.getElementById('prefs-view');
   if (pv) pv.classList.add('hidden');
   hideMapView();
+  document.getElementById('region-nodes-view').classList.add('hidden');
 }
 
 // ---------------------------------------------------------------------------
@@ -756,6 +764,11 @@ function hideAllViews() {
 function renderContent() {
   hideLoadingState();
   hideAllViews();
+
+  if (state.mode === 'regions') {
+    renderRegionsView();
+    return;
+  }
 
   // Palette mode renders directly from state.allPals
   if (state.mode === 'palette') {

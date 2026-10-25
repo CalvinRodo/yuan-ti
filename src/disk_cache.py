@@ -2,9 +2,9 @@
 Disk-based precomputed result cache.
 
 Precomputed files live under  precomputed/<game_id>/  and are written by
-:mod:`precompute`.  Server routes call these helpers to short-circuit
-expensive on-the-fly parsing or rendering when a cached result already
-exists.
+:mod:`precompute`. Map PNGs and connections are also cached on demand.
+Server routes use these helpers to skip expensive parsing or rendering
+when a cached result already exists.
 
 Directory layout (mirrors precompute.py output)
 ------------------------------------------------
@@ -12,6 +12,8 @@ precomputed/
   <game_id>/
     gff/<GFF_FILENAME>.json      – resource manifest
     maps/<GFF_STEM>.png          – rendered region map
+    maps/rendered/<HASH>.png     – on-demand map, keyed by inputs and palette
+    maps/connections/<HASH>.json – scripted region connections, keyed by inputs
     maps/<GFF_STEM>-<N>.json     – decoded RMAP tile data
     gamedata/items.json
     gamedata/monsters.json
@@ -24,6 +26,19 @@ import os
 from config import BASE_DIR
 
 PRECOMPUTED_DIR = os.path.join(BASE_DIR, 'precomputed')
+
+
+def source_signature(paths) -> tuple:
+    """Fingerprint input files without reading their contents."""
+    result = []
+    for path in paths:
+        try:
+            stat = os.stat(path)
+        except FileNotFoundError:
+            result.append((path, None, None))
+        else:
+            result.append((path, stat.st_mtime_ns, stat.st_size))
+    return tuple(result)
 
 
 def precomputed_path(game_id: str, *parts: str) -> str:
