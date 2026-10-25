@@ -7,7 +7,7 @@ namespace DarkSun.Engine;
 /// screen), in the stone of DSUN.EXE's LOAD and SAVE window (<c>WIND</c> 3009,
 /// as the mods screen): an OPTIONS banner and the ten slot bars, each an
 /// option and its value, ten to a page. GAME holds music and sound volume, full
-/// screen, the opening, autosave, the map's information lines, pathfinding,
+/// screen, the opening, autosave, pathfinding,
 /// the script repairs, shadows, dust, enemy rings, box selection and the
 /// enemy keys; KEYS every key that can be rebound: click one, then press the
 /// new key (Esc keeps the old one), DEFAULTS puts them all back. A click on a
@@ -190,7 +190,6 @@ public partial class OptionsWindow : RetroScreen
             Toggle("Full screen", () => Settings.Fullscreen, v => Settings.Fullscreen = v, "The whole screen or a window"),
             Toggle("Skip the opening", () => Settings.SkipIntro, v => Settings.SkipIntro = v, "Start at the main menu"),
             Toggle("Autosave", () => Settings.Autosave, v => Settings.Autosave = v, "Save on entering a region"),
-            Toggle("Map information", () => Settings.DebugHud, v => Settings.DebugHud = v, "The map's information lines"),
             Toggle("Original paths", () => Settings.OriginalPathfinding, v => Settings.OriginalPathfinding = v, "Walk as the original plans paths"),
             Toggle("Repair scripts", () => Settings.ScriptRepairs, v => Settings.ScriptRepairs = v, "Mend the game's script bugs (next launch)"),
             Toggle("Shadows", () => Settings.Shadows, v => Settings.Shadows = v, "Shadows under the figures"),

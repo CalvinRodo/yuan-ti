@@ -252,7 +252,7 @@ Conversations use the original's text windows (`WIND` 3007 and 3008): the portra
 with MORE (Space, Enter or a click) and the up arrow, choices on five stone bars (1–9, Y and N);
 `-- --new-game --talk` starts one, `--check-dialogue` reads a conversation through and pages a long text.
 Options (O on the main menu and the map) set the music and sound volume, full screen, skipping the
-opening, autosave, the map's information lines, the original pathfinding and the rest below (GAME),
+opening, autosave, the original pathfinding and the rest below (GAME),
 and rebind every key (KEYS); they are kept in `user://settings.cfg`. The original has no options
 screen: it is drawn in the stone of its LOAD and SAVE window (`WIND` 3009, as the mods screen), one
 option to a slot bar with its value on the right, ten to a page; a click changes it, a right-click
@@ -296,7 +296,8 @@ occupied cells (yellow) and move triggers (magenta); F3 a cell grid (coordinates
 and `OJFF` number (party green, creatures yellow, doors cyan); with any of
 these on, the cell under the pointer is outlined and a panel shows its
 coordinates, `GMAP` flags, occupant, objects (with their verbs) and move
-triggers (with the script they run); `-- --debug-overlay` starts with all on; Esc goes back. Objects with an `SCMD` script
+triggers (with the script they run); F7 shows the map information lines (region file, object and trigger
+counts), hidden at first; `-- --debug-overlay` starts with all on; Esc goes back. Objects with an `SCMD` script
 animate. `--check-regions` also walks the party 20 cells in every region and
 fails if two characters ever overlap; `--check-exits` walks the active member into
 every move trigger from each side and uses every object with a use trigger,

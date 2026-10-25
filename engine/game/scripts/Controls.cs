@@ -29,6 +29,7 @@ public static class Controls
     public const string QuickSave = "quick_save";
     public const string QuickLoad = "quick_load";
     public const string ToggleObjectNumbers = "debug_toggle_object_numbers";
+    public const string ToggleMapInfo = "debug_toggle_map_info";
     public const string ToggleInventory = "inventory";
     public const string ToggleCharacter = "character";
     public const string ToggleScriptDebugger = "debug_toggle_script_debugger";
@@ -53,7 +54,7 @@ public static class Controls
     [
         MoveLeft, MoveRight, MoveUp, MoveDown,
         PanLeft, PanRight, PanUp, PanDown, ZoomIn, ZoomOut, NextRegion, PreviousRegion, ToggleMapFlags, NextCharacter,
-        AddCharacter, ChangeSprite, ToggleScriptLog, ToggleGrid, QuickSave, QuickLoad, ToggleObjectNumbers,
+        AddCharacter, ChangeSprite, ToggleScriptLog, ToggleGrid, QuickSave, QuickLoad, ToggleObjectNumbers, ToggleMapInfo,
         ToggleInventory, ToggleCharacter, ToggleJournal, ToggleOptions, ToggleScriptDebugger, DebugContinue, DebugStepOver, DebugStepInto,
         DebugStepOut, CombatEndTurn, CombatGuard, CombatWait, CombatCast, CombatAuto, CombatChooseEnemy, CombatAttackChosen, ToggleCombatLog, Back,
     ];
@@ -82,6 +83,7 @@ public static class Controls
         [QuickSave] = Keys(Key.F5),
         [QuickLoad] = Keys(Key.F9),
         [ToggleObjectNumbers] = Keys(Key.F4),
+        [ToggleMapInfo] = Keys(Key.F7),
         [ToggleInventory] = Keys(Key.I),
         [ToggleCharacter] = Keys(Key.C),
         [ToggleJournal] = Keys(Key.J),
