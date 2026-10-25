@@ -14,10 +14,14 @@ namespace DarkSun.Engine;
 /// windows and art. The bottom bar's icons switch between them:
 /// <list type="bullet">
 /// <item><b>Character</b> (C): View Character, <c>WIND</c> 11500 over
-/// <c>BMP</c> 11000. The four boxes, and the selected member's sheet in the
-/// panel (<c>APFM</c> 11269): race, classes and levels, abilities, hit
-/// points, armour class and THAC0 (<see cref="CharacterSheet"/>),
-/// experience, alignment, psionics, sphere.</item>
+/// <c>BMP</c> 11000 at (0, 9), the menu's fire (<c>BMP</c> 20028 at (47, 0))
+/// behind it and the page's banner over it, centred at y 11 (<c>9106:0622</c>,
+/// <c>70E7:0000</c>): VIEW•CHARACTER (20079), USE on the spell and psionic pages
+/// (20080), EFFECTS (20075). The four boxes, the selected one in its yellow
+/// frame (<c>ICON</c> 11100 frame 3: <c>9106:020C</c> sets it to state 4), and
+/// the selected member's sheet in the panel as Create Characters writes it
+/// (<see cref="ViewCharacterText"/>). The page's icon on the bottom bar is
+/// drawn pressed, its colours turning.</item>
 /// <item><b>Items</b> (I): the inventory, <c>WIND</c> 13500 over <c>BMP</c>
 /// 13001. The boxes down the left; the member's figure (<c>BMP</c> 20000 +
 /// their look, on the parchment 13005: <c>74F1:17AF</c>) with its 14
@@ -62,7 +66,8 @@ public partial class CharacterScreen : RetroScreen
     private const int SheetWindow = 11500, SheetBackdrop = 11000, ItemsWindow = 13500, ItemsBackdrop = 13001;
     private const int FirstBox = 11300, FirstLeader = 11309, FirstComputerControl = 11313, NameBar = 11318;
     private const int CharacterButton = 10300, ItemsButton = 11304, SpellsButton = 11305, EffectsButton = 11306, MenuButton = 11308, ReturnButton = 10308;
-    private const int SheetArea = 11269, SheetDivider = 104, FirstText = 11319, SecondText = 11320;
+    private const int FirstText = 11319, SecondText = 11320;
+    private const int SheetTop = 9, Fire = 20028, CharacterBanner = 20079, MagicBanner = 20080, EffectsBanner = 20075, BoxArt = 11100, SelectedBoxFrame = 3;
     private const int DropButton = 13300, SplitButton = 13302, MoreButton = 13303, SellButton = 13304;
     private const int FirstWorn = 11216, FirstPackSlot = 11230, PackSlots = 12, ContainerArea = 13200, FirstInside = 11248, InsideSlots = 12;
     private const int ContainerSlots = ContainerWindow.Slots;
@@ -114,6 +119,8 @@ public partial class CharacterScreen : RetroScreen
         public required UiWindowView Window { get; init; }
         public required Control Root { get; init; }
         public List<TextureRect> Pictures { get; } = [];
+        /// <summary>The selected box's yellow frame over its figure, one a box.</summary>
+        public List<TextureRect> Selected { get; } = [];
         /// <summary>The items page's hit points and status words under the boxes (<c>74F1:0000</c>).</summary>
         public List<Label> Hp { get; } = [];
         public List<Label> States { get; } = [];
@@ -124,7 +131,9 @@ public partial class CharacterScreen : RetroScreen
     private GffFile _resources = null!;
     private Palette _palette = null!;
     private PageView _sheetPage = null!, _itemsPage = null!;
-    private Label _sheet = null!, _sheetMore = null!, _info = null!, _status = null!, _itemsStatus = null!;
+    private ViewCharacterText _sheet = null!;
+    private TextureRect _fire = null!, _banner = null!;
+    private Label _info = null!, _status = null!, _itemsStatus = null!;
     private TextureRect _body = null!, _figure = null!, _containerArt = null!, _panel = null!;
     private Control _stats = null!;
     private readonly Label[] _abilities = new Label[6];
@@ -200,15 +209,15 @@ public partial class CharacterScreen : RetroScreen
         _sheetPage = BuildPage(SheetWindow, SheetBackdrop);
         _itemsPage = BuildPage(ItemsWindow, ItemsBackdrop);
 
-        // The sheet: the panel the original fills with the character's details.
+        // The sheet: 9106:0622 puts the window at (0, 9) over the fire, the banner over both.
         UiWindowView sheet = _sheetPage.Window;
-        Rect2 area = sheet.RectOf("APFM", SheetArea);
-        // BMP 11000 divides the panel in two (at y 104): who the character is above, the rest below.
-        _sheet = Text(sheet, area.Position + new Vector2(3, 1), area.Size.X - 5, "");
-        _sheet.Size = new Vector2(area.Size.X - 5, SheetDivider - area.Position.Y - 2);
-        _sheetMore = Text(sheet, new Vector2(area.Position.X + 3, SheetDivider + 3), area.Size.X - 5, "");
-        _sheetMore.Size = new Vector2(area.Size.X - 5, area.End.Y - SheetDivider - 3);
-        _sheetMore.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        sheet.Position = new Vector2(0, SheetTop);
+        _fire = new TextureRect { Texture = Art("BMP ", Fire, 0), Position = new Vector2(47, 0), MouseFilter = MouseFilterEnum.Ignore };
+        Canvas.AddChild(_fire);
+        Canvas.MoveChild(_fire, sheet.GetIndex());
+        _banner = new TextureRect { MouseFilter = MouseFilterEnum.Ignore };
+        Canvas.AddChild(_banner);
+        _sheet = new ViewCharacterText(sheet, Art("BMP ", SlotArt, 0), boxText: false);
         // The status line: BMP 11000's bar under the window.
         _status = Text(sheet, new Vector2(74, 175), 172, "", HorizontalAlignment.Center);
         _status.ClipText = true;
@@ -400,6 +409,9 @@ public partial class CharacterScreen : RetroScreen
             };
             box.ClipContents = true;
             box.AddChild(picture);
+            var selected = new TextureRect { Texture = Art("ICON", BoxArt, SelectedBoxFrame), MouseFilter = MouseFilterEnum.Ignore, Visible = false };
+            box.AddChild(selected);
+            page.Selected.Add(selected);
             box.GuiInput += e =>
             {
                 if (e is InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left })
@@ -548,7 +560,13 @@ public partial class CharacterScreen : RetroScreen
         _page = page;
         _sheetPage.Window.Visible = page != Page.Items;
         _itemsPage.Window.Visible = page == Page.Items;
-        _sheet.Visible = _sheetMore.Visible = page == Page.Character;
+        _sheet.Visible = page == Page.Character;
+        _fire.Visible = _banner.Visible = page != Page.Items;
+        _banner.Texture = Art("BMP ", page switch { Page.Character => CharacterBanner, Page.Effects => EffectsBanner, _ => MagicBanner }, 0);
+        if (_banner.Texture is { } banner)
+        {
+            _banner.Position = new Vector2((Width - banner.GetWidth()) / 2 + 1, 11); // 70E7:0000 mode 1: centred, + 1
+        }
         ShowMagic(page);
         Refresh();
     }
@@ -648,11 +666,13 @@ public partial class CharacterScreen : RetroScreen
                 page.Hp[i].Text = there ? $"{_world[i]!.Vitals.Hp}/{_world[i]!.Vitals.MaxHp}" : "";
                 page.States[i].Text = there ? PartyFrames.StatusName(_world[i]!.Vitals.Status) : "";
             }
-            if (page == _itemsPage && page.Window.Button(FirstBox + i) is { } box)
+            if (page.Window.Button(FirstBox + i) is { } box)
             {
-                // 74F1:001C sets the member's box to state 4, as the page's icon (74F1:042B): drawn pressed.
+                // 74F1:001C and 9106:020C set the member's box to state 4, as the page's icon (74F1:042B): drawn pressed,
+                // its yellow frame over the figure.
                 box.ToggleMode = true;
                 box.SetPressedNoSignal(i == _member);
+                page.Selected[i].Visible = i == _member && there;
             }
             if (page.Window.Button(FirstLeader + i) is { } l)
             {
@@ -667,17 +687,23 @@ public partial class CharacterScreen : RetroScreen
                 cc.TooltipText = $"Computer control is {(CharacterOf(i) is null ? "locked" : CharacterOf(i)!.ComputerControl ? "on" : "off")}";
             }
         }
-        page.Name.Text = MemberName(_member).ToUpperInvariant();
-        if (page == _itemsPage)
+        // On the Character page the sheet writes the name (INACTIVE CHARACTER for an empty box).
+        page.Name.Text = _page == Page.Character ? "" : MemberName(_member).ToUpperInvariant();
+        // The page's icon drawn pressed (9106:0622 sets 10300 to state 4; 74F1:042B the items' icon).
+        int shown = _page switch { Page.Character => CharacterButton, Page.Items => ItemsButton, Page.Effects => EffectsButton, _ => SpellsButton };
+        foreach (int n in new[] { CharacterButton, ItemsButton, SpellsButton, EffectsButton })
         {
-            page.Window.Button(ItemsButton)!.ToggleMode = true;
-            page.Window.Button(ItemsButton)!.SetPressedNoSignal(true);
+            if (page.Window.Button(n) is { } icon)
+            {
+                icon.ToggleMode = true;
+                icon.SetPressedNoSignal(n == shown);
+            }
         }
         page.Frames.Refresh();
         switch (_page)
         {
             case Page.Character:
-                (_sheet.Text, _sheetMore.Text) = SheetText();
+                ShowSheet();
                 break;
             case Page.Items:
                 RefreshItems();
@@ -688,43 +714,32 @@ public partial class CharacterScreen : RetroScreen
         }
     }
 
-    private (string Who, string More) SheetText()
+    /// <summary>
+    /// The selected member's sheet (<see cref="ViewCharacterText"/>) as it is now: its
+    /// hit points, psionic points, armour and readied weapons; INACTIVE CHARACTER for
+    /// a member without a character.
+    /// </summary>
+    private void ShowSheet()
     {
-        if (Member is not { } member)
+        if (Member is not { } member || CharacterOf(_member) is not { } c)
         {
-            return ("", "");
+            _sheet.Show(null);
+            _sheet.ShowReadied([]);
+            return;
         }
-        Vitals v = member.Vitals;
-        string status = v.Status switch
+        Combatant fighter = PartyCombatant.From(c, member, _world!.Items, Session.Rules);
+        _sheet.Show(ViewCharacterText.Of(c, member.Items, _world.Items) with
         {
-            Vitals.Well => "",
-            >= Vitals.Destroyed => "DESTROYED",
-            >= Vitals.Dead => "DEAD",
-            >= Vitals.Down => "UNCONSCIOUS",
-            _ => "WOUNDED",
-        };
-        if (CharacterOf(_member) is not { } c)
-        {
-            return ($"HP {v.Hp}/{v.MaxHp}  {status}", "No character sheet: this member was added for testing.");
-        }
-        var cc = new CharacterCreation(Session.Rules, Session.Names, new Random());
-        var levels = cc.Levels(c);
-        string Abil(Ability a) => $"{a.ToString().ToUpperInvariant()} {cc.Adjusted(c, a),2}";
-        int ac = CharacterSheet.ArmorClass(cc.Adjusted(c, Ability.Dex), member.Items, _world!.Items, Session.Rules);
-        string who = $"{Session.Rules.Race(c.Race).Name.ToUpperInvariant()} {c.Gender.ToString().ToUpperInvariant()}\n"
-            + string.Join(" / ", c.Former.Select(f => cc.Active(c, f) ? $"{Session.Rules.Class(f.Class).Name.ToUpperInvariant()} {f.Level}" : $"({Session.Rules.Class(f.Class).Name.ToUpperInvariant()} {f.Level})")
-                .Concat(c.Classes.Select((k, n) => $"{Session.Rules.Class(k).Name.ToUpperInvariant()} {levels[n]}"))) + "\n"
-            + $"{Abil(Ability.Str)}   {Abil(Ability.Int)}\n{Abil(Ability.Dex)}   {Abil(Ability.Wis)}\n{Abil(Ability.Con)}   {Abil(Ability.Cha)}";
-        string more = $"HP {v.Hp}/{v.MaxHp}  AC {ac}  THAC0 {CharacterSheet.Thac0(cc.ActiveLevels(c), Session.Rules)}\n"
-            + $"EXP {c.Experience}   {Spaced(c.Alignment.ToString())}\n"
-            + $"PSI {_magic.Psp(c)}/{_magic.MaxPsp(c)}: {string.Join(", ", c.Disciplines.Select(d => d.ToString().ToUpperInvariant()))}"
-            + (c.Sphere is { } sphere ? $"\nSPHERE: {sphere.ToString().ToUpperInvariant()}" : "")
-            + (status.Length > 0 ? $"\n{status}" : "");
-        return (who, more);
+            Name = MemberName(_member),
+            Abilities = fighter.Stats,
+            Hp = member.Vitals.Hp,
+            MaxHp = member.Vitals.MaxHp,
+            Psp = _magic.Psp(c),
+            MaxPsp = _magic.MaxPsp(c),
+        });
+        _sheet.ShowReadied([.. ViewCharacterText.ReadiedSlots.Select(slot =>
+            member.Items.FirstOrDefault(i => i.Equipped && i.Slot == slot) is { } item ? ItemIcon(item.Rdff) : null)]);
     }
-
-    private static string Spaced(string pascal) =>
-        string.Concat(pascal.Select((ch, i) => i > 0 && char.IsUpper(ch) ? " " + ch : ch.ToString())).ToUpperInvariant();
 
     private List<Item> Pack => Member?.Items.Where(i => !i.Equipped && !_offered.Contains(i)).ToList() ?? [];
 
@@ -1053,7 +1068,7 @@ public partial class CharacterScreen : RetroScreen
 
     public string Info => _store is not null ? _info.Text : _itemsPage.Frames.Resting;
 
-    public string Sheet => _sheet.Text + "\n" + _sheetMore.Text;
+    public string Sheet => _sheet.Text;
 
     // -- clicks ---------------------------------------------------------------------------
 

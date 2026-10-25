@@ -199,8 +199,11 @@ creatures carry and items left on the ground. `-- --new-game --give=1051,1095` h
 Items can only be worn by the classes their type allows. A creature that dies leaves a dead body
 holding what it carried.
 The character screens (`CharacterScreen`) are the original's windows and art: C shows the
-character sheet (View Character, `WIND` 11500: abilities, hit points, armour class, THAC0,
-experience, psionics), I the items (`WIND` 13500: the body with its 14 equipment slots, the pack, DROP
+character sheet (View Character, `WIND` 11500 at (0, 9) over the menu's fire, its banner over it:
+VIEW•CHARACTER, USE on the spell pages, EFFECTS; the panel as Create Characters writes it, the
+abilities, three readied weapons, race, alignment, the classes and levels with a cleric's, druid's or
+ranger's in its element's colour, experience, hit and psionic points, armour class and damage; the
+selected box in its yellow frame and the page's icon pressed), I the items (`WIND` 13500: the body with its 14 equipment slots, the pack, DROP
 and SPLIT; on the right `BMP` 13004 with the abilities, PSI, AC and the attacks, `74F1:37B3`; the money
 under the window, `74F1:1C92`; what happens in the description box), and the bottom icons switch between them. Click a thing, then where it goes (a slot to
 wear it, the pack, another member's box to give it); double-click wears or takes off; right-click
