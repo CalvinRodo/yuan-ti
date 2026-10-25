@@ -263,9 +263,17 @@ onto separate free cells again. Saved games and region changes keep a collapsed 
 OVERHEAD MAP (the game menu) shows the whole region, the game stopped, the party's members as steady dots and
 the enemies left on it as flashing red ones; a click, Esc or O goes back to the view as it was
 (`--open-overhead` opens it at once).
+The original's other keys are there too, on keys the engine left free: M the overhead map (the original's O,
+the options here), V as well as C View Character, K cast a spell (the original's C), 1–4 make that member
+the leader, 5 shows the whole party (spread out) and 6 the leader alone (collapsed), H back to the party,
+Alt+A animations on or off, Ctrl+S save, Ctrl+L load, Alt+X exit (asking to save). The key help (?) lists them.
 START GAME without a party made plays the pre-made party (`game/party/premade.json`, editable:
 the roster's JSON); Create Characters' right-click menu has PRE-MADE PARTY on an empty box and DUAL for
-humans of third level or more (a new class; the old one returns once the new passes its level). The
+humans of third level or more (a new class; the old one returns once the new passes its level, and until then
+its gear can't be used: what it alone could wear goes to the pack). A second dual-class needs second level in
+each class so far. In the game a right-click on a member's box, on View Character or the inventory, opens the
+same DUAL, fights included. Raise Dead doesn't bring back an elf or a half-elf (the manual; the guide for
+half-elves); the game's own raisings do. The
 leader button picks who leads (selected when the game starts), computer control is kept for combat.
 View Character and the inventory draw what DSUN.EXE draws in their frames: the hit point, psionic and
 status bars, hit points and status under the inventory's boxes, and the status line's texts.
@@ -311,14 +319,15 @@ the next character; N: add a character; C: change the selected character's
 sprite. Characters cover a footprint of cells (estimated from the sprite's
 width until the game's size data is traced) and, except when gathering into the leader, never overlap: one blocked by
 another waits, goes round if that's short, or gives up after about 4 s.
-As in the original, a click or the arrow keys walk the selected character and the others
+As in the original, a click or the walking keys walk the selected character and the others
 follow it, each keeping to the free cell next to it nearest to them (DSUN.EXE's chase target
 chooser); Options → Party follows off makes each walk alone, as box selection and Shift+click
 (the whole party to the click) do anyway.
-Hold the arrow keys to walk the selected character (two arrows walk diagonally);
+Hold W, A, S, D to walk the selected character (two of them walk diagonally; keys can be changed in Options, and
+the ones saved there, `[keys]` in `settings.cfg`, are kept);
 releasing them stops after the current step. They move the active combatant one
 cell per key press in combat, using its movement allowance. Menus and dialogue
-block keyboard walking. WASD or middle-drag scroll (the camera eases after the selected
+block keyboard walking. The arrow keys or middle-drag scroll (the camera eases after the selected
 character, and follows it again after the next click); mouse wheel or +/-
 zoom (½, 1–4; 2, the default, shows what the original showed); PgUp/PgDn change region;
 F1 shows blocked cells (red), cells that block line of sight (blue outline),
@@ -501,8 +510,10 @@ level of each class (half-giants double), averaged over the classes, with
 Constitution's bonus; 3000 experience in each class to start (a fighter starts
 at level 2); and the map icon. The rest is the manual's: the classes each race
 may take (humans one; the others up to three, never cleric with druid), good
-or neutral alignments, one psionic discipline (psionicists all three; it gives the starting powers) and a
-sphere for clerics, druids and rangers. Where the manual contradicts itself,
+or neutral alignments (a druid True Neutral only: another alignment gives the druid up), one psionic
+discipline (psionicists all three; it gives the starting powers) and a sphere for clerics, druids and rangers,
+which start unchosen, as in the original: DONE asks for them. A click on an ability or the hit points goes
+round past its top to its bottom and back; a race that keeps no class gets the fighter again. Where the manual contradicts itself,
 half-giants can't be rangers and muls and thri-kreen can't be druids. A mod can replace the rules with
 `rules/characters.json` in its folder (the same JSON `CharacterRules` reads; a file need only hold what
 it changes). The same file holds what

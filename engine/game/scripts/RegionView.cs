@@ -671,7 +671,9 @@ public partial class RegionView : Node2D
         _objectData = objectData;
         _world = new GameWorld(_region, objectData, Session.ScriptHost.EngineVariables, Session.ScriptHost.PartyMembers, _checking ? 1 : Settings.Difficulty)
         {
-            PartyClasses = slot => slot < Session.Party.Count ? Session.Party[slot].ItemClasses : null,
+            PartyClasses = slot => slot < Session.Party.Count
+                ? new DarkSun.Game.Characters.CharacterCreation(Session.Rules, Session.Names, new Random(0)).UsableItemClasses(Session.Party[slot])
+                : null,
             PartyWeaponsOnly = slot => slot < Session.Party.Count && Session.Rules.Race(Session.Party[slot].Race).WeaponsOnly,
         };
         _world.Rested += () =>
@@ -1437,7 +1439,8 @@ public partial class RegionView : Node2D
     private bool KeyboardMovementLocked => MapLocked || _message.IsOpen || _study.IsOpen || _powerStudy.IsOpen || _dialogueWindow.Visible || _gameMenu.IsOpen || _saves.IsOpen || _character.IsOpen
         || _journal.Visible || _options.Visible || _verbMenu.Visible || _containerWindow.Visible || _itemWindow.Visible || _debugger.Visible
         || GetNodeOrNull<KeyHelp>("/root/KeyHelp")?.IsOpen == true
-        || GetViewport().GuiGetFocusOwner() is LineEdit or TextEdit;
+        || GetViewport().GuiGetFocusOwner() is LineEdit or TextEdit
+        || Controls.ModifierHeld; // Ctrl+S, Alt+A … are other keys, not a step
 
     private void MoveWithKeyboard()
     {
@@ -1511,7 +1514,7 @@ public partial class RegionView : Node2D
         {
             // The overhead map goes with a click or a key that closes things; nothing else reaches the map meanwhile.
             if (e is InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left or MouseButton.Right }
-                || e.IsActionPressed(Controls.Back) || e.IsActionPressed(Controls.ToggleOptions))
+                || e.IsActionPressed(Controls.Back) || e.IsActionPressed(Controls.ToggleOptions) || e.IsActionPressed(Controls.OverheadMap))
             {
                 OverheadMap();
             }
@@ -1566,7 +1569,7 @@ public partial class RegionView : Node2D
         {
             QuickLoadGame();
         }
-        else if (e.IsActionPressed(Controls.ToggleCombatLog))
+        else if (e.IsActionPressed(Controls.ToggleCombatLog, exactMatch: true))
         {
             _combatLog.Toggle();
         }
@@ -1683,12 +1686,73 @@ public partial class RegionView : Node2D
         {
             _scriptPanel.Visible = !_scriptPanel.Visible;
         }
+        else if (OriginalKey(e))
+        {
+            GetViewport().SetInputAsHandled();
+        }
         else if (e is InputEventMouseMotion motion && (motion.ButtonMask & MouseButtonMask.Middle) != 0)
         {
             _follow = false;
             _camera.Position -= motion.Relative / _camera.Zoom.X;
             ClampCamera();
         }
+    }
+
+    /// <summary>
+    /// The original's keys (the guide's list) the engine didn't have: the overhead map, cast, the
+    /// leader (1–4), the whole party or the leader alone (5, 6), back to the party, animations,
+    /// save, load and exit. True if <paramref name="e"/> was one of them.
+    /// </summary>
+    private bool OriginalKey(InputEvent e)
+    {
+        bool free = !_character.IsOpen && !_dialogueWindow.Visible && !_verbMenu.Visible && !Session.Scripts.IsSuspended;
+        if (e.IsActionPressed(Controls.OverheadMap) && !InCombat)
+        {
+            OverheadMap();
+        }
+        else if (e.IsActionPressed(Controls.CastSpell) && free)
+        {
+            _character.Open(_world, _selected, CharacterScreen.Page.Spells);
+        }
+        else if (Controls.LeaderKeys.FirstOrDefault(k => e.IsActionPressed(k)) is { } leader && free)
+        {
+            MakeLeader(Controls.LeaderKeys.ToList().IndexOf(leader)); // an empty slot does nothing
+        }
+        else if (e.IsActionPressed(Controls.ShowParty) && free && _world.CollapsedLeader is not null)
+        {
+            CollapseParty(); // collapsed: spreads out
+        }
+        else if (e.IsActionPressed(Controls.LeaderOnly) && free && _world.CollapsedLeader is null)
+        {
+            CollapseParty();
+        }
+        else if (e.IsActionPressed(Controls.CenterOnLeader))
+        {
+            _follow = true;
+        }
+        else if (e.IsActionPressed(Controls.ToggleAnimations))
+        {
+            Settings.Animations = !Settings.Animations;
+            Notice(Settings.Animations ? "ANIMATIONS ON" : "ANIMATIONS OFF");
+        }
+        else if (e.IsActionPressed(Controls.SaveGame) && free && !InCombat)
+        {
+            _saves.Open(SavesView.Mode.Save, null);
+        }
+        else if (e.IsActionPressed(Controls.LoadGame) && free)
+        {
+            _saves.Open(SavesView.Mode.Load, null);
+        }
+        else if (e.IsActionPressed(Controls.ExitGame))
+        {
+            _gameMenu.Open();
+            _gameMenu.Press(10301); // EXIT TO DOS: "EXIT: SAVE GAME?"
+        }
+        else
+        {
+            return false;
+        }
+        return true;
     }
 
     private void Zoom(int step)
@@ -3251,6 +3315,10 @@ public partial class RegionView : Node2D
             screen.Click(Pack, PackIndex(bag), doubleClick: true);
             screen.Click(Inside, 3, button: MouseButton.Right);
             Expect(!screen.ContainerShown, "right-clicking an empty slot of the open bag closes it");
+            screen.Click(Pack, PackIndex(bag), button: MouseButton.Right);
+            Expect(screen.OpenItem == bag && screen.ContainerShown && !screen.ItemWindowShown, "right-clicking the carried bag opens it");
+            screen.Click(Pack, PackIndex(bag), button: MouseButton.Right);
+            Expect(!screen.ContainerShown, "and right-clicking it again closes it");
         }
         else
         {
@@ -3259,6 +3327,9 @@ public partial class RegionView : Node2D
 
         screen.Press(10300);
         Expect(screen.Showing == CharacterScreen.Page.Character && screen.Sheet.Contains("HP"), "the Character icon turns to the sheet");
+        screen.OpenDual(0);
+        Expect(screen.Dual.Visible && screen.Dual.Title.Length > 0, $"a box's DUAL opens the class choice in the game too ({screen.Dual.Title})");
+        screen.Dual.Close();
         screen.Press(10308);
         Expect(!screen.IsOpen, "Return closes it");
 

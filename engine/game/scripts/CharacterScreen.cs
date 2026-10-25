@@ -37,8 +37,8 @@ namespace DarkSun.Engine;
 /// screen refreshes, then open (13003, 13002, at <c>APFM</c> 13200), its six
 /// slots over it: a bag's (leather, <c>IT1R</c> +8 = 5) the upper six of
 /// <c>APFM</c> 11248–11259, a box's the lower six. So it holds six things.
-/// Double-clicking it again, or right-clicking an empty slot of it, closes
-/// it. A container doesn't go in another. (Containers on the map open in
+/// It opens on a right-click too. Double- or right-clicking it again, or right-clicking an empty
+/// slot of it, closes it. A container doesn't go in another. (Containers on the map open in
 /// their own window, <see cref="ContainerWindow"/>.)</item>
 /// </list>
 /// <item><b>Spells</b> and <b>Psionics</b> (CAST SPELL/USE PSIONIC, 11305; the first
@@ -52,7 +52,7 @@ namespace DarkSun.Engine;
 /// Items move by clicking one, then where it goes: an equipment slot (worn,
 /// if the slot and the class allow), the pack (taken off, or out of the
 /// container), the container (put in), another member's box (given).
-/// Double-click wears, takes off or takes; right-click opens the item
+/// Double-click wears, takes off or takes; right-click opens a carried bag or box, or else the item
 /// window (<see cref="ItemWindow"/>). DSUN.EXE drags items with the
 /// pointer instead. Each box has the leader button (<c>BUTN</c> 11309–11312: "MAKE %s LEADER") and computer control
 /// (11313–11316: "COMPUTER CONTROL IS ON / OFF / LOCKED"); the wide button
@@ -139,6 +139,8 @@ public partial class CharacterScreen : RetroScreen
     private readonly Label[] _abilities = new Label[6];
     private Label _psp = null!, _armour = null!, _attacks = null!, _money = null!;
     private ItemWindow _itemWindow = null!;
+    private QuestionWindow _ask = null!;
+    private DualWindow _dual = null!;
     private readonly List<ItemSlot> _slots = [];
     private readonly Dictionary<int, Texture2D?> _slotArt = [];
 
@@ -292,6 +294,8 @@ public partial class CharacterScreen : RetroScreen
         items.Button(MoreButton)!.TooltipText = "The next twelve things in the pack (or the wheel)";
         _itemWindow = new ItemWindow { Use = UseItem };
         Canvas.AddChild(_itemWindow);
+        _ask = new QuestionWindow(Canvas, _palette);
+        _dual = new DualWindow(Canvas, _palette) { Chosen = DualChosen };
     }
 
     /// <summary>The labels of the right-hand panel (<see cref="PanelAt"/>), in colour 47 (<c>DS:326E</c>).</summary>
@@ -417,6 +421,10 @@ public partial class CharacterScreen : RetroScreen
                 if (e is InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left })
                 {
                     BoxClicked(slot);
+                }
+                else if (e is InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Right })
+                {
+                    BoxMenu(slot, window, box);
                 }
             };
             page.Pictures.Add(picture);
@@ -579,7 +587,15 @@ public partial class CharacterScreen : RetroScreen
         {
             return; // ? is the key help's
         }
-        if (e.IsActionPressed(Controls.Back) && _spellInfo is not null)
+        if (e.IsActionPressed(Controls.Back) && _dual.Visible)
+        {
+            _dual.Close();
+        }
+        else if (e.IsActionPressed(Controls.Back) && _ask.Visible)
+        {
+            _ask.Close();
+        }
+        else if (e.IsActionPressed(Controls.Back) && _spellInfo is not null)
         {
             CloseSpellInfo();
         }
@@ -1057,6 +1073,9 @@ public partial class CharacterScreen : RetroScreen
     /// <summary>A container shows in the body's place (for the headless check).</summary>
     public bool ContainerShown => _container is not null && _containerArt.Visible;
 
+    /// <summary>The item window is up (for the checks).</summary>
+    public bool ItemWindowShown => _itemWindow.Visible;
+
     /// <summary>The carried bag or box open, or null (for the headless check).</summary>
     public Item? OpenItem => _openItem;
 
@@ -1144,6 +1163,11 @@ public partial class CharacterScreen : RetroScreen
                 case MouseButton.Left:
                     Clicked(slot);
                     break;
+                case MouseButton.Right when slot.Item is { } bag && CarriedContainer(slot, bag):
+                    // A carried bag or box opens (again: closes) on a right-click too, as on a double-click.
+                    _picked = null;
+                    ToggleContainer(bag);
+                    break;
                 case MouseButton.Right when slot.Item is { } item:
                     ShowInfo(item, HolderOf(slot));
                     Describe(item, HolderOf(slot), Canvas.GetGlobalTransform().AffineInverse() * (slot.Control.GetGlobalTransform() * click.Position));
@@ -1201,6 +1225,24 @@ public partial class CharacterScreen : RetroScreen
         }
     }
 
+    /// <summary>A bag or box the member carries (worn or in the pack), out of a store: it opens in the body's place.</summary>
+    private bool CarriedContainer(ItemSlot slot, Item item) =>
+        slot.Where is Where.Worn or Where.Pack && _store is null && _world?.IsContainerItem(item) == true;
+
+    /// <summary>6527:12BD: a carried bag or box opens in the container's place (again: closes).</summary>
+    private void ToggleContainer(Item item)
+    {
+        if (_openItem == item)
+        {
+            CloseContainer();
+        }
+        else
+        {
+            OpenContainer(item);
+        }
+        RefreshItems();
+    }
+
     private void DoubleClicked(ItemSlot slot)
     {
         if (slot.Item is not { } item || HolderOf(slot) is not { } holder || Member is not { } member || _world is null)
@@ -1209,18 +1251,9 @@ public partial class CharacterScreen : RetroScreen
         }
         _picked = null;
         string? note = null;
-        if (slot.Where is Where.Worn or Where.Pack && _store is null && _world.IsContainerItem(item))
+        if (CarriedContainer(slot, item))
         {
-            // 6527:12BD: a carried bag or box opens in the container's place (again: closes).
-            if (_openItem == item)
-            {
-                CloseContainer();
-            }
-            else
-            {
-                OpenContainer(item);
-            }
-            RefreshItems();
+            ToggleContainer(item);
             return;
         }
         if (slot.Where == Where.Inside)
@@ -1440,6 +1473,50 @@ public partial class CharacterScreen : RetroScreen
     }
 
     /// <summary>A box: with an item picked, give it to that member; otherwise show them.</summary>
+    /// <summary>
+    /// A right-click on a member's box: the box menu, as Create Characters has it, here DUAL (the guide: a
+    /// right-click on a portrait dual-classes, on View Character or the inventory, even mid-fight).
+    /// </summary>
+    private void BoxMenu(int slot, UiWindowView window, Control box)
+    {
+        if (_world?[slot] is not { Kind: ObjectKind.Party } || CharacterOf(slot) is not { } c)
+        {
+            return;
+        }
+        SelectMember(slot);
+        // The small window beside the box, its top 2 pixels above the box's (as Create Characters puts it).
+        Vector2 at = window.Position + box.Position + new Vector2(box.Size.X + 1, -2);
+        _ask.Ask(MemberName(slot).ToUpperInvariant(), at, ("DUAL", () => _dual.Open(c)), ("CANCEL", null));
+    }
+
+    /// <summary>DUAL took a class: what the halted class alone could use goes to the pack (the guide: dual-classing takes some gear off).</summary>
+    private void DualChosen(Character c, CharacterClass k)
+    {
+        if (_world is not null && Member is { } member)
+        {
+            foreach (Item item in member.Items.Where(i => i.Equipped && !_world.CanUse(member, i)).ToList())
+            {
+                item.Slot = Equipment.Pack;
+            }
+        }
+        Did?.Invoke($"{MemberName(_member)} is now a {Session.Rules.Class(k).Name.ToLowerInvariant()}");
+        Say($"{MemberName(_member).ToUpperInvariant()} IS NOW A {Session.Rules.Class(k).Name.ToUpperInvariant()}");
+        Refresh();
+    }
+
+    /// <summary>Right-click member <paramref name="slot"/>'s box, then DUAL (the checks use it).</summary>
+    public void OpenDual(int slot)
+    {
+        if (CharacterOf(slot) is { } c)
+        {
+            SelectMember(slot);
+            _dual.Open(c);
+        }
+    }
+
+    /// <summary>The DUAL window, for the checks.</summary>
+    public DualWindow Dual => _dual;
+
     private void BoxClicked(int slot)
     {
         if (_world?[slot] is not { Kind: ObjectKind.Party } to)

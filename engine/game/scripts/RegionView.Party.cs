@@ -47,13 +47,14 @@ public partial class RegionView
         Expect(!_world.Occupancy.Cells.Any(p => p.Value is >= 0 and < PartySize && p.Value != _selected),
             "collapsed followers no longer block the map");
 
-        foreach (var (action, key, dx, dy) in new[]
+        // The keys bound to walking (by default W, A, S, D; the player's own if changed).
+        foreach (var (action, dx, dy) in new[]
         {
-            (Controls.MoveRight, Key.Right, 1, 0), (Controls.MoveDown, Key.Down, 0, 1),
-            (Controls.MoveLeft, Key.Left, -1, 0), (Controls.MoveUp, Key.Up, 0, -1),
+            (Controls.MoveRight, 1, 0), (Controls.MoveDown, 0, 1), (Controls.MoveLeft, -1, 0), (Controls.MoveUp, 0, -1),
         })
         {
-            Expect(InputMap.ActionHasEvent(action, new InputEventKey { PhysicalKeycode = key }), $"{key} is bound to movement");
+            Key key = InputMap.ActionGetEvents(action).OfType<InputEventKey>().Select(k => k.PhysicalKeycode).FirstOrDefault();
+            Expect(key != Key.None, $"{action} has a key");
             Cell before = Selected!.Walker.Cell;
             Input.ParseInputEvent(new InputEventKey { PhysicalKeycode = key, Pressed = true });
             Input.FlushBufferedEvents();

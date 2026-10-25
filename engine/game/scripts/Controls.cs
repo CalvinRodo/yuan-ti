@@ -47,6 +47,26 @@ public static class Controls
     public const string CombatChooseEnemy = "combat_choose_enemy";
     public const string CombatAttackChosen = "combat_attack_chosen";
     public const string ToggleCombatLog = "combat_log";
+    // The original's keys the engine didn't have (the guide's list): its letters where they are free.
+    public const string OverheadMap = "overhead_map";
+    public const string CastSpell = "cast_spell";
+    public const string Leader1 = "party_leader_1";
+    public const string Leader2 = "party_leader_2";
+    public const string Leader3 = "party_leader_3";
+    public const string Leader4 = "party_leader_4";
+    public const string ShowParty = "party_show_all";
+    public const string LeaderOnly = "party_leader_only";
+    public const string CenterOnLeader = "center_on_leader";
+    public const string ToggleAnimations = "toggle_animations";
+    public const string SaveGame = "save_game";
+    public const string LoadGame = "load_game";
+    public const string ExitGame = "exit_game";
+
+    /// <summary>Ctrl or Alt is held: the plain-letter keys (walking, the combat log) leave the key to its Ctrl/Alt action.</summary>
+    public static bool ModifierHeld => Input.IsKeyPressed(Key.Ctrl) || Input.IsKeyPressed(Key.Alt);
+
+    /// <summary>The leader keys, slot by slot.</summary>
+    public static IReadOnlyList<string> LeaderKeys { get; } = [Leader1, Leader2, Leader3, Leader4];
     public const string Back = "ui_cancel";
 
     /// <summary>Every action above (the key help lists them all).</summary>
@@ -56,20 +76,23 @@ public static class Controls
         PanLeft, PanRight, PanUp, PanDown, ZoomIn, ZoomOut, NextRegion, PreviousRegion, ToggleMapFlags, NextCharacter,
         AddCharacter, ChangeSprite, ToggleScriptLog, ToggleGrid, QuickSave, QuickLoad, ToggleObjectNumbers, ToggleMapInfo,
         ToggleInventory, ToggleCharacter, ToggleJournal, ToggleOptions, ToggleScriptDebugger, DebugContinue, DebugStepOver, DebugStepInto,
-        DebugStepOut, CombatEndTurn, CombatGuard, CombatWait, CombatCast, CombatAuto, CombatChooseEnemy, CombatAttackChosen, ToggleCombatLog, Back,
+        DebugStepOut, CombatEndTurn, CombatGuard, CombatWait, CombatCast, CombatAuto, CombatChooseEnemy, CombatAttackChosen, ToggleCombatLog,
+        OverheadMap, CastSpell, Leader1, Leader2, Leader3, Leader4, ShowParty, LeaderOnly, CenterOnLeader, ToggleAnimations,
+        SaveGame, LoadGame, ExitGame, Back,
     ];
 
     /// <summary>The default keys of the actions this game adds (<c>ui_cancel</c>, Esc, is Godot's own).</summary>
     private static readonly Dictionary<string, InputEventKey[]> Defaults = new()
     {
-        [MoveLeft] = Keys(Key.Left),
-        [MoveRight] = Keys(Key.Right),
-        [MoveUp] = Keys(Key.Up),
-        [MoveDown] = Keys(Key.Down),
-        [PanLeft] = Keys(Key.A),
-        [PanRight] = Keys(Key.D),
-        [PanUp] = Keys(Key.W),
-        [PanDown] = Keys(Key.S),
+        // The party walks with WASD, the map scrolls with the arrows (saved keys, [keys] in settings.cfg, still win).
+        [MoveLeft] = Keys(Key.A),
+        [MoveRight] = Keys(Key.D),
+        [MoveUp] = Keys(Key.W),
+        [MoveDown] = Keys(Key.S),
+        [PanLeft] = Keys(Key.Left),
+        [PanRight] = Keys(Key.Right),
+        [PanUp] = Keys(Key.Up),
+        [PanDown] = Keys(Key.Down),
         [ZoomIn] = Keys(Key.Equal, Key.KpAdd),
         [ZoomOut] = Keys(Key.Minus, Key.KpSubtract),
         [NextRegion] = Keys(Key.Pagedown),
@@ -85,7 +108,7 @@ public static class Controls
         [ToggleObjectNumbers] = Keys(Key.F4),
         [ToggleMapInfo] = Keys(Key.F7),
         [ToggleInventory] = Keys(Key.I),
-        [ToggleCharacter] = Keys(Key.C),
+        [ToggleCharacter] = Keys(Key.C, Key.V), // V: the original's View Character
         [ToggleJournal] = Keys(Key.J),
         [ToggleOptions] = Keys(Key.O),
         [ToggleScriptDebugger] = Keys(Key.F6),
@@ -101,6 +124,20 @@ public static class Controls
         [CombatChooseEnemy] = Keys(Key.Tab),
         [CombatAttackChosen] = Keys(Key.Enter, Key.KpEnter),
         [ToggleCombatLog] = Keys(Key.L),
+        // The original's O, C, A, F1, F2 are taken here (options, the character sheet, walking, debug): other keys.
+        [OverheadMap] = Keys(Key.M),
+        [CastSpell] = Keys(Key.K),
+        [Leader1] = Keys(Key.Key1),
+        [Leader2] = Keys(Key.Key2),
+        [Leader3] = Keys(Key.Key3),
+        [Leader4] = Keys(Key.Key4),
+        [ShowParty] = Keys(Key.Key5),
+        [LeaderOnly] = Keys(Key.Key6),
+        [CenterOnLeader] = Keys(Key.H),
+        [ToggleAnimations] = [new InputEventKey { PhysicalKeycode = Key.A, AltPressed = true }],
+        [SaveGame] = [new InputEventKey { PhysicalKeycode = Key.S, CtrlPressed = true }],
+        [LoadGame] = [new InputEventKey { PhysicalKeycode = Key.L, CtrlPressed = true }],
+        [ExitGame] = [new InputEventKey { PhysicalKeycode = Key.X, AltPressed = true }],
     };
 
     private static InputEventKey[] Keys(params Key[] keys) => [.. keys.Select(k => new InputEventKey { PhysicalKeycode = k })];

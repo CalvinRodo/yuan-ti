@@ -186,6 +186,20 @@ public sealed record CharacterRules
     /// <summary>A human may dual-class from this level in the current class ("at least third level", the manual).</summary>
     public int DualLevel { get; init; } = 3;
 
+    /// <summary>
+    /// A second dual-class: the classes had so far must each be at this level or more (the guide: "the first two
+    /// classes to be at least level 2"; the second needn't pass the first).
+    /// </summary>
+    public int SecondDualLevel { get; init; } = 2;
+
+    /// <summary>Classes only a character of this alignment may take (the guide: druids are True Neutral only).</summary>
+    public IReadOnlyDictionary<CharacterClass, Alignment> ClassAlignments { get; init; } =
+        new Dictionary<CharacterClass, Alignment> { [CharacterClass.Druid] = Alignment.TrueNeutral };
+
+    /// <summary>Whether <paramref name="alignment"/> allows class <paramref name="k"/> (<see cref="ClassAlignments"/>).</summary>
+    public bool AlignmentAllows(CharacterClass k, Alignment alignment) =>
+        !ClassAlignments.TryGetValue(k, out Alignment only) || only == alignment;
+
     /// <summary>The current class's prime requisites must be this or more to dual-class (AD&amp;D 2nd edition; DSUN.EXE's checks aren't traced).</summary>
     public int DualFromPrime { get; init; } = 15;
 

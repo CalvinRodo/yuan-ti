@@ -60,6 +60,8 @@ public class CharacterTests
         // 6ECD:1871: four of the discipline's powers and 169; a psionicist those of its level, whatever it knew.
         var cc = Creation();
         Character c = cc.New();
+        Assert.Empty(c.Powers); // no discipline chosen yet: the player picks it (the guide: unchecked by default)
+        cc.ChooseDiscipline(c, Discipline.Psychokinesis);
         Assert.Equal([139, 142, 143, 144, 169], c.Powers); // a fighter, psychokinesis
         cc.ChooseDiscipline(c, Discipline.Telepathy);
         Assert.Equal([162, 164, 170, 166, 169], c.Powers);
@@ -143,6 +145,8 @@ public class CharacterTests
             Assert.InRange(cc.Adjusted(c, a), low, high);
         }
         Assert.InRange(c.Hp, cc.HpRange(c).Low, cc.HpRange(c).High);
+        Assert.Equal(["Choose a psionic discipline."], cc.Problems(c)); // unchecked, as in the original
+        cc.ChooseDiscipline(c, Discipline.Telepathy);
         Assert.Empty(cc.Problems(c));
     }
 
@@ -161,11 +165,15 @@ public class CharacterTests
         Assert.Equal(15, cc.Range(c, Ability.Dex).High); // 20 − 5
         Assert.Equal(Math.Max(str + 4, 17), cc.Adjusted(c, Ability.Str)); // a fighter's Strength is at least 17
         Assert.Equal(9, cc.Range(c, Ability.Wis).Low); // the fighter's floor for the other abilities
-        while (cc.Raise(c, Ability.Str))
+        while (cc.Adjusted(c, Ability.Str) < cc.Range(c, Ability.Str).High)
         {
+            cc.Raise(c, Ability.Str);
         }
         Assert.Equal(24, cc.Adjusted(c, Ability.Str));
-        Assert.False(cc.Raise(c, Ability.Str));
+        Assert.True(cc.Raise(c, Ability.Str)); // past the top, round to the bottom (the guide)
+        Assert.Equal(cc.Range(c, Ability.Str).Low, cc.Adjusted(c, Ability.Str));
+        Assert.True(cc.Lower(c, Ability.Str)); // and back
+        Assert.Equal(24, cc.Adjusted(c, Ability.Str));
     }
 
     [Fact]
@@ -214,6 +222,9 @@ public class CharacterTests
         Assert.True(cc.ToggleClass(halfElf, CharacterClass.Thief));
         Assert.False(cc.CanAdd(halfElf, CharacterClass.Preserver)); // three already
         Assert.Equal([CharacterClass.Cleric, CharacterClass.Fighter, CharacterClass.Thief], halfElf.Classes);
+        Assert.Null(halfElf.Sphere); // the cleric's sphere is the player's to pick
+        Assert.Contains("Choose a sphere.", cc.Problems(halfElf));
+        cc.ChooseSphere(halfElf, Sphere.Earth);
         Assert.Equal(Sphere.Earth, halfElf.Sphere);
 
         Character dwarf = cc.New();
@@ -249,12 +260,14 @@ public class CharacterTests
         var cc = Creation();
         Character c = cc.New(); // a fighter with 3000 experience: level 2
         Assert.Equal([2], cc.Levels(c));
-        while (cc.Lower(c, Ability.Con))
+        while (cc.Adjusted(c, Ability.Con) > cc.Range(c, Ability.Con).Low)
         {
+            cc.Lower(c, Ability.Con);
         }
         Assert.Equal((2, 20), cc.HpRange(c)); // a d10 for each level
-        while (cc.Raise(c, Ability.Con))
+        while (cc.Adjusted(c, Ability.Con) < cc.Range(c, Ability.Con).High)
         {
+            cc.Raise(c, Ability.Con);
         }
         Assert.Equal(20, cc.Adjusted(c, Ability.Con));
         Assert.Equal((7, 25), cc.HpRange(c)); // +5 at 19 and above, once
@@ -271,8 +284,9 @@ public class CharacterTests
 
         Character giant = cc.New();
         cc.SetLooks(giant, Race.HalfGiant, Gender.Male);
-        while (cc.Lower(giant, Ability.Con))
+        while (cc.Adjusted(giant, Ability.Con) > cc.Range(giant, Ability.Con).Low)
         {
+            cc.Lower(giant, Ability.Con);
         }
         var (low, high) = cc.HpRange(giant);
         int bonus = CharacterRules.Default.ConstitutionBonus(cc.Adjusted(giant, Ability.Con), true);

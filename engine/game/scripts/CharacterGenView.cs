@@ -512,7 +512,14 @@ public partial class CharacterGenView : RetroScreen
                 Character c = _cc.New();
                 _cc.SetLooks(c, race, gender);
                 c.Classes.Clear();
+                if (!Session.Rules.AlignmentAllows(k, c.Alignment))
+                {
+                    c.Alignment = Session.Rules.ClassAlignments[k]; // a druid is True Neutral
+                }
                 _cc.ToggleClass(c, k);
+                // Nothing is chosen for the player: the discipline (and a priest's sphere) are picked.
+                _cc.ChooseDiscipline(c, Discipline.Telepathy);
+                _cc.ChooseSphere(c, Sphere.Fire);
                 if (_cc.Problems(c) is { Count: > 0 } p)
                 {
                     failed++;

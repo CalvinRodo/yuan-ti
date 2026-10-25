@@ -123,7 +123,10 @@ public sealed record Character
     /// <c>6868:0000</c>): a cleric by its sphere (all four without one).
     /// </summary>
     [JsonIgnore]
-    public ItemClasses ItemClasses => Classes.Concat(Former.Select(f => f.Class)).Aggregate(ItemClasses.None, (all, k) => all | k switch
+    public ItemClasses ItemClasses => ItemClassesOf(Classes.Concat(Former.Select(f => f.Class)));
+
+    /// <summary>The item classes of <paramref name="classes"/> (a cleric by its sphere).</summary>
+    public ItemClasses ItemClassesOf(IEnumerable<CharacterClass> classes) => classes.Aggregate(ItemClasses.None, (all, k) => all | k switch
     {
         CharacterClass.Cleric => Sphere is { } s ? (ItemClasses)(1 << (int)s) : ItemClasses.Clerics,
         CharacterClass.Druid => ItemClasses.Druid,
@@ -180,7 +183,8 @@ public sealed class CharacterCreation(CharacterRules rules, CharacterNames names
     /// <summary>A new character: a human male fighter (the manual: "the fighter class has been pre-selected"), rolled, with a random name, its map icon and its starting experience.</summary>
     public Character New()
     {
-        var c = new Character { Race = Race.Human, Gender = Gender.Male, Classes = [CharacterClass.Fighter], Disciplines = [Discipline.Psychokinesis] };
+        // The psionic discipline and the sphere start unchosen, as in the original: the player picks them.
+        var c = new Character { Race = Race.Human, Gender = Gender.Male, Classes = [CharacterClass.Fighter], Disciplines = [] };
         c.Name = names.Pick(c.Race, c.Gender, random);
         c.Sprite = Icon(c);
         GiveStartingExperience(c);
@@ -266,15 +270,17 @@ public sealed class CharacterCreation(CharacterRules rules, CharacterNames names
 
     public bool Lower(Character c, Ability a) => Step(c, a, -1);
 
+    /// <summary>A click on an ability: up (left) or down (right), past the top round to the bottom and back (the guide).</summary>
     private bool Step(Character c, Ability a, int by)
     {
         var (low, high) = Range(c, a);
         int now = Adjusted(c, a);
-        if (now + by < low || now + by > high)
+        if (low >= high)
         {
             return false;
         }
-        c.Rolled[(int)a] += by;
+        int next = now + by > high ? low : now + by < low ? high : now + by;
+        c.Rolled[(int)a] += next - now;
         c.Hp = Math.Clamp(c.Hp, HpRange(c).Low, HpRange(c).High);
         return true;
     }
@@ -329,14 +335,15 @@ public sealed class CharacterCreation(CharacterRules rules, CharacterNames names
         return Math.Clamp(rolled + Rules.ConstitutionBonus(Adjusted(c, Ability.Con), Warrior(c)), low, high);
     }
 
+    /// <summary>A click on the hit points: up or down, past the top round to the bottom and back, as the abilities.</summary>
     public bool ChangeHp(Character c, int by)
     {
         var (low, high) = HpRange(c);
-        if (c.Hp + by < low || c.Hp + by > high)
+        if (low >= high)
         {
             return false;
         }
-        c.Hp += by;
+        c.Hp = c.Hp + by > high ? low : c.Hp + by < low ? high : c.Hp + by;
         return true;
     }
 
@@ -370,6 +377,10 @@ public sealed class CharacterCreation(CharacterRules rules, CharacterNames names
         c.Gender = gender;
         RaceRules r = Rules.Race(race);
         c.Classes = [.. c.Classes.Where(r.Classes.Contains).Take(r.MultiClass ? Rules.MaxClasses : 1)];
+        if (c.Classes.Count == 0 && r.Classes.Contains(CharacterClass.Fighter))
+        {
+            c.Classes = [CharacterClass.Fighter]; // pre-selected for every race, as the manual has it
+        }
         if (c.Classes.Count == 0)
         {
             c.Classes.Add(r.Classes.Contains(CharacterClass.Fighter) ? CharacterClass.Fighter : r.Classes[0]);
@@ -385,11 +396,16 @@ public sealed class CharacterCreation(CharacterRules rules, CharacterNames names
         GiveStartingPowers(c);
     }
 
+    /// <summary>The next alignment; a class it doesn't allow (a druid's, away from True Neutral) is given up.</summary>
     public void CycleAlignment(Character c, int by)
     {
         var list = Rules.Alignments;
         int at = Math.Max(0, list.ToList().IndexOf(c.Alignment));
         c.Alignment = list[((at + by) % list.Count + list.Count) % list.Count];
+        foreach (CharacterClass k in c.Classes.Where(k => !Rules.AlignmentAllows(k, c.Alignment)).ToList())
+        {
+            ToggleClass(c, k);
+        }
     }
 
     public void Rename(Character c, string name)
@@ -404,7 +420,7 @@ public sealed class CharacterCreation(CharacterRules rules, CharacterNames names
     public bool CanAdd(Character c, CharacterClass k)
     {
         RaceRules r = Rules.Race(c.Race);
-        if (!r.Classes.Contains(k) || c.Classes.Contains(k))
+        if (!r.Classes.Contains(k) || c.Classes.Contains(k) || !Rules.AlignmentAllows(k, c.Alignment))
         {
             return false;
         }
@@ -484,8 +500,8 @@ public sealed class CharacterCreation(CharacterRules rules, CharacterNames names
     private void FixPowers(Character c)
     {
         c.Disciplines = AllDisciplines(c) ? [.. Enum.GetValues<Discipline>()]
-            : c.Disciplines.Count > 0 ? [c.Disciplines[0]] : [Discipline.Psychokinesis];
-        c.Sphere = NeedsSphere(c) ? c.Sphere ?? Sphere.Earth : null;
+            : c.Disciplines.Count > 0 ? [c.Disciplines[0]] : [];
+        c.Sphere = NeedsSphere(c) ? c.Sphere : null;
     }
 
     // -- done ----------------------------------------------------------------------------
@@ -496,9 +512,10 @@ public sealed class CharacterCreation(CharacterRules rules, CharacterNames names
     /// The classes a character could dual-class into now, or why none
     /// ("NO OTHER CLASSES AVAILABLE" in DSUN.EXE). A human (a race that
     /// can't multi-class) with one class at <see cref="CharacterRules.DualLevel"/>
-    /// or more, its prime requisites at <see cref="CharacterRules.DualFromPrime"/>
+    /// or more (a second dual-class: every class so far at <see cref="CharacterRules.SecondDualLevel"/>),
+    /// its prime requisites at <see cref="CharacterRules.DualFromPrime"/>
     /// or more, and fewer than <see cref="CharacterRules.MaxClasses"/> classes
-    /// in all, may take a class the race allows, it hasn't had and nothing
+    /// in all, may take a class the race and its alignment allow, it hasn't had and nothing
     /// excludes, whose prime requisites are at <see cref="CharacterRules.DualToPrime"/>
     /// and whose requirements it meets. (The prime requisite scores are AD&amp;D
     /// 2nd edition's; DSUN.EXE's checks aren't traced.)
@@ -515,9 +532,12 @@ public sealed class CharacterCreation(CharacterRules rules, CharacterNames names
             return ([], "NO OTHER CLASSES AVAILABLE");
         }
         CharacterClass now = c.Classes[0];
-        if (Levels(c)[0] < Rules.DualLevel)
+        // The first dual-class from third level (the manual); a second when the classes so far are each at
+        // second level (the guide), the new one needn't have passed the old.
+        int needed = c.Former.Count == 0 ? Rules.DualLevel : Rules.SecondDualLevel;
+        if (Levels(c)[0] < needed || c.Former.Any(f => f.Level < needed))
         {
-            return ([], $"YOU MUST BE LEVEL {Rules.DualLevel} FIRST");
+            return ([], $"YOU MUST BE LEVEL {needed} FIRST");
         }
         if (Rules.Class(now).PrimeRequisites.Any(a => Adjusted(c, a) < Rules.DualFromPrime))
         {
@@ -526,6 +546,7 @@ public sealed class CharacterCreation(CharacterRules rules, CharacterNames names
         var had = c.Former.Select(f => f.Class).Append(now).ToList();
         var choices = r.Classes.Where(k => !had.Contains(k)
             && !Rules.Exclusive.Any(set => set.Contains(k) && had.Any(set.Contains))
+            && Rules.AlignmentAllows(k, c.Alignment)
             && Rules.Class(k).PrimeRequisites.All(a => Adjusted(c, a) >= Rules.DualToPrime)
             && Rules.Class(k).Requirements.All(q => Adjusted(c, q.Key) >= q.Value)).ToList();
         return (choices, choices.Count == 0 ? "NO OTHER CLASSES AVAILABLE" : null);
@@ -626,6 +647,13 @@ public sealed class CharacterCreation(CharacterRules rules, CharacterNames names
         return text.Length > 29 ? $"{name} gains a level" : text;
     }
 
+    /// <summary>
+    /// The item classes <paramref name="c"/> may use now: its classes, and a dual-class's former ones only once
+    /// in use again (<see cref="Active"/>; the guide: the old class's gear is disabled until then).
+    /// </summary>
+    public ItemClasses UsableItemClasses(Character c) =>
+        c.ItemClassesOf([.. c.Classes, .. c.Former.Where(f => Active(c, f)).Select(f => f.Class)]);
+
     /// <summary>Is the former class in use again: the current class's level exceeds it?</summary>
     public bool Active(Character c, FormerClass f) => Levels(c).DefaultIfEmpty(0).Max() > f.Level;
 
@@ -644,6 +672,14 @@ public sealed class CharacterCreation(CharacterRules rules, CharacterNames names
         if (c.Classes.Count == 0)
         {
             problems.Add("Choose a class.");
+        }
+        if (c.Disciplines.Count == 0)
+        {
+            problems.Add("Choose a psionic discipline.");
+        }
+        if (NeedsSphere(c) && c.Sphere is null)
+        {
+            problems.Add("Choose a sphere.");
         }
         foreach (CharacterClass k in c.Classes)
         {
