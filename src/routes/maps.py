@@ -8,6 +8,8 @@ GET /api/gff/<name>/map-render      – render a full region map image as PNG
 GET/POST /api/gff/<name>/map-environment – read/save indoor or outdoor classification
 GET /api/region-connections        – directed graph of scripted party transitions
 GET/POST /api/gff/<name>/map-name   – read/save a custom map name
+GET /api/map-names                 – every custom map name for a game, by file
+GET /api/gff/<name>/map-debug       – GMAP flags, ETAB objects and script triggers
 """
 
 import hashlib
@@ -128,6 +130,18 @@ def api_map_name(name: str):
         abort(500, description='Map names could not be read or saved')
 
 
+@bp.route('/api/map-names')
+def api_map_names():
+    game_id = request.args.get('game', DEFAULT_GAME)
+    if game_id not in GAMES:
+        abort(404, description='Unknown game')
+    try:
+        return jsonify(_load_map_names().get(game_id, {}))
+    except (OSError, ValueError):
+        current_app.logger.exception('Map names could not be read')
+        abort(500, description='Map names could not be read')
+
+
 @bp.route('/api/region-connections')
 def api_region_connections():
     game_id = request.args.get('game', DEFAULT_GAME)
@@ -147,6 +161,26 @@ def api_region_connections():
         for node in graph['nodes']
     ]
     return jsonify({**graph, 'nodes': nodes})
+
+
+@lru_cache(maxsize=8)
+def _region_debug(name, game_id, signature):
+    from region_debug import region_debug
+
+    aux = {n: load_gff(n, game_id) for n in _AUX_GFF_NAMES
+           if os.path.isfile(os.path.join(resolve_game_dir(game_id), n))}
+    return region_debug(load_gff(name, game_id), list(aux.values()), aux.get('GPLDATA.GFF'))
+
+
+@bp.route('/api/gff/<name>/map-debug')
+def api_map_debug(name: str):
+    game_id = request.args.get('game', DEFAULT_GAME)
+    if game_id not in GAMES:
+        abort(404, description='Unknown game')
+    name = name.upper()
+    if not any(d.tag == 'GMAP' for d in load_gff(name, game_id).describe_resources()):
+        abort(404, description='GFF contains no region')
+    return jsonify(_region_debug(name, game_id, _map_sources(game_id)))
 
 
 @bp.route('/api/gff/<name>/map-environment', methods=['GET', 'POST'])
