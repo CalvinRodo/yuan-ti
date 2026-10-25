@@ -143,18 +143,15 @@ public class SpellcastingTests
     }
 
     [Fact]
-    public void PsionicistsPickPowersAndSpendStrength()
+    public void PsionicistsUseTheirPowersAndSpendStrength()
     {
-        var psi = new Character { Classes = [CharacterClass.Psionicist], Disciplines = [Discipline.Psychometabolism], Experience = 3000 };
+        var psi = new Character { Classes = [CharacterClass.Psionicist], Disciplines = [Discipline.Psychometabolism], Experience = 3000, Powers = [152] }; // Cell Adjustment
         Assert.Equal(22, Magic.MaxPsp(psi)); // level 2
-        Assert.Equal(4, Magic.PowersAllowed(psi));
-        Assert.Equal("NOT IN THIS CHARACTER'S DISCIPLINES", Magic.Pick(psi, 139));
-        Assert.Equal("IS LEARNED", Magic.Pick(psi, 152)); // Cell Adjustment
         var hurt = new Vitals { Hp = 3, MaxHp = 10 };
         Assert.StartsWith("HEALED", Magic.CastOutside(psi, 152, hurt, new Random(2)));
         Assert.Equal(22 - CharacterRules.Default.PowerCost, Magic.Psp(psi));
 
         var fighter = new Character { Classes = [CharacterClass.Fighter], Disciplines = [Discipline.Telepathy] };
-        Assert.Equal((10, 1), (Magic.MaxPsp(fighter), Magic.PowersAllowed(fighter)));
+        Assert.Equal(10, Magic.MaxPsp(fighter));
     }
 }

@@ -205,7 +205,8 @@ and SPLIT; on the right `BMP` 13004 with the abilities, PSI, AC and the attacks,
 under the window, `74F1:1C92`; what happens in the description box), and the bottom icons switch between them. Click a thing, then where it goes (a slot to
 wear it, the pack, another member's box to give it); double-click wears or takes off; right-click
 opens the item window (and describes it in the panel). A carried bag or box opens in place of the
-body, to take or put in. The bar's other icons are spells and psionics, on View Character's panel. As in DSUN.EXE
+body, to take or put in. The bar's other icons are CAST SPELL/USE PSIONIC and CURRENT SPELL EFFECTS (the spells
+and powers on the member, which only a fight keeps), on View Character's panel. As in DSUN.EXE
 nothing is memorized: a caster has a number of casts at each spell level (`DS:4B08` wizard, `DS:4B11`
 priest, a byte a level; `78A9:5344` takes one a cast), and every spell it knows at a level can be cast
 while that level has some left ("2 LEVEL 1 SPELLS TO CAST"; the spells of a level with none left, or
@@ -217,14 +218,24 @@ knows the original's starting spells for its preserver level (`6ECD:1977`: Greas
 level 2, where the starting experience puts it, Shield and Wall of Fog too; at 3 Fog Cloud and Stinking
 Cloud; `CharacterRules.PreserverStartingSpells`) and, on gaining a preserver level, chooses one more in DSUN.EXE's
 study window (`WIND` 17500, CHOOSE A SPELL: the spells it doesn't know up to level (preserver level + 1) ÷ 2;
-EXIT before choosing asks YOU HAVEN'T CHOSEN and gives the choice up), a psionicist picks powers; a rest (REQUEST 1 or 4) fills the casts again. The small buttons by each box make that member leader
+EXIT before choosing asks YOU HAVEN'T CHOSEN and gives the choice up). Nobody picks powers: as DSUN.EXE
+(`6ECD:1871`) does when a character is made and again for each member when a game starts, every power is
+forgotten and a psionicist learns those of its psionicist level, anyone else four of its discipline's, each
+with power 169 (`CharacterRules.DisciplineStartingPowers` and `PsionicistStartingPowers`); PSIONIC shows the
+powers known in a discipline (LEVEL's button goes round the disciplines), crossed out without the points for
+one, and scrolls teach more. A rest (REQUEST 1 or 4) fills the casts again. The small buttons by each box make that member leader
 and turn computer control on or off. A walk click where no way leads says NO PATH FROM HERE, and a verb on
 something out of the leader's sight NO LINE OF SIGHT, in the original's message box (`WIND` 10501 over `BMP`
 10001), until a click or a key. A script's SHOP opens the items as a store: click the goods then
 the pack to buy (at the item's value), put things in the six slots by SELL to sell (at half).
 Esc on the map, or the wide button, opens the original GAME MENU: the character screens, exit, save
 and load, preferences (music and sound, GAME DIFFICULTY scaling creatures' hit points, animations),
-the overhead map, centre on the leader, the move, look and attack cursors, and collapse party.
+the overhead map, centre on the leader, the move, look and attack cursors, and collapse party (its icon
+the party while it is spread out, one figure while it is gathered).
+On the map the original's colours turn (`ColourCycling`): ranges 1–5, 6–10, 11–15 and 240–248 from the
+start of the game and the region's two `RDAT` ranges, at 12 steps a second, so fire, silt, the
+highlighted icons (the spell button's flames, the menu button's lava) and enchanted items flicker;
+`--check-colours` checks it (with a window, on the screen too).
 A right-click on the map turns the pointer the same way (MOVE, ATTACK, LOOK, a held item). As in
 DSUN.EXE (the clock runs only under the move pointer, `1DF3:29E8`), out of a fight the map holds still
 under any pointer but MOVE (creatures, animations, the clock) until a chosen verb sends the character on.
@@ -470,7 +481,7 @@ level of each class (half-giants double), averaged over the classes, with
 Constitution's bonus; 3000 experience in each class to start (a fighter starts
 at level 2); and the map icon. The rest is the manual's: the classes each race
 may take (humans one; the others up to three, never cleric with druid), good
-or neutral alignments, one psionic discipline (psionicists all three) and a
+or neutral alignments, one psionic discipline (psionicists all three; it gives the starting powers) and a
 sphere for clerics, druids and rangers. Where the manual contradicts itself,
 half-giants can't be rangers and muls and thri-kreen can't be druids. A mod can replace the rules with
 `rules/characters.json` in its folder (the same JSON `CharacterRules` reads; a file need only hold what

@@ -13,8 +13,9 @@ public static class Textures
 {
     private static readonly ConditionalWeakTable<ImageFrame, Dictionary<Palette, ImageTexture>> Cache = new();
 
+    /// <summary>The frame's image; colours that can turn carry their code (<see cref="ColourCycling.Keyed"/>).</summary>
     public static Image ToImage(ImageFrame frame, Palette palette) =>
-        Image.CreateFromData(frame.Width, frame.Height, false, Image.Format.Rgba8, frame.ToRgba(palette));
+        Image.CreateFromData(frame.Width, frame.Height, false, Image.Format.Rgba8, frame.ToRgba(ColourCycling.Keyed(palette)));
 
     /// <summary>The texture of <paramref name="frame"/> in <paramref name="palette"/>, made once.</summary>
     public static ImageTexture ToTexture(ImageFrame frame, Palette palette)

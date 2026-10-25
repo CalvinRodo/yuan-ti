@@ -157,10 +157,12 @@ public partial class RegionView
             bool follow = Settings.FollowLeader;
             _gameMenu.ResetCursor();
             _gameMenu.Open();
+            Expect(_gameMenu.CollapseShows == "party", $"COLLAPSE PARTY shows the party while it is spread out ({_gameMenu.CollapseShows})");
             _gameMenu.Press(10313);
             Step(4000);
             Expect(_world.CollapsedLeader == _selected, "collapse gathers the party");
             _gameMenu.Open();
+            Expect(_gameMenu.CollapseShows == "one", $"and one figure while it is gathered ({_gameMenu.CollapseShows})");
             _gameMenu.Press(10313);
             Expect(_world.CollapsedLeader is null && _party.All(p => p.Node.Visible), "COLLAPSE PARTY again spreads the party out");
             Expect(_world.Party.Select(p => p.Cell).Distinct().Count() == _party.Count, "spread out on different cells");

@@ -223,36 +223,6 @@ public sealed class Spellcasting(CharacterRules rules)
 
     public int Psp(Character c) => Math.Max(0, MaxPsp(c) - c.PspSpent);
 
-    /// <summary>How many powers the character may know: a psionicist's grow with its level, others have one (their wild talent).</summary>
-    public int PowersAllowed(Character c)
-    {
-        int level = Level(c, CharacterClass.Psionicist);
-        return level < 1 ? 1 : Rules.PowersAtFirstLevel + level - 1;
-    }
-
-    /// <summary>The powers of the character's disciplines.</summary>
-    public static IEnumerable<Spell> PowersOf(Character c, Discipline d) =>
-        All.Where(s => s.Kind == SpellKind.Psionic && s.Discipline == d && c.Disciplines.Contains(d));
-
-    /// <summary>Learn power <paramref name="number"/>: "IS LEARNED", or why not.</summary>
-    public string Pick(Character c, int number)
-    {
-        if (Get(number) is not { Kind: SpellKind.Psionic, Discipline: { } d } || !c.Disciplines.Contains(d))
-        {
-            return "NOT IN THIS CHARACTER'S DISCIPLINES";
-        }
-        if (c.Powers.Contains(number))
-        {
-            return "ALREADY KNOWN";
-        }
-        if (c.Powers.Count >= PowersAllowed(c))
-        {
-            return "NO MORE POWERS TO PICK";
-        }
-        c.Powers.Add(number);
-        return "IS LEARNED";
-    }
-
     /// <summary>The highest a power's rank goes (<c>6698:0685</c>).</summary>
     public const int MaxPowerRank = 30;
 
