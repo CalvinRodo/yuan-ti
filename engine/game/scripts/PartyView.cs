@@ -39,7 +39,7 @@ public partial class PartyView : RetroScreen
     private const int PaletteNumber = 1001;
     // WIND 11500's controls.
     private const int WindowNumber = 11500, FirstBox = 11300, FirstLeader = 11309, FirstComputerControl = 11313,
-        FirstText = 11319, SecondText = 11320, ReturnButton = 10308, FirstReadied = 11215;
+        FirstText = 11319, SecondText = 11320, ReturnButton = 10308;
     private const int WindowTop = 9, Fire = 20028, Banner = 20079, BoxArt = 11100, SelectedFrame = 3, EmptyFrame = 2, SlotArt = 13007;
 
     /// <summary>The status line's grey (colour 27), as the question window's title.</summary>
@@ -49,10 +49,6 @@ public partial class PartyView : RetroScreen
     private GffFile _resources = null!;
     private readonly List<TextureRect> _slotPictures = [], _selectedFrames = [];
 
-    /// <summary>The equipment slots the readied boxes show, as the recording does: the missile weapon, the weapon hand, the other hand.</summary>
-    private static readonly int[] ReadiedSlots = [2, 3, 10];
-
-    private readonly TextureRect[] _readied = new TextureRect[ReadiedSlots.Length];
     private readonly Dictionary<int, Texture2D?> _itemPictures = [];
     private PartyFrames _frames = null!;
     private ViewCharacterText _text = null!;
@@ -107,15 +103,7 @@ public partial class PartyView : RetroScreen
                 computer.Pressed += () => ComputerPressed(slot);
             }
         }
-        // The three readied weapons' slots (9106:0B64), stone, the item's picture centred over it.
-        for (int i = 0; i < ReadiedSlots.Length; i++)
-        {
-            Rect2 at = _window.RectOf("APFM", FirstReadied + i);
-            _window.AddChild(new TextureRect { Texture = Bmp(SlotArt), Position = at.Position, MouseFilter = MouseFilterEnum.Ignore });
-            _readied[i] = new TextureRect { Position = at.Position, Size = at.Size, StretchMode = TextureRect.StretchModeEnum.KeepCentered, MouseFilter = MouseFilterEnum.Ignore };
-            _window.AddChild(_readied[i]);
-        }
-        _text = new ViewCharacterText(_window);
+        _text = new ViewCharacterText(_window, Bmp(SlotArt));
 
         // The bottom bar (9106:0622): the character screens' icons, drawn but not used here, this page's (10300)
         // pressed, the spells' (11305) and 11308 disabled out of the game; the text buttons hidden.
@@ -211,10 +199,7 @@ public partial class PartyView : RetroScreen
         Character? selected = Selected;
         IReadOnlyList<ItemState> kit = selected is null ? [] : Session.Kit(selected);
         _text.Show(selected is null ? null : ViewCharacterText.Of(selected, kit));
-        for (int i = 0; i < ReadiedSlots.Length; i++)
-        {
-            _readied[i].Texture = kit.FirstOrDefault(k => k.Slot == ReadiedSlots[i]) is { } item ? ItemPicture(item.Rdff) : null;
-        }
+        _text.ShowReadied([.. ViewCharacterText.ReadiedSlots.Select(slot => kit.FirstOrDefault(k => k.Slot == slot) is { } item ? ItemPicture(item.Rdff) : null)]);
         if (Selected is null && _frames.Resting.Length == 0)
         {
             _frames.Resting = "PRESS RIGHT MOUSE BUTTON";
