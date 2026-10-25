@@ -57,7 +57,8 @@ public static class PartyCombatant
             Facing = member.Facing,
             PartyMember = true,
             ComputerControlled = c.ComputerControl,
-            ArmorClass = CharacterSheet.ArmorClass(dex, member.Items, catalog, rules) - CharacterSheet.DexterityDefence(dex, rules),
+            ArmorClass = CharacterSheet.ArmorClass(dex, member.Items, catalog, rules, CharacterSheet.BaseArmorClassOf(c.Race, rules))
+                - CharacterSheet.DexterityDefence(dex, rules),
             ShieldClass = shields,
             Thac0 = CharacterSheet.Thac0(active, rules),
             Move = race?.Move ?? 12,

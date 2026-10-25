@@ -364,6 +364,24 @@ public class ItemTests
     }
 
     [Fact]
+    public void AThriKreenWearsOnlyWeaponsAndAmmunition()
+    {
+        var (w, party) = World();
+        w.Give(1, -Boots, 0, GameWorld.None);
+        w.Give(5, -Arrows, 0, GameWorld.None);
+        Item boots = party[0].Items.Single(i => i.Rdff == Boots), arrows = party[0].Items.Single(i => i.Rdff == Arrows);
+        w.PartyWeaponsOnly = slot => slot == 0;
+        const int Ammunition = 1, Feet = 13;
+
+        Assert.Equal(EquipResult.WrongRace, w.Equip(w[0]!, boots));
+        Assert.Equal(EquipResult.WrongRace, w.EquipAt(w[0]!, boots, Feet));
+        Assert.False(boots.Equipped);
+        Assert.Equal(EquipResult.Worn, w.EquipAt(w[0]!, arrows, Ammunition));
+        w.PartyWeaponsOnly = _ => false;
+        Assert.Equal(EquipResult.Worn, w.Equip(w[0]!, boots));
+    }
+
+    [Fact]
     public void EquipAtWearsInThatSlotOnlyAndSwapsWhatWasThere()
     {
         var (w, party) = World();

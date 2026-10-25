@@ -125,6 +125,26 @@ public class CombatTests
     }
 
     [Fact]
+    public void AThriKreenWithAWeaponStillBites()
+    {
+        Combatant Kreen() => new()
+        {
+            Name = "kreen", Side = 1, Cell = new Cell(5, 5), Vitals = new Vitals { Hp = 30, MaxHp = 30 }, Stats = [10, 10, 10, 10, 10, 10],
+            ArmorClass = 5, Thac0 = 20, Level = 5, Facing = 2, NaturalAttacks = [new(8, 1, 4, 0), new(2, 1, 4, 1)], Weapon = Sword(),
+        };
+        Combatant kreen = Kreen(), t = Fighter("t", 2, 6, 5, hp: 500);
+        Battle b = Started(new ScriptedDice(Highest), kreen, t);
+        Assert.True(b.Attack(kreen, t));
+        Assert.Equal(2, b.Log.OfType<AttackRolled>().Count()); // the sword, then the bite
+
+        Combatant human = Fighter("a", 1, 5, 5), u = Fighter("u", 2, 6, 5, hp: 500);
+        human.Weapon = Sword();
+        Battle c = Started(new ScriptedDice(Highest), human, u);
+        Assert.True(c.Attack(human, u));
+        Assert.Single(c.Log.OfType<AttackRolled>()); // one natural attack: no extra
+    }
+
+    [Fact]
     public void ResistancesStopOrdinaryWeaponsButNotMagicOnes()
     {
         Combatant a = Fighter("a", 1, 5, 5), shadow = Fighter("shadow", 2, 6, 5, hp: 50, type: 13);

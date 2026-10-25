@@ -24,6 +24,17 @@ public class CharacterSheetTests
     }
 
     [Fact]
+    public void AThriKreenStartsFromArmourClassFive()
+    {
+        var catalog = new ItemCatalog(ItemType.ParseAll(new byte[20]), Data.Text.NameTable.Parse(new byte[25]));
+        Assert.Equal(5, CharacterSheet.BaseArmorClassOf(Race.ThriKreen));
+        Assert.Equal(10, CharacterSheet.BaseArmorClassOf(Race.Human));
+        Assert.Equal(5 - 4, CharacterSheet.ArmorClass(19, [], catalog, baseArmorClass: CharacterSheet.BaseArmorClassOf(Race.ThriKreen)));
+        Assert.True(CharacterRules.Default.Race(Race.ThriKreen).WeaponsOnly);
+        Assert.False(CharacterRules.Default.Race(Race.Mul).WeaponsOnly);
+    }
+
+    [Fact]
     public void Thac0IsTheBestOfTheClassesTables()
     {
         Assert.Equal(20, CharacterSheet.Thac0(CharacterClass.Fighter, 1));

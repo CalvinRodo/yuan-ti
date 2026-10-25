@@ -651,6 +651,7 @@ public partial class RegionView : Node2D
         _world = new GameWorld(_region, objectData, Session.ScriptHost.EngineVariables, Session.ScriptHost.PartyMembers, _checking ? 1 : Settings.Difficulty)
         {
             PartyClasses = slot => slot < Session.Party.Count ? Session.Party[slot].ItemClasses : null,
+            PartyWeaponsOnly = slot => slot < Session.Party.Count && Session.Rules.Race(Session.Party[slot].Race).WeaponsOnly,
         };
         _world.Rested += () =>
         {

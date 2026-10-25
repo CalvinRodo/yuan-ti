@@ -32,12 +32,15 @@ public sealed record SpellbookSize(int Intelligence, int Spells);
 /// <param name="NaturalAttacks">Its attacks without a weapon (+0x2B …): a thri-kreen's claws and bite; null: <see cref="CharacterRules.UnarmedDice"/>.</param>
 /// <param name="ConstitutionSaves">Saves Con × 2 ÷ 7 better (<c>8E77:059B</c>: dwarves and halflings).</param>
 /// <param name="ThiefSkills">Its adjustment to each of the eight thief skills (<c>3FAA:0008 + 8 · race</c>; <see cref="CharacterRules.ThiefSkills"/>); null: none.</param>
+/// <param name="ArmorClass">Its armour class before Dexterity and armour (character record +0x27, set when a character is made: 10, a thri-kreen 5).</param>
+/// <param name="WeaponsOnly">It wears nothing but weapons and their ammunition: a thri-kreen (no armour, shield, helm, ring …).</param>
 public sealed record RaceRules(
     Race Race, string Name, IReadOnlyList<Gender> Genders, IReadOnlyDictionary<Ability, int> Adjustments,
     IReadOnlyList<CharacterClass> Classes, bool MultiClass, int HitPointFactor = 1, int Move = 12,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<DarkSun.Data.Regions.NaturalAttack>? NaturalAttacks = null,
     bool ConstitutionSaves = false,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<int>? ThiefSkills = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<int>? ThiefSkills = null,
+    int ArmorClass = 10, bool WeaponsOnly = false);
 
 /// <summary>
 /// A thief skill (<c>3FAA:0000</c>, read by <c>87B3:030B</c>): <paramref name="Base"/>
@@ -442,7 +445,8 @@ public sealed record CharacterRules
                 A((Ability.Dex, 2), (Ability.Wis, 1), (Ability.Int, -1), (Ability.Cha, -2)),
                 [CharacterClass.Cleric, CharacterClass.Fighter, CharacterClass.Gladiator, CharacterClass.Psionicist, CharacterClass.Ranger], true,
                 // 6ECD:1344: four claws of 1d4 a round (8 halves) and a bite of 1d4 + 1; Move 15.
-                Move: 15, NaturalAttacks: [new(8, 1, 4, 0), new(2, 1, 4, 1)]),
+                Move: 15, NaturalAttacks: [new(8, 1, 4, 0), new(2, 1, 4, 1)],
+                ArmorClass: 5, WeaponsOnly: true),
         ],
         Classes =
         [

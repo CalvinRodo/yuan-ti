@@ -496,7 +496,9 @@ it changes). The same file holds what
 the character sheet and combat work out: the ability tables (Strength's damage and to-hit,
 Dexterity's reaction and defence, Constitution's poison save, Wisdom's magical defence), Constitution's
 hit points, each class's THAC0 factor and saving throws, attacks a round by warrior level, the
-unarmed blow, and each race's Move and natural attacks (the thri-kreen's claws and bite). A race or
+unarmed blow, and each race's Move, natural attacks (the thri-kreen's claws and bite: with a weapon in
+hand its limbs swing the weapon and it still bites), base armour class (10, a thri-kreen 5) and whether it
+wears only weapons (a thri-kreen: no armour, shield or other worn gear, only weapons and ammunition). A race or
 class that leaves a field out gets the original's.
 
 What creatures can do in combat beyond their `RDFF` records is in DSUN.EXE, not the data files, so
