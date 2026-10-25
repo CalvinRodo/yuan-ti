@@ -442,6 +442,7 @@ public sealed partial class Battle
         }
         UseCharge(t, Condition.ImprovedAc);
         Note(new Damaged(a, t, damage, elements));
+        t.WasHit = true;
         Vitals v = t.Vitals;
         if (damage < v.Hp)
         {

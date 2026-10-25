@@ -226,6 +226,33 @@ public sealed class Spellcasting(CharacterRules rules)
     /// <summary>The highest a power's rank goes (<c>6698:0685</c>).</summary>
     public const int MaxPowerRank = 30;
 
+    /// <summary>
+    /// The powers a psionicist who gained a level may pick in <paramref name="discipline"/>
+    /// (<c>8CCC:0BA7</c>): those of the discipline not yet at <see cref="MaxPowerRank"/>, known
+    /// (to enhance) or not (to learn).
+    /// </summary>
+    public static IReadOnlyList<int> PowersToStudy(Character c, Discipline discipline) =>
+        [.. Enumerable.Range(FirstPower, LastPower - FirstPower + 1)
+            .Where(n => Get(n) is { Discipline: var d } && d == discipline && c.PowerRank(n) < MaxPowerRank)];
+
+    /// <summary>
+    /// Pick power <paramref name="number"/> (<c>8CCC</c>): learned at rank 1 ("IS LEARNED"), or,
+    /// if known, a rank higher ("IS ENHANCED"); one of <see cref="Character.PowersToChoose"/> used.
+    /// </summary>
+    public static string StudyPower(Character c, int number)
+    {
+        if (!c.Powers.Contains(number))
+        {
+            c.Powers.Add(number);
+            c.PowerRanks.Remove(number);
+            c.PowersToChoose = Math.Max(0, c.PowersToChoose - 1);
+            return "IS LEARNED";
+        }
+        c.PowerRanks[number] = Math.Min(MaxPowerRank, c.PowerRank(number) + 1);
+        c.PowersToChoose = Math.Max(0, c.PowersToChoose - 1);
+        return "IS ENHANCED";
+    }
+
     /// <summary>The items that teach a spell or power when used: <c>RDFF</c> 1400–1499 (<c>91F7:03D0</c>).</summary>
     public static bool Teaches(int rdff) => rdff is >= 1400 and <= 1499;
 
@@ -272,10 +299,10 @@ public sealed class Spellcasting(CharacterRules rules)
 
     /// <summary>
     /// Cast spell (or use power) <paramref name="number"/> on
-    /// <paramref name="target"/> outside combat. Only the healing ones do
-    /// anything yet (cure light, serious and critical wounds, raise dead,
-    /// cell adjustment); the rest need combat. Returns what happened, as
-    /// DSUN.EXE's messages put it.
+    /// <paramref name="target"/> outside combat: the healing ones (cure light,
+    /// serious and critical wounds, raise dead, cell adjustment) here; the rest
+    /// say <see cref="OnlyInCombat"/>, for the map's casting to try
+    /// (<c>Encounter.CastOnMap</c>). Returns what happened, as DSUN.EXE's messages put it.
     /// </summary>
     public string CastOutside(Character caster, int number, Vitals target, Random random)
     {
@@ -295,7 +322,7 @@ public sealed class Spellcasting(CharacterRules rules)
         string? result = Heal(number, target, random);
         if (result is null)
         {
-            return "ONLY IN COMBAT";
+            return OnlyInCombat;
         }
         if (result == NothingHappens)
         {
@@ -313,6 +340,9 @@ public sealed class Spellcasting(CharacterRules rules)
     }
 
     public const string NothingHappens = "NOTHING HAPPENS";
+
+    /// <summary>What <see cref="CastOutside"/> says of a spell that isn't a healing one: the map's casting (<c>Encounter.CastOnMap</c>) takes it from there.</summary>
+    public const string OnlyInCombat = "ONLY IN COMBAT";
 
     /// <summary>
     /// What spell or power <paramref name="number"/> does to <paramref name="target"/>

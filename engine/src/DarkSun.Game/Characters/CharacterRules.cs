@@ -69,9 +69,14 @@ public sealed record AttackStep(int WarriorLevel, int Halves);
 /// </param>
 /// <param name="Thac0Factor">THAC0 is 20 − (level − 1) × this ÷ 12 (<c>8E77:0416</c>, <c>40B1:0000</c>): warriors 12, priests 8, rogues and psionicists 6, wizards 4.</param>
 /// <param name="Saves">Its five saving throws (paralysation, rod, petrification, breath, spell; <c>8E77:059B</c>).</param>
+/// <param name="ArmorBonusLevel">
+/// From this level on the class improves its armour class by 1 (0: never): the gladiator's at 5 (the
+/// guide: "Gladiators receive -1 AC at Level 5"; DSUN.EXE's code for it isn't traced).
+/// </param>
 public sealed record ClassRules(
     CharacterClass Class, string Name, IReadOnlyDictionary<Ability, int> Requirements, IReadOnlyList<Ability> PrimeRequisites,
-    int HitDie, bool Warrior, bool ChoosesSphere, IReadOnlyList<int> Levels, int Thac0Factor = 12, IReadOnlyList<SaveRow>? Saves = null)
+    int HitDie, bool Warrior, bool ChoosesSphere, IReadOnlyList<int> Levels, int Thac0Factor = 12, IReadOnlyList<SaveRow>? Saves = null,
+    int ArmorBonusLevel = 0)
 {
     public int Thac0(int level) => 20 - (Math.Max(1, level) - 1) * Thac0Factor / 12;
 }
@@ -344,6 +349,15 @@ public sealed record CharacterRules
     public ClassRules Class(CharacterClass c) => Classes.First(r => r.Class == c);
 
     /// <summary>Constitution's hit point bonus a level (<see cref="ConstitutionHitPoints"/>).</summary>
+    /// <summary>
+    /// The least a level's hit point roll gives, by Constitution (<c>40B1:0038</c>): 1, then 2 at 20,
+    /// 3 at 21–22, 4 from 23.
+    /// </summary>
+    public IReadOnlyList<int> LevelHitPointFloor { get; init; } = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 3, 3, 4, 4, 4];
+
+    public int LevelHitPointFloorOf(int con) =>
+        LevelHitPointFloor is { Count: > 0 } t ? t[Math.Clamp(con, 0, t.Count - 1)] : 1;
+
     public int ConstitutionBonus(int con, bool warrior) =>
         (warrior ? WarriorConstitutionHitPoints : ConstitutionHitPoints) is { Count: > 0 } t ? t[Math.Clamp(con, 0, t.Count - 1)] : 0;
 
@@ -458,7 +472,7 @@ public sealed record CharacterRules
                 [0, 2000, 4000, 8000, 16000, 32000, 64000, 125000, 250000], 12, WarriorSaves),
             // DSUN.EXE gives gladiators the fighter's row.
             new(CharacterClass.Gladiator, "Gladiator", Minimums(Ability.Str, 13), [Ability.Str], 10, true, false,
-                [0, 2000, 4000, 8000, 16000, 32000, 64000, 125000, 250000], 12, WarriorSaves),
+                [0, 2000, 4000, 8000, 16000, 32000, 64000, 125000, 250000], 12, WarriorSaves, ArmorBonusLevel: 5),
             new(CharacterClass.Preserver, "Preserver", Minimums(Ability.Int, 9), [Ability.Int], 4, false, false,
                 [0, 2500, 5000, 10000, 20000, 40000, 60000, 90000, 135000], 4, WizardSaves),
             new(CharacterClass.Psionicist, "Psionicist", Minimums(Ability.Wis, 12), [Ability.Con, Ability.Wis], 6, false, false,

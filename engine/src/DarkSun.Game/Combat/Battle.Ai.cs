@@ -188,7 +188,7 @@ public sealed partial class Battle
         goesOn = false;
         CastsFor(c);
         if (c.TriedSpells || c.Stats[3] <= Rules.SpellIntelligence || c.CurrentMind == CombatRecord.MindFlees || c.Spells.Count == 0
-            || c.Has(Condition.NoSpells))
+            || c.Has(Condition.NoSpells) || c.WasHit)
         {
             return false;
         }
@@ -256,7 +256,7 @@ public sealed partial class Battle
     /// </summary>
     private bool TryPsionics(Combatant c, Combatant target)
     {
-        if ((c.Flags & TurnFlags.MayUsePsionics) == 0 || c.PartyMember || c.TriedSpells)
+        if ((c.Flags & TurnFlags.MayUsePsionics) == 0 || c.PartyMember || c.TriedSpells || c.WasHit)
         {
             return false;
         }
@@ -282,11 +282,11 @@ public sealed partial class Battle
     /// target's level), and needs a power check (<see cref="PowerCheck"/>). A
     /// failed check costs half; a success the whole, and the power acts. A party
     /// member keeps up a power with a maintenance cost (<see cref="KeepUpPowers"/>).
-    /// The turn ends either way. False: not enough points.
+    /// The turn ends either way. False: not enough points, or it was hit this round (<see cref="Combatant.WasHit"/>).
     /// </summary>
     public bool UsePower(Combatant c, int number, Cell at)
     {
-        if (Spells.Power(number) is not { } power || Spells.Effect(number) is not { } e)
+        if (Spells.Power(number) is not { } power || Spells.Effect(number) is not { } e || c.WasHit)
         {
             return false;
         }

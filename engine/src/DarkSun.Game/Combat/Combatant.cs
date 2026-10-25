@@ -278,6 +278,12 @@ public sealed class Combatant
     /// <summary>The AI has tried its spells this round (<c>37BD:00AF</c>).</summary>
     internal bool TriedSpells { get; set; }
 
+    /// <summary>
+    /// It took damage this round: until the next round it can't cast a spell or use a
+    /// power (the original's YOU WERE HIT; the guide: a hit spellcaster can't cast that round).
+    /// </summary>
+    public bool WasHit { get; set; }
+
     /// <summary>This turn's mind (<c>DS:4946</c>, <c>8053:000E</c>).</summary>
     public int CurrentMind { get; internal set; }
 

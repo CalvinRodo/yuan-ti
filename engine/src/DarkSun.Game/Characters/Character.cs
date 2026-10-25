@@ -58,6 +58,22 @@ public sealed record Character
     /// </summary>
     public int SpellsToChoose { get; set; }
 
+    /// <summary>
+    /// Powers a psionicist may still learn or enhance for the levels gained (<c>8E77:0765</c> →
+    /// <c>430A:0057</c>: on gaining a psionicist level the window opens, <c>WIND</c> 17501, PICK A PSIONIC POWER).
+    /// </summary>
+    public int PowersToChoose { get; set; }
+
+    /// <summary>
+    /// The highest level each class (<see cref="Classes"/>' order) has had (character record +0x3F):
+    /// a level gained past it brings hit points and choices (<see cref="CharacterCreation.CheckLevels"/>).
+    /// Empty until the first check, which takes the levels as they are.
+    /// </summary>
+    public List<int> HighestLevels { get; set; } = [];
+
+    /// <summary>The hit points rolled for all the levels of all the classes (+0x0A): maximum hit points are this ÷ the classes + Constitution's bonus. 0: not known yet (taken from <see cref="Hp"/>).</summary>
+    public int HitDieTotal { get; set; }
+
     /// <summary>The spells cast since the last rest: each takes one of its level's casts (<see cref="Magic.Spellcasting.CastsLeft"/>).</summary>
     public List<int> Cast { get; set; } = [];
 
@@ -77,6 +93,9 @@ public sealed record Character
 
     /// <summary>Psionic strength points spent since the last rest.</summary>
     public int PspSpent { get; set; }
+
+    /// <summary>Spells (and powers cast on the map) on it outside a fight, with their ends on the game clock (<see cref="Combat.LastingEffects"/>).</summary>
+    public List<Combat.LastingEffect> Lasting { get; set; } = [];
 
     /// <summary>Computer control (DSUN.EXE's button under the leader's): the character fights on its own. Kept for combat, which isn't in yet.</summary>
     public bool ComputerControl { get; set; }
@@ -151,6 +170,9 @@ public sealed class CharacterNames(IReadOnlyList<string> male, IReadOnlyList<str
 /// three disciplines, everyone else picks one; clerics, druids and rangers
 /// pick a sphere; hit points and alignment go up and down.
 /// </summary>
+/// <summary>A level a class gained (<see cref="CharacterCreation.CheckLevels"/>), with the hit points it rolled.</summary>
+public sealed record LevelGain(CharacterClass Class, int Level, int HitPoints);
+
 public sealed class CharacterCreation(CharacterRules rules, CharacterNames names, Random random)
 {
     public CharacterRules Rules { get; } = rules;
@@ -520,9 +542,88 @@ public sealed class CharacterCreation(CharacterRules rules, CharacterNames names
         c.Classes = [k];
         c.Experience = 0;
         c.Cast.Clear();
+        c.HighestLevels = [.. Levels(c)];
         FixPowers(c);
         GiveStartingSpells(c);
         return true;
+    }
+
+    // -- gaining levels ----------------------------------------------------------------
+
+    /// <summary>
+    /// The level check (<c>8E77:08A6</c>, after an award and at the end of a fight): each class whose
+    /// level (from experience, <see cref="Levels"/>) has passed the highest it had
+    /// (<see cref="Character.HighestLevels"/>) gains it (<c>8E77:0765</c>): its hit points
+    /// (<see cref="LevelHitPoints"/>), and a preserver a spell, a psionicist a power, to choose.
+    /// Levels stop at 9 (the classes' tables). The first check on a character only notes its levels.
+    /// Maximum hit points become the rolls ÷ the classes + Constitution's bonus (<c>8E77:0260</c>).
+    /// </summary>
+    public IReadOnlyList<LevelGain> CheckLevels(Character c)
+    {
+        var levels = Levels(c);
+        if (NoteLevels(c))
+        {
+            return [];
+        }
+        var gains = new List<LevelGain>();
+        for (int i = 0; i < c.Classes.Count; i++)
+        {
+            while (c.HighestLevels[i] < levels[i])
+            {
+                int level = ++c.HighestLevels[i];
+                CharacterClass k = c.Classes[i];
+                gains.Add(new LevelGain(k, level, LevelHitPoints(c, k, level)));
+                c.SpellsToChoose += k == CharacterClass.Preserver ? 1 : 0;
+                c.PowersToChoose += k == CharacterClass.Psionicist ? 1 : 0;
+            }
+        }
+        int rolled = gains.Sum(g => g.HitPoints);
+        if (rolled > 0)
+        {
+            int classes = Math.Max(1, c.Classes.Count), bonus = Rules.ConstitutionBonus(Adjusted(c, Ability.Con), Warrior(c));
+            int total = (c.HitDieTotal > 0 ? c.HitDieTotal : Math.Max(0, c.Hp - bonus) * classes) + rolled;
+            c.HitDieTotal = total;
+            c.Hp = Math.Max(1, total / classes + bonus);
+        }
+        return gains;
+    }
+
+    /// <summary>
+    /// A character not yet checked (<see cref="Character.HighestLevels"/> not one a class) takes the
+    /// levels it has as the highest; done before experience is added, so what that brings counts. True if it was.
+    /// </summary>
+    public bool NoteLevels(Character c)
+    {
+        if (c.HighestLevels.Count == c.Classes.Count)
+        {
+            return false;
+        }
+        c.HighestLevels = [.. Levels(c)];
+        return true;
+    }
+
+    /// <summary>
+    /// The hit points a class's new level rolls (<c>8E77:0000</c>): its hit die, at least
+    /// <see cref="CharacterRules.LevelHitPointFloor"/> for the Constitution, doubled for a
+    /// half-giant (<see cref="RaceRules.HitPointFactor"/>). A human's new class gives none
+    /// until it passes the levels of the classes it left.
+    /// </summary>
+    public int LevelHitPoints(Character c, CharacterClass k, int level)
+    {
+        if (c.Race == Race.Human && c.Former.Any(f => f.Level >= level))
+        {
+            return 0;
+        }
+        int roll = Math.Max(random.Next(1, Math.Max(1, Rules.Class(k).HitDie) + 1), Rules.LevelHitPointFloorOf(Adjusted(c, Ability.Con)));
+        return roll * Math.Max(1, Rules.Race(c.Race).HitPointFactor);
+    }
+
+    /// <summary>What the level check says of a level gained (<c>8E77:08A6</c>): "%s is %d%s level %s", or "%s gains a level" when that is over 29 letters.</summary>
+    public static string LevelMessage(string name, LevelGain gain, string className)
+    {
+        string suffix = gain.Level % 100 is 11 or 12 or 13 ? "th" : (gain.Level % 10) switch { 1 => "st", 2 => "nd", 3 => "rd", _ => "th" };
+        string text = $"{name} is {gain.Level}{suffix} level {className}";
+        return text.Length > 29 ? $"{name} gains a level" : text;
     }
 
     /// <summary>Is the former class in use again: the current class's level exceeds it?</summary>

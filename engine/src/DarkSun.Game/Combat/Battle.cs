@@ -153,6 +153,7 @@ public sealed partial class Battle
                 c.Flags &= ~TurnFlags.MayMove;
             }
             c.TriedSpells = false;
+            c.WasHit = false;
         }
         foreach (Combatant c in _all.Where(c => c.Fights).ToList())
         {

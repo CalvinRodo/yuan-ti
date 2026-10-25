@@ -34,7 +34,15 @@ public static class CharacterSheet
     public static int BaseArmorClassOf(Race race, CharacterRules? rules = null) =>
         (rules ?? CharacterRules.Default).Races.FirstOrDefault(r => r.Race == race)?.ArmorClass ?? BaseArmorClass;
 
-    /// <summary>Armour class wearing <paramref name="items"/> (the worn ones count) with Dexterity <paramref name="dex"/>, from <paramref name="baseArmorClass"/> (the race's, <see cref="BaseArmorClassOf"/>).</summary>
+    /// <summary>
+    /// A character's armour class before Dexterity and armour: its race's (<see cref="BaseArmorClassOf(Race, CharacterRules?)"/>),
+    /// 1 better for each class in use (<paramref name="active"/>) at its <see cref="ClassRules.ArmorBonusLevel"/>
+    /// (a gladiator from level 5).
+    /// </summary>
+    public static int BaseArmorClassOf(Race race, IEnumerable<(CharacterClass Class, int Level)> active, CharacterRules? rules = null) =>
+        BaseArmorClassOf(race, rules) - active.Count(a => Of(a.Class, rules) is { ArmorBonusLevel: > 0 } k && a.Level >= k.ArmorBonusLevel);
+
+    /// <summary>Armour class wearing <paramref name="items"/> (the worn ones count) with Dexterity <paramref name="dex"/>, from <paramref name="baseArmorClass"/> (the race's and its classes', <see cref="BaseArmorClassOf(Race, IEnumerable{ValueTuple{CharacterClass, int}}, CharacterRules?)"/>).</summary>
     public static int ArmorClass(int dex, IEnumerable<Item> items, ItemCatalog catalog, CharacterRules? rules = null, int baseArmorClass = BaseArmorClass)
     {
         int ac = baseArmorClass + DexterityDefence(dex, rules);

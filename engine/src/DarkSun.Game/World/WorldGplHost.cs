@@ -192,20 +192,56 @@ public sealed partial class WorldGplHost : DialogueGplHost
         {
             GiveExperience(world, slot, xp);
         }
+        CheckLevels(world); // 8E77:0A8F after an award
+    }
+
+    /// <summary>A party member gained a level: its slot and what the game says (<see cref="CharacterCreation.LevelMessage"/>).</summary>
+    public event Action<int, string>? LevelGained;
+
+    private readonly Random _levelRolls = new();
+
+    /// <summary>
+    /// The level check (<c>8E77:0A8F</c> → <c>8E77:08A6</c>): after an award and at the end of a fight,
+    /// each party member standing (status below 3) gains the levels its experience has reached
+    /// (<see cref="CharacterCreation.CheckLevels"/>); its hit points rise with its maximum.
+    /// </summary>
+    public void CheckLevels(GameWorld world)
+    {
+        var creation = new CharacterCreation(Rules, CharacterNames.Empty, _levelRolls);
+        foreach (WorldObject member in world.Party.ToList())
+        {
+            if (member.Vitals.Status >= Vitals.Down || PartyCharacter(member.Index) is not { } c)
+            {
+                continue;
+            }
+            int before = c.Hp;
+            IReadOnlyList<LevelGain> gains = creation.CheckLevels(c);
+            if (c.Hp != before)
+            {
+                member.Vitals.MaxHp += c.Hp - before;
+                member.Vitals.Hp = Math.Max(1, member.Vitals.Hp + c.Hp - before);
+            }
+            foreach (LevelGain gain in gains)
+            {
+                string name = gain.Class == CharacterClass.Psionicist ? "Psionic" : Rules.Class(gain.Class).Name;
+                string message = CharacterCreation.LevelMessage(c.Name.Length > 0 ? c.Name : member.Name, gain, name);
+                Journal.Event(world.Region.Number, message + ".");
+                LevelGained?.Invoke(member.Index, message);
+            }
+        }
     }
 
     /// <summary>
     /// <c>7372:1467</c>: a living member gains <paramref name="xp"/> ÷ their classes in each, up to 2 000 000 000 in all.
-    /// A preserver level gained is a spell to choose (<see cref="Character.SpellsToChoose"/>, <c>8CCC:0000</c>).
+    /// The levels it brings come with the next level check (<see cref="CheckLevels"/>).
     /// </summary>
     private void GiveExperience(GameWorld world, int slot, int xp)
     {
         if (world[slot] is { Vitals.Alive: true } && PartyCharacter(slot) is { } c)
         {
             int classes = Math.Max(1, c.Classes.Count);
-            int before = Creation.LevelIn(c, CharacterClass.Preserver);
+            Creation.NoteLevels(c);
             c.Experience = (int)Math.Min(2_000_000_000L, c.Experience + (long)(xp / classes) * classes);
-            c.SpellsToChoose += Math.Max(0, Creation.LevelIn(c, CharacterClass.Preserver) - before);
         }
     }
 
