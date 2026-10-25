@@ -260,6 +260,7 @@ public partial class RegionView
         }
         LeaveFallen(battle);
         bool fallen = Encounter.End(battle, _world);
+        Session.ScriptHost.CheckLevels(_world); // 8E77:0A8F at the end of a fight
         bool won = !fallen;
         Log(won ? "The fight is over." : "The party has fallen.", won ? LogKind.Hit : LogKind.Fell);
         AddScriptLine($"> combat over after {battle.Round} rounds: {(won ? "won" : "lost")}");
@@ -909,6 +910,11 @@ public partial class RegionView
             return false;
         }
         Cell at = e.Target is 7 or 8 ? c.Cell : cell;
+        if (c.WasHit && cast.Item is null)
+        {
+            Notice("YOU WERE HIT"); // a wound this round spoils casting until the next
+            return false;
+        }
         if (cast is { Item: { } item, Holder: { } holder })
         {
             if (!battle.Cast(c, spell, cast.Level, at, ownSpell: false))

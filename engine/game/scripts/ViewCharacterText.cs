@@ -121,7 +121,7 @@ public sealed class ViewCharacterText
         var rules = Session.Rules;
         int str = cc.Adjusted(c, Ability.Str), dex = cc.Adjusted(c, Ability.Dex);
         int halves = CharacterSheet.AttackHalves(cc.ActiveLevels(c), rules), strDamage = rules.Abilities.StrDamageOf(str);
-        int baseArmorClass = CharacterSheet.BaseArmorClassOf(c.Race, rules);
+        int baseArmorClass = CharacterSheet.BaseArmorClassOf(c.Race, cc.ActiveLevels(c), rules);
         int armorClass = baseArmorClass + CharacterSheet.DexterityDefence(dex, rules);
         string? damage = null;
         if (catalog is not null && carried.Count > 0)

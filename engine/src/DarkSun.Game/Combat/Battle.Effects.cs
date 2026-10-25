@@ -42,7 +42,7 @@ public sealed partial class Battle
     /// </summary>
     public bool Cast(Combatant caster, int effect, int level, Cell at, Cell? end = null, bool ownSpell = true)
     {
-        if (Spells.Effect(effect) is not { } e || caster.Has(Condition.NoSpells) && effect < Spellcasting.FirstPower)
+        if (Spells.Effect(effect) is not { } e || caster.Has(Condition.NoSpells) && effect < Spellcasting.FirstPower || ownSpell && caster.WasHit)
         {
             return false;
         }

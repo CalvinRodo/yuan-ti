@@ -1,4 +1,5 @@
 using DarkSun.Game.Characters;
+using DarkSun.Game.Magic;
 using DarkSun.Game.Movement;
 using DarkSun.Game.Rules;
 using DarkSun.Game.World;
@@ -40,7 +41,7 @@ public static class Encounter
         foreach (WorldObject member in party.Where(m => !Watching(m)))
         {
             Combatant c = sheets(member.Index) is { } sheet
-                ? PartyCombatant.From(sheet, member, world.Items, characterRules)
+                ? PartyCombatant.From(sheet, member, world.Items, characterRules, world.Clock)
                 : Combatant.FromCreature(member, world.Items);
             c.Side = 1;
             c.HomeSide = 1;
@@ -82,6 +83,67 @@ public static class Encounter
         return battle;
     }
 
+    /// <summary>
+    /// A spell cast (or power used) on the map by party member <paramref name="casterSlot"/> on
+    /// <paramref name="targetSlot"/> (the guide's pre-fight Bless, Haste, Enlarge, Strength,
+    /// Protection from Evil, Biofeedback): played in a battle of the party members shown, none of
+    /// them fighting, so it reaches whom it would in a fight. With the party collapsed only the
+    /// leader is shown, so Bless and Haste take the leader alone, as the original's leader-only
+    /// view has it. What it leaves on them is kept on their sheets (<see cref="Character.Lasting"/>)
+    /// for the next fight. A spell takes one of its level's casts; a power its points and power
+    /// check. Null for what only works in a fight (damage, summoning, a lingering cloud, or no
+    /// condition at all); else NOTHING HAPPENS or IT TAKES EFFECT.
+    /// </summary>
+    public static string? CastOnMap(GameWorld world, Func<int, Character?> sheets, int casterSlot, int targetSlot, int number, ICombatDice dice,
+        CharacterRules characterRules, CombatRules? rules = null, SpellRules? spells = null, CreatureRules? creatures = null)
+    {
+        spells ??= SpellRules.Default;
+        if (spells.Effect(number) is not { } e || e.Damaging || e.Summons || e.Condition == Condition.None
+            || spells.TemplateOf(e) is { Lingers: true } && !e.SingleTarget)
+        {
+            return null;
+        }
+        List<WorldObject> shown = [.. world.Party.Where(p => !p.Hidden && p.Vitals.Alive && sheets(p.Index) is not null)];
+        int casterAt = shown.FindIndex(p => p.Index == casterSlot), targetAt = shown.FindIndex(p => p.Index == targetSlot);
+        if (casterAt < 0 || targetAt < 0)
+        {
+            return NothingHappens;
+        }
+        List<Combatant> all = [.. shown.Select(m =>
+        {
+            Combatant c = PartyCombatant.From(sheets(m.Index)!, m, world.Items, characterRules, world.Clock);
+            (c.Side, c.HomeSide) = (1, 1);
+            return c;
+        })];
+        var battle = new Battle(all, new RegionCombatMap(world.Region), dice, rules, spells, creatures)
+        {
+            Catalog = world.Items,
+            Characters = characterRules,
+            Difficulty = world.Difficulty,
+        };
+        Combatant caster = all[casterAt];
+        var before = all.ToDictionary(c => c, c => c.Effects.ToHashSet());
+        bool power = number >= Spellcasting.FirstPower;
+        bool done = power ? battle.UsePower(caster, number, all[targetAt].Cell)
+            : battle.Cast(caster, number, caster.Level, all[targetAt].Cell, ownSpell: false);
+        if (!done)
+        {
+            return NothingHappens;
+        }
+        battle.SyncSheets(); // a power's points
+        if (!power)
+        {
+            caster.Sheet!.Cast.Add(number);
+        }
+        foreach (Combatant c in all)
+        {
+            LastingEffects.Keep(c.Sheet!, c, world.Clock, battle.Clock, powers: true);
+        }
+        return all.Any(c => c.Effects.Any(x => !before[c].Contains(x))) ? "IT TAKES EFFECT" : NothingHappens;
+    }
+
+    private const string NothingHappens = "NOTHING HAPPENS";
+
     /// <summary>A summoned creature is on the party's side out of the fight too (allegiance 1, as DSUN.EXE leaves slot 4).</summary>
     private static WorldObject Summoned(WorldObject creature)
     {
@@ -98,7 +160,8 @@ public static class Encounter
 
     /// <summary>
     /// After the fight: the party members' sheets get what they used
-    /// (<see cref="Battle.SyncSheets"/>), those who watched it may fight again,
+    /// (<see cref="Battle.SyncSheets"/>) and the spells still on them
+    /// (<see cref="LastingEffects.Keep"/>), those who watched it may fight again,
     /// the opening bout's creatures leave (<c>87B3:11AC</c>),
     /// and the party gets up (<see cref="Battle.Finish"/>). True: the party
     /// fought and has fallen.
@@ -106,6 +169,13 @@ public static class Encounter
     public static bool End(Battle battle, GameWorld? world = null)
     {
         battle.SyncSheets();
+        if (world is not null)
+        {
+            foreach (Combatant c in battle.Combatants.Where(c => c.PartyMember && c.Sheet is not null && c.Alive))
+            {
+                LastingEffects.Keep(c.Sheet!, c, world.Clock, battle.Clock);
+            }
+        }
         if (world?[world.ActiveMember]?.Allegiance == GameWorld.WatchingAllegiance)
         {
             foreach (WorldObject creature in world.Objects.Where(o => o.Id is -296 or -171 or -269).ToList())

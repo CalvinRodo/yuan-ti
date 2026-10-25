@@ -327,13 +327,13 @@ public partial class CharacterScreen : RetroScreen
             return;
         }
         Character c = CharacterOf(_member)!;
-        Combatant fighter = PartyCombatant.From(c, Member!, _world!.Items, Session.Rules);
+        Combatant fighter = PartyCombatant.From(c, Member!, _world!.Items, Session.Rules, _world.Clock);
         for (int i = 0; i < 6; i++)
         {
             _abilities[i].Text = fighter.Stats[i].ToString();
         }
         _psp.Text = $"{_magic.Psp(c)}/{_magic.MaxPsp(c)}";
-        _armour.Text = $"AC: {CharacterSheet.ArmorClass(fighter.Stats[(int)Ability.Dex], Member!.Items, _world.Items, Session.Rules, CharacterSheet.BaseArmorClassOf(c.Race, Session.Rules)),2}";
+        _armour.Text = $"AC: {CharacterSheet.ArmorClass(fighter.Stats[(int)Ability.Dex], Member!.Items, _world.Items, Session.Rules, CharacterSheet.BaseArmorClassOf(c.Race, new CharacterCreation(Session.Rules, Session.Names, new Random()).ActiveLevels(c), Session.Rules)),2}";
         _attacks.Text = string.Join("\n", AttackLines(fighter));
     }
 
@@ -727,7 +727,7 @@ public partial class CharacterScreen : RetroScreen
             _sheet.ShowReadied([]);
             return;
         }
-        Combatant fighter = PartyCombatant.From(c, member, _world!.Items, Session.Rules);
+        Combatant fighter = PartyCombatant.From(c, member, _world!.Items, Session.Rules, _world.Clock);
         _sheet.Show(ViewCharacterText.Of(c, member.Items, _world.Items) with
         {
             Name = MemberName(_member),
@@ -960,8 +960,16 @@ public partial class CharacterScreen : RetroScreen
     /// <summary>Is the party fighting (USE casts on the map then)?</summary>
     public Func<bool> Fighting { get; set; } = () => false;
 
-    /// <summary>The effects on a member now (<c>SPIN</c> numbers): in a fight its combatant's, else none.</summary>
+    /// <summary>The effects on a member now (<c>SPIN</c> numbers): in a fight its combatant's, else those cast on the map still running.</summary>
     public Func<int, IReadOnlyList<int>> EffectsOf { get; set; } = _ => [];
+
+    /// <summary>
+    /// A spell or power that isn't a healing one cast out of a fight: caster's slot, target's slot,
+    /// number; what happened (<see cref="TakesEffect"/> or NOTHING HAPPENS), or null if it only works in a fight.
+    /// </summary>
+    public Func<int, int, int, string?> CastOnMap { get; set; } = (_, _, _) => null;
+
+    public const string TakesEffect = "IT TAKES EFFECT";
 
     /// <summary>
     /// USE in a fight: member, item, its holder and what it does; null when it was cast or

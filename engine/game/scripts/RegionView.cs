@@ -70,6 +70,10 @@ public partial class RegionView : Node2D
     private FloorEffects _floor = null!;
     private Node2D _sorted = null!;
     private DebugOverlay _overlay = null!;
+    private OverheadMarkers _overheadMarks = null!;
+
+    /// <summary>The view as it was before OVERHEAD MAP, to go back to.</summary>
+    private (int Zoom, bool Follow, Vector2 At)? _beforeOverhead;
     private ScriptDebugger _debugger = null!;
     private CharacterScreen _character = null!;
     private readonly Dictionary<int, Texture2D?> _itemIcons = [];
@@ -79,6 +83,7 @@ public partial class RegionView : Node2D
     private GameMenu _gameMenu = null!;
     private MessageBox _message = null!;
     private SpellStudyWindow _study = null!;
+    private PowerStudyWindow _powerStudy = null!;
     private SavesView _saves = null!;
     private GameMenu.Cursor _cursor;
 
@@ -144,9 +149,12 @@ public partial class RegionView : Node2D
     /// chosen verb sends the character on its way. Text in the dialogue window holds it too, until read.
     /// </summary>
     /// <summary>The game menu, the save and load screen or the preferences are up: nothing on the map moves, in a fight or out.</summary>
-    private bool GamePaused => _gameMenu.IsOpen || _saves.IsOpen || _options.Visible;
+    private bool GamePaused => _gameMenu.IsOpen || _saves.IsOpen || _options.Visible || OverheadShown;
 
-    private bool MapHeld => _cursor != GameMenu.Cursor.Move && _pendingUse is null || _message.IsOpen || _study.IsOpen || _dialogueWindow.Visible;
+    /// <summary>OVERHEAD MAP is up: the game waits until a click, Esc or O takes it away.</summary>
+    public bool OverheadShown => _beforeOverhead is not null;
+
+    private bool MapHeld => _cursor != GameMenu.Cursor.Move && _pendingUse is null || _message.IsOpen || _study.IsOpen || _powerStudy.IsOpen || _dialogueWindow.Visible;
 
     /// <summary>Make the next opening of the view start a new game (region 42).</summary>
     public static void StartNewGame() => _regionIndex = -1;
@@ -173,6 +181,8 @@ public partial class RegionView : Node2D
         AddChild(_sorted);
         _overlay = new DebugOverlay { Visible = false };
         AddChild(_overlay);
+        _overheadMarks = new OverheadMarkers { Visible = false, Marks = OverheadMarks };
+        AddChild(_overheadMarks);
         _camera = new Camera2D
         {
             Zoom = Vector2.One * ZoomLevels[_zoomLevel],
@@ -309,6 +319,10 @@ public partial class RegionView : Node2D
             if (OS.GetCmdlineUserArgs().Contains("--open-menu"))
             {
                 Callable.From(() => _gameMenu.Open()).CallDeferred();
+            }
+            if (OS.GetCmdlineUserArgs().Contains("--open-overhead"))
+            {
+                Callable.From(OverheadMap).CallDeferred();
             }
             if (OS.GetCmdlineUserArgs().FirstOrDefault(a => a is "--open-save" or "--open-load") is { } saves)
             {
@@ -500,7 +514,11 @@ public partial class RegionView : Node2D
             SetMoney = money => Session.ScriptHost.Money = money,
             Fighting = () => InCombat,
             EffectsOf = slot => _battle?.Combatants.FirstOrDefault(c => c.PartyMember && c.Source == _world[slot]) is { } member
-                ? [.. member.Effects.Select(e => e.Effect)] : [],
+                ? [.. member.Effects.Select(e => e.Effect)]
+                : slot < Session.Party.Count ? [.. Session.Party[slot].Lasting.Where(e => e.EndsAt is not int end || end > _world.Clock).Select(e => e.Effect)] : [],
+            CastOnMap = (caster, target, number) => DarkSun.Game.Combat.Encounter.CastOnMap(_world, slot => slot < Session.Party.Count ? Session.Party[slot] : null,
+                caster, target, number, new DarkSun.Game.Combat.BorlandDice(new DarkSun.Game.Rules.BorlandRandom((uint)System.Environment.TickCount)), Session.Rules,
+                Session.CombatRules, Session.SpellRules, Session.CreatureRules),
             CastInFight = CastItemInFight,
             SpellName = Session.SpellName,
             Did = text => AddScriptLine($"> {text}"),
@@ -538,6 +556,9 @@ public partial class RegionView : Node2D
         layer.AddChild(_message);
         _study = new SpellStudyWindow();
         layer.AddChild(_study);
+        _powerStudy = new PowerStudyWindow();
+        layer.AddChild(_powerStudy);
+        Session.ScriptHost.LevelGained += LevelGained;
         _saves = new SavesView
         {
             SaveTo = (name, file) =>
@@ -872,17 +893,46 @@ public partial class RegionView : Node2D
         UpdateHud();
     }
 
-    /// <summary>OVERHEAD MAP: the whole region in view (again: back to where it was).</summary>
+    /// <summary>
+    /// OVERHEAD MAP (<c>BUTN</c> 10305; the original draws the region's map over the
+    /// whole screen, no window of its own): the whole region in view, the game
+    /// stopped, the party's members marked and the enemies left on it flashing
+    /// (<see cref="OverheadMarkers"/>). Again (or a click, Esc): back to the view as it was.
+    /// </summary>
     private void OverheadMap()
     {
-        _zoomLevel = _zoomLevel == 0 ? Array.IndexOf(ZoomLevels, 1f) : 0;
-        _camera.Zoom = Vector2.One * ZoomLevels[_zoomLevel];
-        _follow = _zoomLevel != 0;
-        if (!_follow)
+        if (_beforeOverhead is { } before)
         {
-            _camera.Position = _mapSize / 2;
+            _beforeOverhead = null;
+            _overheadMarks.Visible = false;
+            (_zoomLevel, _follow) = (before.Zoom, before.Follow);
+            _camera.Zoom = Vector2.One * ZoomLevels[_zoomLevel];
+            _camera.Position = before.At;
+            ClampCamera();
+            return;
         }
-        ClampCamera();
+        _beforeOverhead = (_zoomLevel, _follow, _camera.Position);
+        Vector2 view = GetViewportRect().Size;
+        float fit = Math.Min(view.X / Math.Max(1, _mapSize.X), view.Y / Math.Max(1, _mapSize.Y));
+        _camera.Zoom = Vector2.One * fit;
+        _follow = false;
+        _camera.Position = _mapSize / 2;
+        _camera.ResetSmoothing();
+        _overheadMarks.Visible = true;
+    }
+
+    /// <summary>The overhead map's marks: the party's members shown, and the creatures hostile to the party, standing.</summary>
+    private IEnumerable<(Vector2 At, bool Enemy)> OverheadMarks()
+    {
+        static Vector2 Centre(Cell c) => new((c.X + 0.5f) * Region.TileSize, (c.Y + 0.5f) * Region.TileSize);
+        foreach (WorldObject o in _world.Objects.Where(o => !o.Hidden && o.Kind == ObjectKind.Creature && o.Allegiance == 2 && o.Vitals.Alive))
+        {
+            yield return (Centre(o.Cell), true);
+        }
+        foreach (WorldObject m in _world.Party.Where(m => !m.Hidden))
+        {
+            yield return (Centre(m.Cell), false);
+        }
     }
 
     /// <summary>How many times as fast as a walk the members gather with <see cref="Settings.QuickCollapse"/>.</summary>
@@ -1339,18 +1389,23 @@ public partial class RegionView : Node2D
 
     /// <summary>
     /// When the map is free, a preserver with a level gained chooses a spell (<c>8CCC:0000</c>:
-    /// standing, condition below 5) in the study window; with nothing left to learn, the choice goes.
+    /// standing, condition below 5) in the study window, a psionicist a power in its own
+    /// (<see cref="PowerStudyWindow"/>); with nothing left to learn, the choice goes.
     /// </summary>
     private void OfferSpellStudy()
     {
-        if (_study.IsOpen || KeyboardMovementLocked || _checking)
+        if (_study.IsOpen || _powerStudy.IsOpen || KeyboardMovementLocked || _checking)
         {
             return;
         }
         for (int i = 0; i < Session.Party.Count && i < PartySize; i++)
         {
-            if (Session.Party[i] is { SpellsToChoose: > 0 } c && _world[i] is { Kind: ObjectKind.Party, Hidden: false } member
-                && member.Vitals.Status < 5)
+            if (_world[i] is not { Kind: ObjectKind.Party, Hidden: false } member || member.Vitals.Status >= 5)
+            {
+                continue;
+            }
+            DarkSun.Game.Characters.Character c = Session.Party[i];
+            if (c.SpellsToChoose > 0)
             {
                 if (!_study.Open(c, c.Name, new DarkSun.Game.Magic.Spellcasting(Session.Rules)))
                 {
@@ -1358,10 +1413,28 @@ public partial class RegionView : Node2D
                 }
                 return;
             }
+            if (c.PowersToChoose > 0)
+            {
+                if (!_powerStudy.Open(c, c.Name))
+                {
+                    c.PowersToChoose = 0;
+                }
+                return;
+            }
         }
     }
 
-    private bool KeyboardMovementLocked => MapLocked || _message.IsOpen || _study.IsOpen || _dialogueWindow.Visible || _gameMenu.IsOpen || _saves.IsOpen || _character.IsOpen
+    /// <summary>A member gained a level (<see cref="WorldGplHost.CheckLevels"/>): the game says so in the message box.</summary>
+    private void LevelGained(int slot, string message)
+    {
+        AddScriptLine($"> {message}");
+        if (!_checking)
+        {
+            _message.Show(message);
+        }
+    }
+
+    private bool KeyboardMovementLocked => MapLocked || _message.IsOpen || _study.IsOpen || _powerStudy.IsOpen || _dialogueWindow.Visible || _gameMenu.IsOpen || _saves.IsOpen || _character.IsOpen
         || _journal.Visible || _options.Visible || _verbMenu.Visible || _containerWindow.Visible || _itemWindow.Visible || _debugger.Visible
         || GetNodeOrNull<KeyHelp>("/root/KeyHelp")?.IsOpen == true
         || GetViewport().GuiGetFocusOwner() is LineEdit or TextEdit;
@@ -1430,9 +1503,23 @@ public partial class RegionView : Node2D
 
     public override void _UnhandledInput(InputEvent e)
     {
-        if (_message.IsOpen || _study.IsOpen)
+        if (_message.IsOpen || _study.IsOpen || _powerStudy.IsOpen)
         {
-            return; // a key puts the message away (MessageBox); the study window takes its own
+            return; // a key puts the message away (MessageBox); the study windows take their own
+        }
+        if (OverheadShown)
+        {
+            // The overhead map goes with a click or a key that closes things; nothing else reaches the map meanwhile.
+            if (e is InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left or MouseButton.Right }
+                || e.IsActionPressed(Controls.Back) || e.IsActionPressed(Controls.ToggleOptions))
+            {
+                OverheadMap();
+            }
+            if (e is InputEventMouseButton or InputEventKey)
+            {
+                GetViewport().SetInputAsHandled();
+            }
+            return;
         }
         if (CombatInput(e))
         {
@@ -1606,6 +1693,10 @@ public partial class RegionView : Node2D
 
     private void Zoom(int step)
     {
+        if (OverheadShown)
+        {
+            return;
+        }
         _zoomLevel = Math.Clamp(_zoomLevel + step, 0, ZoomLevels.Length - 1);
         _camera.Zoom = Vector2.One * ZoomLevels[_zoomLevel];
         ClampCamera();
@@ -2893,6 +2984,18 @@ public partial class RegionView : Node2D
         _gameMenu.Close();
         _Process(0.5);
         Expect(_clock > clockBefore || MapHeld, "and runs again when it closes");
+
+        // OVERHEAD MAP: the whole region in view, the game stopped, the party and the enemies marked; again, back as it was.
+        Vector2 zoomBefore = _camera.Zoom;
+        OverheadMap();
+        double overheadClock = _clock;
+        _Process(0.5);
+        var marks = OverheadMarks().ToList();
+        Expect(OverheadShown && _overheadMarks.Visible && _clock == overheadClock && _camera.Zoom.X <= zoomBefore.X
+            && marks.Count(m => !m.Enemy) == _world.Party.Count(p => !p.Hidden),
+            $"OVERHEAD MAP shows the whole region, stopped, the party marked ({marks.Count(m => !m.Enemy)} members, {marks.Count(m => m.Enemy)} enemies)");
+        OverheadMap();
+        Expect(!OverheadShown && !_overheadMarks.Visible && _camera.Zoom == zoomBefore, "and goes back to the view as it was");
 
         Item boots = party[0].Items.First(i => i.Rdff == Boots);
         Expect(_world.Equip(me, boots) == EquipResult.Worn && boots.Slot == 13, $"boots worn on the feet (slot {boots.Slot})");

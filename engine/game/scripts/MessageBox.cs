@@ -50,15 +50,29 @@ public partial class MessageBox : RetroScreen
         window.AddChild(_text);
     }
 
-    /// <summary>Show <paramref name="message"/> until a click or a key.</summary>
+    private readonly Queue<string> _waiting = new();
+
+    /// <summary>Show <paramref name="message"/> until a click or a key; while one shows, it waits its turn (several levels gained at once).</summary>
     public void Show(string message)
     {
+        if (Visible)
+        {
+            _waiting.Enqueue(message);
+            return;
+        }
         _text.Text = message;
         Visible = true;
         GetParent()?.MoveChild(this, -1);
     }
 
-    public void Close() => Visible = false;
+    public void Close()
+    {
+        Visible = false;
+        if (_waiting.TryDequeue(out string? next))
+        {
+            Show(next);
+        }
+    }
 
     public override void _GuiInput(InputEvent e)
     {

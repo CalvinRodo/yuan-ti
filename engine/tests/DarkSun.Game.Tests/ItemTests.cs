@@ -562,15 +562,23 @@ public class ItemTests
         // 8CCC:0000: a preserver level gained opens the study window (WIND 17500) to choose a spell.
         var (w, _) = World(armed: true);
         var host = new WorldGplHost { Map = w };
-        var mage = new Characters.Character { Name = "Sadira", Experience = 2400 }; // preserver level 1 (2500 for 2)
+        var mage = new Characters.Character { Name = "Sadira", Experience = 2400, Hp = 4 }; // preserver level 1 (2500 for 2)
         mage.Classes.Add(Characters.CharacterClass.Preserver);
         host.PartyCharacter = slot => slot == 0 ? mage : null;
         w.Defeated += c => host.AwardKill(w, c);
+        var said = new List<string>();
+        host.LevelGained += (_, message) => said.Add(message);
 
         w.Hurt(TemplarOf(w), 31);
-
         Assert.Equal(2535, mage.Experience);
+        Assert.Equal(0, mage.SpellsToChoose); // the level comes with the check at the end of the fight (8E77:0A8F)
+
+        host.CheckLevels(w);
         Assert.Equal(1, mage.SpellsToChoose);
+        Assert.Equal(["Sadira is 2nd level Preserver"], said);
+        Assert.True(mage.Hp > 4); // a d4 for the level
+        host.CheckLevels(w);
+        Assert.Single(said); // once
     }
 
     [Fact]

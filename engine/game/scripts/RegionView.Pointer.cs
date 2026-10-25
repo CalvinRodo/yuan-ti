@@ -30,6 +30,7 @@ public partial class RegionView
     /// <summary>Other screens have the system's pointer, and a repeating sound and the colour cycling stop with the map.</summary>
     public override void _ExitTree()
     {
+        Session.ScriptHost.LevelGained -= LevelGained;
         Pointers.Reset();
         Sounds.Instance?.StopRepeating();
         ColourCycling.Instance?.Stop();

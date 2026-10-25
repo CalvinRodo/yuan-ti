@@ -212,19 +212,29 @@ under the window, `74F1:1C92`; what happens in the description box), and the bot
 wear it, the pack, another member's box to give it); double-click wears or takes off; right-click
 opens the item window (and describes it in the panel). A carried bag or box opens in place of the
 body, to take or put in. The bar's other icons are CAST SPELL/USE PSIONIC and CURRENT SPELL EFFECTS (the spells
-and powers on the member, which only a fight keeps), on View Character's panel. As in DSUN.EXE
+and powers on the member: a fight's, or the spells cast on the map still running), on View Character's panel. As in DSUN.EXE
 nothing is memorized: a caster has a number of casts at each spell level (`DS:4B08` wizard, `DS:4B11`
 priest, a byte a level; `78A9:5344` takes one a cast), and every spell it knows at a level can be cast
 while that level has some left ("2 LEVEL 1 SPELLS TO CAST"; the spells of a level with none left, or
 of a member not Okay, are crossed out, and the pointer on one says YOU NEED TO REST). The spells fill the
 panel's slots in their numbers' order, as DSUN.EXE does (`8F23:19B6`); MAGE / CLERIC / PSIONIC goes round
 the kinds and LEVEL n round the levels, and the points and status show under the boxes. Click a spell, then a member's box, to
-cast it (outside combat only the healing ones work; in a fight CAST lists them all); a new preserver
+cast it (in a fight CAST lists them all). Out of a fight the healing ones heal, and those that put a condition on
+the party (Bless, Haste, Enlarge, Strength, Protection from Evil, Biofeedback …) take effect as they would in a fight on
+the members shown (collapsed, the leader alone), and last on the game clock into the next fight; a spell still
+running when a fight ends goes on after it, a power ends with it; damage and summoning wait for a fight. A combatant
+hit in a round can't cast or use a power until the next (YOU WERE HIT; an item's spell is still cast). A new preserver
 knows the original's starting spells for its preserver level (`6ECD:1977`: Grease and Magic Missile; at
 level 2, where the starting experience puts it, Shield and Wall of Fog too; at 3 Fog Cloud and Stinking
 Cloud; `CharacterRules.PreserverStartingSpells`) and, on gaining a preserver level, chooses one more in DSUN.EXE's
 study window (`WIND` 17500, CHOOSE A SPELL: the spells it doesn't know up to level (preserver level + 1) ÷ 2;
-EXIT before choosing asks YOU HAVEN'T CHOSEN and gives the choice up). Nobody picks powers: as DSUN.EXE
+EXIT before choosing asks YOU HAVEN'T CHOSEN and gives the choice up). Levels come with the level check, after an
+award and at the end of a fight (`8E77:08A6`): each one says "%s is %d%s level %s" in the message box, rolls the
+class's hit die (d8 priests, d10 warriors, d4 preservers, d6 psionicists and thieves; at least 1, more at Con 20+;
+doubled for a half-giant; `8E77:0000`; a human's new class only past its old classes' levels) into maximum and
+current hit points, and a psionicist's opens PICK A PSIONIC POWER (`WIND` 17501): the discipline's powers under
+rank 30, a new one learned or a known one enhanced a rank, 11320 going round the disciplines; EXIT with choices left
+asks YOU HAVE MORE. A gladiator's armour class improves by 1 from level 5 (the guide's; not traced). As DSUN.EXE
 (`6ECD:1871`) does when a character is made and again for each member when a game starts, every power is
 forgotten and a psionicist learns those of its psionicist level, anyone else four of its discipline's, each
 with power 169 (`CharacterRules.DisciplineStartingPowers` and `PsionicistStartingPowers`); PSIONIC shows the
@@ -250,6 +260,9 @@ COLLAPSE PARTY makes the other members walk into the selected leader and disappe
 they travel with that character, still present for scripts, dialogue and character screens.
 COLLAPSE PARTY again, Shift+click, selecting a different map character or starting combat spreads the party
 onto separate free cells again. Saved games and region changes keep a collapsed party.
+OVERHEAD MAP (the game menu) shows the whole region, the game stopped, the party's members as steady dots and
+the enemies left on it as flashing red ones; a click, Esc or O goes back to the view as it was
+(`--open-overhead` opens it at once).
 START GAME without a party made plays the pre-made party (`game/party/premade.json`, editable:
 the roster's JSON); Create Characters' right-click menu has PRE-MADE PARTY on an empty box and DUAL for
 humans of third level or more (a new class; the old one returns once the new passes its level). The

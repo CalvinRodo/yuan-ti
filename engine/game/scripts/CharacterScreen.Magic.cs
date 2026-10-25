@@ -33,9 +33,11 @@ namespace DarkSun.Engine;
 /// creation gave it (<see cref="CharacterCreation.GiveStartingPowers"/>)
 /// and those items teach. Click one, then a box, to use it.</item>
 /// <item>Effects (CURRENT SPELL EFFECTS): the spells and powers on the member now,
-/// which only a fight keeps (<see cref="EffectsOf"/>).</item>
+/// and the spells cast on the map that are still running (<see cref="EffectsOf"/>).</item>
 /// </list>
-/// Outside combat only the healing spells and powers do anything (<see cref="Spellcasting.CastOutside"/>).
+/// Outside combat the healing spells and powers heal (<see cref="Spellcasting.CastOutside"/>); the others that
+/// put a condition on the party (Bless, Haste, Strength …) take effect and last into the next fight
+/// (<see cref="CastOnMap"/>); damage and summoning wait for a fight.
 /// </summary>
 public partial class CharacterScreen
 {
@@ -450,8 +452,12 @@ public partial class CharacterScreen
             return;
         }
         string result = _magic.CastOutside(caster, number, target.Vitals, _random);
+        if (result == Spellcasting.OnlyInCombat && CastOnMap(_member, slot, number) is { } onMap)
+        {
+            result = onMap;
+        }
         string name = Session.SpellName(number)?.ToUpperInvariant() ?? $"SPELL {number}";
-        if (result.StartsWith("HEALED") || result.StartsWith("RAISED"))
+        if (result.StartsWith("HEALED") || result.StartsWith("RAISED") || result == TakesEffect)
         {
             Did?.Invoke($"{MemberName(_member)} casts {name} on {MemberName(slot)}: {result.ToLowerInvariant()}");
         }

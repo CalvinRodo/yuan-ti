@@ -26,8 +26,20 @@ public static class PartyCombatant
     /// round of 1d1), or with its race's <see cref="RaceRules.NaturalAttacks"/>
     /// (a thri-kreen's four claws of 1d4 a round and a bite of 1d4 + 1); its
     /// race's <see cref="RaceRules.Move"/>. The tables are all <paramref name="rules"/>'.
+    /// With <paramref name="clock"/> (the game clock), the spells on it from outside a
+    /// fight come too (<see cref="Character.Lasting"/>).
     /// </summary>
-    public static Combatant From(Character c, WorldObject member, ItemCatalog catalog, CharacterRules rules)
+    public static Combatant From(Character c, WorldObject member, ItemCatalog catalog, CharacterRules rules, int? clock = null)
+    {
+        Combatant fighter = Make(c, member, catalog, rules);
+        if (clock is int now)
+        {
+            LastingEffects.Apply(c, fighter, now);
+        }
+        return fighter;
+    }
+
+    private static Combatant Make(Character c, WorldObject member, ItemCatalog catalog, CharacterRules rules)
     {
         var creation = new CharacterCreation(rules, CharacterNames.Empty, new Random(0));
         var magic = new Spellcasting(rules);
@@ -57,7 +69,7 @@ public static class PartyCombatant
             Facing = member.Facing,
             PartyMember = true,
             ComputerControlled = c.ComputerControl,
-            ArmorClass = CharacterSheet.ArmorClass(dex, member.Items, catalog, rules, CharacterSheet.BaseArmorClassOf(c.Race, rules))
+            ArmorClass = CharacterSheet.ArmorClass(dex, member.Items, catalog, rules, CharacterSheet.BaseArmorClassOf(c.Race, active, rules))
                 - CharacterSheet.DexterityDefence(dex, rules),
             ShieldClass = shields,
             Thac0 = CharacterSheet.Thac0(active, rules),
