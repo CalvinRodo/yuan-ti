@@ -35,6 +35,11 @@ def region_connections(gff, nodes: list[dict], game_id='dark_sun') -> dict:
     non_geographic = {
         frozenset(pair) for pair in ((45, 11), (45, 8), (45, 31), (45, 3), (11, 43), (43, 10))
     } if game_id == 'dark_sun' else set()
+    # Corner/stair triggers do not always identify the intended cardinal edge.
+    cardinal_sides = {
+        (41, 40): 'north', (40, 41): 'south',
+        (40, 38): 'south', (38, 40): 'north',
+    } if game_id == 'dark_sun' else {}
 
     def script(tag, number):
         key = (tag, number)
@@ -143,7 +148,8 @@ def region_connections(gff, nodes: list[dict], game_id='dark_sun') -> dict:
             y = (position['y'] + (position['height'] - 1) / 2) / max(1, region['height'] - 1)
             side = min(('north', y), ('south', 1 - y), ('west', x), ('east', 1 - x), key=lambda pair: pair[1])[0]
             edge['exit'] = {
-                'side': side, 'x': max(0, min(1, x)), 'y': max(0, min(1, y)),
+                'side': cardinal_sides.get((source, target), side),
+                'x': max(0, min(1, x)), 'y': max(0, min(1, y)),
                 'area': position['width'] * position['height'],
             }
     known = {node['id'] for node in nodes}
