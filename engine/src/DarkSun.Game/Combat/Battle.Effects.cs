@@ -83,6 +83,10 @@ public sealed partial class Battle
 
     private bool OnSide(Combatant caster, Cell at) => At(at) is { } t && !caster.IsEnemyOf(t);
 
+    /// <summary>A single-target effect's target at <paramref name="at"/>: the living there, but Raise Dead's the dead (whom <see cref="At"/> passes over).</summary>
+    private Combatant? TargetAt(SpellEffect e, Cell at) =>
+        e.Number == RaiseDead ? _all.FirstOrDefault(c => c.Vitals.Status == Vitals.Dead && c.Cell == at) : At(at);
+
     /// <summary>
     /// Whether the player may cast <paramref name="e"/> at <paramref name="at"/>
     /// (<c>8BEB:0584</c>, the spell pointer). Self effects always. One-creature
@@ -99,7 +103,7 @@ public sealed partial class Battle
         }
         if (e.SingleTarget)
         {
-            return At(at) is not { } t ? SpellAim.NoTarget
+            return TargetAt(e, at) is not { } t ? SpellAim.NoTarget
                 : Distance(caster, t) > e.RangeCells(level) ? SpellAim.OutOfRange
                 : !InSight(caster, t) ? SpellAim.NoLineOfSight
                 : SpellAim.Ok;
@@ -124,7 +128,7 @@ public sealed partial class Battle
         }
         if (Spells.TemplateOf(e) is not { } template || e.SingleTarget)
         {
-            return At(at) is { } one && Reaches(caster, e, one) ? [one] : [];
+            return TargetAt(e, at) is { } one && Reaches(caster, e, one) ? [one] : [];
         }
         Shape shape = ShapeOf(caster, e, template, level, at, end);
         return [.. _all.Where(c => c.Alive && Covers(shape, c) && Reaches(caster, e, c))];
@@ -984,7 +988,8 @@ public sealed partial class Battle
                 // A failed turn does nothing: its call (1A0A:0251) is an empty function.
                 Hurt(caster, t, 1000);
                 break;
-            case RaiseDead when t.Vitals.Status == Vitals.Dead:
+            // Not an elf or a half-elf (race codes 3 and 4; Spellcasting.RaiseDeadTakes).
+            case RaiseDead when t.Vitals.Status == Vitals.Dead && t.Race is not (3 or 4):
                 if (t.Stats[2] > 0)
                 {
                     t.Stats[2]--;

@@ -52,9 +52,7 @@ public partial class PartyView : RetroScreen
     private readonly Dictionary<int, Texture2D?> _itemPictures = [];
     private PartyFrames _frames = null!;
     private ViewCharacterText _text = null!;
-    private UiWindowView _dual = null!;
-    private Label _dualTitle = null!;
-    private const int DualWindow = 17502, DualBackdrop = 17002, FirstDualClass = 17303, DualExit = 17302;
+    private DualWindow _dual = null!;
     private Label _status = null!;
     private UiWindowView _window = null!;
     private QuestionWindow _ask = null!;
@@ -138,7 +136,7 @@ public partial class PartyView : RetroScreen
         _frames = new PartyFrames(_window, _status, MemberView, () => Session.LeaderIndex, bars: false);
         _frames.Hoverable(back, () => "RETURN TO GAME");
         _ask = new QuestionWindow(Canvas, _palette);
-        BuildDual();
+        _dual = new DualWindow(Canvas, _palette) { Chosen = DualChosen };
 
         if (OS.GetCmdlineUserArgs().Contains("--check-party"))
         {
@@ -156,7 +154,7 @@ public partial class PartyView : RetroScreen
             GetViewport().SetInputAsHandled();
             if (_dual.Visible)
             {
-                _dual.Visible = false;
+                _dual.Close();
             }
             else if (_ask.Visible)
             {
@@ -291,7 +289,7 @@ public partial class PartyView : RetroScreen
                 AskAdd(_ask.Position);
                 break;
             case 5 when Selected is { } c:
-                OpenDual(c);
+                _dual.Open(c);
                 break;
             case 6:
                 AddPremade();
@@ -354,64 +352,13 @@ public partial class PartyView : RetroScreen
 
     // -- DUAL: WIND 17502, the eight classes --------------------------------------------------
 
-    private void BuildDual()
+    /// <summary>DUAL took a class: the character is saved and says so.</summary>
+    private void DualChosen(Character c, CharacterClass k)
     {
-        _dual = UiWindowView.Build(DualWindow, _palette, DualBackdrop)!;
-        _dual.Position = ((new Vector2(RetroScreen.Width, RetroScreen.Height) - _dual.Size) / 2).Floor();
-        _dual.Visible = false;
-        Canvas.AddChild(_dual);
-        // BMP 17002 has its own DUAL title; the message goes left of the class list.
-        _dualTitle = new Label
-        {
-            Position = new Vector2(10, 30),
-            Size = new Vector2(_dual.RectOf("BUTN", FirstDualClass).Position.X - 16, 60),
-            AutowrapMode = TextServer.AutowrapMode.WordSmart,
-            LabelSettings = GameFonts.Settings(new Color(0.95f, 0.9f, 0.75f)),
-            MouseFilter = MouseFilterEnum.Ignore,
-        };
-        _dual.AddChild(_dualTitle);
-        // The class buttons, in CharacterClass order: cleric, druid, fighter, gladiator, preserver, psionicist, ranger, thief.
-        foreach (CharacterClass k in Enum.GetValues<CharacterClass>())
-        {
-            CharacterClass choice = k;
-            _dual.Button(FirstDualClass + (int)k)!.Pressed += () => ChooseDual(choice);
-        }
-        _dual.Button(DualExit)!.Pressed += () => _dual.Visible = false;
-        if (_dual.ButtonText(DualExit) is { } t)
-        {
-            t.LabelSettings = GameFonts.Settings(new Color(0.95f, 0.9f, 0.75f));
-        }
-    }
-
-    private void OpenDual(Character c)
-    {
-        var cc = new CharacterCreation(Session.Rules, Session.Names, new Random());
-        var (classes, why) = cc.DualChoices(c);
-        foreach (CharacterClass k in Enum.GetValues<CharacterClass>())
-        {
-            TextureButton b = _dual.Button(FirstDualClass + (int)k)!;
-            b.Disabled = !classes.Contains(k);
-            b.Modulate = b.Disabled ? new Color(1, 1, 1, 0.35f) : Colors.White;
-        }
-        _dualTitle.Text = why ?? $"CHOOSE {c.Name.ToUpperInvariant()}'S NEW CLASS";
-        _dual.Visible = true;
-    }
-
-    private void ChooseDual(CharacterClass k)
-    {
-        if (Selected is not { } c)
-        {
-            return;
-        }
-        var cc = new CharacterCreation(Session.Rules, Session.Names, new Random());
-        if (cc.Dual(c, k))
-        {
-            Session.Roster.Save(c);
-            Session.SaveParty();
-            _dual.Visible = false;
-            _frames.Resting = $"{c.Name.ToUpperInvariant()} IS NOW A {Session.Rules.Class(k).Name.ToUpperInvariant()}";
-            Refresh();
-        }
+        Session.Roster.Save(c);
+        Session.SaveParty();
+        _frames.Resting = $"{c.Name.ToUpperInvariant()} IS NOW A {Session.Rules.Class(k).Name.ToUpperInvariant()}";
+        Refresh();
     }
 
     /// <summary>
@@ -445,10 +392,10 @@ public partial class PartyView : RetroScreen
         Session.Party.AddRange([fighter, premade[0]]);
         _selected = 0;
         Command(5);
-        TextureButton preserver = _dual.Button(FirstDualClass + (int)CharacterClass.Preserver)!;
-        if (!_dual.Visible || preserver.Disabled || !_dual.Button(FirstDualClass + (int)CharacterClass.Cleric)!.Disabled)
+        TextureButton preserver = _dual.Button(CharacterClass.Preserver);
+        if (!_dual.Visible || preserver.Disabled || !_dual.Button(CharacterClass.Cleric).Disabled)
         {
-            problems.Add($"DUAL shows the classes ({_dualTitle.Text})");
+            problems.Add($"DUAL shows the classes ({_dual.Title})");
         }
         preserver.EmitSignal(BaseButton.SignalName.Pressed);
         if (fighter.Classes is not [CharacterClass.Preserver] || fighter.Former is not [{ Class: CharacterClass.Fighter }] || _dual.Visible)

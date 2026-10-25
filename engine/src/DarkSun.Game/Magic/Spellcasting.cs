@@ -304,7 +304,7 @@ public sealed class Spellcasting(CharacterRules rules)
     /// say <see cref="OnlyInCombat"/>, for the map's casting to try
     /// (<c>Encounter.CastOnMap</c>). Returns what happened, as DSUN.EXE's messages put it.
     /// </summary>
-    public string CastOutside(Character caster, int number, Vitals target, Random random)
+    public string CastOutside(Character caster, int number, Vitals target, Random random, Race? targetRace = null)
     {
         if (Get(number) is not { } s)
         {
@@ -319,7 +319,7 @@ public sealed class Spellcasting(CharacterRules rules)
         {
             return "YOU NEED TO REST";
         }
-        string? result = Heal(number, target, random);
+        string? result = Heal(number, target, random, targetRace);
         if (result is null)
         {
             return OnlyInCombat;
@@ -345,12 +345,20 @@ public sealed class Spellcasting(CharacterRules rules)
     public const string OnlyInCombat = "ONLY IN COMBAT";
 
     /// <summary>
+    /// Whether Raise Dead brings back a dead character of <paramref name="race"/>: not an elf (the manual: dead
+    /// elves can't be resurrected) nor a half-elf (the guide, tested). The game's own raisings (the Druid of the
+    /// Howling Wind, the Wyrm Temple's healing room, the genie: <c>REST_RAISE</c>) take everyone.
+    /// </summary>
+    public static bool RaiseDeadTakes(Race race) => race is not (Race.Elf or Race.HalfElf);
+
+    /// <summary>
     /// What spell or power <paramref name="number"/> does to <paramref name="target"/>
     /// outside combat, where only the healing ones work (cure light, serious and
     /// critical wounds, cell adjustment, raise dead): "HEALED n", "RAISED FROM THE
     /// DEAD" or "NOTHING HAPPENS", as DSUN.EXE's messages put it; null for any other.
+    /// Raise Dead doesn't take an elf or a half-elf (<paramref name="race"/>; <see cref="RaiseDeadTakes"/>).
     /// </summary>
-    public static string? Heal(int number, Vitals target, Random random)
+    public static string? Heal(int number, Vitals target, Random random, Race? race = null)
     {
         int Dice(int n, int sides, int plus) => Enumerable.Range(0, n).Sum(_ => random.Next(1, sides + 1)) + plus;
         int? heal = number switch
@@ -363,7 +371,7 @@ public sealed class Spellcasting(CharacterRules rules)
         };
         if (number == 136) // raise dead
         {
-            if (target.Status is < Vitals.Dead or >= Vitals.Destroyed)
+            if (target.Status is < Vitals.Dead or >= Vitals.Destroyed || race is { } r && !RaiseDeadTakes(r))
             {
                 return NothingHappens;
             }

@@ -97,7 +97,7 @@ public sealed partial class WorldGplHost
         BinaryPrimitives.WriteInt16LittleEndian(b.AsSpan(0x0A), (short)o.Vitals.MaxHp);
         BinaryPrimitives.WriteInt16LittleEndian(b.AsSpan(0x0C), (short)magic.MaxPsp(c));
         BinaryPrimitives.WriteInt16LittleEndian(b.AsSpan(0x10), (short)o.Id);
-        BinaryPrimitives.WriteUInt16LittleEndian(b.AsSpan(0x12), (ushort)c.ItemClasses);
+        BinaryPrimitives.WriteUInt16LittleEndian(b.AsSpan(0x12), (ushort)Creation.UsableItemClasses(c));
         (b[0x18], b[0x19], b[0x1A]) = ((byte)(c.Race + 1), (byte)(c.Gender + 1), (byte)(c.Alignment + 1));
         for (int i = 0; i < 6; i++)
         {
