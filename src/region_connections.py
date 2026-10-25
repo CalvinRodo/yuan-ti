@@ -27,11 +27,14 @@ def _number(text):
     return None
 
 
-def region_connections(gff, nodes: list[dict]) -> dict:
+def region_connections(gff, nodes: list[dict], game_id='dark_sun') -> dict:
     """Return possible directed party transitions; conditions are not evaluated."""
     field_types = field_types_from(gff)
     scripts, problems = {}, set()
     edges = {}
+    non_geographic = {
+        frozenset(pair) for pair in ((45, 11), (45, 8), (45, 31), (45, 3), (11, 43), (43, 10))
+    } if game_id == 'dark_sun' else set()
 
     def script(tag, number):
         key = (tag, number)
@@ -67,11 +70,14 @@ def region_connections(gff, nodes: list[dict]) -> dict:
     }
     for node in nodes:
         source = node['id']
-        pending = [('MAS ', source, 0)]
+        if game_id == 'dark_sun' and source == 255:
+            node['test_region'] = True
+            continue
+        pending = [('MAS ', source, 0, None)]
         visited = set()
         while pending:
-            tag, number, address = pending.pop()
-            key = (tag, number, address)
+            tag, number, address, trigger = pending.pop()
+            key = (tag, number, address, trigger)
             if key in visited:
                 continue
             visited.add(key)
@@ -85,27 +91,35 @@ def region_connections(gff, nodes: list[dict]) -> dict:
             op = row['raw_op']
             args = _arguments(row['line'][row['line'].find('(') + 1:-1])
 
-            def follow(target, target_file=number, target_tag=tag):
+            def follow(target, target_file=number, target_tag=tag, location=trigger):
                 if target is None or target_file is None:
                     problems.add(f'{tag.strip()} {number} @{address:04X}: dynamic script target')
                 else:
-                    pending.append((target_tag, target_file, target & 0xFFFF))
+                    pending.append((target_tag, target_file, target & 0xFFFF, location))
 
             if op == 0x5E and _number(args[0]) == 32766:
                 target = _number(args[1])
                 if target is None:
                     problems.add(f'{tag.strip()} {number} @{address:04X}: dynamic party destination {args[1]}')
-                elif target != source:
+                elif target != source and not (game_id == 'dark_sun' and target == 255):
                     edge = edges.setdefault((source, target), {
                         'source': source, 'target': target, 'transitions': [],
                     })
-                    edge['transitions'].append({
+                    transition = {
                         'script': tag.strip(), 'number': number, 'address': address,
                         'x': _number(args[2]), 'y': _number(args[3]),
-                    })
+                        'trigger': dict(zip(('x', 'y', 'width', 'height'), trigger)) if trigger else None,
+                    }
+                    if transition not in edge['transitions']:
+                        edge['transitions'].append(transition)
             if op in trigger_indices:
                 index = trigger_indices[op]
-                follow(_number(args[index]), _number(args[index + 1]), 'GPL ')
+                location = None
+                if op in (0x68, 0x69, 0x6A, 0x6B):
+                    values = [_number(arg) for arg in args[:index]]
+                    if all(value is not None for value in values):
+                        location = tuple(values if index == 4 else [*values, 1, 1])
+                follow(_number(args[index]), _number(args[index + 1]), 'GPL ', location)
             elif op == 0x14:
                 follow(_number(args[0]), _number(args[1]), 'GPL ')
             elif op in (0x12, 0x13, 0x29, 0x3E, 0x3F, 0x63, 0x64):
@@ -115,8 +129,23 @@ def region_connections(gff, nodes: list[dict]) -> dict:
             for target in row['menu_targets']:
                 follow(target)
             if op not in (0x12, 0x15, 0x19, 0x31, 0x35, 0x64) and row['next'] is not None:
-                pending.append((tag, number, row['next']))
+                pending.append((tag, number, row['next'], trigger))
 
+    by_id = {node['id']: node for node in nodes}
+    for (source, target), edge in edges.items():
+        edge['geographic'] = frozenset((source, target)) not in non_geographic
+        region = by_id[source]
+        positions = [t['trigger'] for t in edge['transitions'] if t['trigger']]
+        if edge['geographic'] and positions and region.get('width') and region.get('height'):
+            # Prefer the broad exit zone over single-cell emergency/story triggers.
+            position = max(positions, key=lambda p: p['width'] * p['height'])
+            x = (position['x'] + (position['width'] - 1) / 2) / max(1, region['width'] - 1)
+            y = (position['y'] + (position['height'] - 1) / 2) / max(1, region['height'] - 1)
+            side = min(('north', y), ('south', 1 - y), ('west', x), ('east', 1 - x), key=lambda pair: pair[1])[0]
+            edge['exit'] = {
+                'side': side, 'x': max(0, min(1, x)), 'y': max(0, min(1, y)),
+                'area': position['width'] * position['height'],
+            }
     known = {node['id'] for node in nodes}
     for target in sorted({target for _, target in edges} - known):
         nodes.append({'id': target, 'file': None})

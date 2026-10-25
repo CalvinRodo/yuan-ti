@@ -56,6 +56,8 @@ def _region_graph(game_id, signature):
     cached = load_precomputed_json(game_id, 'maps', 'connections', f'{key}.json')
     if cached is not None:
         return cached
+    from region_renderer import DEFAULT_MAP_WIDTH
+
     nodes = []
     for path, _, _ in signature:
         name = os.path.basename(path)
@@ -64,8 +66,10 @@ def _region_graph(game_id, signature):
         gff = load_gff(name, game_id)
         region = next((d.number for d in gff.describe_resources() if d.tag == 'GMAP'), None)
         if region is not None:
-            nodes.append({'id': region, 'file': name})
-    graph = region_connections(load_gff('GPLDATA.GFF', game_id), nodes)
+            size = len(gff.get_resource_data('GMAP', region))
+            width = DEFAULT_MAP_WIDTH
+            nodes.append({'id': region, 'file': name, 'width': width, 'height': size // width})
+    graph = region_connections(load_gff('GPLDATA.GFF', game_id), nodes, game_id)
     path = precomputed_path(game_id, 'maps', 'connections', f'{key}.json')
     os.makedirs(os.path.dirname(path), exist_ok=True)
     _write_map_metadata(path, graph)
