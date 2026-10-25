@@ -106,3 +106,6 @@ public sealed record FieldEnded(AreaField Field) : CombatEvent;
 
 /// <summary>A charm or Berserk moved a combatant to another side.</summary>
 public sealed record SideChanged(Combatant Actor, int Side) : CombatEvent;
+
+/// <summary>A summoning brought <see cref="Creature"/> into the fight.</summary>
+public sealed record Summoned(Combatant Actor, Combatant Creature) : CombatEvent;

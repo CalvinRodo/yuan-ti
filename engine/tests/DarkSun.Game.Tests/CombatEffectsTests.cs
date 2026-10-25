@@ -221,6 +221,31 @@ public class CombatEffectsTests
     }
 
     [Fact]
+    public void ASummoningIsAimedAtAPointAndBringsACreatureOnTheCastersSide()
+    {
+        // 80F5:2687: Monster Summoning I rolls one of three creatures (OJFF 269, 150, 279); it appears on the free cell nearest the point.
+        Combatant mage = Fighter("mage", 1, 5, 10), blocker = Fighter("orc", 2, 9, 10);
+        int? made = null;
+        var b = new Battle([mage, blocker], new OpenField(30, 30), new ScriptedDice(Highest))
+        {
+            MakeCreature = (ojff, cell) => { made = ojff; return Fighter("summoned", 0, cell.X, cell.Y); },
+        };
+        b.StartRound();
+        SpellEffect summoning = Spell(36);
+
+        Assert.True(summoning.Summons && !summoning.SingleTarget);
+        Assert.Equal(SpellAim.Ok, b.Aim(mage, summoning, 5, new Cell(8, 12))); // an empty cell will do
+        Assert.True(b.Cast(mage, 36, 5, blocker.Cell, ownSpell: false));
+
+        Combatant summoned = Assert.Single(b.Combatants, c => c.Name == "summoned");
+        Assert.Equal(279, made); // the highest roll: the third of three
+        Assert.Equal(1, summoned.Side);
+        Assert.NotEqual(blocker.Cell, summoned.Cell);
+        Assert.Equal(1, Battle.Distance(summoned.Cell, blocker.Cell));
+        Assert.Contains(b.Log, e => e is Summoned { Actor.Name: "mage" });
+    }
+
+    [Fact]
     public void BlowsWithoutAWeaponBludgeonAndACreaturesCountAsMagicByLevel()
     {
         Assert.Equal(DamageElement.Bludgeoning | DamageElement.Plus1, Battle.NaturalHit(Fighter("orc", 2, 0, 0)));      // level 5, race 0

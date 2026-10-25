@@ -531,8 +531,13 @@ the weapons in hand and missile slot, the spells known with their levels' casts 
 fighting allegiance within 24 cells. The battle plays back step by step as DSUN.EXE shows it:
 attackers play their attack animation with its sound, missiles and spell projectiles fly to their
 targets, spells show their graphics over caster and target with their sounds, blows that hurt sound
-the target's cry, damage shows as a number on the original's splash (its look by what hit), and
-lingering fields show their graphic on every cell; a combat log (lower right, see [Combat log](#combat-log)) says it all. On a party member's turn, click an enemy to attack it (it walks up first if needed;
+the target's cry, damage shows as a number on the original's splash (its look by what hit), centred on
+the figure for 40 ticks (`896E:0A0E`; a party member's on its portrait while the character screen shows it), and
+lingering fields show their graphic on every cell. The summonings (Monster Summoning I–III, the Conjure Elemental
+spells, Summon Shadow, Summon Insects, Dust Devil, Evard's Black Tentacles: `80F5:2687`) are aimed at a point and bring
+their creature (`Battle.SummonedBy`, rolled where there are several) onto the free cell nearest it, on the caster's side;
+Shillelagh, Flame Blade and Spiritual Hammer put their weapon in an empty hand ("Failed: weapon in hand" otherwise, as
+in the original); a combat log (lower right, see [Combat log](#combat-log)) says it all. On a party member's turn, click an enemy to attack it (it walks up first if needed;
 hovering shows the chance to hit and the number needed), click the ground to move, or use CAST (Q,
 then click a target; hovering shows who the area takes), GUARD (G), WAIT (T), END TURN (E) and AUTO
 (U: the computer fights for that member). Once a member can't move any more, the original's menu

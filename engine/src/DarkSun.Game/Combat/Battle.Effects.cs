@@ -56,7 +56,11 @@ public sealed partial class Battle
             UseCharge(caster, Condition.Invisible);
             UseCharge(caster, Condition.InvisibleToUndead);
         }
-        if (Spells.TemplateOf(e) is { Lingers: true } template && !e.SingleTarget)
+        if (e.Summons)
+        {
+            Summon(caster, e, at);
+        }
+        else if (Spells.TemplateOf(e) is { Lingers: true } template && !e.SingleTarget)
         {
             MakeField(caster, e, template, level, at, end);
         }
@@ -678,6 +682,84 @@ public sealed partial class Battle
     /// club), 30025 (1d4 + 4, fire, +1), 30026 (+1, 1d4 + 1, two attacks).
     /// </summary>
     public static int ConjuredItem(int effect) => effect switch { 80 => 30024, 86 => 30025, 90 => 30026, _ => 0 };
+
+    /// <summary>
+    /// The creatures (<c>OJFF</c>) a summoning brings, one picked at random
+    /// (<c>80F5:2687</c>: a switch on the record index, <c>80F5:2853</c>, rolling 1d3 or 1d4 where
+    /// there are several): Monster Summoning I, II and III three each, Conjure Elemental the four
+    /// lesser elementals (air, water, fire, earth), the others one.
+    /// </summary>
+    public static IReadOnlyList<int> SummonedBy(int effect) => effect switch
+    {
+        36 => [269, 150, 279],
+        43 => [286], // Evard's Black Tentacles
+        50 => [152, 167, 166],
+        60 => [176, 175, 173, 164],
+        66 => [53, 156, 160],
+        67 => [153], // Summon Shadow
+        84 => [239], // Dust Devil
+        91 => [176], // Conjure Lesser Air Elemental … Water
+        92 => [173],
+        93 => [164],
+        94 => [175],
+        107 => [170], // Summon Insects
+        124 => [177], // Conjure Air Elemental … Water
+        125 => [172],
+        126 => [165],
+        127 => [174],
+        _ => [],
+    };
+
+    /// <summary>
+    /// Puts a summoned creature (<c>OJFF</c>) on a free cell and makes its combatant;
+    /// without it, or when it gives none, the summoning goes unanswered.
+    /// </summary>
+    public Func<int, Cell, Combatant?>? MakeCreature { get; init; }
+
+    /// <summary>
+    /// A summoning (<c>80F5:2687</c>): the creature appears on the free cell nearest the point
+    /// aimed at (<c>7372:0909</c>) and fights at once. DSUN.EXE puts it in object slot 4 on the
+    /// party's side (allegiance 1) whoever casts; here it takes its caster's side. Nothing in that
+    /// code ends it: it stays until it falls.
+    /// </summary>
+    private void Summon(Combatant caster, SpellEffect e, Cell at)
+    {
+        IReadOnlyList<int> kinds = SummonedBy(e.Number);
+        if (kinds.Count == 0 || NearestFree(at) is not { } cell || MakeCreature?.Invoke(kinds[Roll(0, kinds.Count - 1)], cell) is not { } creature)
+        {
+            Note(new Avoided(caster, caster, "Your summoning goes unanswered"));
+            return;
+        }
+        creature.Side = creature.HomeSide = caster.Side & 3;
+        creature.ComputerControlled = true;
+        Add(creature);
+        Note(new Summoned(caster, creature));
+    }
+
+    /// <summary>The free cell nearest <paramref name="at"/>, within 8 cells (<c>7372:0909</c>'s search isn't traced).</summary>
+    private Cell? NearestFree(Cell at)
+    {
+        for (int r = 0; r <= 8; r++)
+        {
+            Cell? best = null;
+            for (int dy = -r; dy <= r; dy++)
+            {
+                for (int dx = -r; dx <= r; dx++)
+                {
+                    var c = new Cell(at.X + dx, at.Y + dy);
+                    if (Math.Max(Math.Abs(dx), Math.Abs(dy)) == r && Free(c) && (best is null || Distance(c, at) < Distance(best.Value, at)))
+                    {
+                        best = c;
+                    }
+                }
+            }
+            if (best is not null)
+            {
+                return best;
+            }
+        }
+        return null;
+    }
 
     /// <summary>
     /// Makes an item from its <c>RDFF</c> number (<c>GameWorld.NewItem</c>), for

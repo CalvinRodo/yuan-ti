@@ -238,7 +238,9 @@ public partial class RegionView
     /// <summary>
     /// The damage splash (<c>896E:0A0E</c>): <c>BMP</c> 5014's frame by what hit,
     /// 4 fire, cold or electricity, 2 poison or acid, 3 magic, else 0 under 15
-    /// and 1 from 15; the number on it.
+    /// and 1 from 15, centred on the figure as drawn (its position + half its
+    /// size), the number centred across it 6, 11, 8, 11 or 12 pixels from its top
+    /// by frame (2 to the right on frame 4); both stay 40 ticks, then go.
     /// </summary>
     private void Splash(Combatant c, int amount, DamageElement elements)
     {
@@ -246,7 +248,9 @@ public partial class RegionView
         {
             return;
         }
-        if (MapCovered && c.PartyMember && c.Source is { Kind: ObjectKind.Party } member)
+        // DSUN.EXE puts a member's splash on its portrait whenever a window covers the map, at the
+        // character screen's places; here only when that screen shows the portrait, else on the figure.
+        if (MapCovered && c.PartyMember && c.Source is { Kind: ObjectKind.Party } member && _character.PortraitRect(member.Index) is not null)
         {
             _character.ShowVitals();
             PortraitSplash(member.Index);
@@ -254,24 +258,33 @@ public partial class RegionView
         }
         int frame = ((int)elements & 0x86) != 0 ? 4 : ((int)elements & 0x41) != 0 ? 2 : ((int)elements & 0x200) != 0 ? 3 : amount < 15 ? 0 : 1;
         _splashFrames ??= Session.Open("RESOURCE.GFF").TryRead("BMP ", DamageSplash, out var data) ? Session.Assets.Frames(data) : [];
-        var holder = new Node2D { Position = Middle(c.Cell), ZIndex = 100 };
+        Vector2 centre = SpriteOf(c) is { Texture: not null } sprite ? SpriteRect(sprite).GetCenter() : Middle(c.Cell);
+        var holder = new Node2D { Position = centre.Floor(), ZIndex = 100 };
+        float top = -6;
         if (frame < _splashFrames.Count && _splashFrames[frame] is { Width: > 1 } image)
         {
             holder.AddChild(new Sprite2D { Texture = TextureFor(image), Centered = true });
+            top = -(image.Height / 2);
         }
-        var label = new Label { Text = amount.ToString(), HorizontalAlignment = HorizontalAlignment.Center, Position = new Vector2(-20, -7), Size = new Vector2(40, 12) };
+        int down = frame switch { 0 => 6, 2 => 8, 4 => 12, _ => 11 }, right = frame == 4 ? 2 : 0;
+        var label = new Label
+        {
+            Text = amount.ToString(),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            Position = new Vector2(-20 + right, top + down - 3),
+            Size = new Vector2(40, 12),
+        };
         label.AddThemeFontSizeOverride("font_size", 8);
         label.AddThemeColorOverride("font_color", Colors.White);
         label.AddThemeColorOverride("font_outline_color", Colors.Black);
         label.AddThemeConstantOverride("outline_size", 3);
         holder.AddChild(label);
         _floaters.AddChild(holder);
-        Tween tween = holder.CreateTween();
-        tween.TweenInterval(0.5);
-        tween.TweenProperty(holder, "position", holder.Position + new Vector2(0, -12), 0.6);
-        tween.Parallel().TweenProperty(holder, "modulate:a", 0f, 0.6);
-        tween.TweenCallback(Callable.From(holder.QueueFree));
+        GetTree().CreateTimer(SplashTicks / (double)ScmdAnimator.TicksPerSecond).Timeout += holder.QueueFree;
     }
+
+    /// <summary>How long a damage splash stays (<c>896E:0A0E</c> waits 0x28 ticks).</summary>
+    private const int SplashTicks = 40;
 
     /// <summary>
     /// A window covers the map (DSUN.EXE's display mode <c>DS:0BC9</c> = 2, set by
@@ -282,22 +295,21 @@ public partial class RegionView
     /// <summary>
     /// Damage to a party member while a window covers the map
     /// (<c>896E:0ED3</c>): <c>BMP</c> 5014's frame 4, no number, for 40 ticks,
-    /// over the member's portrait: on the character screen where it shows it
-    /// (the original's inventory column at x 37, y 48 × member + 30), else at
-    /// the 2 × 2 boxes' places, (78, 54), (129, 54), (78, 114), (129, 114) of
-    /// the 320 × 200 screen.
+    /// centred over the member's portrait on the character screen (DSUN.EXE: the
+    /// inventory column at x 37, y 48 × member + 30, else the 2 × 2 boxes'
+    /// places, (78, 54), (129, 54), (78, 114), (129, 114) of the 320 × 200
+    /// screen, less 10 in x, even under another window).
     /// </summary>
     private void PortraitSplash(int slot)
     {
         _splashFrames ??= Session.Open("RESOURCE.GFF").TryRead("BMP ", DamageSplash, out var data) ? Session.Assets.Frames(data) : [];
-        if (slot is < 0 or > 3 || _splashFrames.Count <= PortraitFrame || _splashFrames[PortraitFrame] is not { Width: > 1 } image)
+        if (_character.PortraitRect(slot) is not { } portrait || _splashFrames.Count <= PortraitFrame
+            || _splashFrames[PortraitFrame] is not { Width: > 1 } image)
         {
             return;
         }
         float scale = Math.Max(1f, MathF.Floor(Math.Min(GetViewportRect().Size.X / RetroScreen.Width, GetViewportRect().Size.Y / RetroScreen.Height)));
-        Vector2 origin = ((GetViewportRect().Size - new Vector2(RetroScreen.Width, RetroScreen.Height) * scale) / 2).Floor();
-        (int X, int Y)[] boxes = [(78, 54), (129, 54), (78, 114), (129, 114)];
-        Vector2 centre = _character.PortraitRect(slot) is { } rect ? rect.GetCenter() : origin + new Vector2(boxes[slot].X - 10, boxes[slot].Y) * scale;
+        Vector2 centre = portrait.GetCenter();
         var splash = new TextureRect
         {
             Texture = TextureFor(image),
