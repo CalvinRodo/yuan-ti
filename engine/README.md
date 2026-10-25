@@ -128,10 +128,11 @@ them, and INFO (Look, or Open for a container); an object offering only Talk,
 only Use or only Open has it done at once (a fire pit rests the party). Attack is
 the attack pointer's; to use an item with something, pick it up in the
 inventory and leave it: it rides on the pointer (pointer mode 3) until clicked
-on the second thing. The selected character walks up to the object, then its
+on the second thing; clicked on the bare ground, it is put down on that cell. The selected character walks up to the object, then its
 trigger for that verb runs; Use opens or closes a door and toggles a lever;
 Look works from anywhere and names an object with no look script. Open on a
-chest, a bag or a body on the map shows the original's container window
+chest, a bag or a body on the map (a chest showing open, as Use leaves it, its opening playing even while
+the pointer holds the map) shows the original's container window
 (`WIND` 13501, `6527:002C`): six slots holding what the container's `RDFF`
 links to it; click a thing to take it into the opener's pack. Coins (`RDFF`
 1384–1389, 1399) are never carried: taken from the map (at once, no verb
@@ -160,6 +161,8 @@ left comes back as it was left (DSUN.EXE saves it too): doors open or
 closed, cells scripts blocked, objects moved, taken off the map or cloned,
 creatures' allegiance and script fields; its script then runs again, as in
 the original. Saved games keep it, with everything else.
+
+The game menu, the LOAD and SAVE screen and the preferences stop the game while they are up, a fight too.
 
 Saved games: F5 saves (a quick save, QUICKSAVE in the lists), F9 loads it,
 and entering a region autosaves (AUTOSAVE). The game menu's LOAD/SAVE GAME
