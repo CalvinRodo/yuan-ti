@@ -373,7 +373,9 @@ public partial class RegionView
         foreach (AnimatedObject animated in Settings.Animations || _checking ? _animated : [])
         {
             (Sprite2D sprite, RegionObject obj, ScmdAnimator animator) = (animated.Sprite, animated.Object, animated.Animator);
-            if (!animator.Update(now))
+            // On the clock it started on (Animate): a door a script opened just before FIGHT steps on the view's
+            // running time; the fight's clock, which stood still while the map was held (a speech), lags behind it.
+            if (!animator.Update(animated.OwnClock ? RunningNow : now))
             {
                 continue;
             }
@@ -1380,6 +1382,7 @@ public partial class RegionView
         else
         {
             CheckReleasedMonsters(Step, problems);
+            CheckDoorOpensInFight(Step, problems);
         }
         if (_scriptErrors > 0)
         {
@@ -1391,6 +1394,32 @@ public partial class RegionView
         }
         GD.Print(problems.Count == 0 ? "arena: OK" : $"arena: {problems.Count} problems");
         GetTree().Quit(problems.Count == 0 ? 0 : 1);
+    }
+
+    /// <summary>
+    /// A door a script opens just before FIGHT (the slave pens' doors when Kurzak calls, the arena's side gates)
+    /// is drawn opening in the fight, though the map was held before it (a speech: the view's time ran on, the
+    /// game's clock didn't): its first step is taken on the map, the rest in the fight.
+    /// </summary>
+    private void CheckDoorOpensInFight(Action step, List<string> problems)
+    {
+        if (!InCombat || _world.First(-2057) is not { } gate || _animated.FirstOrDefault(a => a.Object == gate.Source) is not { } drawn)
+        {
+            problems.Add("no fight and side gate (2057) to open in it");
+            return;
+        }
+        _running += 60;
+        _world.SetDoor(gate, 0, force: true);
+        Animate();
+        for (int tick = 0; tick < 500 && InCombat && drawn.Animator.Animating; tick++)
+        {
+            step();
+        }
+        if (drawn.Animator.Animating)
+        {
+            problems.Add($"the side gate opened in the fight is still drawn at frame {drawn.Animator.Frame}, not open");
+        }
+        GD.Print($"side gate opened in the fight: frame {drawn.Animator.Frame}, {(drawn.Animator.Animating ? "still opening" : "open")}");
     }
 
     /// <summary>

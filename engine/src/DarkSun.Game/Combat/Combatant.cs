@@ -280,7 +280,8 @@ public sealed class Combatant
 
     /// <summary>
     /// It took damage this round: until the next round it can't cast a spell or use a
-    /// power (the original's YOU WERE HIT; the guide: a hit spellcaster can't cast that round).
+    /// power, whatever its class (the original's YOU WERE HIT, <c>8F23:1594</c>, for
+    /// wizards, priests and psionicists alike; set by <c>612E:1A74</c>, cleared each round).
     /// </summary>
     public bool WasHit { get; set; }
 

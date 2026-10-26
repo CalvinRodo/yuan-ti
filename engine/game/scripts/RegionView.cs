@@ -661,7 +661,10 @@ public partial class RegionView : Node2D
     private void LoadRegion(string file)
     {
         LoadMapEnvironment(file);
+        // The map left takes its sounds with it: a repeating one playing, and any its scripts asked for that
+        // weren't played yet (a script sending the party on queues them while the screen fades, which stops the frames).
         Sounds.Instance?.StopRepeating();
+        Session.ScriptHost.Sounds.Clear();
         foreach (Node child in _ground.GetChildren().Concat(_sorted.GetChildren()))
         {
             child.QueueFree();
@@ -1284,11 +1287,7 @@ public partial class RegionView : Node2D
                 PlaySounds(walker.TakeSounds(), node.Position);
             }
         }
-        // GPL SOUND (play_sound_effect, as for SCMD sounds).
-        while (Session.ScriptHost.Sounds.TryDequeue(out int sound))
-        {
-            Sounds.Instance?.Play(sound);
-        }
+        PlayScriptSounds();
         RunCreatureScripts();
         StartWatchedFight();
         if (_overlay.Visible)
@@ -1306,6 +1305,15 @@ public partial class RegionView : Node2D
     /// rather than jumping a cell at a time. Scrolling by hand stops following
     /// until the next click.
     /// </summary>
+    /// <summary>GPL SOUND (play_sound_effect, as for SCMD sounds): what the scripts asked for since the last frame.</summary>
+    private static void PlayScriptSounds()
+    {
+        while (Session.ScriptHost.Sounds.TryDequeue(out int sound))
+        {
+            Sounds.Instance?.Play(sound);
+        }
+    }
+
     /// <summary>
     /// Play an animation's sound effects (<c>SCMD</c> record byte 7) if it is
     /// on screen; DSUN.EXE animates, and so sounds, the objects it draws.
@@ -1370,6 +1378,7 @@ public partial class RegionView : Node2D
         {
             AnimateCombat(delta);
             CombatProcess(delta);
+            PlayScriptSounds(); // a fight's scripts (the arena's crowd) are heard as they run, not once it is over
             Vector2 pan = Input.GetVector(Controls.PanLeft, Controls.PanRight, Controls.PanUp, Controls.PanDown);
             if (pan != Vector2.Zero)
             {
@@ -3668,7 +3677,14 @@ public partial class RegionView : Node2D
         }
         // Back in the arena later (by way of region 43): the body and the empty frame are still there.
         int region = _region.Number;
+        // A sound the arena's scripts asked for but that wasn't played yet (the fade stops the frames) is left with it.
+        const int Unplayed = int.MinValue;
+        Session.ScriptHost.Sounds.Enqueue(Unplayed);
         EnterRegion(region + 1, new Cell(10, 10));
+        if (Session.ScriptHost.Sounds.Contains(Unplayed))
+        {
+            problems.Add("a sound queued in the arena would play in the next region");
+        }
         await Frames(3);
         EnterRegion(region, new Cell(30, 30));
         await Frames(3);

@@ -1664,7 +1664,15 @@ These are AD&D 2nd edition's, but 18 has no percentile strength (+2 to hit,
   targets (`0980:337C`, colours 0xFE and 0x34). The engine: `Pointers`,
   `RegionView.Pointer.cs` (the targets flash black instead of being framed).
 * Casting needs the caster active ("ONLY ACTIVE CHAR CAN CAST"); being hit
-  interrupts it ("YOU WERE HIT"). Nothing is memorized spell by spell: the
+  interrupts it ("YOU WERE HIT") for every kind of caster, priests and
+  psionicists as well as wizards: the cast menu's handler (a jump-table case
+  of `8F23:1111`, not recovered by Ghidra) refuses a power it can't start
+  (`DS:3214`) and a wizard or priest with no casts left (`DS:322D`), then any
+  kind with "YOU WERE HIT" (`DS:323E`, `8F23:1594`) while a fight is on
+  (`02B8:0019`) and the active member's byte `02E0:00AF + member` is set.
+  The damage code sets it (`612E:1A74`, also `612E:0EC1`, `8B7D:0651`), a
+  new round clears it (`612E:0962`); `8F23:1BBC` and `5F6D:0E41` test it too.
+  Nothing is memorized spell by spell: the
   casts left per spell level are `DS:4B08` (wizard) and `DS:4B11` (priest),
   one byte a level (indexed by the spell's level, `DS:019C`), 0x1E bytes per
   character. A spell can be cast while its level's byte is not 0
