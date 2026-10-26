@@ -5,7 +5,8 @@
    CSS-transform pan/zoom interaction. A list of regions (with the
    names saved in the Regions view) sits beside the map, and debug
    layers like the game's own (grid, GMAP collision, script triggers,
-   ETAB objects) draw on a canvas over it.
+   ETAB objects) draw on a canvas over it, with the cells painted as
+   water or sand for the engine's splashes and dust.
 
    Depends on globals from app.js: state, dom, palParams(), formatBytes()
    ================================================================ */
@@ -38,6 +39,9 @@ const mapState = {
   debugFor:     null,   // `${game}|${gff}` the debug data belongs to
   debugRequest: 0,
   hoverCell:    null,   // {x, y} under the pointer while a debug layer is on
+  terrain:      new Map(), // 'x,y' -> 'water' | 'sand' for debugFor
+  paint:        null,   // {start, end} cells of the rectangle being painted
+  terrainRequest: 0,
 };
 
 const MAP_DEBUG_COLORS = {
@@ -52,6 +56,9 @@ const MAP_DEBUG_COLORS = {
   creature: '#ffe64d',
   door:     '#66e6ff',
   thing:    '#ffffff',
+  water:    'rgba(40, 120, 255, 0.45)',
+  sand:     'rgba(240, 200, 80, 0.45)',
+  erase:    'rgba(255, 255, 255, 0.9)',
 };
 
 // ---------------------------------------------------------------------------
@@ -237,7 +244,7 @@ function filterMapRegionList() {
 }
 
 // ---------------------------------------------------------------------------
-// Debug layers: grid, GMAP collision, script triggers, ETAB objects
+// Debug layers: grid, GMAP collision, script triggers, ETAB objects, terrain
 // ---------------------------------------------------------------------------
 
 function mapDebugActive() {
@@ -254,12 +261,16 @@ async function loadMapDebug() {
     return;
   }
   const id = ++mapState.debugRequest;
+  const url = endpoint => `/api/gff/${encodeURIComponent(state.currentGff)}/${endpoint}?game=${encodeURIComponent(state.game)}`;
   try {
-    const res = await fetch(`/api/gff/${encodeURIComponent(state.currentGff)}/map-debug?game=${encodeURIComponent(state.game)}`);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
+    const [data, terrain] = await Promise.all(['map-debug', 'map-terrain'].map(async endpoint => {
+      const res = await fetch(url(endpoint), { cache: 'no-store' });
+      if (!res.ok) throw new Error(`${endpoint}: HTTP ${res.status}`);
+      return res.json();
+    }));
     if (id !== mapState.debugRequest) return;
     mapState.debug = data;
+    mapState.terrain = terrainCells(terrain.cells);
     mapState.debugFor = key;
   } catch (err) {
     if (id !== mapState.debugRequest) return;
@@ -283,6 +294,14 @@ function drawMapDebug() {
   canvas.width = data.width * S;
   canvas.height = data.height * S;
   const ctx = canvas.getContext('2d');
+
+  if (layers.terrain) {
+    mapState.terrain.forEach((kind, cell) => {
+      const [x, y] = cell.split(',').map(Number);
+      ctx.fillStyle = MAP_DEBUG_COLORS[kind];
+      ctx.fillRect(x * S, y * S, S, S);
+    });
+  }
 
   if (layers.collision) {
     for (let y = 0; y < data.height; y++) {
@@ -346,6 +365,13 @@ function drawMapDebug() {
     });
   }
 
+  if (mapState.paint) {
+    const { x0, y0, x1, y1 } = paintRect(mapState.paint);
+    ctx.strokeStyle = MAP_DEBUG_COLORS[dom.mapTerrainTool.value];
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x0 * S + 1, y0 * S + 1, (x1 - x0 + 1) * S - 2, (y1 - y0 + 1) * S - 2);
+  }
+
   const hover = mapState.hoverCell;
   dom.mapDebugInfo.classList.toggle('hidden', !hover);
   if (hover) {
@@ -368,6 +394,7 @@ function describeMapCell(data, c) {
   const lines = [
     `Cell (${c.x},${c.y}) · pixel (${c.x * NATIVE_TILE_PX},${c.y * NATIVE_TILE_PX}) · region ${data.region}`,
     `GMAP 0x${flags.toString(16).padStart(2, '0')}: ${named.join(', ') || 'open'}`,
+    `Terrain: ${mapState.terrain.get(`${c.x},${c.y}`) || 'unpainted'}`,
   ];
   data.objects.filter(o => o.cell[0] === c.x && o.cell[1] === c.y).forEach(obj => {
     lines.push(`Object #${obj.index} OJFF ${obj.ojff} (${obj.kind}) at (${obj.x},${obj.y})`);
@@ -381,17 +408,94 @@ function describeMapCell(data, c) {
   return lines.join('\n');
 }
 
-function updateMapHover(e) {
-  if (!mapDebugActive() || !mapState.debug || mapState.drag.active) return;
+// The map cell under a mouse event; clamped to the map, or null outside it.
+function mapCellAt(e, clamp = false) {
   const rect = dom.mapCanvasWrap.getBoundingClientRect();
   const S = NATIVE_TILE_PX * mapState.zoom;
-  const x = Math.floor((e.clientX - rect.left - mapState.pan.x) / S);
-  const y = Math.floor((e.clientY - rect.top - mapState.pan.y) / S);
-  const inside = x >= 0 && y >= 0 && x < mapState.debug.width && y < mapState.debug.height;
-  const cell = inside ? { x, y } : null;
+  let x = Math.floor((e.clientX - rect.left - mapState.pan.x) / S);
+  let y = Math.floor((e.clientY - rect.top - mapState.pan.y) / S);
+  const { width, height } = mapState.debug;
+  if (clamp) {
+    x = Math.max(0, Math.min(width - 1, x));
+    y = Math.max(0, Math.min(height - 1, y));
+  }
+  return x >= 0 && y >= 0 && x < width && y < height ? { x, y } : null;
+}
+
+function updateMapHover(e) {
+  if (!mapDebugActive() || !mapState.debug || mapState.drag.active) return;
+  const cell = mapCellAt(e);
   if (cell?.x === mapState.hoverCell?.x && cell?.y === mapState.hoverCell?.y) return;
   mapState.hoverCell = cell;
   drawMapDebug();
+}
+
+// ---------------------------------------------------------------------------
+// Terrain painting: drag a rectangle of cells as water or sand, or erase it
+// ---------------------------------------------------------------------------
+
+function terrainCells(cells) {
+  return new Map(Object.entries(cells).flatMap(([kind, points]) => points.map(([x, y]) => [`${x},${y}`, kind])));
+}
+
+function paintRect({ start, end }) {
+  return {
+    x0: Math.min(start.x, end.x), y0: Math.min(start.y, end.y),
+    x1: Math.max(start.x, end.x), y1: Math.max(start.y, end.y),
+  };
+}
+
+function selectTerrainTool() {
+  if (dom.mapTerrainTool.value && !prefs.mapDebugLayers.terrain) {
+    prefs.mapDebugLayers = { ...prefs.mapDebugLayers, terrain: true };
+    savePrefs();
+    loadMapDebug();
+  }
+  dom.mapCanvasWrap.classList.toggle('painting', Boolean(dom.mapTerrainTool.value));
+}
+
+async function finishPaint() {
+  const { x0, y0, x1, y1 } = paintRect(mapState.paint);
+  mapState.paint = null;
+  const tool = dom.mapTerrainTool.value;
+  const terrain = new Map(mapState.terrain);
+  for (let y = y0; y <= y1; y++) {
+    for (let x = x0; x <= x1; x++) {
+      if (tool === 'erase') terrain.delete(`${x},${y}`);
+      else terrain.set(`${x},${y}`, tool);
+    }
+  }
+  const key = mapState.debugFor;
+  mapState.terrain = terrain;
+  drawMapDebug();
+
+  const cells = {};
+  terrain.forEach((kind, cell) => (cells[kind] ||= []).push(cell.split(',').map(Number)));
+  const id = ++mapState.terrainRequest;
+  dom.mapTerrainStatus.textContent = 'Saving...';
+  const [game, gff] = key.split('|');
+  try {
+    const res = await fetch(`/api/gff/${encodeURIComponent(gff)}/map-terrain?game=${encodeURIComponent(game)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cells }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
+    const saved = terrainCells((await res.json()).cells);
+    if (id !== mapState.terrainRequest) return;
+    if (mapState.debugFor === key) {
+      mapState.terrain = saved;
+      drawMapDebug();
+    }
+    dom.mapTerrainStatus.textContent = `Saved (${saved.size} cells)`;
+  } catch (err) {
+    if (id !== mapState.terrainRequest) return;
+    dom.mapTerrainStatus.textContent = `Unable to save terrain: ${err.message}`;
+    console.error('Failed to save map terrain:', err);
+    // Show what is saved, not the stroke that failed.
+    mapState.debugFor = null;
+    if (`${state.game}|${state.currentGff}` === key) loadMapDebug();
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -492,8 +596,17 @@ function bindMapEvents() {
     _applyZoom(mapState.zoomIdx + (e.deltaY < 0 ? 1 : -1), px, py);
   }, { passive: false });
 
-  // Mouse drag
+  dom.mapTerrainTool.addEventListener('change', selectTerrainTool);
+
+  // Mouse drag: paints with a terrain tool chosen (left button), else pans
   dom.mapCanvasWrap.addEventListener('mousedown', e => {
+    if (e.button === 0 && dom.mapTerrainTool.value && mapState.debug) {
+      const start = mapCellAt(e);
+      if (start) mapState.paint = { start, end: start };
+      drawMapDebug();
+      e.preventDefault();
+      return;
+    }
     mapState.drag = {
       active:    true,
       startX:    e.clientX,
@@ -505,6 +618,14 @@ function bindMapEvents() {
     e.preventDefault();
   });
   document.addEventListener('mousemove', e => {
+    if (mapState.paint) {
+      const end = mapCellAt(e, true);
+      if (end.x !== mapState.paint.end.x || end.y !== mapState.paint.end.y) {
+        mapState.paint.end = end;
+        drawMapDebug();
+      }
+      return;
+    }
     if (!mapState.drag.active) return;
     mapState.pan.x = mapState.drag.startPanX + (e.clientX - mapState.drag.startX);
     mapState.pan.y = mapState.drag.startPanY + (e.clientY - mapState.drag.startY);
@@ -512,6 +633,7 @@ function bindMapEvents() {
     applyTransform();
   });
   document.addEventListener('mouseup', () => {
+    if (mapState.paint) finishPaint();
     if (!mapState.drag.active) return;
     mapState.drag.active = false;
     dom.mapCanvasWrap.classList.remove('dragging');

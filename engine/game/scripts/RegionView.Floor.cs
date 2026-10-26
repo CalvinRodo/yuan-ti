@@ -6,7 +6,7 @@ using Godot;
 
 namespace DarkSun.Engine;
 
-/// <summary>The map's floor effects (<see cref="FloorEffects"/>): shadows, dust and the enemies' rings.</summary>
+/// <summary>The map's floor effects (<see cref="FloorEffects"/>): shadows, dust, splashes and the enemies' rings.</summary>
 public partial class RegionView
 {
     private bool _indoors;
@@ -27,6 +27,34 @@ public partial class RegionView
                 _ => throw new InvalidDataException($"{path}: invalid environment for {file}: {environment}"),
             };
         }
+        _floor.Indoors = _indoors;
+        _floor.Terrain = LoadMapTerrain(file);
+    }
+
+    /// <summary>The cells of <paramref name="file"/> painted with a floor type in the GFF viewer.</summary>
+    private static Dictionary<Vector2I, FloorTerrain> LoadMapTerrain(string file)
+    {
+        const string path = "res://data/map_terrain.json";
+        using JsonDocument metadata = JsonDocument.Parse(Godot.FileAccess.GetFileAsString(path));
+        var terrain = new Dictionary<Vector2I, FloorTerrain>();
+        if (metadata.RootElement.TryGetProperty("dark_sun", out JsonElement maps)
+            && maps.TryGetProperty(file.ToUpperInvariant(), out JsonElement types))
+        {
+            foreach (JsonProperty type in types.EnumerateObject())
+            {
+                FloorTerrain kind = type.Name switch
+                {
+                    "water" => FloorTerrain.Water,
+                    "sand" => FloorTerrain.Sand,
+                    _ => throw new InvalidDataException($"{path}: invalid terrain for {file}: {type.Name}"),
+                };
+                foreach (JsonElement cell in type.Value.EnumerateArray())
+                {
+                    terrain[new Vector2I(cell[0].GetInt32(), cell[1].GetInt32())] = kind;
+                }
+            }
+        }
+        return terrain;
     }
 
     /// <summary>
@@ -35,7 +63,7 @@ public partial class RegionView
     /// </summary>
     private void UpdateFloor(double delta)
     {
-        (_floor.Shadows, _floor.Dust) = (Settings.Shadows, Settings.Dust && !_indoors);
+        (_floor.Shadows, _floor.Dust) = (Settings.Shadows, Settings.Dust);
         _floor.Follow(delta, FloorFigures());
         _floor.ShowRings(EnemyRings());
     }
@@ -154,6 +182,30 @@ public partial class RegionView
             problems.Add($"{_floor.PuffCount} puffs of dust still there a second after the walk");
         }
         GD.Print($"floor: {figures} figures cast shadows; walking {path.Count} cells raised up to {most} puffs of dust ({walkSeconds:F1} s, {frames} frames)");
+
+        if (Settings.Dust)
+        {
+            // Painted water: the walk back west over the same sand splashes and raises no dust.
+            IReadOnlyDictionary<Vector2I, FloorTerrain> painted = _floor.Terrain;
+            List<Cell> back = [.. Enumerable.Range(1, path.Count).Select(dx => new Cell(walker.Cell.X - dx, walker.Cell.Y)).TakeWhile(c => !_region.IsBlocked(c.X, c.Y))];
+            _floor.Terrain = Enumerable.Range(walker.Cell.X - back.Count - 1, back.Count + 3)
+                .SelectMany(x => Enumerable.Range(walker.Cell.Y - 1, 3).Select(y => new Vector2I(x, y)))
+                .ToDictionary(c => c, _ => FloorTerrain.Water);
+            walker.Follow(back);
+            int splashes = 0, dust = 0;
+            for (int frame = 0; frame < 600 && (walker.IsWalking || frame < 10); frame++)
+            {
+                await Frames(1);
+                splashes = Math.Max(splashes, _floor.SplashCount);
+                dust = Math.Max(dust, _floor.PuffCount - _floor.SplashCount);
+            }
+            _floor.Terrain = painted;
+            if (splashes == 0 || dust > 0)
+            {
+                problems.Add($"walking {back.Count} cells over painted water: {splashes} splashes, {dust} puffs of dust");
+            }
+            GD.Print($"floor: walking {back.Count} cells over painted water splashed up to {splashes} times");
+        }
 
         DropScripts();
         CheckChooseEnemy(problems);

@@ -668,8 +668,12 @@ whoever stands on or beside them.
   colour of the floor under the feet; stone, water and lava don't. A puff
   is single pixels thinned toward its edge and as it fades, by a pattern
   fixed to the map, so it doesn't shimmer.
-  Maps marked **Indoors** in the GFF viewer never raise dust; outdoors still
-  uses the floor-colour test and the Dust option.
+  Maps marked **Indoors** in the GFF viewer raise no dust from the floor's
+  colour; outdoors still uses the floor-colour test and the Dust option.
+  Cells painted in the GFF viewer (see [Map terrain](#map-terrain)) decide
+  over the colour, indoors or out: **Sand** raises dust, and **Water**
+  splashes instead, a ring that widens on the floor where the foot fell and
+  fades. The Dust option turns splashes off too.
 - **Choosing an enemy** (`[game] choose_enemy_keys`; `[display] enemy_rings`):
   on a party member's turn in a fight, Tab chooses the nearest living enemy,
   then the next nearest (Shift+Tab goes back), names it in the combat log
@@ -681,7 +685,8 @@ whoever stands on or beside them.
 
 `-- --new-game --check-floor` checks that each living figure casts a shadow,
 walks a member across the arena's sand and checks for dust that fades,
-then in a fight presses Tab (the nearest enemy, its ring drawn) and Enter
+paints the cells it walks back over as water and checks that they splash
+and raise no dust, then in a fight presses Tab (the nearest enemy, its ring drawn) and Enter
 (an attack on it).
 
 ### Map environments
@@ -702,6 +707,28 @@ as `res://data/map_environments.json` whenever a region loads, so re-enter the
 region to pick up viewer changes. The file is included in exports; rebuild an
 export to ship updated classifications. The current engine consumes `dark_sun`;
 the viewer keeps DS2 classifications separately.
+
+### Map terrain
+
+In the web viewer's map toolbar, choose **Paint: Water / Sand / Erase** and
+drag over the map: the cells in the rectangle get that type (Erase clears
+them), and a later stroke paints over an earlier one. Middle-drag still pans;
+**Paint: Off** gives the left button back to panning. The **Terrain** debug
+layer shows the painted cells (water blue, sand yellow) and is turned on when
+a paint type is chosen; hovering a cell names its type. Each stroke saves
+immediately to [game/data/map_terrain.json](game/data/map_terrain.json),
+which maps game IDs to uppercase GFF filenames and their cells by type:
+
+```json
+{"dark_sun": {"RGN28.GFF": {"water": [[4, 3], [5, 3]], "sand": [[9, 6]]}}, "dark_sun_2": {}}
+```
+
+The viewer uses `GET` / `POST /api/gff/<name>/map-terrain?game=<game_id>`;
+POST takes `{"cells": {"water": [[x, y], ...], "sand": [...]}}` and replaces
+the map's cells (an empty `cells` removes the map). The types are
+`TERRAIN_TYPES` in `src/config.py`. Godot reads the file as
+`res://data/map_terrain.json` whenever a region loads, for `dark_sun` only,
+and uses it for the floor's dust and splashes (see Dust above).
 
 ## Combat log
 
