@@ -524,9 +524,10 @@ public partial class CharacterScreen : RetroScreen
     /// <summary>
     /// Show <paramref name="page"/> for party member <paramref name="member"/>,
     /// with <paramref name="container"/> open on the items page, or
-    /// <paramref name="store"/>'s goods (a merchant: SHOP).
+    /// <paramref name="store"/>'s goods (a merchant: SHOP), and the member's
+    /// <paramref name="held"/> item (held on the map's pointer) already picked up.
     /// </summary>
-    public void Open(GameWorld world, int member, Page page, WorldObject? container = null, WorldObject? store = null)
+    public void Open(GameWorld world, int member, Page page, WorldObject? container = null, WorldObject? store = null, Item? held = null)
     {
         _world = world;
         _member = world[member] is { Kind: ObjectKind.Party } ? member : world.Party.FirstOrDefault()?.Index ?? 0;
@@ -535,6 +536,10 @@ public partial class CharacterScreen : RetroScreen
         _openItem = null;
         _opening = false;
         (_picked, _packPage, _insidePage) = (null, 0, 0);
+        if (held is not null && Member is { } holder && holder.Items.Contains(held))
+        {
+            _picked = (held, holder);
+        }
         ResetMagic();
         ResetStore();
         _status.Text = "";

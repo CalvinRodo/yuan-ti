@@ -128,7 +128,12 @@ them, and INFO (Look, or Open for a container); an object offering only Talk,
 only Use or only Open has it done at once (a fire pit rests the party). Attack is
 the attack pointer's; to use an item with something, pick it up in the
 inventory and leave it: it rides on the pointer (pointer mode 3) until clicked
-on the second thing; clicked on the bare ground, it is put down on that cell. The selected character walks up to the object, then its
+on the second thing; clicked on the bare ground, it is put down on that cell,
+and clicked on a party member, it goes in their pack. Get on an item on the
+ground doesn't put it away: it rides on the pointer the same way (its pickup
+trigger has run). Put it on a character to take it: click one on the map, or
+open the inventory, where it is still picked up, and click a slot. Esc puts
+it back where it lay. The selected character walks up to the object, then its
 trigger for that verb runs; Use opens or closes a door and toggles a lever;
 Look works from anywhere and names an object with no look script. Open on a
 chest, a bag or a body on the map (a chest showing open, as Use leaves it, its opening playing even while
