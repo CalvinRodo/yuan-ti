@@ -6,6 +6,7 @@ Endpoints
 GET /api/gff/<name>/rmap/<number>   – decode an RMAP/MAP resource to JSON tile data
 GET /api/gff/<name>/map-render      – render a full region map image as PNG
 GET/POST /api/gff/<name>/map-environment – read/save indoor or outdoor classification
+GET/POST /api/gff/<name>/map-terrain – read/save the cells painted as water, sand, ...
 GET /api/region-connections        – directed graph of scripted party transitions
 GET/POST /api/gff/<name>/map-name   – read/save a custom map name
 GET /api/map-names                 – every custom map name for a game, by file
@@ -22,7 +23,10 @@ from threading import Lock
 from flask import Blueprint, jsonify, send_file, abort, request, current_app
 
 from gff import NoSuchResourceError
-from config import DEFAULT_GAME, GAMES, MAP_ENVIRONMENTS_PATH, MAP_NAMES_PATH, resolve_game_dir, list_files_nocase
+from config import (
+    DEFAULT_GAME, GAMES, MAP_ENVIRONMENTS_PATH, MAP_NAMES_PATH, MAP_TERRAIN_PATH, TERRAIN_TYPES,
+    resolve_game_dir, list_files_nocase,
+)
 from gff_cache import load_gff, find_palette
 from disk_cache import load_precomputed_json, precomputed_png_path, precomputed_path, source_signature
 
@@ -32,6 +36,7 @@ bp = Blueprint('maps', __name__)
 # DS1 uses SEGOBJEX.GFF; DS2 uses OBJEX.GFF.
 _AUX_GFF_NAMES = ['SEGOBJEX.GFF', 'OBJEX.GFF', 'GPLDATA.GFF']
 _environment_lock = Lock()
+_terrain_lock = Lock()
 _names_lock = Lock()
 _render_lock = Lock()
 _connections_lock = Lock()
@@ -212,6 +217,55 @@ def api_map_environment(name: str):
     except (OSError, ValueError) as exc:
         current_app.logger.exception('Map environment file could not be read or saved')
         abort(500, description=f'Map environment file could not be read or saved: {exc}')
+
+
+@bp.route('/api/gff/<name>/map-terrain', methods=['GET', 'POST'])
+def api_map_terrain(name: str):
+    """{types, cells: {type: [[x, y], ...]}}; POST {cells} replaces the map's cells."""
+    game_id = request.args.get('game', DEFAULT_GAME)
+    if game_id not in GAMES:
+        abort(404, description='Unknown game')
+    name = name.upper()
+    gff = load_gff(name, game_id)
+    gmap = next((d.number for d in gff.describe_resources() if d.tag == 'GMAP'), None)
+    if gmap is None:
+        abort(404, description='GFF contains no region')
+
+    cells = None
+    if request.method == 'POST':
+        from region_renderer import DEFAULT_MAP_WIDTH
+        width = DEFAULT_MAP_WIDTH
+        height = len(gff.get_resource_data('GMAP', gmap)) // width
+        body = request.get_json()
+        cells = body.get('cells') if isinstance(body, dict) else None
+        if not isinstance(cells, dict) or not set(cells) <= set(TERRAIN_TYPES):
+            abort(400, description=f'cells must map {", ".join(TERRAIN_TYPES)} to [x, y] lists')
+        for kind, points in cells.items():
+            if not isinstance(points, list) or not all(
+                isinstance(p, list) and len(p) == 2 and all(type(v) is int for v in p)
+                and 0 <= p[0] < width and 0 <= p[1] < height for p in points
+            ):
+                abort(400, description=f'{kind}: cells must be [x, y] inside the {width} x {height} map')
+        # One type per cell: a later type in the body wins, as the viewer paints over.
+        owner = {(x, y): kind for kind, points in cells.items() for x, y in points}
+        cells = {kind: sorted([x, y] for (x, y), k in owner.items() if k == kind) for kind in TERRAIN_TYPES}
+        cells = {kind: points for kind, points in cells.items() if points}
+
+    try:
+        with _terrain_lock:
+            with open(MAP_TERRAIN_PATH, encoding='utf-8') as fh:
+                terrain = json.load(fh)
+            maps = terrain.setdefault(game_id, {})
+            if cells is not None:
+                if cells:
+                    maps[name] = cells
+                else:
+                    maps.pop(name, None)
+                _write_map_metadata(MAP_TERRAIN_PATH, terrain)
+            return jsonify(types=list(TERRAIN_TYPES), cells=maps.get(name, {}))
+    except (OSError, ValueError) as exc:
+        current_app.logger.exception('Map terrain file could not be read or saved')
+        abort(500, description=f'Map terrain file could not be read or saved: {exc}')
 
 
 @bp.route('/api/gff/<name>/rmap/<int:number>')

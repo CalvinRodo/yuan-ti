@@ -216,6 +216,17 @@
                     <label title="GMAP flags: red blocks movement, blue outline blocks sight"><input type="checkbox" data-layer="collision"> Collision</label>
                     <label title="Script move triggers: tiles filled, boxes outlined"><input type="checkbox" data-layer="triggers"> Triggers</label>
                     <label title="ETAB objects: index and OJFF number (creatures yellow, doors cyan)"><input type="checkbox" data-layer="objects"> Objects</label>
+                    <label title="Cells painted as water (blue) or sand (yellow)"><input type="checkbox" data-layer="terrain"> Terrain</label>
+                  </div>
+                  <div class="map-ctrl-group">
+                    <label for="map-terrain-tool" class="control-label">Paint</label>
+                    <select id="map-terrain-tool" title="Drag over the map to paint a rectangle of cells; middle-drag still pans">
+                      <option value="">Off (drag pans)</option>
+                      <option value="water">Water</option>
+                      <option value="sand">Sand</option>
+                      <option value="erase">Erase</option>
+                    </select>
+                    <span id="map-terrain-status" class="dim" role="status" aria-live="polite"></span>
                   </div>
                 </div>
                 <div id="map-canvas-wrap">

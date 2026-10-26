@@ -17,6 +17,9 @@ BASE_DIR = os.path.dirname(SRC_DIR)
 WEB_DIR  = os.path.join(SRC_DIR, 'web')
 DATA_DIR = os.path.join(SRC_DIR, 'data')
 MAP_ENVIRONMENTS_PATH = os.path.join(BASE_DIR, 'engine', 'game', 'data', 'map_environments.json')
+MAP_TERRAIN_PATH = os.path.join(BASE_DIR, 'engine', 'game', 'data', 'map_terrain.json')
+# Floor types the viewer can paint on map cells; the engine splashes on water and raises dust on sand.
+TERRAIN_TYPES = ('water', 'sand')
 MAP_NAMES_PATH = os.path.join(SRC_DIR, 'json', 'map_names.json')
 
 

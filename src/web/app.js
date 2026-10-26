@@ -13,7 +13,7 @@
 const PREFS_KEY = 'yuan-ti-prefs-v2';
 const PREFS_DEFAULTS = {
   spriteScale: 1,
-  mapDebugLayers: {},   // map view overlays: { grid, collision, triggers, objects }
+  mapDebugLayers: {},   // map view overlays: { grid, collision, triggers, objects, terrain }
 };
 const prefs = (() => {
   try {
@@ -123,6 +123,8 @@ const dom = {
   mapDebugLayers:   $('map-debug-layers'),
   mapDebugCanvas:   $('map-debug-canvas'),
   mapDebugInfo:     $('map-debug-info'),
+  mapTerrainTool:   $('map-terrain-tool'),
+  mapTerrainStatus: $('map-terrain-status'),
 
   // Resource table filters
   resFilterTag:     $('res-filter-tag'),

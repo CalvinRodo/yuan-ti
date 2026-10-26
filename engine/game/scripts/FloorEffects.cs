@@ -1,11 +1,19 @@
+using DarkSun.Data.Regions;
 using Godot;
 
 namespace DarkSun.Engine;
 
+/// <summary>A floor type painted on map cells in the GFF viewer (<c>data/map_terrain.json</c>).</summary>
+public enum FloorTerrain
+{
+    Water,
+    Sand,
+}
+
 /// <summary>
 /// What the map draws on its floor, under every wall and figure (between the
 /// ground and the sorted sprites), none of it in DSUN.EXE: the figures'
-/// shadows, dust raised by walking on sand or dirt, and in a fight red rings
+/// shadows, dust raised by walking on sand or dirt, splashes on water, and in a fight red rings
 /// under the enemies. After the Obsidian Edition's
 /// (<c>github.com/daaki85/darksun-obsidian-edition</c>, FEATURES.md, Graphics
 /// and Controls), drawn here with Godot rather than into the game's floor.
@@ -22,6 +30,7 @@ public partial class FloorEffects : Node2D
     private const float DustStep = 6;
     private const float DustLife = 1.0f, DustStartRadius = 2.5f, DustEndRadius = 7f, DustRise = 4f;
     private const int MaxPuffs = 240;
+    private static readonly Color SplashTint = new(0.85f, 0.93f, 1f);
 
     /// <summary>Farther than this in a frame isn't a step but a figure put somewhere (a region entered, a load).</summary>
     private const float Jump = 24;
@@ -51,14 +60,23 @@ public partial class FloorEffects : Node2D
     /// <summary>Living figures cast shadows (<c>[display] shadows</c>).</summary>
     public bool Shadows { get; set; } = true;
 
-    /// <summary>Walking on sand or dirt raises dust (<c>[display] dust</c>).</summary>
+    /// <summary>Walking on sand or dirt raises dust, and on water splashes (<c>[display] dust</c>).</summary>
     public bool Dust { get; set; } = true;
+
+    /// <summary>An indoor map: only cells painted as sand raise dust.</summary>
+    public bool Indoors { get; set; }
+
+    /// <summary>The cells painted with a floor type; they decide over the floor's colour.</summary>
+    public IReadOnlyDictionary<Vector2I, FloorTerrain> Terrain { get; set; } = new Dictionary<Vector2I, FloorTerrain>();
 
     /// <summary>Figures casting a shadow now.</summary>
     public int ShadowCount => _shadows.Count;
 
-    /// <summary>Puffs of dust on the floor now.</summary>
+    /// <summary>Puffs of dust and splashes on the floor now.</summary>
     public int PuffCount => _dust.Puffs.Count;
+
+    /// <summary>Splashes on the floor now.</summary>
+    public int SplashCount => _dust.Puffs.Count(p => p.Splash);
 
     /// <summary>Rings on the floor now, and whether one is the chosen enemy's.</summary>
     public (int Count, bool Chosen) RingCount => (_rings.Rings.Count, _rings.Rings.Any(r => r.Chosen));
@@ -123,7 +141,7 @@ public partial class FloorEffects : Node2D
         (shadow.Texture, shadow.FlipH, shadow.Offset, shadow.Centered) = (figure.Texture, figure.FlipH, figure.Offset, figure.Centered);
     }
 
-    /// <summary>Count how far a figure walked; every <see cref="DustStep"/> pixels on sand or dirt, a puff behind a foot.</summary>
+    /// <summary>Count how far a figure walked; every <see cref="DustStep"/> pixels on sand, dirt or water, a puff or splash behind a foot.</summary>
     private void Walked(Sprite2D figure)
     {
         Vector2 feet = figure.Position + new Vector2(0, 1);
@@ -148,28 +166,35 @@ public partial class FloorEffects : Node2D
         Vector2 way = moved.Normalized();
         Vector2 side = new Vector2(-way.Y, way.X) * (stride.LeftFoot ? 2 : -2);
         Vector2 at = feet - way * 3 + side;
-        if (DustColour(at) is { } colour && _dust.Puffs.Count < MaxPuffs)
+        if (StepEffect(at) is var (colour, splash) && _dust.Puffs.Count < MaxPuffs)
         {
-            var drift = new Vector2((float)_random.NextDouble() - 0.5f, (float)_random.NextDouble() - 0.5f) * 3 - way * 2;
-            _dust.Puffs.Add(new Puff(at, drift, colour));
+            // Splashes stay where the foot fell; dust drifts back from the walk.
+            var drift = splash ? Vector2.Zero : new Vector2((float)_random.NextDouble() - 0.5f, (float)_random.NextDouble() - 0.5f) * 3 - way * 2;
+            _dust.Puffs.Add(new Puff(at, drift, colour, splash));
         }
     }
 
     /// <summary>
-    /// The colour of dust off the floor at <paramref name="at"/>: lighter than
-    /// it, and only on warm middling colours (sand, dirt), not stone, water,
-    /// lava or grass. Null where no dust rises.
+    /// What a step at <paramref name="at"/> raises, in a colour of the floor
+    /// there: a splash on a cell painted as water; dust on one painted as sand,
+    /// or, on an unpainted cell outdoors, on warm middling colours (sand, dirt),
+    /// not stone, water, lava or grass. Null where nothing rises.
     /// </summary>
-    private Color? DustColour(Vector2 at)
+    private (Color Colour, bool Splash)? StepEffect(Vector2 at)
     {
         if (_ground is null || at.X < 0 || at.Y < 0 || at.X >= _ground.GetWidth() || at.Y >= _ground.GetHeight())
         {
             return null;
         }
         Color floor = _ground.GetPixel((int)at.X, (int)at.Y);
+        var cell = new Vector2I((int)at.X / Region.TileSize, (int)at.Y / Region.TileSize);
+        if (Terrain.TryGetValue(cell, out FloorTerrain terrain))
+        {
+            return terrain == FloorTerrain.Water ? (floor.Lerp(SplashTint, 0.7f), true) : (floor.Lightened(0.7f), false);
+        }
         float hue = floor.H * 360;
-        return hue is >= 12 and <= 55 && floor.S is >= 0.15f and <= 0.75f && floor.V is >= 0.3f and <= 0.95f
-            ? floor.Lightened(0.7f)
+        return !Indoors && hue is >= 12 and <= 55 && floor.S is >= 0.15f and <= 0.75f && floor.V is >= 0.3f and <= 0.95f
+            ? (floor.Lightened(0.7f), false)
             : null;
     }
 
@@ -188,18 +213,20 @@ public partial class FloorEffects : Node2D
         public bool LeftFoot { get; set; }
     }
 
-    private sealed class Puff(Vector2 at, Vector2 drift, Color colour)
+    private sealed class Puff(Vector2 at, Vector2 drift, Color colour, bool splash)
     {
         public Vector2 At { get; } = at;
         public Vector2 Drift { get; } = drift;
         public Color Colour { get; } = colour;
+        public bool Splash { get; } = splash;
         public float Age { get; set; }
     }
 
     /// <summary>
     /// The puffs: each spreads, rises a little and fades in <see cref="DustLife"/>,
     /// drawn as single pixels thinned toward its edge and as it fades by a
-    /// pattern fixed to the map, so it doesn't shimmer as it moves.
+    /// pattern fixed to the map, so it doesn't shimmer as it moves. A splash
+    /// is a ripple instead: a ring that widens on the floor and fades.
     /// </summary>
     private sealed partial class DustLayer : Node2D
     {
@@ -225,7 +252,7 @@ public partial class FloorEffects : Node2D
             {
                 float t = puff.Age / DustLife;
                 float radius = Mathf.Lerp(DustStartRadius, DustEndRadius, Mathf.Sqrt(t));
-                Vector2 centre = puff.At + puff.Drift * t + new Vector2(0, -DustRise * t);
+                Vector2 centre = puff.At + puff.Drift * t + (puff.Splash ? Vector2.Zero : new Vector2(0, -DustRise * t));
                 float strength = Mathf.Pow(1 - t, 0.7f);
                 int r = (int)Mathf.Ceil(radius);
                 for (int y = -r; y <= r; y++)
@@ -235,7 +262,9 @@ public partial class FloorEffects : Node2D
                         // Flattened as the floor is seen: half as tall as wide.
                         float d = new Vector2(x, y * 2).Length() / radius;
                         int px = (int)centre.X + x, py = (int)centre.Y + y;
-                        if (d <= 1 && Dither(px, py) < strength * (1 - d * d * d))
+                        // A ripple's pixels lie on its rim; a puff's thin out toward its edge.
+                        float density = puff.Splash ? (d is >= 0.7f and <= 1 ? 1 : 0) : 1 - d * d * d;
+                        if (d <= 1 && Dither(px, py) < strength * density)
                         {
                             DrawRect(new Rect2(px, py, 1, 1), puff.Colour);
                         }
