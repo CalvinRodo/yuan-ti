@@ -310,6 +310,7 @@ public partial class KeyHelp : CanvasLayer
             new HelpLine("T G U L O", "Talk, Get, Use, Look, Open (a chest, a body)"),
             new HelpLine("Esc, click outside", "Close the menu; put away the item held for Use with…"),
             new HelpLine("Click with the item", "Use with…: the second thing (pick the item up in the inventory, then leave it)"),
+            new HelpLine("Get, then click", "An item from the ground rides on the pointer: click a character (or a slot in the inventory) to take it"),
             new HelpLine("Double-click a bag", "Inventory: open or close a carried bag or box"),
             new HelpLine("Space, Enter", "Conversation: MORE (the next page, go on, the choices)"),
             new HelpLine("Click the text", "Conversation: the same as MORE; the wheel scrolls"),

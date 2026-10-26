@@ -122,6 +122,8 @@ public partial class RegionView : Node2D
 
     /// <summary>The inventory item <see cref="_useWith"/> stands for, when it is one.</summary>
     private Item? _useWithItem;
+    /// <summary>The held item when it was picked up from the ground, and the cell it lay on (<see cref="HoldFromGround"/>).</summary>
+    private (Item Item, Cell From)? _heldFromGround;
     private Label _prompt = null!;
     private readonly List<(RegionObject Object, Sprite2D Sprite)> _objectSprites = [];
     private readonly Dictionary<Walker, Cell> _lastCells = [];
@@ -527,10 +529,20 @@ public partial class RegionView : Node2D
             OpenGameMenu = () => _gameMenu.Open(),
             Closed = () =>
             {
-                // DSUN.EXE's pointer mode 3: an item picked up in the inventory is held, to use with something on the map.
+                // DSUN.EXE's pointer mode 3: an item picked up in the inventory is held, to use with something on the map
+                // (one from the ground that wasn't put anywhere is still held from there).
+                (Item Item, Cell From)? ground = _heldFromGround;
+                _heldFromGround = null;
                 if (_character.HeldOnClose is { } held && _world is not null)
                 {
-                    SetUseWithItem(held);
+                    if (ground is var (item, from) && item == held)
+                    {
+                        HoldFromGround(held, from);
+                    }
+                    else
+                    {
+                        SetUseWithItem(held);
+                    }
                 }
                 // A store's script waits for it to close.
                 if (Session.ScriptHost.Dialogue.Prompt is GplShopPrompt && Session.Scripts.IsSuspended && Session.Scripts.PausedFor is null)
@@ -542,7 +554,7 @@ public partial class RegionView : Node2D
         layer.AddChild(_character);
         _gameMenu = new GameMenu
         {
-            ShowCharacter = page => _character.Open(_world, _selected, page),
+            ShowCharacter = page => OpenInventory(_selected, page),
             OpenSaves = (mode, then) => _saves.Open(mode, then),
             ExitGame = () => GetTree().CallDeferred(SceneTree.MethodName.ChangeSceneToFile, MainMenu.ScenePath),
             OverheadMap = OverheadMap,
@@ -1530,16 +1542,27 @@ public partial class RegionView : Node2D
         }
         if (_useWith is not null && e.IsActionPressed(Controls.Back))
         {
+            // Put away: an item from a pack stays there; one picked up from the ground goes back where it lay.
+            (Item Item, Cell From)? ground = _heldFromGround;
             SetUseWith(null);
+            if (ground is var (item, from))
+            {
+                DropHeld(item, new Vector2((from.X + 0.5f) * Region.TileSize, (from.Y + 0.5f) * Region.TileSize));
+            }
         }
         else if (_useWith is not null && _cursor == GameMenu.Cursor.Item && !_dialogueWindow.Visible
             && e is InputEventMouseButton { ButtonIndex: MouseButton.Left, Pressed: true })
         {
-            // Use with…: the held item's pointer picks the second object; on the bare ground, an item held from a pack is put down there.
+            // Use with…: the held item's pointer picks the second object; on a party member, an item held from a
+            // pack goes in theirs; on the bare ground, it is put down there.
             WorldObject first = _useWith;
             Item? heldItem = _useWithItem;
             SetUseWith(null);
-            if (ObjectAt(GetGlobalMousePosition()) is { } second && second != first)
+            if (heldItem is not null && MemberAt(GetGlobalMousePosition()) is { } member)
+            {
+                PutHeldOn(heldItem, member);
+            }
+            else if (ObjectAt(GetGlobalMousePosition()) is { } second && second != first)
             {
                 StartVerb(second, Verb.UseWith, first);
             }
@@ -1668,7 +1691,7 @@ public partial class RegionView : Node2D
         }
         else if (e.IsActionPressed(Controls.ToggleInventory) && !_character.IsOpen && !Session.Scripts.IsSuspended)
         {
-            _character.Open(_world, _selected, CharacterScreen.Page.Items);
+            OpenInventory(_selected, CharacterScreen.Page.Items);
         }
         else if (e.IsActionPressed(Controls.ToggleCharacter) && !_character.IsOpen && !Session.Scripts.IsSuspended)
         {
@@ -1935,6 +1958,58 @@ public partial class RegionView : Node2D
     }
 
     /// <summary>
+    /// An item just picked up from cell <paramref name="from"/> is held on the pointer, not
+    /// put away: clicked on a party member it goes in their pack, in the inventory it is put
+    /// where it is clicked, on the bare ground it is put down, and Esc puts it back.
+    /// </summary>
+    private void HoldFromGround(Item item, Cell from)
+    {
+        SetUseWithItem(item);
+        _heldFromGround = (item, from);
+        _prompt.Text = $"Holding {ItemText.Name(_world, item)}: click a character or open the inventory to take it, the ground to put it down (Esc: back where it was)";
+    }
+
+    /// <summary>The party member whose sprite is drawn at map point <paramref name="at"/>, or null.</summary>
+    private WorldObject? MemberAt(Vector2 at) =>
+        _party.Where(m => DrawnAt(m.Node, at)).OrderByDescending(m => m.Node.Position.Y)
+            .Select(m => _world[m.Walker.Id]).FirstOrDefault(o => o is { Kind: ObjectKind.Party });
+
+    /// <summary>The item held on the pointer, clicked on party member <paramref name="to"/>: it goes in their pack.</summary>
+    private void PutHeldOn(Item item, WorldObject to)
+    {
+        if (_world.Party.FirstOrDefault(m => m.Items.Contains(item)) is not { } holder)
+        {
+            return;
+        }
+        string name = ItemText.Name(_world, item);
+        item.Slot = Equipment.Pack;
+        if (holder != to && !_world.MoveItem(holder, to, item))
+        {
+            Say($"give {name} to {to.Name}", $"{to.Name} can't carry any more.");
+            return;
+        }
+        AddScriptLine($"> {to.Name} puts {name} in the pack");
+    }
+
+    /// <summary>
+    /// The inventory on <paramref name="page"/>: with an item held on the pointer, its holder's,
+    /// the item still picked up there (and back on the pointer if it is still picked when it closes).
+    /// </summary>
+    private void OpenInventory(int member, CharacterScreen.Page page)
+    {
+        if (page == CharacterScreen.Page.Items && _useWithItem is { } item
+            && _world.Party.FirstOrDefault(m => m.Items.Contains(item)) is { } holder)
+        {
+            (Item Item, Cell From)? ground = _heldFromGround;
+            SetUseWith(null);
+            _heldFromGround = ground;
+            _character.Open(_world, holder.Index, page, held: item);
+            return;
+        }
+        _character.Open(_world, member, page);
+    }
+
+    /// <summary>
     /// Put <paramref name="item"/>, held on the pointer from a member's pack, on the
     /// ground under map point <paramref name="at"/>; not on a blocked cell or off the map.
     /// </summary>
@@ -1965,6 +2040,7 @@ public partial class RegionView : Node2D
     {
         _useWith = first;
         _useWithItem = null;
+        _heldFromGround = null;
         _prompt.Visible = first is not null;
         _prompt.Text = first is null ? "" : $"Use {Called(first)} with… (click an object; right-click: other pointers; Esc puts it away)";
         // DSUN.EXE's pointer mode 3: the item is held on the pointer, which shows it.
@@ -2124,15 +2200,22 @@ public partial class RegionView : Node2D
                 return;
             }
             // 7BEB:0A60: the item goes into the pack first, then its pickup trigger runs.
+            Cell from = target.Cell;
             if (!_world.PickUp(taker, target))
             {
                 Say(what, target.Items.Count > 0 ? $"{Called(target, start: true)} has something in it: open it and take that first." : $"{taker.Name} can't carry any more.");
                 return;
             }
+            Item item = taker.Items[^1]; // PickUp adds it last
             AddScriptLine($"> {taker.Name} picks up {Describe(target)}");
             if (scripts.OnObject(GplTriggerList.Pickup, actor, target.Index) is { } picked)
             {
                 ReportScript(what, picked);
+            }
+            // It rides on the pointer until it is put on a member, in the inventory or on the map.
+            if (taker.Items.Contains(item))
+            {
+                HoldFromGround(item, from);
             }
             return;
         }
@@ -3034,6 +3117,38 @@ public partial class RegionView : Node2D
             DropHeld(held, new Vector2((free.X + 0.5f) * Region.TileSize, (free.Y + 0.5f) * Region.TileSize));
             Expect(!me.Items.Contains(held) && _world.Objects.Any(o => !o.Hidden && o.Cell == free && o.Item is not null && o.Source?.Ojff == heldRdff),
                 $"a held item clicked on the ground at ({free.X},{free.Y}) is put down there");
+
+            // Get on it: it is held on the pointer, not put away. Esc puts it back where it lay; in the inventory it is
+            // still picked up, and back on the pointer when that closes; clicked on a member, it goes in their pack.
+            WorldObject? Lying() => _world.Objects.FirstOrDefault(o => !o.Hidden && o.Cell == free && o.Item is not null && o.Source?.Ojff == heldRdff);
+            if (Lying() is { } lying)
+            {
+                Act(lying, 0, Verb.Get);
+                Expect(_useWithItem?.Rdff == heldRdff && _heldFromGround?.From == free && _cursor == GameMenu.Cursor.Item && Lying() is null,
+                    "Get holds the item on the pointer");
+                _UnhandledInput(new InputEventAction { Action = Controls.Back, Pressed = true });
+                Expect(_useWith is null && Lying() is not null && !me.Items.Any(i => i.Rdff == heldRdff), "Esc puts it back where it lay");
+            }
+            if (Lying() is { } again)
+            {
+                Act(again, 0, Verb.Get);
+                Item? got = _useWithItem;
+                OpenInventory(_selected, CharacterScreen.Page.Items);
+                Expect(got is not null && _character.IsOpen && _character.Picked == got && _useWith is null, "the inventory opens with it picked up");
+                _character.Close();
+                Expect(got is not null && _useWithItem == got && _heldFromGround?.From == free, "closed with it still picked, it is held from the ground again");
+                WorldObject to = _world.Party.FirstOrDefault(m => m != me && m.Items.Count < Equipment.Capacity) ?? me;
+                if (got is not null)
+                {
+                    SetUseWith(null);
+                    PutHeldOn(got, to);
+                }
+                Expect(got is not null && to.Items.Contains(got) && Lying() is null, $"put on {to.Name}, it is in their pack");
+            }
+            else
+            {
+                problems.Add("the dropped item isn't on the ground to pick up");
+            }
         }
         else
         {
