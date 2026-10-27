@@ -1445,6 +1445,9 @@ Records: a combatant is an object of kind 2 (`DS:0C36 + 3·index`) with a
   (`3781:0369`, `1587:3866`). Then a combatant under computer control
   (combat record +0x21 & 0x20) runs the AI, `612E:0BAD` (see "The AI"),
   and `612E:1AE1` follows; any other returns 2 and waits for the player.
+  Only party members can wait: loading a creature's combat record into a
+  slot past the party's (index above 4) sets 0x20 (`7155:0732`), so every
+  other creature, allies too (Semyon, freed in the arena), is the AI's.
 * **A new round** (`612E:0754`): the round clock (`DS:035B` in segment 4781)
   goes up by 60. Every creature with status 1 (Okay) and an allegiance that
   fights (& 3), the party or those `612E:0000` finds involved, rolls:

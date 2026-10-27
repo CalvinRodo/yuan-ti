@@ -262,6 +262,17 @@ public class GameWorldTests
     }
 
     [Fact]
+    public void ACreatureOnThePartysSideIsTheAisWhateverItsRecordSays()
+    {
+        GameWorld world = World(); // the templar's record: allegiance 1 (the party's side), flag 0x20 clear
+
+        var ally = Combat.Combatant.FromCreature(world.First(-100)!);
+
+        Assert.Equal(1, ally.Side);
+        Assert.True(ally.ComputerControlled); // 7155:0732 sets 0x20 on every record past the party's slots
+    }
+
+    [Fact]
     public void IdleCreaturesQueueTheirNoOrdersScript()
     {
         GameWorld world = World();

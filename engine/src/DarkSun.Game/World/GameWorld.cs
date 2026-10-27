@@ -790,7 +790,7 @@ public sealed partial class GameWorld
         }
     }
 
-    private void ToggleState(WorldObject obj)
+    public void ToggleState(WorldObject obj)
     {
         if (obj.Source is not { Scmd: > 0 } source || ScriptOf(source.Scmd) is not { } scmd)
         {
