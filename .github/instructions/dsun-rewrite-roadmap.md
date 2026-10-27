@@ -277,9 +277,9 @@ this milestone brings most of the game's content.
       game and are saved; regions remember what their creatures carry and
       items left on the ground. An inventory window (I): wear, give, drop.
       `--check-items`; `--give=RDFF,…` and `--open-items` for testing.
-- [ ] Still logged only: FIGHT's combat (M5), and REQUEST 3 (a check), 7
-      (trap / blast), 8 (random monster), 14 (ambush), 15 (unidentified).
-      Not traced: SEARCH's per-member work (`0826:0344`, op 3 is taken to
+- [x] FIGHT's combat (M6) and every REQUEST code the shipped scripts use
+      (see M6, "The rest of the REQUEST codes").
+- [ ] Not traced (#80): SEARCH's per-member work (`0826:0344`, op 3 is taken to
       count items), the range bytes, the shop screen, what happens to a
       dead creature (`612E:1AAF`: here it leaves the map), healing details
       of a rest, class restrictions on wearing items. FLEE and the orders'
@@ -341,7 +341,7 @@ this milestone brings most of the game's content.
       load (`GplRepairs`, `script_repairs`, on); the final battle's gate
       repair is there but off (with the clock running the gate waits its
       window out). Not yet: conditions outside fights (the skills' and
-      traps' Detect Traps), SKILLROLL (no script uses it), JOINPARTY and
+      traps' Detect Traps, #73), SKILLROLL (no script uses it), JOINPARTY and
       LEAVEPARTY, the LOG text, where the clock stops (`DS:11B8`,
       `DS:0BC9`: the Look pointer, by Obsidian Edition's notes).
 - [x] **Golden tests**: `make engine-compare` checks that the C# decoder lists
@@ -370,7 +370,7 @@ this milestone brings most of the game's content.
       opens the choices or puts the window away; 1–9 and Y / N choose.
       Scaled with the screen like the 320 × 200 screens, in the game's font
       (`FONT` 100: `GameFonts`). Not yet: `WIND` 3500 (text without a
-      portrait; every window here has the portrait box). `--check-dialogue`,
+      portrait; every window here has the portrait box; #81). `--check-dialogue`,
       and `--talk` to start a conversation for testing.
 - [x] The UI approach: screens are Godot `Control`s built from the original
       windows' data and art (`UiWindowView`: a `WIND` with its `BUTN`s,
@@ -388,8 +388,8 @@ this milestone brings most of the game's content.
       are plain Godot controls.
 - [x] Main menu, from the original's window 3000 (`MainMenu`): Start Game
       (plays cinematic 1, then a new game in region 42) and Exit work; S, C,
-      L and E and the arrow keys work. Create Characters and Load Saved Game
-      say they aren't ported yet.
+      L and E and the arrow keys work, and so do Create Characters and Load
+      Saved Game.
 - [x] Options, and a journal or quest log (new; fed by GPL variables and
       dialogue history).
       - Options (O, on the main menu and the map; `OptionsWindow`,
@@ -453,11 +453,13 @@ this milestone brings most of the game's content.
       cast (`78A9:2324`; gone at 0); in a fight aimed like CAST, outside one
       only healing (as memorized spells). USE is offered as `91F7:0000` does,
       with the spell's purpose (record −7, `SpellEffect.Purpose`).
+- [x] Breakage in combat (`80F5:1F4B`, #56): as in DSUN.EXE only Detonate's
+      shrapnel breaks things (`Battle.BreakItem`; the original leaves a
+      "Broken Weapon", here the item is gone).
 - [ ] Items still to do: the quest items' USE scripts (`RDFF` 30029–30999,
-      `039D:0319`), spells from items aimed on the map outside a fight
+      `039D:0319`; #71), spells from items aimed on the map outside a fight
       (`8B7D:04D1` starts the spell pointer there), what worn items' spells
-      do while worn, breakage in combat (`80F5:1F4B`), and the type flags 4
-      and 0x10.
+      do while worn, and the type flags 4 and 0x10 (#72).
 - [x] Character sheet and inventory screens (`CharacterScreen`): View
       Character (`WIND` 11500 over `BMP` 11000) with the member's sheet, and
       the inventory (`WIND` 13500 over `BMP` 13001: the member's figure,
@@ -479,11 +481,15 @@ this milestone brings most of the game's content.
       inventory (SHOP: the merchant's goods, the six selling slots
       11242–11247, SELL / TAKE IT). See `dsun-exe-reference.md`, "Spells"
       and "Game menu and preferences".
-- [ ] Spells and powers in combat (all but healing say ONLY IN COMBAT);
-      DSUN.EXE's own spell-slot tables (`DS:4B08`, `DS:4B11`), psionic
-      costs and strength; level-up (`WIND` 17502, probably) and the
-      original's learn and pick windows (17500, 17501); computer control's
-      effect; END TURN; the ABOUT text.
+- [x] Spells and powers in combat, and buffs outside it (#53);
+      DSUN.EXE's own spell-slot tables (`DS:4B08`, `DS:4B11`) and psionic
+      costs; level-up (#51) and the original's learn and pick windows
+      (17500, 17501); computer control; END TURN; the ABOUT text.
+- [ ] Psionic strength from DSUN.EXE's formula (`6698:0B8A`, `8E77:0162`;
+      the engine's table is a stand-in, #77). Still from the manual: the
+      classes each race may take, alignments, prime requisites and the
+      dual-class requirements (#76), and the gladiator's armour class at
+      level 5 (#78).
 - [x] Party creation: Create Characters (View Character, `WIND` 11500) and
       Character Generation (`WIND` 3011) screens; the party starts new games
       and is kept in saves; a roster for ADD and DROP.
@@ -499,7 +505,7 @@ this milestone brings most of the game's content.
       "Character screens"): View Character's bars and hover texts, the
       inventory's bars, hit points and status words, as DSUN.EXE draws them
       (`PartyFrames`).
-- [ ] The remaining `APFM`s' drawing: the quick weapons (`9106:0B64`,
+- [ ] The remaining `APFM`s' drawing (#81): the quick weapons (`9106:0B64`,
       `WIND` 14002), the status word's current effect for Okay members, and
       only the leader on the map (the manual: the others show in combat or
       with COLLAPSE PARTY).
@@ -631,8 +637,8 @@ executable, not in the data.
       `Spellcasting.LearnFromItem`: a spell into the spellbook, a power
       learned at rank 1 or raised a rank (to 30), the item used up.
       `Combatant.PowerRanksOf` gives a party combatant its ranks.
-- [ ] An inventory USE action that calls `GameWorld.LearnFrom` (no USE
-      exists in the inventory screen yet).
+- [x] An inventory USE action that calls `GameWorld.LearnFrom` (the item
+      window's USE, `91F7:03D0`).
 - [x] Tactical combat scene on the region map (2026-10-20,
       `RegionView.Combat.cs`): FIGHT or an attack without a trigger starts a
       `Battle` (`Encounter.Start`) from the party, built from their sheets
@@ -713,7 +719,7 @@ executable, not in the data.
       map; the script resumes after it), 8 (`MONR` random monsters, with the
       EXE's count from the next slot's strength), 15 (the move pointer) and 19
       (game over). Open: the pictures 200 and 300 (`CMAT` / `CPAL`) that
-      REQUEST 6 shows in GPL 62 and 177, and 7 and 17 for an object that
+      REQUEST 6 shows in GPL 62 and 177 (#74), and 7 and 17 for an object that
       isn't a name (no shipped script asks for either).
 
 ---
@@ -727,34 +733,38 @@ executable, not in the data.
       versions (`GSEQ`) are played. Fades and track changes follow
       `35D1:0265`/`012D`.
 - [ ] Bundle (or offer to download) a good freely licensed SoundFont, for
-      systems without one; a volume setting.
+      systems without one; a music volume setting (#82).
 - [ ] An OPL (AdLib) emulation option for the original sound (`ADV` drivers,
-      `TIMB` timbres), and MT-32 (`LSEQ`).
+      `TIMB` timbres), and MT-32 (`LSEQ`) (#82).
 - [x] Sound effects: `BVOC` (Creative `.VOC`) decoded by `Voc` to Godot
       `AudioStreamWAV` (`Sounds`). Sounds 131–180 (MIDI notes for the music
-      driver) are not played yet.
+      driver) are not played yet (#82).
 - [x] Which music plays where: the menu plays 17; a region plays the track
       in its `RDAT` record (`+0x2F`); cinematics play 26–29 (`CINE.GFF`).
       GPL's `MUSIC` command exists but no script uses it.
 - [ ] Combat and event music (`870B:0584` plays `4931:028C` again; other
-      callers of `35D1:01D3`), and the per-track flags at `DS:1676`.
+      callers of `35D1:01D3`), and the per-track flags at `DS:1676`. REQUEST
+      16 (music level, 382 uses) raises `WorldGplHost.MusicLevelChanged`,
+      but nothing listens and the player can't play XMIDI sections (#70).
 
 ---
 
 ## 9. Milestone 8: saving, cinematics, full game
 
-- [ ] Save and load in the engine's own format (JSON plus compressed state):
-      GPL variables, party, region states. Save at any time, with autosaves.
-- [ ] Optional: import original save games (format needs reverse engineering).
+- [x] Save and load in the engine's own format (JSON: GPL variables, party,
+      region states; `SaveGame`, the original's LOAD and SAVE screen `WIND`
+      3009). F5 / F9 quick save and load, an autosave on entering a region.
+- [ ] Optional: import original save games (format needs reverse
+      engineering; #84).
 - [x] Cinematics from `CINE.GFF` (`CinematicPlayer`): the intro (ACF 1–8)
       before the main menu, the arrival (9–10) on a new game; the ending
-      (11–13) plays too, but nothing triggers it yet. Any key skips. Timed by
+      (11–13) plays through REQUEST 6 from the final scripts. Any key skips. Timed by
       the music's XMIDI callbacks, as in DSUN.EXE.
 - [ ] Cinematic op 0x7F (`9944:1AD7`, 12 arguments; only in the ending's
-      first script): not decoded, so that picture is shown still.
+      first script): not decoded, so that picture is shown still (#75).
 - [x] Cinematic music (GSEQ 26–29; ops 0x64–0x66).
 - [ ] Full playthrough with a checklist of every region, quest and ending;
-      compare doubtful behaviour against the original in DOSBox.
+      compare doubtful behaviour against the original in DOSBox (#83).
 
 ---
 

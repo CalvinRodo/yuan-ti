@@ -622,6 +622,11 @@ public partial class RegionView : Node2D
             Session.Regions.Remember(_world);
         }
         LoadRegion(files[_regionIndex]);
+        // The arena's main gate as its scripts take it to be (ArenaGate), before the region script runs.
+        if (Settings.ScriptRepairs && ArenaGate.Match(_world, Session.Scripts.Memory, loaded: saved is not null))
+        {
+            AddScriptLine("    the arena's gate set as its scripts have it (script repair)");
+        }
         if (saved is not null)
         {
             PlaceSavedParty(saved);
@@ -3677,6 +3682,18 @@ public partial class RegionView : Node2D
         }
         // Back in the arena later (by way of region 43): the body and the empty frame are still there.
         int region = _region.Number;
+        // The main gate left open after the first bout, as GPL 2 opens it: it is shut again on coming back (ArenaGate).
+        WorldObject? gate = _world.Objects.FirstOrDefault(o => o.Source?.Ojff == ArenaGate.Ojff);
+        if (gate is { SecondState: true })
+        {
+            _world.ToggleState(gate);
+        }
+        foreach (int x in new[] { 30, 31 })
+        {
+            _world.SetCellFlags(x, 21, CellFlags.Blocked, false);
+        }
+        GplVariables.Set(Session.Scripts, "gflag[5]=0");
+        GplVariables.Set(Session.Scripts, "gflag[16]=1");
         // A sound the arena's scripts asked for but that wasn't played yet (the fade stops the frames) is left with it.
         const int Unplayed = int.MinValue;
         Session.ScriptHost.Sounds.Enqueue(Unplayed);
@@ -3688,6 +3705,7 @@ public partial class RegionView : Node2D
         await Frames(3);
         EnterRegion(region, new Cell(30, 30));
         await Frames(3);
+        CheckGateCameBackShut(problems);
         foreach (int left in new[] { -1258, -2603 })
         {
             WorldObject? o = _world.First(left);
@@ -3703,6 +3721,36 @@ public partial class RegionView : Node2D
         }
         GD.Print(problems.Count == 0 ? "prisoners: OK" : $"prisoners: {problems.Count} problems");
         GetTree().Quit(problems.Count == 0 ? 0 : 1);
+    }
+
+    /// <summary>The step of <c>--check-prisoners</c> after coming back: the arena's main gate, left open, is shut and drawn shut.</summary>
+    private void CheckGateCameBackShut(List<string> problems)
+    {
+        if (!Settings.ScriptRepairs)
+        {
+            GD.Print("prisoners: script repairs are off in the options; the gate isn't checked");
+            return;
+        }
+        if (_world.Objects.FirstOrDefault(o => o.Source?.Ojff == ArenaGate.Ojff) is not { } gate)
+        {
+            problems.Add($"no main gate ({ArenaGate.Ojff}) in region {_region.Number}");
+            return;
+        }
+        AnimatedObject? drawn = _animated.FirstOrDefault(a => a.Object == gate.Source);
+        for (int step = 0; step < 100 && drawn is { Animator.Animating: true }; step++)
+        {
+            _running += 60;
+            Animate();
+        }
+        bool blocked = _region.IsBlocked(30, 21) && _region.IsBlocked(31, 21);
+        int gflag5 = Session.Scripts.Memory.Read(new GplVariable(GplVarType.GlobalFlag, 5));
+        GD.Print($"prisoners: main gate back in the arena: {(gate.SecondState ? "shut" : "open")}, frame {drawn?.Animator.Frame}, "
+            + $"cells {(blocked ? "blocked" : "free")}, gflag[5] {gflag5}");
+        // Frame 0 is the shut gate, 1 the open arch (BMP 1875).
+        if (!gate.SecondState || drawn?.Animator.Frame != 0 || !blocked || gflag5 != 1)
+        {
+            problems.Add("the main gate, left open, didn't come back shut as gflag[5] says");
+        }
     }
 
     /// <summary>

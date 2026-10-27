@@ -342,8 +342,9 @@ public sealed class Combatant
             Cell = cell,
             Facing = facing,
             PartyMember = party,
-            // A creature not on the party's side is the AI's whatever its flag (the arena's Legcrusher has it clear): no one else could play it.
-            ComputerControlled = (r?.ComputerControlled ?? !party) || !party && (side & 1) == 0,
+            // Any creature but a party member is the AI's whatever its record says: loading a combat record into a
+            // slot past the party's sets flag 0x20 (7155:0732). The arena's Legcrusher and Semyon, freed, have it clear.
+            ComputerControlled = !party || (r?.ComputerControlled ?? false),
             ArmorClass = source?.SheetField(WorldObject.SheetBaseArmorClass) ?? ch?.BaseArmorClass ?? r?.Ac ?? 10,
             Thac0 = r?.Thac0 ?? 20,
             Move = r?.Move ?? 12,
