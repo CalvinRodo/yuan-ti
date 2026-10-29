@@ -272,7 +272,7 @@ this milestone brings most of the game's content.
       and status rules), SHOP (the script waits for a shop window: prices
       are the item's value, half to sell; the original screen isn't
       traced), and REQUEST 1 / 4 (rest), 9 (turn an object into another),
-      16 (music level; the music player doesn't play XMIDI sections yet)
+      16 (music level: a section of the track)
       and 20 (count creatures). Party items and hit points last the whole
       game and are saved; regions remember what their creatures carry and
       items left on the ground. An inventory window (I): wear, give, drop.
@@ -742,10 +742,15 @@ executable, not in the data.
 - [x] Which music plays where: the menu plays 17; a region plays the track
       in its `RDAT` record (`+0x2F`); cinematics play 26–29 (`CINE.GFF`).
       GPL's `MUSIC` command exists but no script uses it.
-- [ ] Combat and event music (`870B:0584` plays `4931:028C` again; other
-      callers of `35D1:01D3`), and the per-track flags at `DS:1676`. REQUEST
-      16 (music level, 382 uses) raises `WorldGplHost.MusicLevelChanged`,
-      but nothing listens and the player can't play XMIDI sections (#70).
+- [x] The music level (#70): REQUEST 16 (382 uses), a fight's start (the
+      level its creature has in `RDAT`) and its end (level 1) pick a section
+      of the track (`MusicSections`: branch markers, the indirect controller
+      table, `361A:0000` / `3164:0033`), up to the track's highest level
+      (`MusicTracks`, `DS:1675`). There is no other combat or event music:
+      `870B:0584` is the preferences' music toggle, and `35D1:01D3` has no
+      callers. `--check-music` plays every level of every region track.
+- [ ] The per-track flags at `DS:1676` (bit 4 lets a track start, bit 2
+      hands it to a hook); all of DS1's tracks have 4.
 
 ---
 

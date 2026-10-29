@@ -84,12 +84,16 @@ public static class RecordJson
         new("homeAllegiance", 0x3C, "u8"), new("size", 0x3D, "u8"), new("spellSet", 0x3E, "u8"), new("hurtSound", 0x42, "s16"), new("attackSound", 0x44, "s16"), new("psionicSet", 0x46, "u8"),
     ];
 
-    /// <summary><c>RDAT</c> (<c>RegionInfo</c>): colour cycles as first colour, count, and speed × 10.</summary>
+    /// <summary><c>RDAT</c> (<c>RegionInfo</c>): colour cycles as first colour, count, and speed × 10; the fights' music levels.</summary>
     public static readonly IReadOnlyList<RecordField> RegionFields =
     [
         new("cycle1First", 0, "u8"), new("cycle1Count", 1, "u8"), new("cycle1Speed", 2, "u8"),
         new("cycle2First", 3, "u8"), new("cycle2Count", 4, "u8"), new("cycle2Speed", 5, "u8"),
-        new("music", 0x2F, "u8"),
+        new("music", 0x2F, "u8"), new("fightLevel", 0x2E, "u8"),
+        .. Enumerable.Range(0, 10).SelectMany(i => new RecordField[]
+        {
+            new($"fightCreature{i + 1}", 6 + 2 * i, "s16"), new($"fightCreature{i + 1}Level", 0x1A + 2 * i, "u8"),
+        }),
     ];
 
     // Plain characters (×, ', é) in what modders read and edit, not \u escapes.

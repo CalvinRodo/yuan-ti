@@ -106,6 +106,71 @@ public partial class Main : Control
             GetTree().Quit(ok > 0 && stops ? 0 : 1);
             return;
         }
+        if (args.Contains("--check-music") && install is not null)
+        {
+            // Every music level of every region track: the section it asks for plays, within a minute.
+            Session.Use(install);
+            int changes = 0;
+            long longest = 0;
+            var problems = new List<string>();
+            for (int track = 1; track <= 23; track++)
+            {
+                if (!Session.Open("RESOURCE.GFF").TryRead("GSEQ", track, out var xmi))
+                {
+                    problems.Add($"GSEQ {track} missing");
+                    continue;
+                }
+                for (int level = 1; level <= DarkSun.Game.Audio.MusicTracks.Levels(track); level++)
+                {
+                    // Level 1 from section 2, any other from section 1.
+                    foreach (int from in level == 1 ? new[] { 2 } : [1])
+                    {
+                        if (from > DarkSun.Game.Audio.MusicTracks.Levels(track))
+                        {
+                            continue;
+                        }
+                        var sequence = new DarkSun.Data.Audio.XmidiSequencer(xmi.Span);
+                        var sections = new DarkSun.Game.Audio.MusicSections();
+                        sections.Follow(sequence);
+                        const int Second = DarkSun.Data.Audio.XmidiSequencer.TicksPerSecond;
+                        long tick = 0;
+                        // Plays until the section comes (ticks taken; -1 if not in a minute) or, with none, for that long.
+                        long Play(int section, long ticks = 60 * Second)
+                        {
+                            long start = tick;
+                            for (; tick - start < ticks && sections.Section != section && !sequence.Finished; tick++)
+                            {
+                                sequence.AdvanceTo(tick, _ => { });
+                            }
+                            return sections.Section == section ? tick - start : -1;
+                        }
+                        sections.SetLevel(from);
+                        if (from != 1 && Play(from) < 0)
+                        {
+                            problems.Add($"track {track}: level {from} never came");
+                            continue;
+                        }
+                        Play(section: 0, ticks: 5 * Second); // a while into the section
+                        sections.SetLevel(level);
+                        long took = Play(level);
+                        if (took < 0)
+                        {
+                            problems.Add($"track {track}: level {from} to {level} never came{(sequence.Finished ? " (the track ended)" : "")}");
+                            continue;
+                        }
+                        changes++;
+                        longest = Math.Max(longest, took);
+                    }
+                }
+            }
+            GD.Print($"music: {changes} level changes in 23 tracks, the longest after {longest / (double)DarkSun.Data.Audio.XmidiSequencer.TicksPerSecond:F1} s");
+            foreach (string p in problems)
+            {
+                GD.Print($"music: PROBLEM {p}");
+            }
+            GetTree().Quit(problems.Count == 0 && changes > 0 ? 0 : 1);
+            return;
+        }
         bool regionCheck = args.Contains("--check-regions") || args.Contains("--check-exits") || args.Contains("--check-start") || args.Contains("--check-verbs") || args.Contains("--check-memory") || args.Contains("--check-save")
             || args.Contains("--check-debugger") || args.Contains("--check-items") || args.Contains("--check-floor") || args.Contains("--check-character") || args.Contains("--check-dialogue")
             || args.Contains("--check-journal") || args.Contains("--check-colours");
