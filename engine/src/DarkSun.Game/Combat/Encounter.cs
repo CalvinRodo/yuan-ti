@@ -92,10 +92,12 @@ public static class Encounter
     /// view has it. What it leaves on them is kept on their sheets (<see cref="Character.Lasting"/>)
     /// for the next fight. A spell takes one of its level's casts; a power its points and power
     /// check. Null for what only works in a fight (damage, summoning, a lingering cloud, or no
-    /// condition at all); else NOTHING HAPPENS or IT TAKES EFFECT.
+    /// condition at all); else NOTHING HAPPENS or IT TAKES EFFECT. <paramref name="fromItem"/>:
+    /// cast from an item instead, at <see cref="ItemMagic.CasterLevel"/>, spending neither a cast
+    /// nor psionic strength (the caller uses the item's charge).
     /// </summary>
     public static string? CastOnMap(GameWorld world, Func<int, Character?> sheets, int casterSlot, int targetSlot, int number, ICombatDice dice,
-        CharacterRules characterRules, CombatRules? rules = null, SpellRules? spells = null, CreatureRules? creatures = null)
+        CharacterRules characterRules, CombatRules? rules = null, SpellRules? spells = null, CreatureRules? creatures = null, bool fromItem = false)
     {
         spells ??= SpellRules.Default;
         if (spells.Effect(number) is not { } e || e.Damaging || e.Summons || e.Condition == Condition.None
@@ -123,15 +125,15 @@ public static class Encounter
         };
         Combatant caster = all[casterAt];
         var before = all.ToDictionary(c => c, c => c.Effects.ToHashSet());
-        bool power = number >= Spellcasting.FirstPower;
+        bool power = number >= Spellcasting.FirstPower && !fromItem;
         bool done = power ? battle.UsePower(caster, number, all[targetAt].Cell)
-            : battle.Cast(caster, number, caster.Level, all[targetAt].Cell, ownSpell: false);
+            : battle.Cast(caster, number, fromItem ? ItemMagic.CasterLevel : caster.Level, all[targetAt].Cell, ownSpell: false);
         if (!done)
         {
             return NothingHappens;
         }
         battle.SyncSheets(); // a power's points
-        if (!power)
+        if (!power && !fromItem)
         {
             caster.Sheet!.Cast.Add(number);
         }

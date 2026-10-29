@@ -456,10 +456,17 @@ this milestone brings most of the game's content.
 - [x] Breakage in combat (`80F5:1F4B`, #56): as in DSUN.EXE only Detonate's
       shrapnel breaks things (`Battle.BreakItem`; the original leaves a
       "Broken Weapon", here the item is gone).
-- [ ] Items still to do: the quest items' USE scripts (`RDFF` 30029–30999,
-      `039D:0319`; #71), spells from items aimed on the map outside a fight
-      (`8B7D:04D1` starts the spell pointer there), what worn items' spells
-      do while worn, and the type flags 4 and 0x10 (#72).
+- [x] Quest items' USE runs their use trigger (`039D:0319`, #71): the
+      inventory item is the target by its id, as for USE WITH.
+- [x] Item spells (#72): out of a fight a spell to aim is aimed on the map
+      (`8B7D:04D1`; `RegionView.ItemAim`): a help on a party member takes
+      effect as members' own spells do out of a fight, anything else at a
+      creature starts the fight and is cast first. A spell on the user that
+      isn't a heal takes effect too. A weapon's spell reaches whom it hits
+      (`612E:1B7A`). Worn items' ordinary spells do nothing, and the type
+      flags 4 and 0x10 are read nowhere. `--check-map-cast`.
+- [ ] The worn specials 0xFA–0xFF (Belt and Helm of Might, El's Ring,
+      Steadfast Ring, Ring of Insight, Dag's Dagger; `80F5:2BB8`) (#87).
 - [x] Character sheet and inventory screens (`CharacterScreen`): View
       Character (`WIND` 11500 over `BMP` 11000) with the member's sheet, and
       the inventory (`WIND` 13500 over `BMP` 13001: the member's figure,

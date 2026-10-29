@@ -78,7 +78,8 @@ public enum ItemMaterial : byte { Wooden, Bone, Stone, Obsidian, Metal, Leather 
 /// container (VIEW INVENTORY, <c>6527:12BD</c>); 0x80 marks armour (the verb
 /// window's flag 8). 0x40 is on two-handed weapons only (staves, the great
 /// axe, polearms, bows; inferred). 4 (doors, chests, nests, obelisks) and
-/// 0x10 are not traced.
+/// 0x10 are read nowhere in the decompiled code (2 402 of 2 829 functions), so
+/// they likely do nothing.
 /// </summary>
 [Flags]
 public enum ItemTypeFlags : byte

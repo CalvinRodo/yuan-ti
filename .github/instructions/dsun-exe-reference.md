@@ -1030,7 +1030,8 @@ each record are not read.
   (the inventory's VIEW INVENTORY, `6527:12BD`; chests, bags, skeletons);
   0x80 armour (verb-window flag 8). 0x40 is on two-handed weapons only
   (staves, the great axe, polearms, bows; inferred). 4 (doors, chests,
-  nests, obelisks) and 0x10 are not traced.
+  nests, obelisks) and 0x10 are read nowhere in the decompiled code (2 402
+  of 2 829 functions), so they likely do nothing.
 * **`IT1R` +0x10, classes:** a word with one bit per class code. A
   character record's +0x12 is the OR of `DS:0718`[code] over its class
   codes (`6868:0000`). The codes come from `38D4:00ED` + class × 4 +
@@ -1050,6 +1051,28 @@ each record are not read.
   spell, put back by `78A9:6488`. The shipped items agree (fruit casts
   NEUTRALIZE POISON with one charge). Doors keep their state in +0x0F
   instead (bits 1/2/4/8).
+* **What an item's spell does** (+0x0F, the `SPIN` record +0x0F − 1):
+  * USE in the item window (`91F7:03D0`). For a quest item (`RDFF`
+    30029–30999) the item is put in a spare object slot (`4972:000C`), and if
+    `039D:08AA` finds a use trigger for it (bit 0x10) the windows close and
+    `039D:0319` runs it, with the active member as actor and the item as
+    target ("NOTHING HAPPENS" if none matched). Without a trigger it goes on
+    as any item. 30101 (Nagi's journal, GPL 199) and 12 more get global use
+    triggers from the game start (`MAS 99`); regions add others.
+  * A spell to aim puts the spell pointer on the map (`8B7D:04D1`, mode 5),
+    in a fight or out of one; a click casts it there (`8B7D:0627` →
+    `7D80:21C5`, level 6) and uses a charge (`78A9:2324`).
+  * A weapon's spell reaches whoever it hits (`612E:1B7A`, after the
+    damage): `7D80:21C5(attacker, target, spell, 6)` on the target alone,
+    unless the spell helps (record −7 bits 0–1 = 1) and the weapon isn't
+    cursed (bonus below 0). No charge is used; `78A9:33A6` only copies the
+    spell back. Eight shipped weapons carry one (Dark Flame, El's Drinker,
+    Terror Blade, Blackmace, Balk's Staff, Phrain's Bow, Cahulaks, Chatkcha).
+  * Worn, an ordinary spell does nothing: no code reads it there, and the
+    item window offers no USE for a worn item whose spell helps. Values
+    0xFA–0xFF (Belt and Helm of Might, Draketooth, El's Ring, Steadfast Ring,
+    Ring of Insight, Dag's Dagger) are special cases in `80F5:2BB8` (the
+    stats), whose jump table Ghidra doesn't decompile cleanly (#87).
 * **Item record +0x10, special:** 1–6, how easily it breaks; 6 never (480
   items). `80F5:1F4B` picks the carried item with the lowest value below 6
   and breaks it when 1d20 < 15 − its bonus (`612E:20A1`). `612E:2700` turns

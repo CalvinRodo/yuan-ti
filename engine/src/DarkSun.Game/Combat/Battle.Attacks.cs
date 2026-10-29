@@ -266,6 +266,27 @@ public sealed partial class Battle
         damage *= times;
         Note(new DamageRolled(a, t, dice, sides, bonus, times, damage));
         Hit(a, t, damage, w?.Elements ?? NaturalHit(a), first, last && natural is not null, missile: !melee);
+        if (w?.Item is { } item)
+        {
+            WeaponSpell(a, t, item);
+        }
+    }
+
+    /// <summary>
+    /// A weapon's spell (its record's +0x0F) reaching whoever it hit
+    /// (<c>612E:1B7A</c>, after the damage: <c>7D80:21C5</c> at level 6 on
+    /// the target alone), unless it is a help and the weapon isn't cursed. No
+    /// charge is used (<c>78A9:33A6</c> only copies the spell back).
+    /// </summary>
+    private void WeaponSpell(Combatant a, Combatant t, Item item)
+    {
+        if (item.Record.Flags is 0 or > ItemMagic.LastEffect || Spells.Effect(item.Record.Flags) is not { } e
+            || e.Purpose == SpellEffect.Helps && item.Record.Bonus >= 0 || !t.Alive)
+        {
+            return;
+        }
+        Note(new Cast(a, e.Number, t.Cell));
+        Apply(a, t, e, ItemMagic.CasterLevel);
     }
 
     /// <summary>

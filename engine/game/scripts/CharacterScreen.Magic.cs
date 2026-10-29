@@ -452,7 +452,7 @@ public partial class CharacterScreen
             return;
         }
         string result = _magic.CastOutside(caster, number, target.Vitals, _random, CharacterOf(slot)?.Race);
-        if (result == Spellcasting.OnlyInCombat && CastOnMap(_member, slot, number) is { } onMap)
+        if (result == Spellcasting.OnlyInCombat && CastOnMap(_member, slot, number, false) is { } onMap)
         {
             result = onMap;
         }
