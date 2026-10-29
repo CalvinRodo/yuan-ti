@@ -125,6 +125,26 @@ public class CombatTests
     }
 
     [Fact]
+    public void AWeaponsSpellReachesWhomItHitsUnlessItHelps()
+    {
+        static Weapon Carrying(int spell, sbyte bonus = 0) => Sword() with
+        {
+            Item = new Item(30001, new ItemRecord(-30001, (ushort)spell, 0, 0, 0, 0, 0, 0, (byte)spell, 6, 255, 0, bonus)),
+        };
+        Assert.Equal(SpellEffect.Helps, SpellRules.Default.Effect(89)!.Purpose);
+        foreach (var (weapon, cast) in new[] { (Carrying(Battle.CauseFear), true), (Carrying(89), false), (Carrying(89, bonus: -1), true) })
+        {
+            Combatant a = Fighter("a", 1, 5, 5), t = Fighter("t", 2, 6, 5, hp: 50);
+            a.Weapon = weapon;
+            Battle b = Started(new ScriptedDice(Highest), a, t);
+
+            Assert.True(b.Attack(a, t));
+
+            Assert.Equal(cast, b.Log.Any(e => e is Cast c && c.Actor == a && c.Effect == weapon.Item!.Record.Flags && c.At == t.Cell));
+        }
+    }
+
+    [Fact]
     public void AThriKreenWithAWeaponStillBites()
     {
         Combatant Kreen() => new()

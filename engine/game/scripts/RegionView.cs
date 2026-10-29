@@ -383,6 +383,11 @@ public partial class RegionView : Node2D
                 CheckGang();
                 return;
             }
+            if (OS.GetCmdlineUserArgs().Contains("--check-map-cast"))
+            {
+                CheckMapCast();
+                return;
+            }
             if (OS.GetCmdlineUserArgs().Contains("--check-combat"))
             {
                 CheckCombat();
@@ -518,10 +523,10 @@ public partial class RegionView : Node2D
             EffectsOf = slot => _battle?.Combatants.FirstOrDefault(c => c.PartyMember && c.Source == _world[slot]) is { } member
                 ? [.. member.Effects.Select(e => e.Effect)]
                 : slot < Session.Party.Count ? [.. Session.Party[slot].Lasting.Where(e => e.EndsAt is not int end || end > _world.Clock).Select(e => e.Effect)] : [],
-            CastOnMap = (caster, target, number) => DarkSun.Game.Combat.Encounter.CastOnMap(_world, slot => slot < Session.Party.Count ? Session.Party[slot] : null,
-                caster, target, number, new DarkSun.Game.Combat.BorlandDice(new DarkSun.Game.Rules.BorlandRandom((uint)System.Environment.TickCount)), Session.Rules,
-                Session.CombatRules, Session.SpellRules, Session.CreatureRules),
+            CastOnMap = CastOnMap,
             CastInFight = CastItemInFight,
+            AimOnMap = AimItemOnMap,
+            UseTrigger = UseQuestItem,
             SpellName = Session.SpellName,
             Did = text => AddScriptLine($"> {text}"),
             Leader = () => _selected,
@@ -1552,6 +1557,11 @@ public partial class RegionView : Node2D
         }
         if (CombatInput(e))
         {
+            return;
+        }
+        if (MapCastInput(e))
+        {
+            GetViewport().SetInputAsHandled();
             return;
         }
         if (_useWith is not null && e.IsActionPressed(Controls.Back))
@@ -3334,8 +3344,8 @@ public partial class RegionView : Node2D
         Expect(window.Lines is ["USEABLE BY:", ..] && window.Lines.Contains(MemberName(0)), $"INFO: a fighter may ({Shown()})");
         window.Close();
 
-        // USE (91F7:03D0): a lemon (RDFF 31028) makes its eater whole and is eaten; a wand (31007) waits for a
-        // fight; boots have no spell and no USE.
+        // USE (91F7:03D0): a lemon (RDFF 31028) makes its eater whole and is eaten; a wand (31007) is aimed on the
+        // map (--check-map-cast goes on from there); boots have no spell and no USE.
         const int Lemon = 31028, Wand = 31007;
         _world.Give(1, -Lemon, 0, GameWorld.None);
         _world.Give(1, -Wand, 0, GameWorld.None);
@@ -3351,7 +3361,28 @@ public partial class RegionView : Node2D
         (vitals.MaxHp, vitals.Hp) = (maxHp, hp);
         screen.Click(Pack, PackIndex(wand), button: MouseButton.Right);
         window.PressUse();
-        Expect(screen.IsOpen && screen.Status == "ONLY IN COMBAT" && wand.Charges == wand.Record.Charges, $"the wand waits for a fight ({screen.Status}, {wand.Charges} charges)");
+        Expect(!screen.IsOpen && _mapCast is { } aimed && aimed.Cast.Item == wand && wand.Charges == wand.Record.Charges,
+            $"out of a fight, the wand's spell is aimed on the map ({screen.Status}, {wand.Charges} charges)");
+        _mapCast = null;
+        // A quest item runs its use trigger (039D:0319): Nagi's journal (RDFF 30101; the game start's trigger, GPL 199).
+        const int Journal = 30101;
+        if (Session.Scripts.Triggers.MatchObject(GplTriggerList.Use, -Journal) is null)
+        {
+            Session.Scripts.Triggers.AddObject(GplTriggerList.Use, 1, 199, -Journal, global: true); // as MAS 99 makes it
+        }
+        _world.Give(1, -Journal, 0, GameWorld.None);
+        Item journal = me.Items.Last(i => i.Rdff == Journal);
+        screen.Open(_world, 0, CharacterScreen.Page.Items);
+        screen.Click(Pack, PackIndex(journal), button: MouseButton.Right);
+        Expect(window.UseOffered, "Nagi's journal has USE");
+        window.PressUse();
+        string read = string.Concat(Session.ScriptHost.Dialogue.Text.Select(t => t.Text));
+        Expect(!screen.IsOpen && read.Contains("Nagi"), $"USE on Nagi's journal runs its use trigger ({read[..Math.Min(read.Length, 60)]})");
+        Session.Scripts.Abandon();
+        Session.ScriptHost.Dialogue.Clear();
+        _dialogueWindow.Refresh();
+        me.Items.Remove(journal);
+        screen.Open(_world, 0, CharacterScreen.Page.Items);
         screen.Click(Pack, PackIndex(boots), button: MouseButton.Right);
         Expect(window.Visible && !window.UseOffered, "boots have no USE");
         window.Close();

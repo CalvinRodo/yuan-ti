@@ -93,6 +93,10 @@ public partial class RegionView
                 _ => there == c || (c.Flags & TurnFlags.MayMove) != 0 && battle.Free(cell) ? Pointers.Move : Pointers.CantMove,
             };
         }
+        if (_mapCast is { Cast.Spell: var aimed })
+        {
+            return MapCastTarget(at) is not null && Spellcasting.Get(aimed) is { } known ? known.Icon : Pointers.CantCast;
+        }
         WorldObject? hit = ObjectAt(at);
         return _cursor switch
         {
@@ -238,7 +242,11 @@ public partial class RegionView
         {
             return _party.FirstOrDefault(m => m.Walker == o.Walker)?.Node;
         }
-        return _creatureNodes.GetValueOrDefault(o) ?? _cloneSprites.GetValueOrDefault(o)
-            ?? _objectSprites.FirstOrDefault(s => _worldObjects.GetValueOrDefault(s.Object) == o).Sprite;
+        return SpriteOf(o);
     }
+
+    /// <summary>The sprite a creature or thing on the map is drawn with, if any.</summary>
+    private Sprite2D? SpriteOf(WorldObject o) =>
+        _creatureNodes.GetValueOrDefault(o) ?? _cloneSprites.GetValueOrDefault(o)
+            ?? _objectSprites.FirstOrDefault(s => _worldObjects.GetValueOrDefault(s.Object) == o).Sprite;
 }

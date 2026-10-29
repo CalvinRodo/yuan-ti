@@ -910,17 +910,23 @@ public partial class CharacterScreen : RetroScreen
     private WorldObject? _described;
 
     /// <summary>
-    /// USE in the item window (<c>91F7:03D0</c>, <see cref="ItemMagic.Plan"/>): a scroll or
-    /// book teaches its spell or power; any other spell is cast at level 6, using one of the
-    /// item's charges. In a fight that is the map's (<see cref="CastInFight"/>: on the
-    /// member's turn, aimed there if it needs a target). Outside one, as for the member's
-    /// own spells, only healing works, on the member using it (and a lemon makes them whole);
-    /// anything else waits for a fight.
+    /// USE in the item window (<c>91F7:03D0</c>, <see cref="ItemMagic.Plan"/>): a quest item
+    /// with a use trigger runs it (<see cref="UseTrigger"/>); a scroll or book teaches its
+    /// spell or power; any other spell is cast at level 6, using one of the item's charges.
+    /// In a fight that is the map's (<see cref="CastInFight"/>: on the member's turn, aimed
+    /// there if it needs a target). Outside one, a spell to aim is aimed on the map
+    /// (<see cref="AimOnMap"/>); one on the user heals, or takes effect as the member's own
+    /// spells do outside a fight (<see cref="CastOnMap"/>), and a lemon makes them whole.
     /// </summary>
     private void UseItem(Item item)
     {
         if (_world is null || _described is not { } holder || Member is not { } member || CharacterOf(_member) is not { } c || !holder.Items.Contains(item))
         {
+            return;
+        }
+        if (ItemMagic.IsScripted(item.Rdff) && UseTrigger?.Invoke(_member, item) == true)
+        {
+            Close();
             return;
         }
         ItemUse use = ItemMagic.Plan(item, Session.SpellRules);
@@ -945,6 +951,15 @@ public partial class CharacterScreen : RetroScreen
             }
             message = refused;
         }
+        else if (use.Kind == ItemUseKind.Aim)
+        {
+            if (AimOnMap?.Invoke(_member, item, holder, use) is not { } refused)
+            {
+                Close();
+                return;
+            }
+            message = refused;
+        }
         else
         {
             Vitals v = member.Vitals;
@@ -952,7 +967,7 @@ public partial class CharacterScreen : RetroScreen
             {
                 ItemUseKind.FullHeal when v.Status < Vitals.Dead && v.Hp < v.MaxHp => Healed(v),
                 ItemUseKind.FullHeal => Spellcasting.NothingHappens,
-                ItemUseKind.OnSelf => Spellcasting.Heal(use.Spell, v, _random),
+                ItemUseKind.OnSelf => Spellcasting.Heal(use.Spell, v, _random) ?? CastOnMap(_member, _member, use.Spell, true),
                 _ => null,
             };
             message = result ?? "ONLY IN COMBAT";
@@ -986,9 +1001,22 @@ public partial class CharacterScreen : RetroScreen
 
     /// <summary>
     /// A spell or power that isn't a healing one cast out of a fight: caster's slot, target's slot,
-    /// number; what happened (<see cref="TakesEffect"/> or NOTHING HAPPENS), or null if it only works in a fight.
+    /// number, and whether it comes from an item (level 6, no cast or strength spent); what happened
+    /// (<see cref="TakesEffect"/> or NOTHING HAPPENS), or null if it only works in a fight.
     /// </summary>
-    public Func<int, int, int, string?> CastOnMap { get; set; } = (_, _, _) => null;
+    public Func<int, int, int, bool, string?> CastOnMap { get; set; } = (_, _, _, _) => null;
+
+    /// <summary>
+    /// USE on an item whose spell is aimed, out of a fight (<c>8B7D:04D1</c>, the spell pointer on the map):
+    /// member, item, who holds it, the use; null when the pointer is up (the screen closes), else why not.
+    /// </summary>
+    public Func<int, Item, WorldObject, ItemUse, string?>? AimOnMap { get; set; }
+
+    /// <summary>
+    /// USE on a quest item (<c>91F7:03D0</c>): run its use trigger (<c>039D:0319</c>) with the
+    /// member as actor; false if it has none (then its spell, if any, as for any item).
+    /// </summary>
+    public Func<int, Item, bool>? UseTrigger { get; set; }
 
     public const string TakesEffect = "IT TAKES EFFECT";
 

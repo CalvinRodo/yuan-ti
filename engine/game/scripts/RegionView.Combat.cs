@@ -1185,7 +1185,10 @@ public partial class RegionView
     /// <c>--fight</c> (and the check): the nearest creature that fights is
     /// brought a few cells from the party and attacked.
     /// </summary>
-    private bool StartTestFight()
+    private bool StartTestFight() => BringFoeNear() is { } foe && StartCombat(foe, $"attack {Describe(foe)}");
+
+    /// <summary>The nearest creature that fights, brought 3–8 cells from the party and made hostile; null if none.</summary>
+    private WorldObject? BringFoeNear()
     {
         WorldObject? foe = _world.Objects.Where(o => o.Kind == ObjectKind.Creature && !o.Hidden && o.Vitals.Alive
                 && o.Record is { Mind: not (CombatRecord.MindIdle or CombatRecord.MindFlees) })
@@ -1196,7 +1199,7 @@ public partial class RegionView
             && _world.Party.All(p => p.Cell != c), new Cell(-1, -1));
         if (foe is null || near is not { X: >= 0 } spot)
         {
-            return false;
+            return null;
         }
         if (foe.Walker is { } w)
         {
@@ -1209,7 +1212,7 @@ public partial class RegionView
             OnWorldChanged(foe, null);
         }
         foe.Allegiance = 0;
-        return StartCombat(foe, $"attack {Describe(foe)}");
+        return foe;
     }
 
     // -- headless check ------------------------------------------------------------------------------

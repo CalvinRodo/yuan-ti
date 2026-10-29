@@ -50,15 +50,16 @@ public static class ItemMagic
     public static bool IsFruit(int rdff) => Math.Abs(rdff) is >= 31017 and <= 31040;
 
     /// <summary>
-    /// The quest items (<c>RDFF</c> 30029–30999): USE runs their script
-    /// (<c>039D:0319</c>, not traced: here nothing happens).
+    /// The quest items (<c>RDFF</c> 30029–30999): USE runs their use trigger
+    /// (<c>91F7:03D0</c>: when <c>039D:08AA</c> finds one, <c>039D:0319</c>), and without one
+    /// goes on as for any item.
     /// </summary>
     public static bool IsScripted(int rdff) => Math.Abs(rdff) is >= 30029 and <= 30999;
 
     /// <summary>
     /// Does the item window offer USE for <paramref name="item"/> (<c>91F7:0000</c>)?
     /// Quest items and fruit always; otherwise it needs a spell (+0x0F, up to 196),
-    /// and a worn item doesn't have it when its spell helps (it works by being worn),
+    /// and a worn item doesn't have it when its spell helps (though worn, it does nothing),
     /// when it is cursed (a bonus below 0) with a spell against a creature, or when
     /// it is a hand's, ammunition or a thrown weapon (worn in places 5, 11, 12).
     /// </summary>
@@ -85,15 +86,15 @@ public static class ItemMagic
     }
 
     /// <summary>
-    /// What USE on <paramref name="item"/> does (<c>91F7:03D0</c>): nothing
-    /// without a spell; an item of <c>RDFF</c> 1400–1499 teaches it; a spell
+    /// What USE on <paramref name="item"/> does (<c>91F7:03D0</c>) when no use
+    /// trigger takes it: nothing without a spell; an item of <c>RDFF</c> 1400–1499 teaches it; a spell
     /// with an effect that isn't on oneself (target 0 or 7) is aimed, except a
     /// fruit's; from 249 the user is made whole; anything else acts on the user.
     /// </summary>
     public static ItemUse Plan(Item item, SpellRules spells)
     {
         int spell = item.Record.Flags;
-        if (spell == 0 || IsScripted(item.Rdff))
+        if (spell == 0)
         {
             return new(ItemUseKind.Nothing, 0);
         }

@@ -32,7 +32,7 @@ public class ItemMagicTests
     }
 
     [Fact]
-    public void WornThingsWhoseSpellHelpsWorkByBeingWorn()
+    public void WornThingsWhoseSpellHelpsHaveNoUse()
     {
         Assert.Equal(SpellEffect.Helps, Spells.Effect(89)!.Purpose); // Drake Armor's
         Assert.False(ItemMagic.Offered(Magic(30013, 89), WornAt(1), Spells));
@@ -53,10 +53,11 @@ public class ItemMagicTests
     }
 
     [Fact]
-    public void ScrollsTeachAndQuestItemsDoNothingHere()
+    public void ScrollsTeachAndQuestItemsWithoutAUseTriggerAreLikeAnyItem()
     {
         Assert.Equal(new ItemUse(ItemUseKind.Learn, 66), ItemMagic.Plan(Magic(1410, 66), Spells));
         Assert.Equal(ItemUseKind.Nothing, ItemMagic.Plan(Magic(30029, 0), Spells).Kind);
+        Assert.Equal(new ItemUse(ItemUseKind.Aim, MagicMissile), ItemMagic.Plan(Magic(30029, MagicMissile), Spells)); // 91F7:03D0 goes on to the spell
         Assert.True(ItemMagic.Offered(Magic(30029, 0), WornAt(0), Spells));
     }
 }
