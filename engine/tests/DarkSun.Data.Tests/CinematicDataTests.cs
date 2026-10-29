@@ -74,7 +74,10 @@ public class AcfTests
 public class XmidiTimelineTests
 {
     /// <summary>An XMIDI file: FORM XDIR, CAT holding FORM XMID with one EVNT chunk.</summary>
-    internal static byte[] Xmidi(params byte[] events)
+    internal static byte[] Xmidi(params byte[] events) => Xmidi([], events);
+
+    /// <summary>An XMIDI file whose FORM XMID has an RBRN chunk of branch markers (marker, offset into EVNT) before its EVNT.</summary>
+    internal static byte[] Xmidi((int Marker, int Offset)[] branches, params byte[] events)
     {
         static byte[] Chunk(string tag, byte[] body)
         {
@@ -83,7 +86,8 @@ public class XmidiTimelineTests
             return [.. System.Text.Encoding.ASCII.GetBytes(tag), .. size, .. body, .. (body.Length % 2 == 1 ? new byte[1] : [])];
         }
         byte[] xdir = Chunk("FORM", [.. "XDIR"u8, .. Chunk("INFO", [1, 0])]);
-        byte[] xmid = Chunk("FORM", [.. "XMID"u8, .. Chunk("EVNT", events)]);
+        byte[] rbrn = [(byte)branches.Length, 0, .. branches.SelectMany(b => new byte[] { (byte)b.Marker, 0, (byte)b.Offset, 0, 0, 0 })];
+        byte[] xmid = Chunk("FORM", [.. "XMID"u8, .. (branches.Length > 0 ? Chunk("RBRN", rbrn) : []), .. Chunk("EVNT", events)]);
         return [.. xdir, .. Chunk("CAT ", [.. "XMID"u8, .. xmid])];
     }
 

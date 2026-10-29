@@ -373,6 +373,7 @@ public static class Session
             Fields = Open("GPLDATA.GFF").TryRead("GPLX", 1, out var gplx) ? GplFieldMap.Parse(gplx.Span) : GplFieldMap.Empty,
             Monsters = Open("RESOURCE.GFF").TryRead("MONR", 1, out var monr) ? MonsterTable.Parse(monr.Span) : MonsterTable.Empty,
         };
+        host.MusicLevelChanged += level => Music.Instance?.SetLevel(level);
         for (int slot = 0; slot < host.PartyMembers.Count; slot++)
         {
             if (slot < Party.Count && Party[slot].Hp > 0)

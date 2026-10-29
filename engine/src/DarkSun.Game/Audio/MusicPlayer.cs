@@ -10,6 +10,7 @@ namespace DarkSun.Game.Audio;
 /// same time), <see cref="FadeIn"/> / <see cref="FadeOut"/> are
 /// <c>35D1:012D</c> with 0x32 / 0x33. Call <see cref="Render"/> from the
 /// audio output; it advances the sequence by the samples rendered.
+/// The music level picks a section of the track (<see cref="MusicSections"/>).
 /// </summary>
 public sealed class MusicPlayer
 {
@@ -19,6 +20,7 @@ public sealed class MusicPlayer
     private XmidiSequencer? _sequencer;
     private long _samples; // since the current sequence started
     private (byte[] Xmi, double FadeIn)? _queued;
+    private readonly MusicSections _sections = new();
 
     // Volume ramp, in samples.
     private float _gain = 1f;
@@ -39,11 +41,18 @@ public sealed class MusicPlayer
 
     public bool IsPlaying => _sequencer is not null;
 
+    /// <summary>The section playing (<see cref="MusicSections.Section"/>).</summary>
+    public int Section => _sections.Section;
+
+    /// <summary>The music level (<see cref="MusicSections.SetLevel"/>).</summary>
+    public void SetLevel(int level) => _sections.SetLevel(level);
+
     /// <summary>Start a sequence at once, fading in over <paramref name="fadeIn"/> seconds (0: full volume).</summary>
     public void Play(byte[] xmi, double fadeIn = 0)
     {
         StopNow();
         _sequencer = new XmidiSequencer(xmi);
+        _sections.Follow(_sequencer);
         _samples = 0;
         if (fadeIn > 0)
         {

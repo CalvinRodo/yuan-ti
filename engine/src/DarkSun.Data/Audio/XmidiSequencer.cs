@@ -11,14 +11,18 @@ public readonly record struct MidiMessage(int Channel, int Command, int Data1, i
 /// and <c>CINE.GFF</c>) as Miles AIL does: time in ticks of 1/120 s (delay
 /// bytes below 0x80 add to it; tempo events are ignored), notes carry their
 /// duration, and the XMIDI controllers are acted on instead of sent: FOR /
-/// NEXT loops (0x74 / 0x75; a count of 0 or 127 loops for ever) and callbacks
-/// (0x77). Port of the event handling in <c>src/xmi_tool.py</c>, but played
-/// live, so endless loops stay endless.
+/// NEXT loops (0x74 / 0x75; a count of 0 or 127 loops for ever), callbacks
+/// (0x77), and the indirect prefix (0x73), which takes the next controller's
+/// value on its channel from <see cref="ControllerTable"/>. <see cref="Branch"/>
+/// jumps to a marker (0x78) listed in the <c>RBRN</c> chunk. Port of the event
+/// handling in <c>src/xmi_tool.py</c>, but played live, so endless loops stay
+/// endless.
 /// </summary>
 public sealed class XmidiSequencer
 {
     public const int TicksPerSecond = 120;
 
+    private const int IndirectController = 0x73;
     private const int ForController = 0x74;
     private const int NextController = 0x75;
     private const int CallbackController = 0x77;
@@ -29,12 +33,54 @@ public sealed class XmidiSequencer
     private readonly byte[] _events;
     private readonly PriorityQueue<(int Channel, int Note), long> _noteOffs = new();
     private readonly Stack<(int Start, int Left)> _loops = new();
+    private readonly Dictionary<int, int> _branches = [];
+    private readonly int[] _indirect = [-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1];
     private int _pos;
     private long _next; // tick of the event at _pos (delays read so far)
     private bool _ended;
 
     /// <exception cref="InvalidDataException">There is no <c>EVNT</c> chunk.</exception>
-    public XmidiSequencer(ReadOnlySpan<byte> xmi) => _events = FindEvents(xmi).ToArray();
+    public XmidiSequencer(ReadOnlySpan<byte> xmi)
+    {
+        _events = FindChunk(xmi, "EVNT").ToArray();
+        ReadOnlySpan<byte> rbrn = FindChunk(xmi, "RBRN", required: false);
+        // RBRN: a count, then {marker, offset into EVNT} (u16, u32).
+        for (int i = 0, n = rbrn.Length >= 2 ? BinaryPrimitives.ReadUInt16LittleEndian(rbrn) : 0; i < n && 2 + 6 * i + 6 <= rbrn.Length; i++)
+        {
+            int at = 2 + 6 * i;
+            _branches[BinaryPrimitives.ReadUInt16LittleEndian(rbrn[at..])] = (int)BinaryPrimitives.ReadUInt32LittleEndian(rbrn[(at + 2)..]);
+        }
+    }
+
+    /// <summary>
+    /// The table indirect controllers read (AIL's controller table; DSUN.EXE's
+    /// is at <c>577D:610E</c>, set to 0–126 at start-up, <c>3256:06B6</c>).
+    /// </summary>
+    public byte[] ControllerTable { get; set; } = IdentityTable();
+
+    /// <summary>A controller table holding its own indices.</summary>
+    public static byte[] IdentityTable() => [.. Enumerable.Range(0, 128).Select(i => (byte)i)];
+
+    /// <summary>The branch markers the sequence has (its <c>RBRN</c> chunk).</summary>
+    public IReadOnlyCollection<int> Markers => _branches.Keys;
+
+    /// <summary>
+    /// Go on from marker <paramref name="marker"/> (AIL's <c>branch_index</c>),
+    /// leaving any loop; false if there is no such marker. Sounding notes
+    /// keep their durations, and time goes on from now.
+    /// </summary>
+    public bool Branch(int marker)
+    {
+        if (!_branches.TryGetValue(marker, out int offset) || offset >= _events.Length)
+        {
+            return false;
+        }
+        _pos = offset;
+        _loops.Clear();
+        Array.Fill(_indirect, -1);
+        _ended = false;
+        return true;
+    }
 
     /// <summary>The tick reached by <see cref="AdvanceTo"/>.</summary>
     public long Tick { get; private set; }
@@ -127,6 +173,16 @@ public sealed class XmidiSequencer
                 {
                     int controller = Byte(_pos + 1), value = Byte(_pos + 2);
                     _pos += 3;
+                    if (controller == IndirectController)
+                    {
+                        _indirect[channel] = value;
+                        break;
+                    }
+                    if (_indirect[channel] >= 0)
+                    {
+                        value = ControllerTable[_indirect[channel] & 0x7F] & 0x7F;
+                        _indirect[channel] = -1;
+                    }
                     Controller(channel, controller, value, output);
                     break;
                 }
@@ -203,15 +259,15 @@ public sealed class XmidiSequencer
         return value;
     }
 
-    /// <summary>The data of the first <c>EVNT</c> chunk, searching the IFF tree.</summary>
-    private static ReadOnlySpan<byte> FindEvents(ReadOnlySpan<byte> data)
+    /// <summary>The data of the first <paramref name="wanted"/> chunk, searching the IFF tree.</summary>
+    private static ReadOnlySpan<byte> FindChunk(ReadOnlySpan<byte> data, string wanted, bool required = true)
     {
         for (int at = 0; at + 8 <= data.Length;)
         {
             string tag = Encoding.ASCII.GetString(data.Slice(at, 4));
             int size = (int)BinaryPrimitives.ReadUInt32BigEndian(data[(at + 4)..]);
             int body = at + 8;
-            if (tag == "EVNT")
+            if (tag == wanted)
             {
                 return data.Slice(body, Math.Min(size, data.Length - body));
             }
@@ -222,6 +278,6 @@ public sealed class XmidiSequencer
             }
             at = body + size + (size & 1);
         }
-        throw new InvalidDataException("no EVNT chunk in XMIDI data");
+        return required ? throw new InvalidDataException($"no {wanted} chunk in XMIDI data") : [];
     }
 }

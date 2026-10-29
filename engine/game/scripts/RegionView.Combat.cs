@@ -166,6 +166,11 @@ public partial class RegionView
             }
         }
         _battle = battle;
+        // 612E:1359 → 6BB8:0EFA: a fight started with a creature takes the music level the region gives it.
+        if (attacked is { Kind: not ObjectKind.Party } foe && RegionInfo.Read(Session.Open("RESOURCE.GFF"), _region.Number) is { } region)
+        {
+            Session.ScriptHost.FightMusic(region.FightLevel(-foe.Id));
+        }
         _combatLines.Clear();
         _combatEvents.Clear();
         _combatLog.Log = NewCombatLog();
@@ -261,6 +266,7 @@ public partial class RegionView
         LeaveFallen(battle);
         bool fallen = Encounter.End(battle, _world);
         Session.ScriptHost.CheckLevels(_world); // 8E77:0A8F at the end of a fight
+        Session.ScriptHost.FightMusicOver();
         bool won = !fallen;
         Log(won ? "The fight is over." : "The party has fallen.", won ? LogKind.Hit : LogKind.Fell);
         AddScriptLine($"> combat over after {battle.Round} rounds: {(won ? "won" : "lost")}");

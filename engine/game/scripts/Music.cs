@@ -121,6 +121,18 @@ public partial class Music : Node
     /// <summary>A track change as DSUN.EXE makes them: fade out, then in, over 5 s each.</summary>
     public void ChangeTo(string file, int number) => Play(file, number, ChangeFade, change: true);
 
+    /// <summary>
+    /// The music level (<c>361A:0000</c>): section <paramref name="level"/> of
+    /// the track playing, if it has that many (<see cref="MusicTracks.Levels"/>).
+    /// </summary>
+    public void SetLevel(int level)
+    {
+        if (Current is { } track && level <= MusicTracks.Levels(track.Number))
+        {
+            _player?.SetLevel(level);
+        }
+    }
+
     public void FadeIn(double seconds) => _player?.FadeIn(seconds);
 
     public void FadeOut(double seconds) => _player?.FadeOut(seconds);

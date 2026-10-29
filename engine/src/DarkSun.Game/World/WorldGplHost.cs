@@ -64,11 +64,29 @@ public sealed partial class WorldGplHost : DialogueGplHost
     /// <summary>
     /// <c>REQUEST(16, who, n)</c> (<c>6BB8:0FA9</c> → <c>361A:0000</c>): the
     /// music's intensity level n (1–5 in the scripts), a section within the
-    /// piece playing; set only when sound is on and it changes.
+    /// piece playing; asked for only when it changes (<c>DS:0D9A</c>).
     /// </summary>
     public int MusicLevel { get; private set; }
 
+    /// <summary>A music level asked for: by a script, a fight's start or its end.</summary>
     public event Action<int>? MusicLevelChanged;
+
+    /// <summary>
+    /// A fight started with a creature (<c>6BB8:0EFA</c>, from <c>612E:1359</c>):
+    /// the level the region gives it (<see cref="Data.Regions.RegionInfo.FightLevel"/>).
+    /// <see cref="MusicLevel"/> stays as it was, so a script can ask for it again.
+    /// </summary>
+    public void FightMusic(int level) => MusicLevelChanged?.Invoke(level);
+
+    /// <summary>A fight is over (<c>612E:04A7</c> → <c>6BB8:0FD4</c>): level 1, if it isn't already.</summary>
+    public void FightMusicOver()
+    {
+        if (MusicLevel != 1)
+        {
+            MusicLevel = 1;
+            MusicLevelChanged?.Invoke(1);
+        }
+    }
 
     /// <summary>FIGHT: combat was asked for at this cell (<c>gname[1]</c>, <c>[2]</c>); combat is not modelled yet.</summary>
     public (int X, int Y)? PendingFight { get; set; }

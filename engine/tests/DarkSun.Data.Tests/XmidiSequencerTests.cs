@@ -60,6 +60,52 @@ public class XmidiSequencerTests
     }
 
     [Fact]
+    public void IndirectControllersReadTheTableAndBranchesGoToTheirMarker()
+    {
+        byte[] xmi = XmidiTimelineTests.Xmidi([(2, 13)],
+            0xB0, 0x73, 0x05, 0xB0, 0x77, 0x00, // indirect callback: entry 5
+            0xB0, 0x73, 0x7F, 0xB0, 0x07, 0x00, // indirect volume: entry 127, sent
+            0x0A,
+            0xB0, 0x78, 0x02,                   // marker 2, at offset 13
+            0x91, 70, 100, 5,
+            0xFF, 0x2F, 0x00);
+        var s = new XmidiSequencer(xmi);
+        s.ControllerTable[5] = 9;
+        s.ControllerTable[127] = 99;
+        var callbacks = new List<int>();
+        s.Callback += callbacks.Add;
+
+        var heard = Play(s, 30);
+
+        Assert.Equal([9], callbacks);
+        Assert.Contains((0, new MidiMessage(0, 0xB0, 0x07, 99)), heard);
+        Assert.Equal([2], s.Markers);
+        Assert.True(s.Branch(2));
+        Assert.False(s.Branch(3));
+        Assert.False(s.Finished);
+        heard = [];
+        s.AdvanceTo(40, m => heard.Add((40, m)));
+        Assert.Contains((40, new MidiMessage(1, 0x90, 70, 100)), heard); // played again from the marker, time going on
+    }
+
+    [Fact]
+    public void RegionInfoGivesTheFightsMusicLevelsReadAsWords()
+    {
+        byte[] rdat = new byte[RegionInfo.Size];
+        (rdat[6], rdat[8], rdat[10]) = (0xA7, 0xAB, 0xA9);           // creatures 167, 171, 169
+        (rdat[0x1A], rdat[0x1B], rdat[0x1C], rdat[0x1D]) = (2, 3, 4, 5); // a level a byte, as the data has them
+        rdat[RegionInfo.FightLevelOffset] = 6;
+
+        RegionInfo info = RegionInfo.Parse(rdat);
+
+        Assert.Equal([167, 171, 169], info.FightCreatures);
+        Assert.Equal(2, info.FightLevel(167));
+        Assert.Equal(4, info.FightLevel(171)); // DSUN.EXE: the byte at +0x1A + 2i
+        Assert.Equal(0, info.FightLevel(169));
+        Assert.Equal(6, info.FightLevel(300));
+    }
+
+    [Fact]
     public void RegionInfoGivesTheMusic()
     {
         byte[] rdat = new byte[RegionInfo.Size];

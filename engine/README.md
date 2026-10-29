@@ -402,7 +402,7 @@ mods/
     RDFF/87.json                    a monster's or item's fields: {"combat": {"hp": 99, "name": "Scar"}}
     IT1R/1.json                     item types: {"2": {"damageDice": 2, "damageSides": 6}}
     NAME/1.json                     item names: {"2": "Longbow"}
-    RDAT/42.json                    region 42's music and colour cycling: {"music": 5}
+    RDAT/42.json                    region 42's music, fights' music levels and colour cycling: {"music": 5, "fightLevel": 2}
     GPL/12.gpl                      a script, as source; assembled when the game loads it
     GPL/80.bin                      raw resource bytes: any tag (scripts, PAL, GMAP, GSEQ, …)
     WIND/3000.json                  a window's layout: {"items": {"BUTN 2048": {"x": 10, "y": 150}}} moves
@@ -636,7 +636,12 @@ a character of every race, gender and class and checks the art is there.
 
 ## Sound
 
-Music: see the SoundFont notes above. Sound effects come from the game
+Music: see the SoundFont notes above. The music level, which scripts set
+(REQUEST 16) and fights change (the level the region's `RDAT` gives the
+creature fought, then 1 when it's over), plays a section of the track as in
+the original (`MusicSections`). `-- --check-music` plays every level of
+every region track and checks that its section comes.
+Sound effects come from the game
 (`BVOC` in `RESOURCE.GFF`): what animations play (`SCMD`) when the object is
 on screen, and what scripts play (SOUND). `[audio] sound_volume` (0–1, 0
 for none) in `user://settings.cfg` sets their loudness.

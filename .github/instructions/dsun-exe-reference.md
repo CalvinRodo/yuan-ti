@@ -943,7 +943,12 @@ Ops 2, 9–0x13, 0x17, 0x18, 0x2C, 0x3D, 0x3E, 0x50–0x5A, 0x5C–0x5E, 0x67 an
     (`6BB8:0A41` loads the 49 bytes to `4931:025D`; `6BB8:030E` →
     `35D1:0265(5000, 4931:028C)`). For example, region 42 plays 2.
   * The record also holds two colour-cycling ranges (first, count,
-    speed × 10) at `+0` and `+3`.
+    speed × 10) at `+0` and `+3`, and the fights' music levels: up to 10
+    creatures (`RDFF` numbers, words, ended by 0) at `+6`, their levels at
+    `+0x1A`, and the level of any other fight at `+0x2E` (`4931:028B`).
+  * The preferences' music toggle (`870B:0584`) starts the region's track
+    again when music comes back on. `35D1:01D3` (fade out, then start) has
+    no callers.
   * GPL `MUSIC` (op 0x5F, `1A0A:0672`) is used by no shipped script.
 * **Changes and fades:**
   * `1A0A:0672(n)` does nothing if n is already playing; otherwise it calls
@@ -953,6 +958,36 @@ Ops 2, 9–0x13, 0x17, 0x18, 0x2C, 0x3D, 0x3E, 0x50–0x5A, 0x5C–0x5E, 0x67 an
     volume; `(ms, 0x33)` ramps to 0.
   * `3592:000E(n)` starts a track if its flags at `DS:1676 + 3n` allow it
     (bit 4); bit 2 hands it to a hook.
+* **Music level** (REQUEST 16, fights): a region track is made of
+  sections, section n starting at XMIDI branch marker n (`RBRN`). The byte
+  at `DS:1675 + 3n` is track n's highest level: its number of sections
+  (1 for a track without), but 6 for track 8, which has 7.
+  * Every track shares one indirect controller table (AIL's, `577D:610E`,
+    set to 0–126 at start-up by `3256:06B6`; a new track keeps it). The
+    sections' callbacks are indirect through entry 0 (CC 0x73 0, CC 0x77);
+    section 1 loops for ever with callbacks inside, the others loop on an
+    indirect NEXT through entry 127 and have a callback after it.
+  * `361A:0000(n)` (n from 1 to 0x22 and at most the track's highest level):
+    entry 0 = n, entry 127 = 0, so the loop ends and the next callback
+    carries n.
+  * The callback (`3164:0033`) with 1–0x22 branches to that marker
+    (`33A5:0D30`, AIL `branch_index`) and keeps it as the section
+    (`4931:02C8`); with those and 0x23, entry 0 = 0 and entry 127 = 0x7F
+    again. 0 does nothing; 0x7F is the cinematic clock, 0x7E and 0x24–0x4C
+    set other flags.
+  * REQUEST 16 (`6BB8:0FA9`) asks only when n differs from `DS:0D9A`, which
+    it then keeps.
+  * A fight started by an attack outside combat (`612E:1359`, when combat
+    mode `477E:0019` is 0 and someone is in sight) asks
+    (`6BB8:0EFA`) for the level its creature has in the region record:
+    the attacker if it isn't a party member, else the one attacked. It finds
+    the creature among the words at `+6` and reads its level with the same
+    index into words (`mov dl, es:[bx+0x277]`, bx = 2i), so creature i's
+    level is the byte at `+0x1A + 2i`, though the records keep a byte per
+    creature there: a level 0 leaves the music as it is. `DS:0D9A` is
+    not changed.
+  * At the end of a fight (`612E:04A7`) `6BB8:0FD4` asks for level 1 unless
+    `DS:0D9A` is already 1, and keeps 1 there.
 
 ### Names (`NAME`)
 
