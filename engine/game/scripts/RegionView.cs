@@ -291,6 +291,11 @@ public partial class RegionView : Node2D
                 _autoParty = OS.GetCmdlineUserArgs().Contains("--auto");
                 Callable.From(() => StartTestFight()).CallDeferred();
             }
+            if (OS.GetCmdlineUserArgs().FirstOrDefault(a => a.StartsWith("--picture=")) is { } picture && int.TryParse(picture["--picture=".Length..], out int number))
+            {
+                // Development: a script's picture (REQUEST 6: 200 or 300), or cinematic, over the map.
+                Callable.From(() => PlayCinematic(number)).CallDeferred();
+            }
             if (OS.GetCmdlineUserArgs().FirstOrDefault(a => a.StartsWith("--screenshot=")) is { } shot)
             {
                 // Development: the screen as a PNG after a few seconds (--screenshot-after=N), then quit.
@@ -2493,7 +2498,7 @@ public partial class RegionView : Node2D
                 ReportScript("cinematic over", Session.Scripts.Resume());
             }
         }
-        _cinematic = picture ? new PictureView { Number = number, Done = Done } : new IntroView { Overlay = number, Done = Done };
+        _cinematic = picture ? new PictureView { Number = number, MapPalette = _palette, Done = Done } : new IntroView { Overlay = number, Done = Done };
         layer.AddChild(_cinematic);
         AddChild(layer);
         return true;

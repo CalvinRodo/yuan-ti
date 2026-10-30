@@ -650,8 +650,9 @@ Sound effects come from the game
 on screen, and what scripts play (SOUND). `[audio] sound_volume` (0–1, 0
 for none) in `user://settings.cfg` sets their loudness.
 `-- --check-sounds` decodes every effect. `-- --check-pictures` decodes the two pictures
-scripts show (`CMAT` 200 and 300, `PictureView`); `-- --cinematic=100` plays the ending instead of
-the intro (with `--check-intro`, through, headless).
+scripts show (`CMAT` 200 and 300, `PictureView`) and times their fades as the original does
+(`-- --new-game --picture=300` shows one over the map); `-- --cinematic=100` plays the ending
+instead of the intro (with `--check-intro`, through, headless).
 
 ## Display
 

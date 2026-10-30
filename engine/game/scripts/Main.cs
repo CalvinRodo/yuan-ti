@@ -119,11 +119,17 @@ public partial class Main : Control
                     ok = false;
                     continue;
                 }
-                var (width, height, rgba) = PictureView.Decode(Session.Open("RESOURCE.GFF"), n);
+                var (frame, palette, rgba) = PictureView.Decode(Session.Open("RESOURCE.GFF"), n);
                 int colours = Enumerable.Range(0, rgba.Length / 4).Select(i => BitConverter.ToInt32(rgba, i * 4)).Distinct().Count();
-                bool fits = width <= RetroScreen.Width && height <= RetroScreen.Height && colours > 16;
+                bool fits = frame.Width <= RetroScreen.Width && frame.Height <= RetroScreen.Height && colours > 16;
                 ok &= fits;
-                GD.Print($"pictures: {n} is {width} x {height}, {colours} colours{(fits ? "" : " PROBLEM")}");
+                // The fades as DSUN.EXE times them, with region 42's palette for the map.
+                var map = Session.Open("GPLDATA.GFF").TryRead("PAL ", 42, out var pal) ? DarkSun.Data.Images.Palette.FromBytes(pal.Span) : null;
+                var (mapRead, mapSteps, read, steps) = PictureView.Phases(frame, palette, map);
+                int total = mapRead + mapSteps + 2 * (read + steps) + PictureView.HoldRetraces;
+                GD.Print($"pictures: {n} is {frame.Width} x {frame.Height}, {colours} colours, {PictureView.ColoursShown(frame).Count} indexes on screen; "
+                    + $"retraces: map {mapRead} + fade {mapSteps}, picture {read} + fade in {steps}, hold {PictureView.HoldRetraces}, {read} + fade out {steps}: "
+                    + $"{total / DarkSun.Game.Cinematics.PaletteFades.RetracesPerSecond:F1} s{(fits ? "" : " PROBLEM")}");
             }
             GetTree().Quit(ok ? 0 : 1);
             return;

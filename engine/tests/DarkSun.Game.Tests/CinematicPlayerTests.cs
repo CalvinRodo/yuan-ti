@@ -203,3 +203,24 @@ public class CinematicPlayerTests
         Assert.True(p.Finished);
     }
 }
+
+public class PaletteFadesTests
+{
+    [Fact]
+    public void ReadingTheDacWaitsARetraceForHalfTheColoursInRunsOfSixteen()
+    {
+        // One before the first, then one for each place (from the last) with bit 4 clear (0980:4C09, 0980:4FEB).
+        Assert.Equal([1, 17, 17, 17, 18, 124, 129], new[] { 0, 16, 17, 32, 33, 235, 256 }.Select(PaletteFades.ReadRetraces));
+    }
+
+    [Fact]
+    public void AFadeTakesTheLargestChannelDifferenceInSteps()
+    {
+        // 6-bit DAC units: (63, 0, 0), (10, 20, 5) and (0, 0, 0) against black.
+        var palette = DarkSun.Data.Images.Palette.FromBytes([0, 0, 0, 63, 0, 0, 10, 20, 5]);
+        var black = new DarkSun.Data.Images.Rgb(0, 0, 0);
+        Assert.Equal(63, PaletteFades.Steps(palette, [0, 1, 2], black));
+        Assert.Equal(20, PaletteFades.Steps(palette, [0, 2], black));
+        Assert.Equal(0, PaletteFades.Steps(palette, [], black));
+    }
+}

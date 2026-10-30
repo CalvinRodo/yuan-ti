@@ -729,7 +729,9 @@ executable, not in the data.
       EXE's count from the next slot's strength), 15 (the move pointer) and 19
       (game over), and the pictures 200 and 300 REQUEST 6 shows in GPL 177 and
       62 (`PictureView`, #74: `CMAT` n is a `BMP`-format image in `CPAL` n,
-      held 1 000 retraces, `60B9:060D`; `--check-pictures`). Open: 7 and 17
+      held 1 000 retraces, `60B9:060D`, with the original's palette fades
+      out of the map and in and out of the picture, `PaletteFades`;
+      `--check-pictures`, `-- --picture=N` over the map). Open: 7 and 17
       for an object that isn't a name (no shipped script asks for either).
 
 ---
