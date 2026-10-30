@@ -376,7 +376,16 @@ public sealed class CharacterCreation(CharacterRules rules, CharacterNames names
         c.Race = race;
         c.Gender = gender;
         RaceRules r = Rules.Race(race);
-        c.Classes = [.. c.Classes.Where(r.Classes.Contains).Take(r.MultiClass ? Rules.MaxClasses : 1)];
+        // The classes the new race may keep together, in the order chosen.
+        var kept = new List<CharacterClass>();
+        foreach (CharacterClass k in c.Classes)
+        {
+            if (kept.Count < (r.MultiClass ? Rules.MaxClasses : 1) && r.Allows([.. kept, k]))
+            {
+                kept.Add(k);
+            }
+        }
+        c.Classes = kept;
         if (c.Classes.Count == 0 && r.Classes.Contains(CharacterClass.Fighter))
         {
             c.Classes = [CharacterClass.Fighter]; // pre-selected for every race, as the manual has it
@@ -385,6 +394,7 @@ public sealed class CharacterCreation(CharacterRules rules, CharacterNames names
         {
             c.Classes.Add(r.Classes.Contains(CharacterClass.Fighter) ? CharacterClass.Fighter : r.Classes[0]);
         }
+        FitAlignment(c);
         if (c.RandomName)
         {
             c.Name = names.Pick(race, gender, random);
@@ -396,15 +406,37 @@ public sealed class CharacterCreation(CharacterRules rules, CharacterNames names
         GiveStartingPowers(c);
     }
 
-    /// <summary>The next alignment; a class it doesn't allow (a druid's, away from True Neutral) is given up.</summary>
+    /// <summary>
+    /// The next alignment every chosen class allows (<c>6CCA:1784</c> → <c>17C7</c>: an alignment a class
+    /// doesn't allow is stepped past; with no class, True Neutral).
+    /// </summary>
     public void CycleAlignment(Character c, int by)
     {
         var list = Rules.Alignments;
         int at = Math.Max(0, list.ToList().IndexOf(c.Alignment));
-        c.Alignment = list[((at + by) % list.Count + list.Count) % list.Count];
-        foreach (CharacterClass k in c.Classes.Where(k => !Rules.AlignmentAllows(k, c.Alignment)).ToList())
+        for (int step = 1; step <= list.Count; step++)
         {
-            ToggleClass(c, k);
+            Alignment next = list[((at + by * step) % list.Count + list.Count) % list.Count];
+            if (Allowed(c.Classes, next))
+            {
+                c.Alignment = next;
+                return;
+            }
+        }
+    }
+
+    /// <summary>Does <paramref name="alignment"/> suit every one of <paramref name="classes"/> (<see cref="CharacterRules.ClassAlignments"/>)?</summary>
+    private bool Allowed(IEnumerable<CharacterClass> classes, Alignment alignment) => classes.All(k => Rules.AlignmentAllows(k, alignment));
+
+    /// <summary>
+    /// An alignment the classes allow, if the character's doesn't: the first in <see cref="CharacterRules.Alignments"/>.
+    /// (DSUN.EXE checks the alignment only when it is changed, so a class taken after it could be at odds with it.)
+    /// </summary>
+    private void FitAlignment(Character c)
+    {
+        if (!Allowed(c.Classes, c.Alignment) && Rules.Alignments.FirstOrDefault(a => Allowed(c.Classes, a)) is var a && Allowed(c.Classes, a))
+        {
+            c.Alignment = a;
         }
     }
 
@@ -416,19 +448,20 @@ public sealed class CharacterCreation(CharacterRules rules, CharacterNames names
 
     // -- classes ---------------------------------------------------------------------
 
-    /// <summary>Whether <paramref name="k"/> can be added: the race allows it, there's room (one class for races that can't multi-class), and nothing chosen excludes it.</summary>
+    /// <summary>
+    /// Whether <paramref name="k"/> can be added: there's room (one class for races that can't multi-class),
+    /// the race allows it with the classes chosen (<see cref="RaceRules.Allows"/>; DSUN.EXE's class buttons,
+    /// <c>6CCA:0A45</c>), nothing chosen excludes it, and some alignment suits them all.
+    /// </summary>
     public bool CanAdd(Character c, CharacterClass k)
     {
         RaceRules r = Rules.Race(c.Race);
-        if (!r.Classes.Contains(k) || c.Classes.Contains(k) || !Rules.AlignmentAllows(k, c.Alignment))
+        if (c.Classes.Contains(k) || c.Classes.Count >= (r.MultiClass ? Rules.MaxClasses : 1) || !r.Allows([.. c.Classes, k]))
         {
             return false;
         }
-        if (c.Classes.Count >= (r.MultiClass ? Rules.MaxClasses : 1))
-        {
-            return false;
-        }
-        return !Rules.Exclusive.Any(set => set.Contains(k) && c.Classes.Any(set.Contains));
+        return !Rules.Exclusive.Any(set => set.Contains(k) && c.Classes.Any(set.Contains))
+            && Rules.Alignments.Any(a => Allowed([.. c.Classes, k], a));
     }
 
     /// <summary>Click on a class: take it off if chosen, else add it if allowed (raising the abilities it requires). Returns whether anything changed.</summary>
@@ -449,6 +482,7 @@ public sealed class CharacterCreation(CharacterRules rules, CharacterNames names
         }
         c.Classes.Add(k);
         c.Classes.Sort();
+        FitAlignment(c);
         GiveStartingExperience(c);
         FixPowers(c);
         Fit(c);
@@ -515,10 +549,10 @@ public sealed class CharacterCreation(CharacterRules rules, CharacterNames names
     /// or more (a second dual-class: every class so far at <see cref="CharacterRules.SecondDualLevel"/>),
     /// its prime requisites at <see cref="CharacterRules.DualFromPrime"/>
     /// or more, and fewer than <see cref="CharacterRules.MaxClasses"/> classes
-    /// in all, may take a class the race and its alignment allow, it hasn't had and nothing
-    /// excludes, whose prime requisites are at <see cref="CharacterRules.DualToPrime"/>
-    /// and whose requirements it meets. (The prime requisite scores are AD&amp;D
-    /// 2nd edition's; DSUN.EXE's checks aren't traced.)
+    /// in all, may take a class the race allows of a group it hasn't had
+    /// (<see cref="CharacterRules.DualGroups"/>), a ranger or druid only of an alignment
+    /// it allows, whose key ability is at <see cref="CharacterRules.DualToPrime"/>
+    /// and whose requirements it meets (<c>8CCC:1934</c>).
     /// </summary>
     public (IReadOnlyList<CharacterClass> Classes, string? Why) DualChoices(Character c)
     {
@@ -546,7 +580,8 @@ public sealed class CharacterCreation(CharacterRules rules, CharacterNames names
         var had = c.Former.Select(f => f.Class).Append(now).ToList();
         var choices = r.Classes.Where(k => !had.Contains(k)
             && !Rules.Exclusive.Any(set => set.Contains(k) && had.Any(set.Contains))
-            && Rules.AlignmentAllows(k, c.Alignment)
+            && !Rules.DualGroups.Any(group => group.Contains(k) && had.Any(group.Contains))
+            && (!Rules.DualAlignmentClasses.Contains(k) || Rules.AlignmentAllows(k, c.Alignment))
             && Rules.Class(k).PrimeRequisites.All(a => Adjusted(c, a) >= Rules.DualToPrime)
             && Rules.Class(k).Requirements.All(q => Adjusted(c, q.Key) >= q.Value)).ToList();
         return (choices, choices.Count == 0 ? "NO OTHER CLASSES AVAILABLE" : null);
@@ -694,6 +729,10 @@ public sealed class CharacterCreation(CharacterRules rules, CharacterNames names
         if (!Rules.Alignments.Contains(c.Alignment))
         {
             problems.Add("The party can't have that alignment.");
+        }
+        foreach (CharacterClass k in c.Classes.Where(k => !Rules.AlignmentAllows(k, c.Alignment)))
+        {
+            problems.Add($"A {Rules.Class(k).Name.ToLowerInvariant()} can't have that alignment.");
         }
         return problems;
     }

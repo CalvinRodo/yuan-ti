@@ -1289,6 +1289,50 @@ Wis, Cha; races 1–8 and classes 1–8 in the string table's order), used by
   figures, in the portraits' order (human male, human female, dwarf male …
   thri-kreen female), all walking with `SCMD` 174; half-elves (306, 307)
   share the humans' pictures (`BMP` 2095, 2099).
+* **Classes by race** (`6CCA:0A45`, a class button: the class goes in the
+  first free slot of +0x21–0x23, or comes out if there): the buttons
+  (`BUTN` 2002–2009, `6CCA:0923(mask)`, bit 0x80 the first class in the
+  order cleric, druid, fighter, gladiator, preserver, psionicist, ranger,
+  thief) are enabled by a mask from segment `38F0`: with no class, the word
+  at `38F0:0000 + 2 × (race − 1)`; else the byte at `38F0:0010 + 72 ×
+  (race − 1) + 9 × (first − 1) + second` (second 0 with one class). The
+  table is order-free. Humans take any one class; dwarves cleric, fighter,
+  gladiator, psionicist, thief; elves all but the druid; half-elves all;
+  half-giants cleric, fighter, gladiator, psionicist, ranger (two classes at
+  most); halflings all but the preserver; muls all but the preserver and
+  ranger; thri-kreen all but the preserver and thief. A gladiator never
+  takes another class, nor does any race combine fighter and ranger. The
+  manual has no half-giant rangers and no mul or thri-kreen druids. The
+  combinations are listed in `CharacterRules` (`RaceRules.Combinations`).
+* **Alignment** (`6CCA:1784`): the button adds ±1, past 9 to 1, below 1
+  to 8 (so backwards skips Chaotic Evil); unless Ctrl is held (`INT 16h`
+  shift flags bit 4, `3015:000B`), `6CCA:17C7` steps on while a chosen
+  class doesn't allow it, by `38F0:0252 + 9 × class + alignment`: none
+  evil; druids True Neutral; rangers Lawful, Neutral or Chaotic Good;
+  thieves not Lawful Good. With no class it is True Neutral. A race change
+  clears the classes and sets True Neutral (`6CCA:0013`); a class button
+  doesn't check the alignment.
+* **Dual-class** (`8CCC:1934(member, code)`, DUAL's list; `8CCC:1720`
+  makes it): a human (+0x18 = 1) whose current class (+0x21) has its key
+  ability (`38D4:0180`) at 15 or more and level (+0x24) 2 or more, with the
+  third slot free (so twice at most), may take a class whose key ability is
+  17 or more, not of a group it has (`40B1:0024` + code: 1 priests, 2
+  warriors, 4 wizards, 8 psionicists, 16 rogues), a ranger only good, a
+  druid only True Neutral. The new class goes in the first slot at level 1,
+  experience 0.
+* **Psionic strength** at full (character record +0xC): at creation
+  (`6ECD:06B9`) and for every member at the end of every fight
+  (`8E77:08A6` → `8E77:0162`, which only raises it, adding the difference to
+  the current points): Constitution, Intelligence and Wisdom of 15 or more
+  add `38D4:011C`, `0124`, `012C` + score (Con and Int score − 15, Wis 20,
+  22 … 34; 8-byte tables, so past 22 a score reads into the next one); a
+  psionicist (`6868:00AF(…, 12)`) adds 10 and `38D4:0134` + Wis (Wis − 15,
+  then 8, 8, 10 for 23–25) for each level past the first; anyone else, at
+  the end of a fight only, 4 × its level (`6868:013F`: a dual-class's first
+  class's, else its highest). The level-up reads Wisdom's base through
+  `DS:11A0`, the creation screen's record, rather than the member's.
+  `6698:0B8A` (2 × Wis − 10 + Int − 15 + Con − 15 + (Wis − 5) × level into
+  the combat record's points) has no caller found.
 * **Humans** count as one class (`8E77:02E5`).
 * `9106` is the View Character screen, `8F23` the character sheet, `91F7`
   the item window (`VIEWITEM`).
@@ -1388,9 +1432,9 @@ Wis, Cha; races 1–8 and classes 1–8 in the string table's order), used by
   (`0x1003C2`); clerics get their sphere's.
 * A character's spells per level are kept at `DS:4B08` (wizard) and
   `DS:4B11` (priest), 0x1E bytes per character, indexed by level. These
-  tables aren't traced. The engine's slots, spellbook sizes and psionic
-  strength follow AD&D 2nd edition (`CharacterRules`). `38D4:013B` holds
-  20, 22, … 34, likely a psionicist's strength points by level.
+  tables aren't traced. The engine's slots and spellbook sizes follow
+  AD&D 2nd edition (`CharacterRules`). `38D4:013B` (20, 22, … 34) is
+  Wisdom's psionic strength table (see "Character creation").
 
 ### Game menu and preferences
 
@@ -1594,7 +1638,8 @@ Records: a combatant is an object of kind 2 (`DS:0C36 + 3·index`) with a
   +0x12) and its bonus (+0x14); shields (`IT1R` +0 & 4) not from behind.
   Pieces on the arms, legs and chest (slots 0, 6, 9) make the body armour,
   which effects can cap; the rest (shield, helm, …) count on top.
-* A gladiator (class bit 0x40) gets −1 per 5 gladiator levels.
+* A gladiator (class bit 0x40) gets −(its gladiator level, `6868:00AF(…,
+  10)`) ÷ 5: −1 from level 5, levels going no higher than 9.
 * `80F5:39B7`: Dexterity's adjustment (`6868:0358`, not from behind), and
   the effects: Armor caps the body armour at 6, Shield at 4, Spirit Armor at
   6 − level/4, others at 10 − level; some subtract 2.

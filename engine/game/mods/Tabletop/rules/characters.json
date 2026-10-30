@@ -1,5 +1,6 @@
 {
   "_about": "AD&D 2nd edition and manual values where they differ from DSUN.EXE. Anything not listed here is the original's.",
+  "DualLevel": 3,
   "Classes": [
     { "Class": "Cleric", "Levels": [0, 1500, 3000, 6000, 13000, 27500, 55000, 110000, 225000] },
     { "Class": "Druid", "Levels": [0, 2000, 4000, 7500, 12500, 20000, 35000, 60000, 90000] },

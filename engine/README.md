@@ -517,13 +517,16 @@ the adjustment, up to 20 plus the adjustment, and at least 17 in each class's
 key ability and the class's floor (9–14) in the others; hit points a die per
 level of each class (half-giants double), averaged over the classes, with
 Constitution's bonus; 3000 experience in each class to start (a fighter starts
-at level 2); and the map icon. The rest is the manual's: the classes each race
-may take (humans one; the others up to three, never cleric with druid), good
-or neutral alignments (a druid True Neutral only: another alignment gives the druid up), one psionic
-discipline (psionicists all three; it gives the starting powers) and a sphere for clerics, druids and rangers,
-which start unchosen, as in the original: DONE asks for them. A click on an ability or the hit points goes
-round past its top to its bottom and back; a race that keeps no class gets the fighter again. Where the manual contradicts itself,
-half-giants can't be rangers and muls and thri-kreen can't be druids. A mod can replace the rules with
+at level 2); the map icon; the classes each race may take and in which
+combinations (humans one; a gladiator never with another; half-giants two at most; DSUN.EXE's table,
+`RaceRules.Combinations`, where the manual has no half-giant rangers or mul and thri-kreen druids); the
+alignments each class allows (none evil, a druid True Neutral, a ranger good, a thief not Lawful Good: the
+alignment button steps past the others, and taking a class moves the alignment to one it allows); dual-classing
+for humans from the class's second level into a class of another group; and psionic strength. The rest is the
+manual's: one psionic discipline (psionicists all three; it gives the starting powers) and a sphere for clerics,
+druids and rangers, which start unchosen, as in the original: DONE asks for them. A click on an ability or the
+hit points goes round past its top to its bottom and back; a race that keeps no class gets the fighter again.
+`-- --check-chargen` makes every combination of every race. A mod can replace the rules with
 `rules/characters.json` in its folder (the same JSON `CharacterRules` reads; a file need only hold what
 it changes). The same file holds what
 the character sheet and combat work out: the ability tables (Strength's damage and to-hit,
