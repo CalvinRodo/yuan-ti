@@ -145,13 +145,20 @@ public class SpellcastingTests
     [Fact]
     public void PsionicistsUseTheirPowersAndSpendStrength()
     {
-        var psi = new Character { Classes = [CharacterClass.Psionicist], Disciplines = [Discipline.Psychometabolism], Experience = 3000, Powers = [152] }; // Cell Adjustment
-        Assert.Equal(22, Magic.MaxPsp(psi)); // level 2
+        // Str, Dex, Con 16, Int 17, Wis 18, Cha (a human: no adjustments).
+        var psi = new Character { Race = Race.Human, Classes = [CharacterClass.Psionicist], Disciplines = [Discipline.Psychometabolism], Experience = 3000, Powers = [152], // Cell Adjustment
+            Rolled = [10, 10, 16, 17, 18, 10] };
+        Assert.Equal(2, Magic.Level(psi, CharacterClass.Psionicist));
+        Assert.Equal(1 + 2 + 26 + (10 + 3) * 1, Magic.MaxPsp(psi)); // 8E77:0162: Con, Int, Wis, then a level past the first
         var hurt = new Vitals { Hp = 3, MaxHp = 10 };
         Assert.StartsWith("HEALED", Magic.CastOutside(psi, 152, hurt, new Random(2)));
-        Assert.Equal(22 - CharacterRules.Default.PowerCost, Magic.Psp(psi));
+        Assert.Equal(42 - CharacterRules.Default.PowerCost, Magic.Psp(psi));
 
-        var fighter = new Character { Classes = [CharacterClass.Fighter], Disciplines = [Discipline.Telepathy] };
-        Assert.Equal(10, Magic.MaxPsp(fighter));
+        // Anyone else: the abilities' part and 4 a level; scores under 15 add nothing.
+        var fighter = new Character { Race = Race.Human, Classes = [CharacterClass.Fighter], Disciplines = [Discipline.Telepathy], Experience = 3000, Rolled = [17, 10, 15, 10, 14, 10] };
+        Assert.Equal(0 + 4 * new CharacterCreation(CharacterRules.Default, CharacterNames.Empty, new Random(0)).Levels(fighter).Max(), Magic.MaxPsp(fighter));
+        // Past 22 a score reads on into the next table, as DSUN.EXE's do: Intelligence 23 gives 20.
+        var genius = new Character { Race = Race.Human, Classes = [CharacterClass.Fighter], Disciplines = [Discipline.Telepathy], Rolled = [17, 10, 10, 23, 10, 10] };
+        Assert.Equal(20 + 4 * new CharacterCreation(CharacterRules.Default, CharacterNames.Empty, new Random(0)).Levels(genius).Max(), Magic.MaxPsp(genius));
     }
 }

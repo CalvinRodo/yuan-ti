@@ -213,12 +213,28 @@ public sealed class Spellcasting(CharacterRules rules)
 
     // -- psionics -------------------------------------------------------------------------
 
-    /// <summary>Psionic strength points at full: the psionicist's by level (<see cref="CharacterRules.PsionicistPsp"/>), others' wild talent.</summary>
+    /// <summary>
+    /// Psionic strength points at full (<c>8E77:0162</c>, <see cref="CharacterRules.PspConstitution"/>):
+    /// from Constitution, Intelligence and Wisdom, then by the psionicist's level, or for anyone
+    /// else by its level (<c>6868:013F</c>: a dual-class's first class's, else its highest). DSUN.EXE
+    /// reads Wisdom's base from <c>DS:11A0</c>, the creation screen's record, not the member's; here
+    /// the member's. It never lowers the points, which here are worked out each time.
+    /// </summary>
     public int MaxPsp(Character c)
     {
+        int Table(IReadOnlyList<int> table, Ability a)
+        {
+            int at = Creation.Adjusted(c, a) - Rules.PspFromScore;
+            return at >= 0 && at < table.Count ? table[at] : 0;
+        }
+        int psp = Table(Rules.PspConstitution, Ability.Con) + Table(Rules.PspIntelligence, Ability.Int) + Table(Rules.PspWisdom, Ability.Wis);
         int level = Level(c, CharacterClass.Psionicist);
-        return level < 1 ? Rules.WildTalentPsp
-            : Rules.PsionicistPsp[Math.Min(level, Rules.PsionicistPsp.Count) - 1] + Rules.PspPerLevelAfter * Math.Max(0, level - Rules.PsionicistPsp.Count);
+        if (level >= 1)
+        {
+            return psp + (Rules.PspPerPsionicistLevel + Table(Rules.PspWisdomPerLevel, Ability.Wis)) * (level - 1);
+        }
+        int others = c.Former.Count > 0 ? c.Former[0].Level : Creation.Levels(c).DefaultIfEmpty(0).Max();
+        return psp + Rules.PspPerLevelOthers * others;
     }
 
     public int Psp(Character c) => Math.Max(0, MaxPsp(c) - c.PspSpent);

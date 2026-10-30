@@ -494,11 +494,14 @@ this milestone brings most of the game's content.
       DSUN.EXE's own spell-slot tables (`DS:4B08`, `DS:4B11`) and psionic
       costs; level-up (#51) and the original's learn and pick windows
       (17500, 17501); computer control; END TURN; the ABOUT text.
-- [ ] Psionic strength from DSUN.EXE's formula (`6698:0B8A`, `8E77:0162`;
-      the engine's table is a stand-in, #77). Still from the manual: the
-      classes each race may take, alignments, prime requisites and the
-      dual-class requirements (#76), and the gladiator's armour class at
-      level 5 (#78).
+- [x] DSUN.EXE's character rules (2026-10-30): psionic strength
+      (`8E77:0162`, #77); the classes each race may take and in which
+      combinations (`38F0`), the alignments each class allows
+      (`38F0:0252`), the key abilities and the dual-class rules
+      (`8CCC:1934`: from level 2, not within a group) (#76); the gladiator's
+      −1 armour class per 5 levels (`612E:2113`, #78). `--check-chargen`
+      makes every combination of every race. The Tabletop mod keeps the
+      manual's third level for dual-classing.
 - [x] Party creation: Create Characters (View Character, `WIND` 11500) and
       Character Generation (`WIND` 3011) screens; the party starts new games
       and is kept in saves; a roster for ADD and DROP.

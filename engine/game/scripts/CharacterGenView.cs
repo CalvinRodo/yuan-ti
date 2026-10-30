@@ -507,23 +507,22 @@ public partial class CharacterGenView : RetroScreen
         int made = 0, failed = 0;
         foreach (var (race, gender) in _cc.Looks)
         {
-            foreach (CharacterClass k in Session.Rules.Race(race).Classes)
+            // Every class alone, and every combination the race allows (DSUN.EXE's table, 38F0), picked one by one.
+            RaceRules r = Session.Rules.Race(race);
+            IEnumerable<IReadOnlyList<CharacterClass>> sets = [.. r.Classes.Select(k => (IReadOnlyList<CharacterClass>)[k]), .. r.Combinations ?? []];
+            foreach (IReadOnlyList<CharacterClass> set in sets)
             {
                 Character c = _cc.New();
                 _cc.SetLooks(c, race, gender);
                 c.Classes.Clear();
-                if (!Session.Rules.AlignmentAllows(k, c.Alignment))
-                {
-                    c.Alignment = Session.Rules.ClassAlignments[k]; // a druid is True Neutral
-                }
-                _cc.ToggleClass(c, k);
+                bool picked = set.All(k => _cc.ToggleClass(c, k));
                 // Nothing is chosen for the player: the discipline (and a priest's sphere) are picked.
                 _cc.ChooseDiscipline(c, Discipline.Telepathy);
                 _cc.ChooseSphere(c, Sphere.Fire);
-                if (_cc.Problems(c) is { Count: > 0 } p)
+                if (!picked || _cc.Problems(c) is { Count: > 0 })
                 {
                     failed++;
-                    GD.Print($"  {race} {gender} {k}: {string.Join("; ", p)}");
+                    GD.Print($"  {race} {gender} {string.Join("/", set)}: {(picked ? string.Join("; ", _cc.Problems(c)) : "couldn't be picked")}");
                 }
                 else
                 {

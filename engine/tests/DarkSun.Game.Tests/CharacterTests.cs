@@ -102,12 +102,12 @@ public class CharacterTests
     }
 
     [Fact]
-    public void AHumanDualClassesFromThirdLevel()
+    public void AHumanDualClassesFromSecondLevel()
     {
         var cc = Creation();
-        // Fighter with Strength 17 (prime 15+) and Intelligence 17 (a preserver's 17).
+        // Fighter with Strength 17 (key ability 15+) and Intelligence 17 (a preserver's 17).
         var c = new Character { Race = Race.Human, Classes = [CharacterClass.Fighter], Rolled = [17, 12, 12, 17, 12, 12], Experience = 1000 };
-        Assert.Contains("LEVEL 3", cc.DualChoices(c).Why);
+        Assert.Contains("LEVEL 2", cc.DualChoices(c).Why);
         c.Experience = 10000;
         var (classes, why) = cc.DualChoices(c);
         Assert.Null(why);

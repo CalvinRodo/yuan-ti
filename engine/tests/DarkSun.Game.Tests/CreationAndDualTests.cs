@@ -15,19 +15,50 @@ public class CreationAndDualTests
     private static CharacterCreation Creation() => new(CharacterRules.Default, new CharacterNames(["Garn"], ["Shandra"], ["T'kir'taap"]), new Random(1));
 
     [Fact]
-    public void DruidsAreTrueNeutralOnly()
+    public void TheAlignmentButtonStepsPastWhatTheClassesForbid()
     {
+        // 38F0:0252: a druid True Neutral only, a ranger good only; 6CCA:17C7 steps past the rest.
         var cc = Creation();
         Character c = cc.New();
         cc.SetLooks(c, Race.HalfElf, Gender.Female);
+        c.Classes.Clear();
         c.Alignment = Alignment.LawfulGood;
-        Assert.False(cc.CanAdd(c, CharacterClass.Druid));
-
-        c.Alignment = Alignment.TrueNeutral;
-        Assert.True(cc.CanAdd(c, CharacterClass.Druid));
         Assert.True(cc.ToggleClass(c, CharacterClass.Druid));
-        cc.CycleAlignment(c, +1); // away from True Neutral: the druid goes
-        Assert.DoesNotContain(CharacterClass.Druid, c.Classes);
+        Assert.Equal(Alignment.TrueNeutral, c.Alignment); // taken on, the class's alignment
+        cc.CycleAlignment(c, +1);
+        Assert.Equal(Alignment.TrueNeutral, c.Alignment); // nothing else a druid may be
+        Assert.False(cc.CanAdd(c, CharacterClass.Ranger)); // half-elves can't be druid-rangers (38F0), nor could the alignments agree
+
+        c.Classes.Clear();
+        Assert.True(cc.ToggleClass(c, CharacterClass.Ranger));
+        Assert.Equal(Alignment.LawfulGood, c.Alignment);
+        cc.CycleAlignment(c, +1);
+        Assert.Equal(Alignment.NeutralGood, c.Alignment); // past Lawful Neutral
+        cc.CycleAlignment(c, -1);
+        Assert.Equal(Alignment.LawfulGood, c.Alignment);
+    }
+
+    [Fact]
+    public void EachRaceTakesTheClassCombinationsOfDsunsTable()
+    {
+        var cc = Creation();
+        Character Made(Race race, params CharacterClass[] classes)
+        {
+            Character c = cc.New();
+            cc.SetLooks(c, race, race == Race.ThriKreen ? Gender.Female : Gender.Male);
+            c.Classes.Clear();
+            foreach (CharacterClass k in classes)
+            {
+                cc.ToggleClass(c, k);
+            }
+            return c;
+        }
+        Assert.Equal([CharacterClass.Ranger], Made(Race.HalfGiant, CharacterClass.Ranger).Classes); // the manual has none
+        Assert.Equal([CharacterClass.Druid], Made(Race.Mul, CharacterClass.Druid).Classes);
+        Assert.Single(Made(Race.Elf, CharacterClass.Gladiator, CharacterClass.Fighter).Classes); // a gladiator takes no other class
+        Assert.Single(Made(Race.Elf, CharacterClass.Fighter, CharacterClass.Ranger).Classes); // no fighter-ranger
+        Assert.Equal(2, Made(Race.HalfGiant, CharacterClass.Cleric, CharacterClass.Fighter, CharacterClass.Psionicist).Classes.Count); // two at most
+        Assert.Equal(3, Made(Race.ThriKreen, CharacterClass.Psionicist, CharacterClass.Ranger, CharacterClass.Cleric).Classes.Count);
     }
 
     [Fact]
@@ -57,9 +88,10 @@ public class CreationAndDualTests
     public void ASecondDualClassNeedsSecondLevelInEach()
     {
         var cc = Creation();
-        var c = new Character { Name = "Dual", Race = Race.Human, Classes = [CharacterClass.Fighter], Rolled = [18, 18, 18, 18, 18, 18], Experience = 2000 };
-        Assert.Equal("YOU MUST BE LEVEL 3 FIRST", cc.DualChoices(c).Why); // the first: third level (the manual)
-        c.Experience = 4000;
+        var c = new Character { Name = "Dual", Race = Race.Human, Classes = [CharacterClass.Fighter], Rolled = [18, 18, 18, 18, 18, 18], Experience = 1000 };
+        Assert.Equal("YOU MUST BE LEVEL 2 FIRST", cc.DualChoices(c).Why); // 8CCC:1934: the class's level above 1 (the manual: third)
+        Assert.DoesNotContain(CharacterClass.Gladiator, cc.DualChoices(new Character { Race = Race.Human, Classes = [CharacterClass.Fighter], Rolled = [18, 18, 18, 18, 18, 18], Experience = 2000 }).Classes); // not within the warriors
+        c.Experience = 2000;
         Assert.True(cc.Dual(c, CharacterClass.Thief));
         c.Experience = 1250; // thief level 2
         Assert.Contains(CharacterClass.Preserver, cc.DualChoices(c).Classes); // the second: second level in each

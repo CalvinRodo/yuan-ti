@@ -34,13 +34,27 @@ public sealed record SpellbookSize(int Intelligence, int Spells);
 /// <param name="ThiefSkills">Its adjustment to each of the eight thief skills (<c>3FAA:0008 + 8 · race</c>; <see cref="CharacterRules.ThiefSkills"/>); null: none.</param>
 /// <param name="ArmorClass">Its armour class before Dexterity and armour (character record +0x27, set when a character is made: 10, a thri-kreen 5).</param>
 /// <param name="WeaponsOnly">It wears nothing but weapons and their ammunition: a thri-kreen (no armour, shield, helm, ring …).</param>
+/// <param name="Combinations">
+/// The class combinations it may take (sets of two or three), as DSUN.EXE's creation screen allows them
+/// (<c>6CCA:0A45</c>: after each class the class buttons are enabled by a mask from <c>38F0</c>, a word a race
+/// for the first class at <c>+0</c>, then a byte by race, first and second class at <c>+0x10</c>; order doesn't
+/// matter). Null: any of <see cref="Classes"/> together, up to <see cref="CharacterRules.MaxClasses"/>, but
+/// <see cref="CharacterRules.Exclusive"/>.
+/// </param>
 public sealed record RaceRules(
     Race Race, string Name, IReadOnlyList<Gender> Genders, IReadOnlyDictionary<Ability, int> Adjustments,
     IReadOnlyList<CharacterClass> Classes, bool MultiClass, int HitPointFactor = 1, int Move = 12,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<DarkSun.Data.Regions.NaturalAttack>? NaturalAttacks = null,
     bool ConstitutionSaves = false,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<int>? ThiefSkills = null,
-    int ArmorClass = 10, bool WeaponsOnly = false);
+    int ArmorClass = 10, bool WeaponsOnly = false,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<IReadOnlyList<CharacterClass>>? Combinations = null)
+{
+    /// <summary>May <paramref name="classes"/> be taken together (<see cref="Combinations"/>; one class: <see cref="Classes"/>)?</summary>
+    public bool Allows(IReadOnlyCollection<CharacterClass> classes) =>
+        classes.All(Classes.Contains) && (classes.Count <= 1 || Combinations is not { } sets
+            || sets.Any(set => set.Count == classes.Count && set.All(classes.Contains)));
+}
 
 /// <summary>
 /// A thief skill (<c>3FAA:0000</c>, read by <c>87B3:030B</c>): <paramref name="Base"/>
@@ -69,14 +83,19 @@ public sealed record AttackStep(int WarriorLevel, int Halves);
 /// </param>
 /// <param name="Thac0Factor">THAC0 is 20 − (level − 1) × this ÷ 12 (<c>8E77:0416</c>, <c>40B1:0000</c>): warriors 12, priests 8, rogues and psionicists 6, wizards 4.</param>
 /// <param name="Saves">Its five saving throws (paralysation, rod, petrification, breath, spell; <c>8E77:059B</c>).</param>
-/// <param name="ArmorBonusLevel">
-/// From this level on the class improves its armour class by 1 (0: never): the gladiator's at 5 (the
-/// guide: "Gladiators receive -1 AC at Level 5"; DSUN.EXE's code for it isn't traced).
+/// <param name="PrimeRequisites">
+/// What dual-classing reads (<c>8CCC:1934</c>): DSUN.EXE's one key ability per class (<c>38D4:0180</c>),
+/// <see cref="CharacterRules.DualFromPrime"/> to leave the class, <see cref="CharacterRules.DualToPrime"/> to take it.
+/// </param>
+/// <param name="ArmorBonusPer">
+/// The class improves its armour class by 1 for every this many of its levels (0: never): the
+/// gladiator's 5 (<c>612E:2113</c>: with class bit 0x40, armour class − the gladiator level
+/// (<c>6868:00AF(…, 10)</c>) ÷ 5). Levels stop at 9, so in play it is the guide's "−1 AC at Level 5".
 /// </param>
 public sealed record ClassRules(
     CharacterClass Class, string Name, IReadOnlyDictionary<Ability, int> Requirements, IReadOnlyList<Ability> PrimeRequisites,
     int HitDie, bool Warrior, bool ChoosesSphere, IReadOnlyList<int> Levels, int Thac0Factor = 12, IReadOnlyList<SaveRow>? Saves = null,
-    int ArmorBonusLevel = 0)
+    int ArmorBonusPer = 0)
 {
     public int Thac0(int level) => 20 - (Math.Max(1, level) - 1) * Thac0Factor / 12;
 }
@@ -99,12 +118,11 @@ public sealed record ClassRules(
 /// per day (<c>6798:0B32</c>'s formula; <see cref="WizardSlots"/>), Constitution's
 /// hit points (<c>40B1:0052</c>), saves and THAC0 (<c>40B1</c>) and the ability
 /// tables (<c>DS:07A8</c>);</item>
-/// <item>from the manual, not yet traced in DSUN.EXE: the classes each race may
-/// take, prime requisites, the alignments a party may have, and that cleric
-/// and druid don't combine. Where it contradicts itself the stricter reading
-/// is taken: half-giants can't be rangers and muls and thri-kreen can't be
-/// druids. The dual-class requirements and psionic strength are AD&amp;D 2nd
-/// edition's (see their fields).</item>
+/// <item>also from DSUN.EXE: the classes each race may take and in which
+/// combinations (<see cref="RaceRules.Combinations"/>, <c>38F0</c>), the alignments each
+/// class allows (<see cref="ClassAlignments"/>, <c>38F0:0252</c>), the dual-class rules
+/// (<c>8CCC:1934</c>; <see cref="DualLevel"/>) and psionic strength (<see cref="PspConstitution"/>).
+/// The manual differs: it has half-giants without rangers and muls and thri-kreen without druids.</item>
 /// </list>
 /// A mod can replace the rules with a JSON file (<see cref="Read"/>); the
 /// tabletop rules that come with the game (<c>engine/game/mods/Tabletop</c>) are one.
@@ -183,22 +201,52 @@ public sealed record CharacterRules
 
     public int MaxClasses { get; init; } = 3;
 
-    /// <summary>A human may dual-class from this level in the current class ("at least third level", the manual).</summary>
-    public int DualLevel { get; init; } = 3;
+    /// <summary>
+    /// A human may dual-class from this level in the current class (<c>8CCC:1934</c>: its level above 1; the
+    /// manual says third level).
+    /// </summary>
+    public int DualLevel { get; init; } = 2;
 
     /// <summary>
-    /// A second dual-class: the classes had so far must each be at this level or more (the guide: "the first two
-    /// classes to be at least level 2"; the second needn't pass the first).
+    /// A second dual-class: the classes had so far must each be at this level or more (DSUN.EXE checks the
+    /// current class only, the others having had to pass <see cref="DualLevel"/> already).
     /// </summary>
     public int SecondDualLevel { get; init; } = 2;
 
-    /// <summary>Classes only a character of this alignment may take (the guide: druids are True Neutral only).</summary>
-    public IReadOnlyDictionary<CharacterClass, Alignment> ClassAlignments { get; init; } =
-        new Dictionary<CharacterClass, Alignment> { [CharacterClass.Druid] = Alignment.TrueNeutral };
+    /// <summary>
+    /// A dual-class can't take a class of a group it has had (<c>8CCC:1934</c>, the bits at <c>40B1:0024</c> +
+    /// class code): priests, warriors, wizards, psionicists, rogues.
+    /// </summary>
+    public IReadOnlyList<IReadOnlyList<CharacterClass>> DualGroups { get; init; } =
+    [
+        [CharacterClass.Cleric, CharacterClass.Druid], [CharacterClass.Fighter, CharacterClass.Gladiator, CharacterClass.Ranger],
+        [CharacterClass.Preserver], [CharacterClass.Psionicist], [CharacterClass.Thief],
+    ];
+
+    /// <summary>The classes whose alignment the dual-class check holds to <see cref="ClassAlignments"/> (<c>8CCC:1934</c>: rangers good, druids True Neutral).</summary>
+    public IReadOnlyList<CharacterClass> DualAlignmentClasses { get; init; } = [CharacterClass.Ranger, CharacterClass.Druid];
+
+    /// <summary>
+    /// The alignments each class allows (<c>38F0:0252</c> + 9 × class + alignment, read when the alignment
+    /// is changed, <c>6CCA:17C7</c>): none evil; a druid True Neutral, a ranger good, a thief not Lawful Good.
+    /// A class not listed allows any.
+    /// </summary>
+    public IReadOnlyDictionary<CharacterClass, IReadOnlyList<Alignment>> ClassAlignments { get; init; } =
+        new Dictionary<CharacterClass, IReadOnlyList<Alignment>>
+        {
+            [CharacterClass.Cleric] = NotEvil, [CharacterClass.Fighter] = NotEvil, [CharacterClass.Gladiator] = NotEvil,
+            [CharacterClass.Preserver] = NotEvil, [CharacterClass.Psionicist] = NotEvil,
+            [CharacterClass.Druid] = [Alignment.TrueNeutral],
+            [CharacterClass.Ranger] = [Alignment.LawfulGood, Alignment.NeutralGood, Alignment.ChaoticGood],
+            [CharacterClass.Thief] = [Alignment.LawfulNeutral, Alignment.NeutralGood, Alignment.TrueNeutral, Alignment.ChaoticGood, Alignment.ChaoticNeutral],
+        };
+
+    private static IReadOnlyList<Alignment> NotEvil =>
+        [Alignment.LawfulGood, Alignment.LawfulNeutral, Alignment.NeutralGood, Alignment.TrueNeutral, Alignment.ChaoticGood, Alignment.ChaoticNeutral];
 
     /// <summary>Whether <paramref name="alignment"/> allows class <paramref name="k"/> (<see cref="ClassAlignments"/>).</summary>
     public bool AlignmentAllows(CharacterClass k, Alignment alignment) =>
-        !ClassAlignments.TryGetValue(k, out Alignment only) || only == alignment;
+        !ClassAlignments.TryGetValue(k, out IReadOnlyList<Alignment>? allowed) || allowed.Contains(alignment);
 
     /// <summary>The current class's prime requisites must be this or more to dual-class (AD&amp;D 2nd edition; DSUN.EXE's checks aren't traced).</summary>
     public int DualFromPrime { get; init; } = 15;
@@ -260,19 +308,29 @@ public sealed record CharacterRules
     public IReadOnlyList<SpellbookSize> SpellbookSizes { get; init; } = [];
 
     /// <summary>
-    /// A psionicist's psionic strength points by level; past the table,
-    /// <see cref="PspPerLevelAfter"/> more each level (AD&amp;D 2nd edition's). Not yet
-    /// DSUN.EXE's: <c>38D4:013B</c> holds 20, 22, … 34; <c>6698:0B8A</c> works points out as
-    /// 2 × Wis − 10 + (Int − 15) + (Con − 15) (each if above 15) + (Wis − 5) × the
-    /// psionicist level (1 for others), and <c>8E77:0162</c> adds 10 a level on a
-    /// level-up; which applies when isn't traced.
+    /// Psionic strength at full (<c>8E77:0162</c>, worked out for every member at the end of
+    /// every fight, <c>8E77:08A6</c>; creation's <c>6ECD:06B9</c> is the same without the
+    /// level part for others): from Constitution, Intelligence and Wisdom of
+    /// <see cref="PspFromScore"/> or more, the tables' entry (index score − 15; DSUN.EXE's
+    /// at <c>38D4:011C</c>, <c>0124</c>, <c>012C</c>, 8 bytes apart, so a score past 22 reads
+    /// on into the next table); then a psionicist adds <see cref="PspPerPsionicistLevel"/> and
+    /// Wisdom's <see cref="PspWisdomPerLevel"/> (<c>38D4:0134</c>) for each level past the
+    /// first, and anyone else <see cref="PspPerLevelOthers"/> for each of its levels.
     /// </summary>
-    public IReadOnlyList<int> PsionicistPsp { get; init; } = [20, 22, 24, 26, 28, 30, 32, 34];
+    public IReadOnlyList<int> PspConstitution { get; init; } = [0, 1, 2, 3, 4, 5, 6, 7, 0, 1, 2];
 
-    public int PspPerLevelAfter { get; init; } = 2;
+    public IReadOnlyList<int> PspIntelligence { get; init; } = [0, 1, 2, 3, 4, 5, 6, 0, 20, 22, 24];
 
-    /// <summary>Psionic strength points of a character who isn't a psionicist (its wild talent).</summary>
-    public int WildTalentPsp { get; init; } = 10;
+    public IReadOnlyList<int> PspWisdom { get; init; } = [20, 22, 24, 26, 28, 30, 32, 34, 0, 1, 2];
+
+    public IReadOnlyList<int> PspWisdomPerLevel { get; init; } = [0, 1, 2, 3, 4, 5, 6, 7, 8, 8, 10];
+
+    /// <summary>The lowest score that adds to psionic strength (<see cref="PspConstitution"/>'s index 0).</summary>
+    public int PspFromScore { get; init; } = 15;
+
+    public int PspPerPsionicistLevel { get; init; } = 10;
+
+    public int PspPerLevelOthers { get; init; } = 4;
 
     /// <summary>Psionic strength points a power costs.</summary>
     public int PowerCost { get; init; } = 5;
@@ -420,6 +478,17 @@ public sealed record CharacterRules
 
     private static readonly CharacterClass[] All = Enum.GetValues<CharacterClass>();
 
+    /// <summary>Class sets written C, D, F, G, P, Ps, R, T joined by '/' ("C/F/Ps": cleric, fighter, psionicist).</summary>
+    private static IReadOnlyList<IReadOnlyList<CharacterClass>> Sets(params string[] sets) =>
+    [
+        .. sets.Select(set => (IReadOnlyList<CharacterClass>)[.. set.Split('/').Select(k => k switch
+        {
+            "C" => CharacterClass.Cleric, "D" => CharacterClass.Druid, "F" => CharacterClass.Fighter, "G" => CharacterClass.Gladiator,
+            "P" => CharacterClass.Preserver, "Ps" => CharacterClass.Psionicist, "R" => CharacterClass.Ranger,
+            "T" => CharacterClass.Thief, _ => throw new ArgumentException($"no class {k}"),
+        })]),
+    ];
+
     /// <summary>
     /// A class's ability minimums as DSUN.EXE has them (<c>6ECD:1F19</c>, table
     /// <c>38D4:0180</c>: a key ability and a number per class): 17 in the key
@@ -447,51 +516,58 @@ public sealed record CharacterRules
                 A((Ability.Con, 2), (Ability.Str, 1), (Ability.Dex, -1), (Ability.Cha, -2)),
                 [CharacterClass.Cleric, CharacterClass.Fighter, CharacterClass.Gladiator, CharacterClass.Psionicist, CharacterClass.Thief], true,
                 ConstitutionSaves: true,
-                ThiefSkills: [0, 10, 15, 0, 0, 0, -10, -5]),
+                ThiefSkills: [0, 10, 15, 0, 0, 0, -10, -5],
+                Combinations: Sets("C/F", "C/Ps", "F/Ps", "F/T", "Ps/T", "C/F/Ps", "F/Ps/T")),
             new(Characters.Race.Elf, "Elf", [Gender.Male, Gender.Female],
                 A((Ability.Dex, 2), (Ability.Int, 1), (Ability.Wis, -1), (Ability.Con, -2)),
                 [CharacterClass.Cleric, CharacterClass.Fighter, CharacterClass.Gladiator, CharacterClass.Preserver, CharacterClass.Psionicist, CharacterClass.Ranger, CharacterClass.Thief], true,
-                ThiefSkills: [5, -5, 0, 5, 10, 5, 0, 0]),
+                ThiefSkills: [5, -5, 0, 5, 10, 5, 0, 0],
+                Combinations: Sets("C/F", "C/P", "C/Ps", "C/R", "C/T", "F/P", "F/Ps", "F/T", "P/Ps", "P/R", "P/T", "Ps/R", "Ps/T", "R/T", "C/F/P", "C/F/Ps", "C/F/T", "C/P/Ps", "C/P/R", "C/P/T", "C/Ps/R", "C/Ps/T", "C/R/T", "F/P/Ps", "F/P/T", "F/Ps/T", "P/Ps/R", "P/Ps/T", "P/R/T", "Ps/R/T")),
             new(Characters.Race.HalfElf, "Half-elf", [Gender.Male, Gender.Female],
                 A((Ability.Dex, 1), (Ability.Con, -1)),
                 All, true,
-                ThiefSkills: [10, 0, 0, 0, 5, 0, 0, 0]),
+                ThiefSkills: [10, 0, 0, 0, 5, 0, 0, 0],
+                Combinations: Sets("C/F", "C/P", "C/Ps", "C/R", "C/T", "D/F", "D/P", "D/Ps", "D/T", "F/P", "F/Ps", "F/T", "P/Ps", "P/R", "P/T", "Ps/R", "Ps/T", "R/T", "C/F/P", "C/F/Ps", "C/F/T", "C/P/Ps", "C/P/R", "C/P/T", "C/Ps/R", "C/Ps/T", "C/R/T", "D/F/P", "D/F/Ps", "D/F/T", "D/P/Ps", "D/P/T", "D/Ps/T", "F/P/Ps", "F/P/T", "F/Ps/T", "P/Ps/R", "P/Ps/T", "P/R/T", "Ps/R/T")),
             new(Characters.Race.HalfGiant, "Half-giant", [Gender.Male, Gender.Female],
                 // DSUN.EXE's (38D4:016B); the manual has Str +4, Con +2, Int −2, Wis −2, Cha −2.
                 A((Ability.Str, 4), (Ability.Dex, -5), (Ability.Con, 2), (Ability.Int, -5), (Ability.Wis, -3), (Ability.Cha, -3)),
-                [CharacterClass.Cleric, CharacterClass.Fighter, CharacterClass.Gladiator, CharacterClass.Psionicist], true, HitPointFactor: 2),
+                [CharacterClass.Cleric, CharacterClass.Fighter, CharacterClass.Gladiator, CharacterClass.Psionicist, CharacterClass.Ranger], true, HitPointFactor: 2,
+                Combinations: Sets("C/F", "C/Ps", "C/R", "F/Ps", "Ps/R")),
             new(Characters.Race.Halfling, "Halfling", [Gender.Male, Gender.Female],
                 A((Ability.Dex, 2), (Ability.Wis, 2), (Ability.Con, -1), (Ability.Cha, -1), (Ability.Str, -2)),
                 [CharacterClass.Cleric, CharacterClass.Druid, CharacterClass.Fighter, CharacterClass.Gladiator, CharacterClass.Psionicist, CharacterClass.Ranger, CharacterClass.Thief], true,
                 ConstitutionSaves: true,
-                ThiefSkills: [5, 5, 5, 10, 15, 5, -15, -5]),
+                ThiefSkills: [5, 5, 5, 10, 15, 5, -15, -5],
+                Combinations: Sets("C/F", "C/Ps", "C/R", "C/T", "D/F", "D/Ps", "D/T", "F/Ps", "F/T", "Ps/R", "Ps/T", "R/T", "F/Ps/T", "Ps/R/T")),
             new(Characters.Race.Mul, "Mul", [Gender.Male],
                 A((Ability.Str, 2), (Ability.Con, 1), (Ability.Int, -1), (Ability.Cha, -2)),
-                [CharacterClass.Cleric, CharacterClass.Fighter, CharacterClass.Gladiator, CharacterClass.Psionicist, CharacterClass.Thief], true,
-                ThiefSkills: [0, -5, 0, 5, 0, 0, 5, -5]),
+                [CharacterClass.Cleric, CharacterClass.Druid, CharacterClass.Fighter, CharacterClass.Gladiator, CharacterClass.Psionicist, CharacterClass.Thief], true,
+                ThiefSkills: [0, -5, 0, 5, 0, 0, 5, -5],
+                Combinations: Sets("C/F", "C/Ps", "C/T", "D/F", "D/Ps", "D/T", "F/Ps", "F/T", "Ps/T", "C/F/T", "D/F/T", "F/Ps/T")),
             new(Characters.Race.ThriKreen, "Thri-kreen", [Gender.Female],
                 A((Ability.Dex, 2), (Ability.Wis, 1), (Ability.Int, -1), (Ability.Cha, -2)),
-                [CharacterClass.Cleric, CharacterClass.Fighter, CharacterClass.Gladiator, CharacterClass.Psionicist, CharacterClass.Ranger], true,
+                [CharacterClass.Cleric, CharacterClass.Druid, CharacterClass.Fighter, CharacterClass.Gladiator, CharacterClass.Psionicist, CharacterClass.Ranger], true,
                 // 6ECD:1344: four claws of 1d4 a round (8 halves) and a bite of 1d4 + 1; Move 15.
                 Move: 15, NaturalAttacks: [new(8, 1, 4, 0), new(2, 1, 4, 1)],
-                ArmorClass: 5, WeaponsOnly: true),
+                ArmorClass: 5, WeaponsOnly: true,
+                Combinations: Sets("C/F", "C/Ps", "C/R", "D/F", "D/Ps", "F/Ps", "Ps/R", "C/F/Ps", "C/Ps/R", "D/F/Ps")),
         ],
         Classes =
         [
             new(CharacterClass.Cleric, "Cleric", Minimums(Ability.Wis, 9), [Ability.Wis], 8, false, true,
                 [0, 1500, 3000, 6000, 13000, 27500, 55000, 110000, 225000], 8, PriestSaves),
-            new(CharacterClass.Druid, "Druid", Minimums(Ability.Wis, 12), [Ability.Wis, Ability.Cha], 8, false, true,
+            new(CharacterClass.Druid, "Druid", Minimums(Ability.Wis, 12), [Ability.Wis], 8, false, true,
                 [0, 2000, 4000, 7500, 12500, 20000, 35000, 60000, 90000], 8, PriestSaves),
             new(CharacterClass.Fighter, "Fighter", Minimums(Ability.Str, 9), [Ability.Str], 10, true, false,
                 [0, 2000, 4000, 8000, 16000, 32000, 64000, 125000, 250000], 12, WarriorSaves),
             // DSUN.EXE gives gladiators the fighter's row.
             new(CharacterClass.Gladiator, "Gladiator", Minimums(Ability.Str, 13), [Ability.Str], 10, true, false,
-                [0, 2000, 4000, 8000, 16000, 32000, 64000, 125000, 250000], 12, WarriorSaves, ArmorBonusLevel: 5),
+                [0, 2000, 4000, 8000, 16000, 32000, 64000, 125000, 250000], 12, WarriorSaves, ArmorBonusPer: 5),
             new(CharacterClass.Preserver, "Preserver", Minimums(Ability.Int, 9), [Ability.Int], 4, false, false,
                 [0, 2500, 5000, 10000, 20000, 40000, 60000, 90000, 135000], 4, WizardSaves),
-            new(CharacterClass.Psionicist, "Psionicist", Minimums(Ability.Wis, 12), [Ability.Con, Ability.Wis], 6, false, false,
+            new(CharacterClass.Psionicist, "Psionicist", Minimums(Ability.Wis, 12), [Ability.Wis], 6, false, false,
                 [0, 2200, 4400, 8800, 16500, 30000, 55000, 100000, 200000], 6, RogueSaves),
-            new(CharacterClass.Ranger, "Ranger", Minimums(Ability.Wis, 14), [Ability.Str, Ability.Dex, Ability.Wis], 10, true, true,
+            new(CharacterClass.Ranger, "Ranger", Minimums(Ability.Wis, 14), [Ability.Wis], 10, true, true,
                 [0, 2200, 4500, 9000, 18000, 36000, 75000, 150000, 300000], 12, WarriorSaves),
             new(CharacterClass.Thief, "Thief", Minimums(Ability.Dex, 9), [Ability.Dex], 6, false, false,
                 [0, 1200, 2500, 5000, 10000, 20000, 40000, 70000, 110000], 6, RogueSaves),

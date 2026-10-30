@@ -95,3 +95,16 @@ public class CharacterSheetTests
         Assert.Null(cc.NextLevelExperience(new Character { Classes = [CharacterClass.Fighter], Experience = int.MaxValue / 2 }));
     }
 }
+
+public class GladiatorArmorTests
+{
+    [Fact]
+    public void AGladiatorGainsOneArmourClassForEveryFiveLevels()
+    {
+        // 612E:2113: armour class − the gladiator level ÷ 5 (levels stop at 9: −1 from level 5).
+        int At(CharacterClass k, int level) => CharacterSheet.BaseArmorClassOf(Race.Human, [(k, level)]);
+        Assert.Equal([10, 9, 9, 8], new[] { 4, 5, 9, 10 }.Select(l => At(CharacterClass.Gladiator, l)));
+        Assert.Equal(10, At(CharacterClass.Fighter, 9));
+        Assert.Equal(9, CharacterSheet.BaseArmorClassOf(Race.Human, [(CharacterClass.Fighter, 6), (CharacterClass.Gladiator, 6)]));
+    }
+}
