@@ -479,8 +479,12 @@ this milestone brings most of the game's content.
       isn't a heal takes effect too. A weapon's spell reaches whom it hits
       (`612E:1B7A`). Worn items' ordinary spells do nothing, and the type
       flags 4 and 0x10 are read nowhere. `--check-map-cast`.
-- [ ] The worn specials 0xFA–0xFF (Belt and Helm of Might, El's Ring,
-      Steadfast Ring, Ring of Insight, Dag's Dagger; `80F5:2BB8`) (#87).
+- [x] The ability items 0xFA–0xFF (#87; `AbilityScores`): `80F5:2BB8`
+      works out a combat record's abilities from the character's, the
+      Strength and Feeblemind effects and every item carried (pack and
+      containers too): +0x0F − 0xFA picks the ability, the charges (+0x0E)
+      add (below 16), set a floor (16–31: Belt of Might's 24) or take away
+      (32 and up). Fights, the character screen and STAT_ROLL use them.
 - [x] Character sheet and inventory screens (`CharacterScreen`): View
       Character (`WIND` 11500 over `BMP` 11000) with the member's sheet, and
       the inventory (`WIND` 13500 over `BMP` 13001: the member's figure,

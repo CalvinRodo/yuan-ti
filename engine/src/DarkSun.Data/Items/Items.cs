@@ -212,7 +212,9 @@ public sealed record ItemType(
 /// the item is gone (<c>78A9:2324</c>). For a type that stacks the two swap:
 /// the quantity is the count, the charges the spell. +0x0F keeps a copy of
 /// the spell to restore (<c>78A9</c>, the shipped items agree; doors use it
-/// for their state: the door flags).
+/// for their state: the door flags). A +0x0F of 0xFA–0xFF is an ability item
+/// instead, its charges what it does to the ability (<c>80F5:2BB8</c>; the
+/// game's <c>AbilityScores</c>).
 /// </para>
 /// <para>
 /// <see cref="Special"/> (+0x10, 1–6) is how easily the item breaks: 6

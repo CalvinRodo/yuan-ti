@@ -559,6 +559,7 @@
 80F5:0079	func	apply_effect	immunity, magic resistance, save, condition or damage (half/none on save)
 80F5:0ED1	func	saving_throw	d20 (1 fails, 20 saves) + modifiers + spell's modifier >= save score
 80F5:119C	func	save_modifier	effects, element resistances, Dex/Wis/Con adjustments, dwarf/halfling Con/3.5
+80F5:2BB8	func	ability_scores	combat record +0x22 from char +0x1B, Str/Feeblemind effects, items 0xFA-0xFF (charges: add, floor, loss)
 80F5:2ACC	func	natural_attacks	char record +0x2B/+0x2E/+0x31/+0x34: count, dice, sides, bonus
 80F5:3671	func	melee_damage_bonus	Str damage, effect percentage
 80F5:36CC	func	speed_state	Paralyzed 0, Stuck 5 (both: no movement), Slowed 1 (half), Hasted 4 (double), else 2

@@ -187,7 +187,7 @@ public sealed partial class Battle
     {
         goesOn = false;
         CastsFor(c);
-        if (c.TriedSpells || c.Stats[3] <= Rules.SpellIntelligence || c.CurrentMind == CombatRecord.MindFlees || c.Spells.Count == 0
+        if (c.TriedSpells || c.Score(3) <= Rules.SpellIntelligence || c.CurrentMind == CombatRecord.MindFlees || c.Spells.Count == 0
             || c.Has(Condition.NoSpells) || c.WasHit)
         {
             return false;
@@ -341,13 +341,13 @@ public sealed partial class Battle
                 return -1;
             }
             int mine = Roll(1, 20), theirs = Roll(1, 20);
-            int static_ = holder.Stats[3] + (Spells.Power(SynapticStatic)?.Modifier ?? 0) + holder.PowerRank(SynapticStatic) - 1;
+            int static_ = holder.Score(3) + (Spells.Power(SynapticStatic)?.Modifier ?? 0) + holder.PowerRank(SynapticStatic) - 1;
             if (mine > c.PowerRank(number) || theirs <= static_ && theirs >= mine)
             {
                 return -1;
             }
         }
-        int score = c.Stats[Math.Clamp(power.Ability, 0, 5)] + power.Modifier + c.PowerRank(number) - 1;
+        int score = c.Score(Math.Clamp(power.Ability, 0, 5)) + power.Modifier + c.PowerRank(number) - 1;
         int roll = Roll(1, 20);
         return roll == 20 ? 0 : roll <= score || roll == 1 ? roll : 0;
     }
@@ -363,7 +363,7 @@ public sealed partial class Battle
     /// </summary>
     public bool PsionicDefence(Combatant t)
     {
-        int defence = t.Stats[4] - 7;
+        int defence = t.Score(4) - 7;
         if (t.PartyMember)
         {
             PsionicPower? best = null;
@@ -441,7 +441,7 @@ public sealed partial class Battle
                 {
                     continue;
                 }
-                slots += Rules.SpellSlots.Where(r => r.Classes.Contains(code)).Sum(r => r.Slots(r.Wisdom ? c.Stats[4] : classLevel, level));
+                slots += Rules.SpellSlots.Where(r => r.Classes.Contains(code)).Sum(r => r.Slots(r.Wisdom ? c.Score(4) : classLevel, level));
             }
             left[level] = (int)(slots * health >> 8);
         }

@@ -1107,10 +1107,11 @@ each record are not read.
     spell back. Eight shipped weapons carry one (Dark Flame, El's Drinker,
     Terror Blade, Blackmace, Balk's Staff, Phrain's Bow, Cahulaks, Chatkcha).
   * Worn, an ordinary spell does nothing: no code reads it there, and the
-    item window offers no USE for a worn item whose spell helps. Values
-    0xFA–0xFF (Belt and Helm of Might, Draketooth, El's Ring, Steadfast Ring,
-    Ring of Insight, Dag's Dagger) are special cases in `80F5:2BB8` (the
-    stats), whose jump table Ghidra doesn't decompile cleanly (#87).
+    item window offers no USE for a worn item whose spell helps.
+  * Values 0xFA–0xFF are ability items, read by `80F5:2BB8` (see "Ability
+    scores"): Belt of Might (Str ≥ 24), Draketooth (Str +3), Helm of Might
+    (Str +1), El's Ring (Dex +3), Steadfast Ring (Con +3), Ring of Insight
+    (Wis +2), Dag's Dagger (Cha +1).
 * **Item record +0x10, special:** 1–6, how easily it breaks; 6 never (480
   items). `80F5:1F4B` picks the carried item with the lowest value below 6
   and breaks it when 1d20 < 15 − its bonus (`612E:20A1`). `612E:2700` turns
@@ -1677,6 +1678,32 @@ Records: a combatant is an object of kind 2 (`DS:0C36 + 3·index`) with a
   Strength's damage (`6868:030D`) and an effect's 10 % per level. With no
   weapon, the natural attacks (`80F5:2ACC`). Damage is applied by
   `80F5:0008` / `0079` and `612E:18DA` (see "Items in scripts", DAMAGE).
+
+### Ability scores (`80F5:2BB8`)
+
+A creature's abilities in its combat record (+0x22–0x27, what fights, the
+saves and STAT_ROLL read) are worked out from its character record's
+(+0x1B–0x20) into two sets, one that adds and one of floors:
+
+* Effects on it (the effect list, condition at entry +6; the values at
+  `cs:2F00`, the cases at `cs:2F0E`): Strength Enhanced (63) makes the
+  Strength floor at least 24;
+  64–68 (Borrowed, Lent, Adrenalin Control, Strength, Weakened) add their
+  value (entry +9) to Strength, kept within 3–24 after each; Feebleminded
+  (19) makes Intelligence and Wisdom 3 at the end, whatever else.
+* Items: every entry of kind 1 in `1A0A:1A2D`'s list, which is the
+  holder's whole tree (worn, pack, inside containers; unlike armour class,
+  `612E:22FF`'s relation 0x4D, worn, isn't asked). An item record +0x0F of
+  0xFA–0xFF jumps through `cs:2EF4`, whose six entries all go to one case
+  (`2D28`): ability +0x0F − 0xFA (Str … Cha), by the record's charges
+  (+0x0E): below 0x10 they are added; 0x10–0x1F set a floor of that value;
+  0x20 and up take away value − 31. (The other cases Ghidra shows are the
+  same function's code read out of line.)
+* Any floor at all (from either) makes every ability the higher of its two
+  sets; else it is the sum. Then nothing goes above 25 (there is no lower
+  limit there).
+
+The engine: `AbilityScores`, `Combatant.Score`.
 
 ### Armour class (`612E:2113`)
 

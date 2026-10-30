@@ -348,7 +348,7 @@ public sealed partial class Battle
         }
         bool mind = (e.Flags & SpellFlags.MindAffecting) != 0;
         int spellLevel = e.Number > Spellcasting.LastPower ? 3 : Spellcasting.Get(e.Number) is { Kind: not SpellKind.Psionic } s ? s.Level : 0;
-        if (spellLevel > 0 && (mind && spellLevel <= t.Stats[4] - 18 || (e.Flags & SpellFlags.Illusion) != 0 && spellLevel <= t.Stats[3] - 18))
+        if (spellLevel > 0 && (mind && spellLevel <= t.Score(4) - 18 || (e.Flags & SpellFlags.Illusion) != 0 && spellLevel <= t.Score(3) - 18))
         {
             return true;
         }
@@ -494,15 +494,15 @@ public sealed partial class Battle
             .Sum(k => k.Bonus);
         if ((e.Flags & SpellFlags.DexteritySave) != 0 || Rules.Fixes.DexterityAgainstAreas && !e.SingleTarget && Spells.TemplateOf(e) is not null)
         {
-            b -= Abilities.DexDefenceOf(t.Stats[1]);
+            b -= Abilities.DexDefenceOf(t.Score(1));
         }
         if ((e.Flags & SpellFlags.WisdomSave) != 0)
         {
-            b += Abilities.WisDefenceOf(t.Stats[4]);
+            b += Abilities.WisDefenceOf(t.Score(4));
         }
         if (save == 1)
         {
-            b += Abilities.ConPoisonOf(t.Stats[2]) + (t.Race is 2 or 6 ? t.Stats[2] * 2 / 7 : 0);
+            b += Abilities.ConPoisonOf(t.Score(2)) + (t.Race is 2 or 6 ? t.Score(2) * 2 / 7 : 0);
         }
         if (e.Number == Dismissal)
         {

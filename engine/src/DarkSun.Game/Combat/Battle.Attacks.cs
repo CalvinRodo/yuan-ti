@@ -73,7 +73,7 @@ public sealed partial class Battle
     {
         bool behind = a is not null && FromBehind(a, t);
         int ac = t.ArmorClass + (behind ? t.ShieldClass : 0);
-        int adjust = behind ? 0 : Abilities.DexDefenceOf(t.Stats[1]);
+        int adjust = behind ? 0 : Abilities.DexDefenceOf(t.Score(1));
         int LevelOf(Condition c) => t.Effects.Where(e => e.Condition == c).Sum(e => e.Level);
         foreach (ConditionModifier m in ModifiersOf(t))
         {
@@ -147,7 +147,7 @@ public sealed partial class Battle
             }
         }
         Less("weapon", (w?.Bonus ?? 0) + (w?.MaterialToHit ?? 0));
-        Less(missile ? "DEX" : "STR", missile ? Abilities.DexReactionOf(a.Stats[1]) : Abilities.StrToHitOf(a.Strength));
+        Less(missile ? "DEX" : "STR", missile ? Abilities.DexReactionOf(a.Score(1)) : Abilities.StrToHitOf(a.Strength));
         Less("difficulty", a.PartyMember ? 0 : Difficulty - 1);
         Less("effects", ModifiersOf(a).Sum(m => m.ToHit) + ModifiersOf(t).Sum(m => m.ToHitAgainst));
         if (a.Effects.FirstOrDefault(e => e.Condition == Condition.Prayer) is { Caster: { } priest })

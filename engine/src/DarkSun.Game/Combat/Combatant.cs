@@ -96,14 +96,14 @@ public sealed class Combatant
     /// <summary>Move (+0x1B): movement points are this × 10 a round.</summary>
     public int Move { get; init; } = 12;
 
-    /// <summary>Str, Dex, Con, Int, Wis, Cha (+0x22); Raise Dead takes a point of Con.</summary>
+    /// <summary>Its own Str, Dex, Con, Int, Wis, Cha (character record +0x1B); Raise Dead takes a point of Con. What counts is <see cref="Score"/>.</summary>
     public int[] Stats { get; init; } = [10, 10, 10, 10, 10, 10];
 
-    /// <summary>
-    /// Strength with what effects add (<c>80F5:2BB8</c>): Strength, Adrenalin
-    /// Control, Enhanced, Borrowed and Lent Strength, Weakened; 3–25.
-    /// </summary>
-    public int Strength => Math.Clamp(Stats[0] + Effects.Where(e => e.Condition is >= Condition.StrengthEnhanced and <= Condition.Weakened).Sum(e => e.Value), 3, 25);
+    /// <summary>Ability <paramref name="ability"/> (0 Str … 5 Cha) with its effects and items (combat record +0x22, <see cref="AbilityScores"/>).</summary>
+    public int Score(int ability) => AbilityScores.Of(Stats, Effects, Items)[ability];
+
+    /// <summary>Strength with its effects and items (<see cref="Score"/>).</summary>
+    public int Strength => Score(0);
 
     /// <summary>The creature type (+0x16): its abilities and resistances (<see cref="DarkSun.Game.Rules.CreatureRules"/>).</summary>
     public int Type { get; init; }

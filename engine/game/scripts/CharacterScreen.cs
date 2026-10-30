@@ -352,10 +352,10 @@ public partial class CharacterScreen : RetroScreen
         Combatant fighter = PartyCombatant.From(c, Member!, _world!.Items, Session.Rules, _world.Clock);
         for (int i = 0; i < 6; i++)
         {
-            _abilities[i].Text = fighter.Stats[i].ToString();
+            _abilities[i].Text = fighter.Score(i).ToString();
         }
         _psp.Text = $"{_magic.Psp(c)}/{_magic.MaxPsp(c)}";
-        _armour.Text = $"AC: {CharacterSheet.ArmorClass(fighter.Stats[(int)Ability.Dex], Member!.Items, _world.Items, Session.Rules, CharacterSheet.BaseArmorClassOf(c.Race, new CharacterCreation(Session.Rules, Session.Names, new Random()).ActiveLevels(c), Session.Rules)),2}";
+        _armour.Text = $"AC: {CharacterSheet.ArmorClass(fighter.Score((int)Ability.Dex), Member!.Items, _world.Items, Session.Rules, CharacterSheet.BaseArmorClassOf(c.Race, new CharacterCreation(Session.Rules, Session.Names, new Random()).ActiveLevels(c), Session.Rules)),2}";
         _attacks.Text = string.Join("\n", AttackLines(fighter));
     }
 
@@ -367,7 +367,7 @@ public partial class CharacterScreen : RetroScreen
     /// </summary>
     private IEnumerable<string> AttackLines(Combatant fighter)
     {
-        int strDamage = Session.Rules.Abilities.StrDamageOf(fighter.Stats[(int)Ability.Str]);
+        int strDamage = Session.Rules.Abilities.StrDamageOf(fighter.Score((int)Ability.Str));
         foreach (Weapon? w in new[] { fighter.Weapon, fighter.MissileWeapon })
         {
             if (w is null)
