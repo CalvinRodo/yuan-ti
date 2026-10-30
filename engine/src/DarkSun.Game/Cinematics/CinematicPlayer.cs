@@ -301,6 +301,9 @@ public sealed class CinematicPlayer
                     break;
                 case 0x67:
                     break;
+                case 0x7F:
+                    foreach (var w in Pan(i)) { yield return w; }
+                    break;
                 default:
                     UnsupportedOps.Add(i.Op);
                     break;
@@ -413,6 +416,130 @@ public sealed class CinematicPlayer
         }
         Flip();
         yield return Until(start, ticks);
+    }
+
+    /// <summary>
+    /// Op 0x7F (<c>9944:1AD7</c>; the ending's first picture, <c>ACF</c> 11): a pan.
+    /// Arguments: four <c>BMP</c>s a1–a4, a rectangle (a5, a6)–(a7, a8) (clamped to
+    /// the screen, corners put in order), a distance a9, a panel step a10, a strip
+    /// step a11, and a closing wait a12. Within the rectangle, each frame: a2
+    /// slides in from the left, pushing a1 off to the right, a10 pixels a frame
+    /// (0: they stay, a1 alone showing); over them a strip of a3 with a4 to its
+    /// left scrolls right a11 pixels a frame. The steps are made divisors of the
+    /// distance (<c>985F:0C77</c>), and it goes on until the panels have moved
+    /// the distance (by 1 a frame when they stay), a frame a retrace (the flip
+    /// waits for one: <c>0980:5814</c>); then it waits until a12 ticks have passed
+    /// since it began. Coordinates are taken on the screen, clipped to the
+    /// rectangle (the shipped script's is the whole screen).
+    /// </summary>
+    private IEnumerable<Func<bool>?> Pan(AcfInstruction i)
+    {
+        int start = Ticks;
+        ImageFrame? Image(int arg) => i.Arg(arg) != 0 && _cine.TryRead("BMP ", i.Arg(arg), out var bmp) && ImageDecoder.ReadFrames(bmp.Span) is [var f, ..] ? f : null;
+        if (Image(0) is not { } back || Image(1) is not { } front || Image(2) is not { } strip || Image(3) is not { } stripLeft)
+        {
+            yield break; // DSUN.EXE gives up when a picture is missing
+        }
+        int left = Math.Min(Math.Min(i.Arg(4), Width - 1), Math.Min(i.Arg(6), Width - 1));
+        int right = Math.Max(Math.Min(i.Arg(4), Width - 1), Math.Min(i.Arg(6), Width - 1));
+        int top = Math.Min(Math.Min(i.Arg(5), Height - 1), Math.Min(i.Arg(7), Height - 1));
+        int bottom = Math.Max(Math.Min(i.Arg(5), Height - 1), Math.Min(i.Arg(7), Height - 1));
+        int distance = Math.Min(i.Arg(8), Width);
+        bool still = i.Arg(9) == 0;
+        int step = Divisor(still ? 1 : Math.Min(i.Arg(9), Width), distance);
+        int stripStep = Divisor(Math.Min(i.Arg(10), Width), distance);
+        if (step <= 0)
+        {
+            step = Math.Max(1, distance);
+        }
+        int slid = 0, stripX = 0;
+        // A mod's true-colour picture, matched to the colours on screen now (as Draw does).
+        byte[] Indexed(ImageFrame f) => f.Rgba is null ? f.Pixels : f.IndexedFor(Data.Images.Palette.FromBytes(_dac, PaletteDepth.SixBit));
+        var pixels = new Dictionary<ImageFrame, byte[]>();
+        foreach (ImageFrame f in new[] { back, front, strip, stripLeft })
+        {
+            pixels[f] = Indexed(f);
+        }
+        void Compose()
+        {
+            byte[] page = _pages[1 - _front];
+            for (int y = top; y <= bottom; y++)
+            {
+                for (int x = left; x <= right; x++)
+                {
+                    // Left of the seam the incoming picture, its right end first; right of it the one pushed out.
+                    (ImageFrame image, int sx) = x < left + slid ? (front, right + 1 - slid + (x - left)) : (back, x - slid);
+                    if (sx >= 0 && sx < image.Width && y < image.Height)
+                    {
+                        page[y * Width + x] = pixels[image][y * image.Width + sx];
+                    }
+                }
+            }
+            DrawClipped(page, strip, stripX, top);
+            DrawClipped(page, stripLeft, stripX - Width, top);
+            void DrawClipped(byte[] to, ImageFrame image, int x0, int y0)
+            {
+                for (int y = Math.Max(top, y0); y <= Math.Min(bottom, y0 + image.Height - 1); y++)
+                {
+                    for (int x = Math.Max(left, x0); x <= Math.Min(right, x0 + image.Width - 1); x++)
+                    {
+                        int at = (y - y0) * image.Width + (x - x0);
+                        if (image.Opaque[at])
+                        {
+                            to[y * Width + x] = pixels[image][at];
+                        }
+                    }
+                }
+            }
+        }
+        for (int moved = 0; moved < distance; moved += step)
+        {
+            if (!still)
+            {
+                slid = Math.Min(slid + step, right - left + 1);
+            }
+            stripX += stripStep;
+            Compose();
+            Flip();
+            yield return null;
+        }
+        yield return Until(start, i.Arg(11));
+    }
+
+    /// <summary>
+    /// <c>985F:0C77(a, total)</c>: <paramref name="a"/> if it divides
+    /// <paramref name="total"/>, else the nearest divisor of it (the lower one
+    /// on a tie); −1 when a is larger than the total.
+    /// </summary>
+    public static int Divisor(int a, int total)
+    {
+        if (a <= 0)
+        {
+            return 0;
+        }
+        if (total < a)
+        {
+            return -1;
+        }
+        if (total % a == 0)
+        {
+            return a;
+        }
+        int below = 0, above = 0;
+        for (int d = 1; d <= total; d++)
+        {
+            if (total % d != 0)
+            {
+                continue;
+            }
+            if (d >= a)
+            {
+                above = d;
+                break;
+            }
+            below = d;
+        }
+        return below != 0 && (above == 0 || a - below <= above - a) ? below : above;
     }
 
     // -- pages and palette ----------------------------------------------------------------

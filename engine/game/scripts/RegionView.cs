@@ -2462,39 +2462,38 @@ public partial class RegionView : Node2D
         }
     }
 
-    /// <summary>A script's cinematic (<c>REQUEST(6)</c>) playing over the map, which waits meanwhile.</summary>
-    private IntroView? _cinematic;
+    /// <summary>A script's cinematic or picture (<c>REQUEST(6)</c>) showing over the map, which waits meanwhile.</summary>
+    private RetroScreen? _cinematic;
 
     /// <summary>
-    /// <c>REQUEST(6, n)</c>: play cinematic n over the map, then the region's music again and the
-    /// script goes on. False (the script goes straight on) for the pictures 200 and 300, which
-    /// aren't decoded (a <c>CMAT</c> / <c>CPAL</c>), without <c>CINE.GFF</c>, and in headless checks.
+    /// <c>REQUEST(6, n)</c>: play cinematic n over the map, or show picture 200 or 300
+    /// (<see cref="PictureView"/>), then the region's music again and the script goes on.
+    /// False (the script goes straight on) without the files, and in headless checks.
     /// </summary>
     private bool PlayCinematic(int number)
     {
-        if (_checking || _cinematic is not null || !CinematicPlayer.Cinematics.ContainsKey(number) || Session.Install?.FindFile("CINE.GFF") is null)
+        bool picture = number is 200 or 300 && PictureView.Exists(number);
+        if (_checking || _cinematic is not null
+            || !picture && (!CinematicPlayer.Cinematics.ContainsKey(number) || Session.Install?.FindFile("CINE.GFF") is null))
         {
             AddScriptLine($"    cinematic {number} not played");
             return false;
         }
         var layer = new CanvasLayer { Layer = 60 };
-        _cinematic = new IntroView
+        void Done()
         {
-            Overlay = number,
-            Done = () =>
+            layer.QueueFree();
+            _cinematic = null;
+            if (RegionInfo.Read(Session.Open("RESOURCE.GFF"), _region.Number) is { Music: > 0 } info)
             {
-                layer.QueueFree();
-                _cinematic = null;
-                if (RegionInfo.Read(Session.Open("RESOURCE.GFF"), _region.Number) is { Music: > 0 } info)
-                {
-                    Music.Instance?.ChangeTo("RESOURCE.GFF", info.Music);
-                }
-                if (Session.Scripts.IsSuspended && Session.Scripts.PausedFor is null)
-                {
-                    ReportScript("cinematic over", Session.Scripts.Resume());
-                }
-            },
-        };
+                Music.Instance?.ChangeTo("RESOURCE.GFF", info.Music);
+            }
+            if (Session.Scripts.IsSuspended && Session.Scripts.PausedFor is null)
+            {
+                ReportScript("cinematic over", Session.Scripts.Resume());
+            }
+        }
+        _cinematic = picture ? new PictureView { Number = number, Done = Done } : new IntroView { Overlay = number, Done = Done };
         layer.AddChild(_cinematic);
         AddChild(layer);
         return true;

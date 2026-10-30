@@ -340,8 +340,10 @@ this milestone brings most of the game's content.
       dead triggers, the Lava Rifts ranger, Linara) apply as the scripts
       load (`GplRepairs`, `script_repairs`, on); the final battle's gate
       repair is there but off (with the clock running the gate waits its
-      window out). Not yet: conditions outside fights (the skills' and
-      traps' Detect Traps, #73), SKILLROLL (no script uses it), JOINPARTY and
+      window out). Conditions outside fights are the spells cast on the map
+      or still running from a fight (`Character.Lasting`): the skill checks
+      and REQUEST 7's traps see them, Detect Traps among them (#73). Not yet:
+      SKILLROLL (no script uses it), JOINPARTY and
       LEAVEPARTY, the LOG text, where the clock stops (`DS:11B8`,
       `DS:0BC9`: the Look pointer, by Obsidian Edition's notes).
 - [x] **Golden tests**: `make engine-compare` checks that the C# decoder lists
@@ -725,9 +727,10 @@ executable, not in the data.
 - [x] The rest of the REQUEST codes (2026-10-21): 6 (a cinematic over the
       map; the script resumes after it), 8 (`MONR` random monsters, with the
       EXE's count from the next slot's strength), 15 (the move pointer) and 19
-      (game over). Open: the pictures 200 and 300 (`CMAT` / `CPAL`) that
-      REQUEST 6 shows in GPL 62 and 177 (#74), and 7 and 17 for an object that
-      isn't a name (no shipped script asks for either).
+      (game over), and the pictures 200 and 300 REQUEST 6 shows in GPL 177 and
+      62 (`PictureView`, #74: `CMAT` n is a `BMP`-format image in `CPAL` n,
+      held 1 000 retraces, `60B9:060D`; `--check-pictures`). Open: 7 and 17
+      for an object that isn't a name (no shipped script asks for either).
 
 ---
 
@@ -772,8 +775,9 @@ executable, not in the data.
       before the main menu, the arrival (9–10) on a new game; the ending
       (11–13) plays through REQUEST 6 from the final scripts. Any key skips. Timed by
       the music's XMIDI callbacks, as in DSUN.EXE.
-- [ ] Cinematic op 0x7F (`9944:1AD7`, 12 arguments; only in the ending's
-      first script): not decoded, so that picture is shown still (#75).
+- [x] Cinematic op 0x7F (`9944:1AD7`, the ending's first picture, #75): a
+      pan, the battlefield scrolling across the sky (`CinematicPlayer.Pan`).
+      `-- --cinematic=100 --check-intro` plays the ending through.
 - [x] Cinematic music (GSEQ 26–29; ops 0x64–0x66).
 - [ ] Full playthrough with a checklist of every region, quest and ending;
       compare doubtful behaviour against the original in DOSBox (#83).

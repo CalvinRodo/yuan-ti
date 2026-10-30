@@ -414,7 +414,7 @@ public sealed partial class WorldGplHost : DialogueGplHost
     /// <summary>
     /// <c>REQUEST(6, who, n)</c>: play cinematic n, the ending's 100 or the pictures 200 and 300.
     /// The view returns true if it plays it; the script then waits until it is over and resumes
-    /// (<see cref="GplMachine.Resume"/>). False: nothing to play (the pictures aren't decoded yet).
+    /// (<see cref="GplMachine.Resume"/>). False: nothing to play (no such files, or a headless check).
     /// </summary>
     public Func<int, bool>? CinematicRequested { get; set; }
 

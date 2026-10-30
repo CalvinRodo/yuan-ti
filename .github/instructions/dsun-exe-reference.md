@@ -870,7 +870,7 @@ From the handlers (2026-10-18). Played by `DarkSun.Game.Cinematics.CinematicPlay
 | 0 | `ACF` 1–8, stopping when one returns 0 (skipped) | start-up (`6A94:0138`), when sound and the intro are enabled (`DS:1162`, `DS:1160`) |
 | 1 | `ACF` 9, 10 | entering region 42 with a new party (`1587:1F83`) |
 | 100 | `ACF` 11, 12, 13 | the ending |
-| 200, 300 | a `CMAT` / `CPAL` picture | |
+| 200, 300 | `60B9:060D`: `CMAT` n (an image in the `BMP` format, 320 × 200 and 318 × 198) drawn at (0, 0) in its palette `CPAL` n, held for 1 000 vertical retraces (`70E7:00B8`, about 14 s at 70 Hz, no key check), then the map is redrawn. 200 is a ruined temple in the sands, 300 the Drajian commander Kraxis before the last battle | `REQUEST(6)` in GPL 177 (200) and 62 (300) |
 
 `REQUEST(6, n)` (`87B3:0AC7`) plays cinematic n from a script.
 
@@ -912,7 +912,7 @@ key ends the cinematic (`0CE5`).
 | 5B | bands, n | wipe: the hidden page opens out from lines 200 ÷ bands apart, one row a step, flip, wait until n ticks | `93D2:112C` |
 | 64 | n | play music n (`GSEQ` etc. 26–29) | `9936:0000` |
 | 65 / 66 | ms | music fade in / out | `9936:0048` / `0073` |
-| 7F | 12 values | not decoded (only in `ACF` 11) | `9944:1AD7` |
+| 7F | `BMP`s a1–a4, rectangle (a5, a6)–(a7, a8), distance a9, steps a10 and a11, ticks a12 | a pan within the rectangle (clamped, corners ordered): each frame a2 slides in from the left pushing a1 out to the right by a10 (0: they stay, by 1), and a strip of a3 with a4 to its left (−320) scrolls right by a11 over them, until the panels have moved a9; the steps are made the nearest divisors of a9 (`985F:0C77`); a frame a retrace (`0980:5814`); then wait until a12 ticks since the start. Off-screen buffers and sub-windows: `0980:27A8` / `282D`, their origins `0980:423F` / `4258`, copies `1A0A:30C3`. Only in `ACF` 11: `BMP` 7 (the sky) still, 9 then 8 (the fallen) scrolling 2 pixels a frame for 160 frames; no shipped script moves the panels, so their direction is read from the window origins (*unverified*) | `9944:1AD7` |
 
 Ops 2, 9–0x13, 0x17, 0x18, 0x2C, 0x3D, 0x3E, 0x50–0x5A, 0x5C–0x5E, 0x67 and
 0x79–0x7E exist but the shipped scripts don't use them.
