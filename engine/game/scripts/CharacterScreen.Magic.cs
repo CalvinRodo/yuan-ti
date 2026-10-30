@@ -419,6 +419,7 @@ public partial class CharacterScreen
             }
             else if (click.DoubleClick)
             {
+                c.RememberCast(n);
                 CastAt(_member, n);
                 return;
             }
@@ -429,12 +430,17 @@ public partial class CharacterScreen
         }
         else if (click.DoubleClick)
         {
+            c.RememberCast(n);
             CastAt(_member, n);
             return;
         }
         else
         {
             _pickedSpell = _pickedSpell == n ? null : n;
+        }
+        if (_pickedSpell is int chosen)
+        {
+            c.RememberCast(chosen); // 78A9:2324: the quick-cast list
         }
         RefreshMagic();
         if (message is not null)
@@ -463,6 +469,29 @@ public partial class CharacterScreen
         }
         RefreshMagic();
         _status.Text = $"{name}: {result}";
+    }
+
+    /// <summary>
+    /// Show spell or power <paramref name="number"/>'s level or discipline with it picked
+    /// to cast, as the quick-cast window does out of a fight; if it can't be cast now, says why.
+    /// </summary>
+    public void PickToCast(int number)
+    {
+        if (CharacterOf(_member) is not { } c || Spellcasting.Get(number) is not { } spell)
+        {
+            return;
+        }
+        bool power = spell.Kind == SpellKind.Psionic;
+        _choice = Math.Max(0, power
+            ? KnownDisciplines(c).IndexOf(spell.Discipline ?? Discipline.Telepathy)
+            : SpellChoices(c).FindIndex(x => x.Kind == spell.Kind && x.Level == spell.Level));
+        bool can = FitToCast && (power ? c.Powers.Contains(number) && _magic.Psp(c) >= Session.Rules.PowerCost : _magic.CanCast(c, number));
+        _pickedSpell = can ? number : null;
+        RefreshMagic();
+        if (!can)
+        {
+            _status.Text = power ? "NOT ENOUGH PSIONIC STRENGTH" : "YOU NEED TO REST";
+        }
     }
 
     /// <summary>The spell or power picked to cast (for the checks).</summary>

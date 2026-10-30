@@ -55,3 +55,49 @@ public sealed class ActiveEffect(int effect, Condition condition, int level, Com
 
     public bool Permanent => EndsAt is null && Charges == 0;
 }
+
+/// <summary>
+/// The conditions' names (<c>3F8D:0000</c>, 6 bytes each: the name, then the
+/// <c>ICON</c>) and the rank <c>78A9:2170</c> gives each (a jump into a run of
+/// increments), by which the status word of an Okay member names its
+/// strongest condition (<c>78A9:20A0</c>, <c>78A9:1FBB</c>).
+/// </summary>
+public static class Conditions
+{
+    private static readonly string[] Names =
+    [
+        "", "Acid", "Improved AC", "Berserk", "Biofeedback", "Blink", "", "Blessed", "Blind", "Brave", "Charmed",
+        "Confused", "Cursed", "Diseased", "Detect Traps", "Detect Invis", "Enlarged", "Afraid", "Cloak of Fear",
+        "Feeblemind", "Fire Shield", "Free Action", "Hasted", "Invisible", "Invis to Undead", "Mirror Images", "Englobed",
+        "", "Prot Missile", "Prot Paralysis", "Synaptic Static", "Low Resistance", "Mind Bar", "Can't Attack", "Paralyzed",
+        "Poisoned", "Prot Cold", "Prot Energy", "Prot Evil", "Prot Evil 10'", "Prot Fire", "Prot Lightning",
+        "Neg Plane Prot", "Gaze Reflection", "Spell Turning", "Save penalty", "Shielded", "Slowed", "Stoneskin",
+        "Graft Weapon", "No spell use", "Stuck", "Dispelling evil", "Ironskin", "", "Blur", "Spirit Armor", "Barkskin",
+        "Displacement", "Flesh Armor", "Magical Vestments", "Animal Affinity", "Body Weaponry", "Strength Enhanced",
+        "Strength Borrowed", "Strength Lent", "Adrenalin Control", "Strength", "Weakened",
+    ];
+
+    private static readonly int[] Ranks =
+    [
+        0, 65, 27, 64, 47, 41, 40, 25, 67, 24, 60, 54, 66, 56, 2, 1, 23, 57, 22, 55, 21, 20, 49, 50, 18, 17, 46, 45, 44, 43,
+        16, 53, 15, 62, 63, 68, 14, 13, 12, 11, 10, 9, 8, 7, 6, 52, 26, 58, 48, 33, 59, 61, 5, 32, 4, 19, 29, 28, 42, 30,
+        31, 35, 34, 38, 37, 36, 3, 39, 51,
+    ];
+
+    /// <summary>The highest condition the original names (and ranks); the engine's own above it have neither.</summary>
+    public const Condition Last = Condition.Weakened;
+
+    /// <summary>Condition <paramref name="c"/>'s name, or null if it has none.</summary>
+    public static string? Name(Condition c) => c is > Condition.None and <= Last && Names[(int)c] is { Length: > 0 } name ? name : null;
+
+    /// <summary>How strongly <paramref name="c"/> claims the status word (0 none, up to 68: Poisoned).</summary>
+    public static int Rank(Condition c) => c is > Condition.None and <= Last ? Ranks[(int)c] : 0;
+
+    /// <summary>
+    /// The status word of an Okay member under <paramref name="conditions"/>: the name of
+    /// the highest-ranked, the lower-numbered first on a tie; null (the word stays Okay)
+    /// for none.
+    /// </summary>
+    public static string? Strongest(IEnumerable<Condition> conditions) =>
+        conditions.Where(c => Name(c) is not null).Distinct().OrderByDescending(Rank).ThenBy(c => c).Select(Name).FirstOrDefault();
+}

@@ -5,5 +5,7 @@
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="MeltySynth" Version="2.4.1" />
+    <!-- The Miles AIL FM drivers, played on Nuked-OPL3 (NukedOPL3Sharp, LGPL-2.1). -->
+    <PackageReference Include="AIL2.NET.Rendering" Version="1.0.0" />
   </ItemGroup>
 </Project>

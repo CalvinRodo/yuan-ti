@@ -192,6 +192,49 @@ public partial class Main : Control
                 }
             }
             GD.Print($"music: {changes} level changes in 23 tracks, the longest after {longest / (double)DarkSun.Data.Audio.XmidiSequencer.TicksPerSecond:F1} s");
+
+            // The FM music: every track's timbres are in STDPATCH.AD, and its first 20 s sound on both cards.
+            byte[] bank = File.ReadAllBytes(install.FindFile(Music.FmTimbres) ?? throw new FileNotFoundException(Music.FmTimbres));
+            var library = AIL2.Formats.TimbreBank.Load(bank);
+            string? soundFont = DarkSun.Game.Audio.SoundFontLocator.Find();
+            var loudness = new List<string>();
+            foreach (var (file, track) in Enumerable.Range(1, 23).Select(n => ("RESOURCE.GFF", n)).Concat(Enumerable.Range(26, 4).Select(n => ("CINE.GFF", n))))
+            {
+                if (!Session.Open(file).TryRead("GSEQ", track, out var xmi))
+                {
+                    problems.Add($"{file} GSEQ {track} missing");
+                    continue;
+                }
+                foreach (var (patch, timbreBank) in DarkSun.Data.Audio.XmidiSequencer.Timbres(xmi.Span))
+                {
+                    if (!library.TryGet((byte)timbreBank, (byte)patch, out _))
+                    {
+                        problems.Add($"{file} GSEQ {track}: timbre {timbreBank}:{patch} isn't in {Music.FmTimbres}");
+                    }
+                }
+                static double Rms(DarkSun.Game.Audio.IMusicSynth synth, byte[] xmi)
+                {
+                    var player = new DarkSun.Game.Audio.MusicPlayer(synth);
+                    player.Play(xmi);
+                    float[] left = new float[44100], right = new float[44100];
+                    double sum = 0;
+                    for (int second = 0; second < 20; second++)
+                    {
+                        player.Render(left, right);
+                        sum += left.Sum(v => (double)v * v) + right.Sum(v => (double)v * v);
+                    }
+                    return Math.Sqrt(sum / (20 * 2 * 44100));
+                }
+                double adlib = Rms(new DarkSun.Game.Audio.FmSynth(bank, DarkSun.Game.Audio.FmDevice.AdLib, 44100), xmi.ToArray());
+                double opl3 = Rms(new DarkSun.Game.Audio.FmSynth(bank, DarkSun.Game.Audio.FmDevice.SoundBlasterPro2, 44100), xmi.ToArray());
+                double general = soundFont is null ? 0 : Rms(new DarkSun.Game.Audio.SoundFontSynth(new MeltySynth.SoundFont(soundFont), 44100), xmi.ToArray());
+                loudness.Add($"{track} {adlib:F3}/{opl3:F3}/{general:F3}");
+                if (adlib < 0.001 || opl3 < 0.001)
+                {
+                    problems.Add($"{file} GSEQ {track}: silent on FM ({adlib:F4}, {opl3:F4})");
+                }
+            }
+            GD.Print($"music: FM loudness (RMS, AdLib/OPL3/SoundFont, first 20 s): {string.Join(", ", loudness)}");
             foreach (string p in problems)
             {
                 GD.Print($"music: PROBLEM {p}");

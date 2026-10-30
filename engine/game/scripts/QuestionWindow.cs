@@ -68,6 +68,12 @@ public sealed class QuestionWindow
 
     public void Close() => _window.Visible = false;
 
+    /// <summary>The title asked, for the checks.</summary>
+    public string Asked => _title.Text;
+
+    /// <summary>Press choice <paramref name="choice"/> (0–2), as a click would (for the checks).</summary>
+    public void Choose(int choice) => _window.Button(FirstChoice + choice)?.EmitSignal(BaseButton.SignalName.Pressed);
+
     /// <summary>
     /// Ask <paramref name="title"/> at <paramref name="at"/> (kept on the screen;
     /// null: centred) with up to three choices; a choice without an action just closes it.

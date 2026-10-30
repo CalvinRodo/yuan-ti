@@ -8,10 +8,18 @@ namespace DarkSun.Engine;
 /// The music, playing across scenes (an autoload). Sequences are the
 /// General MIDI versions (<c>GSEQ</c>) from <c>RESOURCE.GFF</c> (1–23: the
 /// regions' and menus' music) or <c>CINE.GFF</c> (26–29: the cinematics'),
-/// synthesized with a SoundFont found by <see cref="SoundFontLocator"/>: the
-/// <c>DARKSUN_SOUNDFONT</c> variable, the <c>audio/soundfont</c> setting in
-/// <c>user://settings.cfg</c>, a <c>.sf2</c> in the user data or game folder,
-/// then the system's. With none, the game is silent.
+/// played on the device <see cref="Settings.MusicDevice"/> names
+/// (<c>[audio] music_device</c>):
+/// <list type="bullet">
+/// <item><c>soundfont</c>: synthesized with a SoundFont found by
+/// <see cref="SoundFontLocator"/>: the <c>DARKSUN_SOUNDFONT</c> variable, the
+/// <c>audio/soundfont</c> setting, a <c>.sf2</c> in the user data or game
+/// folder, then the system's;</item>
+/// <item><c>adlib</c> or <c>opl3</c>: the original's FM sound, its AdLib or
+/// Sound Blaster Pro driver on an emulated chip with the game's
+/// <c>STDPATCH.AD</c> timbres (<see cref="FmSynth"/>);</item>
+/// <item><c>auto</c> (the default): a SoundFont if there is one, else AdLib.</item>
+/// </list>
 /// </summary>
 public partial class Music : Node
 {
@@ -20,6 +28,9 @@ public partial class Music : Node
 
     private const int SampleRate = 44100;
     private const string SettingsPath = "user://settings.cfg";
+
+    /// <summary>AIL's global timbre library, which DSUN.EXE loads for the FM cards (<c>3256:00D3</c>).</summary>
+    public const string FmTimbres = "STDPATCH.AD";
 
     private AudioStreamPlayer _output = null!;
     private AudioStreamGeneratorPlayback? _playback;
@@ -32,7 +43,7 @@ public partial class Music : Node
     /// <summary>The track playing (file and number), if any.</summary>
     public (string File, int Number)? Current { get; private set; }
 
-    /// <summary>The SoundFont in use, or why there is none.</summary>
+    /// <summary>What plays the music (a SoundFont's path, or the FM card), or why nothing does.</summary>
     public string Status { get; private set; } = "";
 
     public override void _EnterTree() => Instance = this;
@@ -62,10 +73,39 @@ public partial class Music : Node
         AddChild(_output);
         _output.Play();
         _playback = (AudioStreamGeneratorPlayback)_output.GetStreamPlayback();
-        LoadSoundFont();
+        UseDevice(Settings.MusicDevice);
     }
 
-    private void LoadSoundFont()
+    /// <summary>The device the music is to play on (<see cref="Settings.MusicDevice"/>).</summary>
+    public string? Device { get; private set; }
+
+    // The game folder the device was loaded with (the FM timbres are in it; it may come later than the device).
+    private string? _loadedWith;
+
+    /// <summary>Play on <paramref name="device"/> from now on, starting the track again there.</summary>
+    public void UseDevice(string device)
+    {
+        Device = device;
+        _loadedWith = Session.Install?.Directory;
+        _player = device switch
+        {
+            Settings.AdLib => LoadFm(FmDevice.AdLib),
+            Settings.Opl3 => LoadFm(FmDevice.SoundBlasterPro2),
+            Settings.SoundFontDevice => LoadSoundFont(),
+            _ => LoadSoundFont(quiet: true) ?? LoadFm(FmDevice.AdLib),
+        };
+        if (_player is not null || _loadedWith is not null)
+        {
+            GD.Print($"Music: {Status}");
+        }
+        if (Current is { } track)
+        {
+            Current = null;
+            Play(track.File, track.Number, fadeIn: 0.5);
+        }
+    }
+
+    private MusicPlayer? LoadSoundFont(bool quiet = false)
     {
         var config = new ConfigFile();
         config.Load(SettingsPath);
@@ -74,19 +114,45 @@ public partial class Music : Node
         if (path is null)
         {
             Status = "no SoundFont (.sf2) found: set DARKSUN_SOUNDFONT or audio/soundfont in settings.cfg";
-            GD.Print($"Music: {Status}");
-            return;
+            return null;
         }
         try
         {
-            _player = new MusicPlayer(new SoundFont(path), SampleRate);
-            Status = path;
-            GD.Print($"Music: SoundFont {path}");
+            var player = new MusicPlayer(new SoundFont(path), SampleRate);
+            Status = $"SoundFont {path}";
+            return player;
         }
         catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException)
         {
             Status = $"can't load {path}: {e.Message}";
+            if (!quiet)
+            {
+                GD.PrintErr($"Music: {Status}");
+            }
+            return null;
+        }
+    }
+
+    /// <summary>The original's FM music, with the game's timbre library <c>STDPATCH.AD</c>.</summary>
+    private MusicPlayer? LoadFm(FmDevice device)
+    {
+        string? bank = Session.Install?.FindFile(FmTimbres);
+        if (bank is null)
+        {
+            Status = $"no {FmTimbres} in the game folder for the FM music";
+            return null;
+        }
+        try
+        {
+            var player = new MusicPlayer(new FmSynth(File.ReadAllBytes(bank), device, SampleRate), SampleRate);
+            Status = device == FmDevice.AdLib ? "Ad Lib (OPL2)" : "Sound Blaster Pro (OPL3)";
+            return player;
+        }
+        catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException)
+        {
+            Status = $"can't load {bank}: {e.Message}";
             GD.PrintErr($"Music: {Status}");
+            return null;
         }
     }
 
@@ -101,6 +167,10 @@ public partial class Music : Node
         if (Current == (file, number) && _player?.IsPlaying == true)
         {
             return;
+        }
+        if (_player is null && Device is { } device && Session.Install?.Directory is { } folder && folder != _loadedWith)
+        {
+            UseDevice(device);
         }
         Current = (file, number);
         if (_player is null || Session.Install?.FindFile(file) is null

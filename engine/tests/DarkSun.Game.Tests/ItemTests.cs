@@ -1,6 +1,8 @@
 using DarkSun.Data.Gff;
 using DarkSun.Data.Images;
 using DarkSun.Data.Regions;
+using DarkSun.Game.Characters;
+using DarkSun.Game.Combat;
 using DarkSun.Game.Movement;
 using DarkSun.Game.Rules;
 using DarkSun.Game.Scripting;
@@ -302,6 +304,13 @@ public class ItemTests
         Assert.Equal(13, party[1].Items.Single(i => i.Rdff == Boots).Slot); // the feet
         Assert.Equal(1, w.Search(1, [Is(72, -Boots), Is(85, 13)]));
         Assert.Equal(0, w.Search(-Templar, [Is(72, -Boots)])); // a name isn't searched
+
+        // 0826:06A4: a stack counts as one item; its quantity adds to the total of field 82.
+        w.Give(20, -Arrows, 0, GameWorld.None);
+        int stack = party[0].Items.Single(i => i.Rdff == Arrows).Quantity;
+        Assert.Equal(1, w.Search(0, [Is(72, -Arrows), new(72, 3, 0)]));
+        Assert.Equal(stack, w.Search(0, [Is(72, -Arrows), new(82, 2, 0)]));
+        Assert.Equal(GameWorld.SearchNone, w.Search(0, [Is(72, -Boots), new(82, 0, 0)])); // the smallest of nothing
     }
 
     [Fact]
@@ -343,6 +352,40 @@ public class ItemTests
         Assert.Equal(Vitals.Dead, party[1].Vitals.Status);
         w.Rest(raiseDead: true);
         Assert.Equal((Vitals.Well, 10), (party[1].Vitals.Status, party[1].Vitals.Hp));
+    }
+
+    [Fact]
+    public void ARestsHealersCureAndPoisonKills()
+    {
+        var (w, party) = World();
+        var sheets = new[] { new Character(), new Character() };
+        int clericLevel = 5, druidLevel = 0;
+        w.PartySheet = slot => slot < sheets.Length ? sheets[slot] : null;
+        w.PartyLevel = (slot, k) => slot == 0 && k == CharacterClass.Cleric ? clericLevel : slot == 0 && k == CharacterClass.Druid ? druidLevel : 0;
+        LastingEffect Effect(Condition c) => new(1, c, 1);
+        foreach (var v in party.Select(p => p.Vitals))
+        {
+            (v.MaxHp, v.Hp) = (20, 20);
+        }
+
+        // 87B3:073D: a cleric above level 4 cures disease and curse; acid stops.
+        sheets[1].Lasting = [Effect(Condition.Diseased), Effect(Condition.Cursed), Effect(Condition.Acid), Effect(Condition.Blessed)];
+        w.Rest(raiseDead: false);
+        Assert.Equal([Condition.Blessed], sheets[1].Lasting.Select(e => e.Condition));
+
+        // At level 4 they aren't cured.
+        clericLevel = 4;
+        sheets[1].Lasting = [Effect(Condition.Diseased)];
+        w.Rest(raiseDead: false);
+        Assert.Single(sheets[1].Lasting);
+
+        // Poisoned when the rest begins: 1000 damage, even with a druid of 7 neutralizing it.
+        druidLevel = 7;
+        sheets[1].Lasting = [Effect(Condition.Poisoned)];
+        w.Rest(raiseDead: false);
+        Assert.Empty(sheets[1].Lasting);
+        Assert.Equal(Vitals.Dead, party[1].Vitals.Status);
+        Assert.Equal(Vitals.Well, party[0].Vitals.Status);
     }
 
     [Fact]
@@ -412,7 +455,7 @@ public class ItemTests
     }
 
     [Fact]
-    public void AStoreSellsAtValueAndBuysAtHalf()
+    public void AStoreBuysAndSellsAtValue()
     {
         var (w, party) = World();
         WorldObject merchant = TemplarOf(w);
@@ -422,13 +465,26 @@ public class ItemTests
         Assert.Null(Shop.Buy(w, merchant, w[0]!, boots, 299));
         Assert.Equal(700, Shop.Buy(w, merchant, w[0]!, boots, 1000));
         Item bought = party[0].Items.Single();
+        Assert.Empty(merchant.Items); // its only pair: none in its place
 
-        Assert.Equal(150, Shop.Offer(bought));
-        Assert.Equal(150, Shop.Sell(w, merchant, w[0]!, [bought]));
+        // 8A89:0D50: the merchant pays the full value.
+        Assert.Equal(300, Shop.Offer(bought));
+        Assert.Equal(300, Shop.Sell(w, merchant, w[0]!, [bought]));
         Assert.Empty(party[0].Items);
         Assert.Contains(bought, merchant.Items);
-        w.Give(5, -Arrows, 0, GameWorld.None);
-        Assert.Equal(0, Shop.Offer(party[0].Items.Single())); // worth 1: not worth buying
+
+        // A stack costs its value times its quantity, and leaves whole (8A89:0879).
+        w.Give(5, -Arrows, merchant.Index, GameWorld.None);
+        Item arrows = merchant.Items.Single(i => i.Rdff == Arrows);
+        Assert.Equal(5 * arrows.Record.Value, Shop.Price(arrows));
+        Assert.Equal(1000 - Shop.Price(arrows), Shop.Buy(w, merchant, w[0]!, arrows, 1000));
+        Assert.Equal(5, party[0].Items.Single(i => i.Rdff == Arrows).Quantity);
+
+        // What the merchant has two of never runs out (8A89:0A82 → 7372:0FEE).
+        w.Give(1, -Boots, merchant.Index, GameWorld.None);
+        Assert.Equal(2, merchant.Items.Count(i => i.Rdff == Boots));
+        Assert.NotNull(Shop.Buy(w, merchant, w[0]!, merchant.Items.First(i => i.Rdff == Boots), 1000));
+        Assert.Equal(2, merchant.Items.Count(i => i.Rdff == Boots));
     }
 
     [Fact]

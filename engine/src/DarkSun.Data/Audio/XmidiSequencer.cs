@@ -61,6 +61,23 @@ public sealed class XmidiSequencer
     /// <summary>A controller table holding its own indices.</summary>
     public static byte[] IdentityTable() => [.. Enumerable.Range(0, 128).Select(i => (byte)i)];
 
+    /// <summary>
+    /// The timbres a sequence names in its <c>TIMB</c> chunk (a count, then
+    /// {patch, bank} bytes), which AIL installs before playing it: the FM
+    /// drivers' instruments (bank 127 the drums, by note).
+    /// </summary>
+    public static IReadOnlyList<(int Patch, int Bank)> Timbres(ReadOnlySpan<byte> xmi)
+    {
+        ReadOnlySpan<byte> timb = FindChunk(xmi, "TIMB", required: false);
+        int count = timb.Length >= 2 ? BinaryPrimitives.ReadUInt16LittleEndian(timb) : 0;
+        var timbres = new List<(int, int)>();
+        for (int i = 0; i < count && 2 + 2 * i + 2 <= timb.Length; i++)
+        {
+            timbres.Add((timb[2 + 2 * i], timb[3 + 2 * i]));
+        }
+        return timbres;
+    }
+
     /// <summary>The branch markers the sequence has (its <c>RBRN</c> chunk).</summary>
     public IReadOnlyCollection<int> Markers => _branches.Keys;
 

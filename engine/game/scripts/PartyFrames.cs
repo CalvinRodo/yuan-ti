@@ -1,9 +1,12 @@
+using DarkSun.Game.World;
 using Godot;
 
 namespace DarkSun.Engine;
 
 /// <summary>A party member as View Character shows them (null: an empty box).</summary>
-public sealed record PartyMemberView(string Name, int Hp, int MaxHp, int Psp, int MaxPsp, int Status, bool ComputerControl, bool Locked = false);
+/// <param name="Effect">Its strongest condition's name, which an Okay member's status word shows (<see cref="DarkSun.Game.Combat.Conditions.Strongest"/>).</param>
+public sealed record PartyMemberView(string Name, int Hp, int MaxHp, int Psp, int MaxPsp, int Status, bool ComputerControl, bool Locked = false,
+    string? Effect = null);
 
 /// <summary>
 /// What DSUN.EXE draws in View Character's frames (<c>WIND</c> 11500; the
@@ -158,10 +161,15 @@ public sealed class PartyFrames
     {
         0 => $"{BarNames[0].Split(':')[0]}: {m.Hp}/{m.MaxHp}",
         1 => $"{BarNames[1].Split(':')[0]}: {m.Psp}/{m.MaxPsp}",
-        _ => $"{BarNames[2]}: {StatusName(m.Status).ToUpperInvariant()}",
+        _ => $"{BarNames[2]}: {StatusName(m.Status, m.Effect).ToUpperInvariant()}",
     };
 
-    public static string StatusName(int status) => status >= 0 && status < StatusNames.Length ? StatusNames[status] : "Okay";
+    /// <summary>
+    /// The status word (<c>78A9:1FBB</c>): an Okay member's strongest condition if it has
+    /// one (<paramref name="effect"/>), else the status's name.
+    /// </summary>
+    public static string StatusName(int status, string? effect = null) =>
+        status == Vitals.Well && effect is not null ? effect : status >= 0 && status < StatusNames.Length ? StatusNames[status] : "Okay";
 
     /// <summary>Draw the bars and the buttons' states.</summary>
     public void Refresh()
@@ -175,7 +183,7 @@ public sealed class PartyFrames
                 Color ink = slot == _selected() ? ViewCharacterText.Yellow : ViewCharacterText.Grey;
                 _numbers[0, slot].Text = m is null ? "" : $"{m.Hp}/{m.MaxHp}";
                 _numbers[1, slot].Text = m is null ? "" : $"{m.Psp}/{m.MaxPsp}";
-                _numbers[2, slot].Text = m is null ? "" : StatusName(m.Status);
+                _numbers[2, slot].Text = m is null ? "" : StatusName(m.Status, m.Effect);
                 _numbers[0, slot].LabelSettings = _numbers[2, slot].LabelSettings = GameFonts.Settings(ink);
             }
             Fill(0, slot, m is null ? 0 : Ratio(m.Hp, m.MaxHp), new Color(0.75f, 0.2f, 0.15f));

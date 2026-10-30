@@ -171,6 +171,21 @@ public class GameWorldTests
     }
 
     [Fact]
+    public void AFleeingCreatureRunsToTheFarthestFreeCellNearIt()
+    {
+        GameWorld world = World();
+        WorldObject templar = world.First(-100)!;
+
+        // 1A0A:2C86: x ± 4, y + 4 … y − 6 of (10, 5) (row −1 is off the map), farthest from (10, 9):
+        // a top corner, the left one first as the scan goes.
+        Assert.Equal(new Cell(6, 0), world.FleeCell(templar.Walker!, new Cell(10, 9)));
+        Cell away = world.FleeCell(templar.Walker!, new Cell(14, 9))!.Value;
+        Assert.True(GplGeometry.Distance(away.X, away.Y, 14, 9) > GplGeometry.Distance(10, 5, 14, 9));
+        Assert.InRange(away.X, 6, 14);
+        Assert.InRange(away.Y, 0, 9);
+    }
+
+    [Fact]
     public void OrdersNeedAnExistingTargetAndOnlyReachCreatures()
     {
         GameWorld world = World();
