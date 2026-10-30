@@ -14,7 +14,8 @@ public static class PartyCombatant
 {
     /// <summary>
     /// <paramref name="c"/>, standing as <paramref name="member"/> (whose hit
-    /// points it shares): its abilities with race adjustments; the best THAC0,
+    /// points it shares): its abilities with race adjustments (and what its
+    /// items add, <see cref="AbilityScores"/>, armour class's Dexterity too); the best THAC0,
     /// the saves and attacks of the classes in use
     /// (<see cref="CharacterCreation.ActiveLevels"/>); armour class from what it
     /// wears, without Dexterity (the battle adds that), shields apart; the
@@ -51,7 +52,7 @@ public static class PartyCombatant
                 : null;
         int shields = member.Items.Where(i => i.Equipped && catalog.TypeOf(i.Record) is { Weapon: var w } && (w & WeaponKind.Shield) != 0)
             .Sum(i => catalog.TypeOf(i.Record)!.ArmorClass + Math.Max(0, (int)i.Record.Bonus));
-        int dex = stats[(int)Ability.Dex];
+        int dex = AbilityScores.Of(stats, [], member.Items)[(int)Ability.Dex];
         static int LevelKey(SpellKind kind, int level) => (int)kind * 16 + level;
         Dictionary<int, int> castsLeft = magic.Levels(c).Where(l => magic.CastsLeft(c, l.Kind, l.Level) > 0)
             .ToDictionary(l => LevelKey(l.Kind, l.Level), l => magic.CastsLeft(c, l.Kind, l.Level));

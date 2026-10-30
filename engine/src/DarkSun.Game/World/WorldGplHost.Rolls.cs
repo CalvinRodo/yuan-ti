@@ -170,7 +170,9 @@ public sealed partial class WorldGplHost
         {
             return 0;
         }
-        return SheetOf(o) is { } c ? Creation.Adjusted(c, (Ability)ability) : o.Record?.Stats[ability] ?? 0;
+        return SheetOf(o) is { } c
+            ? AbilityScores.Of([.. Enum.GetValues<Ability>().Select(a => Creation.Adjusted(c, a))], [], o.Items)[ability]
+            : o.Record?.Stats[ability] ?? 0;
     }
 
     /// <summary>What a skill check knows of <paramref name="o"/>: a party member's thief level, Dexterity and gear; no one keeps conditions outside a fight.</summary>
