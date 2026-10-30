@@ -870,9 +870,33 @@ From the handlers (2026-10-18). Played by `DarkSun.Game.Cinematics.CinematicPlay
 | 0 | `ACF` 1–8, stopping when one returns 0 (skipped) | start-up (`6A94:0138`), when sound and the intro are enabled (`DS:1162`, `DS:1160`) |
 | 1 | `ACF` 9, 10 | entering region 42 with a new party (`1587:1F83`) |
 | 100 | `ACF` 11, 12, 13 | the ending |
-| 200, 300 | a `CMAT` / `CPAL` picture | |
+| 200, 300 | `60B9:060D`: `CMAT` n, an image in the `BMP` format (320 × 200 and 318 × 198), in its palette `CPAL` n. `0980:4723(1, 0)` fills the off-screen window 1 with colour 0; `4FEB(0, 0)` fades the screen (window 0) out to colour 0's DAC value; `4723(0, 0)` clears it; the `CPAL` goes straight to the DAC (`22F8:0514`, all 256), so the screen shows its colour 0; the picture is drawn at (0, 0) in window 1 (`1A0A:3180`); `4C09(1, 0)` fades it in onto the screen; it is held 1 000 retraces (`70E7:00B8`, about 14 s, no key check); then `4723(1, 0)`, `4FEB(0, 0)` out to colour 0, `4723(0, 0)`, and the map is drawn again (`1587:2459`) with no fade. See "Palette fades" below. 200 is a ruined temple in the sands, 300 the Drajian commander Kraxis before the last battle | `REQUEST(6)` in GPL 177 (200) and 62 (300) |
 
 `REQUEST(6, n)` (`87B3:0AC7`) plays cinematic n from a script.
+
+### Palette fades (`0980:4FEB`, `0980:4C09`)
+
+The VGA routines of segment `0980` work on windows (a table of rectangles
+and buffers; 0 is the screen). Ghidra drops most of these two as unreachable;
+they were read from the disassembly of `out/DSUN_FLAT.EXE`.
+
+* `4FEB(window, colour)`, fade out: read colour's DAC value (`2ACF`) as the
+  goal; mark every colour index the window's pixels use (`DS:16DC`), list them
+  (`DS:14DC`, from 255 down); wait a retrace (`2A74`), then read each listed
+  colour's DAC value, waiting a retrace before each whose place in the list
+  (counted from the last) has bit 4 clear, about half of them; then step:
+  per channel the difference to the goal and its sign, M the largest
+  difference (DAC units, 0–63), error terms from M ÷ 2, and M times: add each
+  difference to its error, past M take M off and move the channel one unit;
+  wait a retrace and write every listed colour (`2A8C`). All arrive together
+  after M retraces.
+* `4C09(source, destination)`, fade in: the goal is the colour of the
+  destination's top-left pixel (`2C18`, then `2ACF`); the source's colours
+  are listed and read the same way, each also set to the start colour as it
+  is read; the source is copied onto the destination (`43AE`), then the same
+  M steps run from the start colour to each colour's own value.
+* A retrace wait (`2A74`) waits out the current vertical retrace and for the
+  next to begin: 1/70 s in mode 13h. The engine's `PaletteFades`.
 
 ### `ACF` scripts (`985F:0000`)
 
@@ -912,7 +936,7 @@ key ends the cinematic (`0CE5`).
 | 5B | bands, n | wipe: the hidden page opens out from lines 200 ÷ bands apart, one row a step, flip, wait until n ticks | `93D2:112C` |
 | 64 | n | play music n (`GSEQ` etc. 26–29) | `9936:0000` |
 | 65 / 66 | ms | music fade in / out | `9936:0048` / `0073` |
-| 7F | 12 values | not decoded (only in `ACF` 11) | `9944:1AD7` |
+| 7F | `BMP`s a1–a4, rectangle (a5, a6)–(a7, a8), distance a9, steps a10 and a11, ticks a12 | a pan within the rectangle (clamped, corners ordered): each frame a2 slides in from the left pushing a1 out to the right by a10 (0: they stay, by 1), and a strip of a3 with a4 to its left (−320) scrolls right by a11 over them, until the panels have moved a9; the steps are made the nearest divisors of a9 (`985F:0C77`); a frame a retrace (`0980:5814`); then wait until a12 ticks since the start. Off-screen buffers and sub-windows: `0980:27A8` / `282D`, their origins `0980:423F` / `4258`, copies `1A0A:30C3`. Only in `ACF` 11: `BMP` 7 (the sky) still, 9 then 8 (the fallen) scrolling 2 pixels a frame for 160 frames; no shipped script moves the panels, so their direction is read from the window origins (*unverified*) | `9944:1AD7` |
 
 Ops 2, 9–0x13, 0x17, 0x18, 0x2C, 0x3D, 0x3E, 0x50–0x5A, 0x5C–0x5E, 0x67 and
 0x79–0x7E exist but the shipped scripts don't use them.

@@ -174,7 +174,7 @@ public sealed partial class WorldGplHost
     }
 
     /// <summary>What a skill check knows of <paramref name="o"/>: a party member's thief level, Dexterity and gear; no one keeps conditions outside a fight.</summary>
-    private ThiefSkills.Who SkillUser(WorldObject o)
+    private ThiefSkills.Who SkillUser(GameWorld world, WorldObject o)
     {
         Character? c = SheetOf(o);
         return new ThiefSkills.Who(
@@ -183,8 +183,16 @@ public sealed partial class WorldGplHost
             AbilityOf(o, (int)Ability.Dex),
             o.Vitals.Status == Vitals.Well,
             [.. o.Items.Where(i => i.Equipped).Select(i => (i.Slot, i.Rdff))],
-            new HashSet<Condition>());
+            ConditionsOn(world, o));
     }
+
+    /// <summary>
+    /// The conditions on party member <paramref name="o"/> out of a fight: the spells cast on it
+    /// on the map, or still running from the last fight (<see cref="Character.Lasting"/>), that
+    /// haven't ended by the game clock. None for anyone else.
+    /// </summary>
+    private HashSet<Condition> ConditionsOn(GameWorld world, WorldObject o) =>
+        SheetOf(o) is { } c ? [.. c.Lasting.Where(e => e.EndsAt is not int end || end > world.Clock).Select(e => e.Condition)] : [];
 
     /// <summary>
     /// REQUEST(3, who, skill, situation) (<c>87B3:028D</c>): a thief skill check
@@ -198,11 +206,11 @@ public sealed partial class WorldGplHost
         {
             < 0 => null,
             WholeParty when Rules.PartySkillCheckBest => world.Party.Where(p => !p.Hidden)
-                .MaxBy(p => ThiefSkills.Target(Rules, SkillUser(p), skill, situation)),
+                .MaxBy(p => ThiefSkills.Target(Rules, SkillUser(world, p), skill, situation)),
             WholeParty => world[0],
             _ => world[who],
         };
-        return roller is not null && ThiefSkills.Succeeds(Rules, SkillUser(roller), skill, situation, machine.Random.Next()) ? 1 : 0;
+        return roller is not null && ThiefSkills.Succeeds(Rules, SkillUser(world, roller), skill, situation, machine.Random.Next()) ? 1 : 0;
     }
 
     /// <summary>
@@ -213,7 +221,8 @@ public sealed partial class WorldGplHost
     /// sets it off: bits 0–2 d6s of damage to everyone of the party's side
     /// within bits 3–4 cells in sight of it, and it goes. (Bits 5–6 pick the
     /// element, <c>DS:251C</c>: poison, fire, slashing, electricity; the party
-    /// takes them all in full. No one keeps Detect Traps outside a fight here.)
+    /// takes them all in full.) Detect Traps is the spell cast on the map and
+    /// still running (<see cref="ConditionsOn"/>).
     /// </summary>
     private int SetOffTrap(GplMachine machine, GameWorld world, int who, int x, int y)
     {
@@ -223,7 +232,8 @@ public sealed partial class WorldGplHost
         }
         if (trap.Item is { } record)
         {
-            if (SkillCheck(machine, world, WholeParty, ThiefSkills.FindTraps, 0) == 1)
+            if (SkillCheck(machine, world, WholeParty, ThiefSkills.FindTraps, 0) == 1
+                || (record.Flags & 0x80) == 0 && world[world.ActiveMember] is { } active && ConditionsOn(world, active).Contains(Condition.DetectTraps))
             {
                 return 1;
             }

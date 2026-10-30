@@ -106,6 +106,34 @@ public partial class Main : Control
             GetTree().Quit(ok > 0 && stops ? 0 : 1);
             return;
         }
+        if (args.Contains("--check-pictures") && install is not null)
+        {
+            // REQUEST(6, 200 / 300): the CMAT pictures decode, fit the screen and aren't one colour.
+            Session.Use(install);
+            bool ok = true;
+            foreach (int n in new[] { 200, 300 })
+            {
+                if (!PictureView.Exists(n))
+                {
+                    GD.Print($"pictures: PROBLEM no CMAT / CPAL {n}");
+                    ok = false;
+                    continue;
+                }
+                var (frame, palette, rgba) = PictureView.Decode(Session.Open("RESOURCE.GFF"), n);
+                int colours = Enumerable.Range(0, rgba.Length / 4).Select(i => BitConverter.ToInt32(rgba, i * 4)).Distinct().Count();
+                bool fits = frame.Width <= RetroScreen.Width && frame.Height <= RetroScreen.Height && colours > 16;
+                ok &= fits;
+                // The fades as DSUN.EXE times them, with region 42's palette for the map.
+                var map = Session.Open("GPLDATA.GFF").TryRead("PAL ", 42, out var pal) ? DarkSun.Data.Images.Palette.FromBytes(pal.Span) : null;
+                var (mapRead, mapSteps, read, steps) = PictureView.Phases(frame, palette, map);
+                int total = mapRead + mapSteps + 2 * (read + steps) + PictureView.HoldRetraces;
+                GD.Print($"pictures: {n} is {frame.Width} x {frame.Height}, {colours} colours, {PictureView.ColoursShown(frame).Count} indexes on screen; "
+                    + $"retraces: map {mapRead} + fade {mapSteps}, picture {read} + fade in {steps}, hold {PictureView.HoldRetraces}, {read} + fade out {steps}: "
+                    + $"{total / DarkSun.Game.Cinematics.PaletteFades.RetracesPerSecond:F1} s{(fits ? "" : " PROBLEM")}");
+            }
+            GetTree().Quit(ok ? 0 : 1);
+            return;
+        }
         if (args.Contains("--check-music") && install is not null)
         {
             // Every music level of every region track: the section it asks for plays, within a minute.
@@ -238,6 +266,12 @@ public partial class Main : Control
         }
         else if (install is not null)
         {
+            // Development: --cinematic=N plays cinematic N (1 the arrival, 100 the ending) instead of the intro.
+            if (args.FirstOrDefault(a => a.StartsWith("--cinematic=")) is { } cinematic && int.TryParse(cinematic["--cinematic=".Length..], out int n)
+                && DarkSun.Game.Cinematics.CinematicPlayer.Cinematics.ContainsKey(n))
+            {
+                IntroView.Cinematic = n;
+            }
             Start(skipIntro: args.Contains("--no-intro"));
         }
     }

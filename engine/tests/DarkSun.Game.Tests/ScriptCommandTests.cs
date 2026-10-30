@@ -185,28 +185,62 @@ public class ScriptCommandTests
 
     // -- traps, things, text ---------------------------------------------------------------------------
 
+    /// <summary>A world with a trap item (RDFF 2039): +0x0F = <paramref name="flags"/> (4: four d6 on its own cell).</summary>
+    private static GameWorld TrapWorld(byte flags = 4) => GameWorldTests.World(more: data =>
+    {
+        var trap = new byte[10 + 21 + 1];
+        (trap[0], trap[2], trap[8]) = (1, 1, 21);
+        BinaryPrimitives.WriteInt16LittleEndian(trap.AsSpan(10 + 10), 9999);
+        trap[10 + 15] = flags;
+        trap[^1] = 0xFF;
+        data[("RDFF", 2039)] = trap;
+        data[("OJFF", 2039)] = [0, 0, 8, 0, 15, 0, 0, 0, 0, 0, 0, 0, 7, 0, 0, 0];
+        data[("BMP ", 7)] = CinematicPlayerTests.Screen(3);
+    });
+
+    /// <summary>REQUEST(7, name(−2039), the member's cell): the hit points the member loses.</summary>
+    private static int SetOffTrap(GameWorld world, Func<int, Character?>? sheets = null)
+    {
+        WorldObject member = world[0]!;
+        member.Vitals.Hp = member.Vitals.MaxHp = 40;
+        var (_, _, machine) = Run(world, new Asm().Op(0x22).Num(7).Num(-2039).Num(member.Cell.X).Num(member.Cell.Y).Op(0x31).ToArray(), sheets: sheets);
+        Assert.Null(machine.Run(new GplEntry(1, 0)).Error);
+        return 40 - member.Vitals.Hp;
+    }
+
     [Fact]
     public void ATrapGoesOffOnItsCell()
     {
-        GameWorld world = GameWorldTests.World(more: data =>
-        {
-            // A trap item (RDFF 2039): +0x0F = 4, four d6 on its own cell.
-            var trap = new byte[10 + 21 + 1];
-            (trap[0], trap[2], trap[8]) = (1, 1, 21);
-            BinaryPrimitives.WriteInt16LittleEndian(trap.AsSpan(10 + 10), 9999);
-            trap[10 + 15] = 4;
-            trap[^1] = 0xFF;
-            data[("RDFF", 2039)] = trap;
-            data[("OJFF", 2039)] = [0, 0, 8, 0, 15, 0, 0, 0, 0, 0, 0, 0, 7, 0, 0, 0];
-            data[("BMP ", 7)] = CinematicPlayerTests.Screen(3);
-        });
-        WorldObject member = world[0]!;
-        member.Vitals.Hp = member.Vitals.MaxHp = 40;
-        var (_, host, machine) = Run(world, new Asm().Op(0x22).Num(7).Num(-2039).Num(member.Cell.X).Num(member.Cell.Y).Op(0x31).ToArray());
+        GameWorld world = TrapWorld();
 
-        Assert.Null(machine.Run(new GplEntry(1, 0)).Error);
-        Assert.InRange(40 - member.Vitals.Hp, 4, 24); // no thieves: 4d6
+        Assert.InRange(SetOffTrap(world), 4, 24); // no thieves: 4d6
         Assert.Empty(world.Select(-2039)); // spent
+    }
+
+    [Fact]
+    public void DetectTrapsCastOnTheMapAvoidsATrapUnlessItHidesFromIt()
+    {
+        // Detect Traps on the active member (slot 1), cast on the map; the party's find traps roll is slot 0's, who has none.
+        var fighter = new Character { Race = Race.Human, Classes = [CharacterClass.Fighter] };
+        var detecting = new Character { Race = Race.Human, Classes = [CharacterClass.Fighter] };
+        detecting.Lasting.Add(new LastingEffect(85, Condition.DetectTraps, 5, EndsAt: 600));
+        Character? Sheet(int slot) => slot == 1 ? detecting : fighter;
+        GameWorld Trap(byte flags = 4)
+        {
+            GameWorld w = TrapWorld(flags);
+            w.ActiveMember = 1;
+            return w;
+        }
+
+        GameWorld world = Trap();
+        Assert.Equal(0, SetOffTrap(world, Sheet));
+        Assert.NotEmpty(world.Select(-2039)); // left lying there
+
+        Assert.InRange(SetOffTrap(Trap(4 | 0x80), Sheet), 4, 24); // its +0x0F hides it from the spell
+
+        world = Trap();
+        world.Clock = 600; // the spell is over
+        Assert.InRange(SetOffTrap(world, Sheet), 4, 24);
     }
 
     [Fact]
