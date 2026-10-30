@@ -4,9 +4,9 @@ using MeltySynth;
 namespace DarkSun.Game.Audio;
 
 /// <summary>
-/// Plays the game's XMIDI music through a SoundFont synthesizer (MeltySynth),
-/// with the fades of DSUN.EXE's music code: <see cref="Change"/> is
-/// <c>35D1:0265</c> (fade the old track out, then the new one in, over the
+/// Plays the game's XMIDI music through a synthesizer (<see cref="IMusicSynth"/>:
+/// a SoundFont, or the original's FM drivers on an emulated OPL chip), with
+/// the fades of DSUN.EXE's music code: <see cref="Change"/> is <c>35D1:0265</c> (fade the old track out, then the new one in, over the
 /// same time), <see cref="FadeIn"/> / <see cref="FadeOut"/> are
 /// <c>35D1:012D</c> with 0x32 / 0x33. Call <see cref="Render"/> from the
 /// audio output; it advances the sequence by the samples rendered.
@@ -14,7 +14,7 @@ namespace DarkSun.Game.Audio;
 /// </summary>
 public sealed class MusicPlayer
 {
-    private readonly Synthesizer _synth;
+    private readonly IMusicSynth _synth;
     private readonly int _sampleRate;
     private readonly Action<MidiMessage> _send;
     private XmidiSequencer? _sequencer;
@@ -28,10 +28,15 @@ public sealed class MusicPlayer
     private long _rampLength, _rampAt;
 
     public MusicPlayer(SoundFont soundFont, int sampleRate = 44100)
+        : this(new SoundFontSynth(soundFont, sampleRate), sampleRate)
+    {
+    }
+
+    public MusicPlayer(IMusicSynth synth, int sampleRate = 44100)
     {
         _sampleRate = sampleRate;
-        _synth = new Synthesizer(soundFont, new SynthesizerSettings(sampleRate) { EnableReverbAndChorus = true });
-        _send = m => _synth.ProcessMidiMessage(m.Channel, m.Command, m.Data1, m.Data2);
+        _synth = synth;
+        _send = synth.Send;
     }
 
     public int SampleRate => _sampleRate;
@@ -52,6 +57,7 @@ public sealed class MusicPlayer
     {
         StopNow();
         _sequencer = new XmidiSequencer(xmi);
+        _synth.Prepare(xmi);
         _sections.Follow(_sequencer);
         _samples = 0;
         if (fadeIn > 0)

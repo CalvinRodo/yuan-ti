@@ -294,6 +294,10 @@ public partial class RegionView
             }
         }
         _partyFell = fallen;
+        if (won)
+        {
+            ShowLeaderAlone(); // 1587:1B43: the others gather into the leader again
+        }
         UpdateSilhouettes();
         ResumeAfterWatchedFight();
     }
@@ -1023,6 +1027,10 @@ public partial class RegionView
         if (PlayerTurn is not { } c || _battle!.Spells.Effect(spell) is not { } e)
         {
             return;
+        }
+        if (c.Source is { } o && o.Index < Session.Party.Count)
+        {
+            Session.Party[o.Index].RememberCast(spell); // 78A9:2324: the quick-cast list
         }
         if (e.Target is 7 or 8)
         {

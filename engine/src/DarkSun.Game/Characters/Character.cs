@@ -94,6 +94,33 @@ public sealed record Character
     /// <summary>Psionic strength points spent since the last rest.</summary>
     public int PspSpent { get; set; }
 
+    /// <summary>How many spells and powers the quick-cast window holds (<c>WIND</c> 14002's slots).</summary>
+    public const int QuickCastSlots = 6;
+
+    /// <summary>
+    /// The quick-cast list (DSUN.EXE's six words at <c>DS:4AFD + 30·member</c>):
+    /// the spells and powers last chosen to cast, the latest first.
+    /// </summary>
+    public List<int> QuickCasts { get; set; } = [];
+
+    /// <summary>
+    /// A spell or power chosen to cast goes first in <see cref="QuickCasts"/>, the others
+    /// moving down and the sixth dropping off; one already there stays where it is
+    /// (<c>78A9:2324</c>).
+    /// </summary>
+    public void RememberCast(int number)
+    {
+        if (QuickCasts.Contains(number))
+        {
+            return;
+        }
+        QuickCasts.Insert(0, number);
+        if (QuickCasts.Count > QuickCastSlots)
+        {
+            QuickCasts.RemoveRange(QuickCastSlots, QuickCasts.Count - QuickCastSlots);
+        }
+    }
+
     /// <summary>Spells (and powers cast on the map) on it outside a fight, with their ends on the game clock (<see cref="Combat.LastingEffects"/>).</summary>
     public List<Combat.LastingEffect> Lasting { get; set; } = [];
 

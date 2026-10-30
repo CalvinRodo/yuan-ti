@@ -1,35 +1,49 @@
 namespace DarkSun.Game.World;
 
 /// <summary>
-/// Buying and selling (SHOP in a script). DSUN.EXE's store screen
-/// (<c>74F1:042B</c>, <c>84C9:11B4</c>) isn't traced past its messages
-/// (STORE, NOT ENOUGH MONEY, "I'll give you %u$", TAKE IT / LEAVE IT,
-/// SOLD!, I COULDN'T SELL THAT); the prices are the engine's: an item
-/// costs its value (item record +6) and sells for half; items worth 9999
-/// (quest items in the data) aren't bought.
+/// Buying and selling (SHOP in a script): DSUN.EXE's store is the items page
+/// (<c>74F1:042B(actor, merchant)</c>) with the merchant's goods in six slots
+/// (<c>APFM</c> 11242–11247), each priced "%d$" under it (<c>8A89:0C3B</c>).
+/// A thing costs its value (item record +6), times its quantity for one that
+/// stacks (<c>8A89:0879</c>: else NOT ENOUGH MONEY, or NO DEAL! while one is
+/// offered for sale); the merchant pays the same for one sold, nothing for one
+/// worth 0 ("I'll give you %u$", TAKE IT / LEAVE IT, SOLD!; I COULDN'T SELL
+/// THAT, <c>8A89:0D50</c>). What is bought leaves the merchant whole, and if
+/// the merchant has another of it a new one takes its place (<c>8A89:0A82</c>
+/// → <c>7372:0FEE</c>), so what it has two of never runs out. The engine's
+/// own: things worth 9999 (the quest items) are neither bought nor sold.
 /// </summary>
 public static class Shop
 {
     public const int NotForSale = 9999;
 
-    public static int Price(Item item) => item.Record.Value;
+    /// <summary>Is <paramref name="item"/> one the engine keeps out of trade (a quest item)?</summary>
+    public static bool Kept(Item item) => item.Record.Value >= NotForSale;
+
+    /// <summary>What <paramref name="item"/> costs (all of a stack).</summary>
+    public static int Price(Item item) => item.Record.Value * Math.Max(1, item.Quantity);
 
     /// <summary>What the merchant gives for <paramref name="item"/> (all of a stack), or 0 if it won't buy it.</summary>
-    public static int Offer(Item item) =>
-        item.Record.Value >= NotForSale || item.Record.Value < 2 ? 0 : item.Record.Value / 2 * Math.Max(1, item.Quantity);
+    public static int Offer(Item item) => Kept(item) ? 0 : Price(item);
 
     /// <summary>
-    /// <paramref name="buyer"/> buys one <paramref name="item"/> from
+    /// <paramref name="buyer"/> buys <paramref name="item"/> from
     /// <paramref name="merchant"/> with <paramref name="money"/>: the money
     /// left, or null if it isn't enough or the pack is full.
     /// </summary>
     public static int? Buy(GameWorld world, WorldObject merchant, WorldObject buyer, Item item, int money)
     {
-        if (money < Price(item) || world.Give(1, item.Id, buyer.Index, merchant.Index) == 0)
+        int price = Price(item);
+        bool another = merchant.Items.Any(i => i != item && i.Rdff == item.Rdff);
+        if (money < price || Kept(item) || !world.MoveItem(merchant, buyer, item))
         {
             return null;
         }
-        return money - Price(item);
+        if (another)
+        {
+            world.Give(Math.Max(1, item.Quantity), -item.Rdff, merchant.Index, GameWorld.None);
+        }
+        return money - price;
     }
 
     /// <summary>Sell <paramref name="items"/> to <paramref name="merchant"/>: what was paid (they go to the merchant).</summary>

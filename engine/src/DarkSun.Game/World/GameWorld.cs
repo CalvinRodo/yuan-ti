@@ -1276,9 +1276,9 @@ public sealed partial class GameWorld
                     obj.Order = default;
                     break;
                 }
+                // 1A0A:0B0F aims at the free cell next to the target nearest the mover (1A0A:2E99), FOLLOW too.
                 int distance = GplGeometry.Distance(w.Cell.X, w.Cell.Y, target.Cell.X, target.Cell.Y);
-                int near = order.Mode == OrderMode.Follow ? 2 : 1;
-                if (distance <= near)
+                if (distance <= 1)
                 {
                     w.Stop();
                     if (order.Mode is OrderMode.Go or OrderMode.Fetch)
@@ -1292,13 +1292,42 @@ public sealed partial class GameWorld
                 }
                 break;
             case OrderMode.Flee:
-                if (this[ActiveMember] is { } from && !w.IsWalking)
+                // FLEE(who) is 1A0A:03CA(who, 1, 0): away from object 0, the first party slot.
+                if (this[0] is { } from && !w.IsWalking && FleeCell(w, from.Cell) is { } away)
                 {
-                    int dx = Math.Sign(w.Cell.X - from.Cell.X), dy = Math.Sign(w.Cell.Y - from.Cell.Y);
-                    w.WalkTo(new Cell(w.Cell.X + 6 * (dx == 0 ? 1 : dx), w.Cell.Y + 6 * dy), Region.IsBlocked);
+                    w.WalkTo(away, Region.IsBlocked);
                 }
                 break;
         }
+    }
+
+    /// <summary>
+    /// Where a fleeing creature runs (<c>1A0A:0B0F</c> mode 1 → <c>1A0A:2C86</c>): of the cells
+    /// x − 4 … x + 4, y + 4 … y − 6 about it (in that order, its own cell left out), the first
+    /// free one farther from <paramref name="from"/> than any before, and farther than it stands
+    /// now. Null if it is as far as it can get. Planned again whenever it stops.
+    /// </summary>
+    public Cell? FleeCell(Walker w, Cell from)
+    {
+        Cell? best = null;
+        int farthest = GplGeometry.Distance(w.Cell.X, w.Cell.Y, from.X, from.Y);
+        for (int x = w.Cell.X - 4; x <= w.Cell.X + 4; x++)
+        {
+            for (int y = w.Cell.Y + 4; y >= w.Cell.Y - 6; y--)
+            {
+                var cell = new Cell(x, y);
+                if (cell == w.Cell)
+                {
+                    continue;
+                }
+                int distance = GplGeometry.Distance(from.X, from.Y, x, y);
+                if (distance > farthest && w.CanStand(cell, Region.IsBlocked))
+                {
+                    (best, farthest) = (cell, distance);
+                }
+            }
+        }
+        return best;
     }
 
     /// <summary>

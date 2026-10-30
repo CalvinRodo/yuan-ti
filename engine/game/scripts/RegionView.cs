@@ -296,6 +296,13 @@ public partial class RegionView : Node2D
                 // Development: a script's picture (REQUEST 6: 200 or 300), or cinematic, over the map.
                 Callable.From(() => PlayCinematic(number)).CallDeferred();
             }
+            if (OS.GetCmdlineUserArgs().FirstOrDefault(a => a.StartsWith("--gpl=")) is { } gpl
+                && gpl["--gpl=".Length..].Split('@') is var parts && int.TryParse(parts[0], out int file))
+            {
+                // Development: run a local script as a trigger would: --gpl=N, or --gpl=N@address (hex).
+                int address = parts.Length > 1 ? Convert.ToInt32(parts[1], 16) : 0;
+                WhenScriptsFree(() => ReportScript($"GPL {file}", Session.Scripts.Run(new GplEntry(file, address))));
+            }
             if (OS.GetCmdlineUserArgs().FirstOrDefault(a => a.StartsWith("--screenshot=")) is { } shot)
             {
                 // Development: the screen as a PNG after a few seconds (--screenshot-after=N), then quit.
@@ -393,6 +400,11 @@ public partial class RegionView : Node2D
                 CheckMapCast();
                 return;
             }
+            if (OS.GetCmdlineUserArgs().Contains("--check-quick-cast"))
+            {
+                CheckQuickCast();
+                return;
+            }
             if (OS.GetCmdlineUserArgs().Contains("--check-combat"))
             {
                 CheckCombat();
@@ -473,6 +485,7 @@ public partial class RegionView : Node2D
         _scriptLog = new Label { LabelSettings = new LabelSettings { FontSize = 9 }, AutowrapMode = TextServer.AutowrapMode.Off };
         _scriptPanel.AddChild(_scriptLog);
         layer.AddChild(_scriptPanel);
+        BuildDarkSun(layer);
 
         _dialogueWindow = new DialogueWindow
         {
@@ -539,6 +552,7 @@ public partial class RegionView : Node2D
             OpenGameMenu = () => _gameMenu.Open(),
             Closed = () =>
             {
+                _lastPage[_character.MemberSlot] = _character.Showing;
                 // DSUN.EXE's pointer mode 3: an item picked up in the inventory is held, to use with something on the map
                 // (one from the ground that wasn't put anywhere is still held from there).
                 (Item Item, Cell From)? ground = _heldFromGround;
@@ -705,6 +719,8 @@ public partial class RegionView : Node2D
                 ? new DarkSun.Game.Characters.CharacterCreation(Session.Rules, Session.Names, new Random(0)).UsableItemClasses(Session.Party[slot])
                 : null,
             PartyWeaponsOnly = slot => slot < Session.Party.Count && Session.Rules.Race(Session.Party[slot].Race).WeaponsOnly,
+            PartySheet = slot => slot < Session.Party.Count ? Session.Party[slot] : null,
+            PartyLevel = (slot, k) => slot < Session.Party.Count ? new DarkSun.Game.Magic.Spellcasting(Session.Rules).Level(Session.Party[slot], k) : 0,
         };
         _world.Rested += () =>
         {
@@ -970,6 +986,33 @@ public partial class RegionView : Node2D
     /// <summary>How many times as fast as a walk the members gather with <see cref="Settings.QuickCollapse"/>.</summary>
     private const int QuickCollapseSpeed = 3;
 
+    /// <summary>
+    /// DSUN.EXE's <c>DS:1168</c>: the whole party shows on the map (COLLAPSE PARTY spread it
+    /// out). Off, as the original starts (the manual: "by default, only the leader of your party
+    /// appears on the map"), the others are gathered into the leader on entering a region and
+    /// after a fight (<c>1587:32E2</c>, from <c>1587:1F83</c> and <c>1587:1B43</c>), showing in
+    /// combat. A new game starts as <see cref="Settings.LeaderAlone"/> says.
+    /// </summary>
+    private bool _wholeParty = !Settings.LeaderAlone;
+
+    /// <summary>The headless checks lay the party out themselves.</summary>
+    private static bool CheckRun => OS.GetCmdlineUserArgs().Any(a => a.StartsWith("--check-"));
+
+    /// <summary>Gather the others into the leader at once (<c>1587:32E2</c>), unless the whole party shows.</summary>
+    private void ShowLeaderAlone()
+    {
+        if (_wholeParty || CheckRun || InCombat || _world.CollapsedLeader is not null
+            || _world[_selected] is not { Kind: ObjectKind.Party, Hidden: false, Walker: not null })
+        {
+            return;
+        }
+        List<int> others = [.. _world.Party.Where(p => p.Index != _selected && !p.Hidden && p.Vitals.Alive && p.Walker is not null).Select(p => p.Index)];
+        if (others.Count > 0)
+        {
+            _world.RestoreCollapsedParty(_selected, others);
+        }
+    }
+
     /// <summary>COLLAPSE PARTY: walk into the leader, then travel as one character; again, spread out.</summary>
     private void CollapseParty()
     {
@@ -981,9 +1024,11 @@ public partial class RegionView : Node2D
         if (_world.CollapsedLeader is not null)
         {
             _world.ExpandParty();
+            _wholeParty = true;
             Notice("THE PARTY SPREADS OUT");
             return;
         }
+        _wholeParty = false;
         if (Selected is not null)
         {
             _keyboardWalker = null;
@@ -2870,6 +2915,7 @@ public partial class RegionView : Node2D
             _world.RestoreCollapsedParty(leader, save.Party.Select((member, slot) => (member, slot))
                 .Where(p => p.member.Collapsed).Select(p => p.slot));
         }
+        _wholeParty = save.CollapsedLeader is null && _world.Party.Count(p => !p.Hidden) > 1;
         foreach (PartyMember member in _party)
         {
             _lastCells[member.Walker] = member.Walker.Cell;
@@ -2899,6 +2945,7 @@ public partial class RegionView : Node2D
             return;
         }
         ShowRegion(index, start);
+        ShowLeaderAlone();
     }
 
     private void AddScriptLine(string line)
@@ -3555,6 +3602,10 @@ public partial class RegionView : Node2D
             // The preserver: a level gained opens the study window (8CCC:0000); a click learns, then it casts what the book holds.
             screen.Close();
             preserver.SpellsToChoose = 1;
+            // What earlier scripts left in the text window (a menu among them) would keep the study window from opening.
+            AnswerForThePlayer();
+            Session.ScriptHost.Dialogue.Answered();
+            _dialogueWindow.Refresh();
             _checking = false;
             OfferSpellStudy();
             _checking = true;
@@ -3630,20 +3681,26 @@ public partial class RegionView : Node2D
                 _world.Give(1, -Water, 0, GameWorld.None);
                 Session.ScriptHost.Money = 1000;
                 screen.Open(_world, 0, CharacterScreen.Page.Items, store: merchant);
-                Item goods = Enumerable.Range(0, 12).Select(i => screen.ItemAt(2, i)).OfType<Item>().First(i => i.Rdff == Boots);
-                int index = Enumerable.Range(0, 12).First(i => screen.ItemAt(2, i) == goods);
-                screen.Click(2, index);
-                screen.Click(1, 11);
-                int paid = 1000 - Session.ScriptHost.Money;
-                Expect(_world[0]!.Items.Any(i => i.Rdff == Boots) && paid == goods.Record.Value, $"buying boots costs their value ({paid})");
+                const int Goods = 3, Pack = 1;
+                int index = Enumerable.Range(0, 6).FirstOrDefault(i => screen.ItemAt(Goods, i)?.Rdff == Boots, -1);
+                Item? goods = index >= 0 ? screen.ItemAt(Goods, index) : null;
+                Expect(goods is not null, "the merchant's boots are among the six goods on the right");
+                if (goods is not null)
+                {
+                    screen.Click(Goods, index);
+                    int paid = 1000 - Session.ScriptHost.Money;
+                    Expect(_world[0]!.Items.Contains(goods) && paid == Shop.Price(goods), $"a click buys them for their value ({paid})");
+                }
                 Item pot = _world[0]!.Items.First(i => i.Rdff == Water);
                 int before = Session.ScriptHost.Money;
-                screen.Click(1, Enumerable.Range(0, 12).First(i => screen.ItemAt(1, i) == pot));
-                screen.Click(3, 0);
-                Expect(screen.ItemAt(3, 0) == pot, "the pot goes in a sell slot");
+                screen.Click(Pack, Enumerable.Range(0, 12).First(i => screen.ItemAt(Pack, i) == pot));
                 screen.Press(13304);
-                Expect(screen.Info.Contains("give you") || screen.Info.Contains("COULDN'T"), $"SELL: the merchant's offer ({screen.Info.Replace('\n', ' ')})");
-                screen.Press(13304);
+                Expect(Shop.Offer(pot) == 0 ? screen.Info.Contains("COULDN'T") : screen.Question.Visible && screen.Question.Asked.Contains("give you"),
+                    $"SELL: the merchant's offer ({screen.Question.Asked}; {screen.Info.Replace('\n', ' ')})");
+                if (screen.Question.Visible)
+                {
+                    screen.Question.Choose(0);
+                }
                 Expect(Shop.Offer(pot) == 0 || (merchant.Items.Contains(pot) && Session.ScriptHost.Money == before + Shop.Offer(pot)),
                     $"TAKE IT: sold ({Session.ScriptHost.Money - before})");
                 screen.Close();

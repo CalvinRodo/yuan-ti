@@ -77,6 +77,9 @@ public sealed partial class GameWorld
     /// </summary>
     public const int DeadBody = 1101;
 
+    /// <summary>Where a dead body lands about its creature (<see cref="LeaveBody"/>).</summary>
+    private static readonly Random BodyScatter = new();
+
     /// <summary>
     /// Coins: item <c>RDFF</c>s 1384–1389 and 1399, nameless items worth their
     /// value. Taken (picked up on the map, out of a container on the map or in
@@ -114,6 +117,12 @@ public sealed partial class GameWorld
 
     /// <summary>A party member's item classes (by slot; the session's characters), or null to let it use anything.</summary>
     public Func<int, ItemClasses?> PartyClasses { get; set; } = _ => null;
+
+    /// <summary>A party member's sheet (by slot; the session's characters), for what a rest does to its spells' effects.</summary>
+    public Func<int, Character?> PartySheet { get; set; } = _ => null;
+
+    /// <summary>A party member's level in a class (by slot), for the healers of a rest.</summary>
+    public Func<int, CharacterClass, int> PartyLevel { get; set; } = (_, _) => 0;
 
     /// <summary>Whether the party member in a slot wears only weapons (a thri-kreen, <see cref="RaceRules.WeaponsOnly"/>).</summary>
     public Func<int, bool> PartyWeaponsOnly { get; set; } = _ => false;
@@ -498,13 +507,16 @@ public sealed partial class GameWorld
     }
 
     /// <summary>
-    /// <paramref name="creature"/> has died: a dead body (<see cref="DeadBody"/>)
-    /// where it lay takes everything it carried (<c>612E</c>). Null if it
-    /// carried nothing or there is no room for the body.
+    /// <paramref name="creature"/> has fallen (<c>612E:1AAF</c> lists it; at the fight's end, or
+    /// at once out of one, <c>612E:1AE1</c> → <c>896E:0C92</c> → <c>612E:2659</c>): if it carried
+    /// anything, a dead body (<see cref="DeadBody"/>) takes it all, put down within 7 pixels
+    /// of it each way at random (<c>rand() × 15 / 32768 − 7</c>). Null if it carried nothing
+    /// or there is no room for the body.
     /// </summary>
     public WorldObject? LeaveBody(WorldObject creature)
     {
-        if (creature.Items.Count == 0 || Spawn(DeadBody, creature.Cell) is not { } body)
+        int Scatter() => BodyScatter.Next(15) - 7;
+        if (creature.Items.Count == 0 || Spawn(DeadBody, creature.Cell, Scatter(), Scatter()) is not { } body)
         {
             return null;
         }
@@ -525,11 +537,13 @@ public sealed partial class GameWorld
     /// clone. Null if there is no such object, or for a creature when the
     /// creature slots are full (things always find room).
     /// </summary>
-    public WorldObject? Spawn(int ojff, Cell cell)
+    /// <param name="dx">Pixels right of the cell's foot to draw it (its cell stays <paramref name="cell"/>).</param>
+    /// <param name="dy">Pixels down.</param>
+    public WorldObject? Spawn(int ojff, Cell cell, int dx = 0, int dy = 0)
     {
         bool creature = IsCreature(ojff);
         int index = FreeSlot(creature);
-        int x = cell.X * Region.TileSize + Region.TileSize / 2, y = (cell.Y + 1) * Region.TileSize - 1;
+        int x = cell.X * Region.TileSize + Region.TileSize / 2 + dx, y = (cell.Y + 1) * Region.TileSize - 1 + dy;
         if (index < 0 || Region.MakeObject(_objectData, ojff, x, y) is not { } source)
         {
             return null;
@@ -620,8 +634,8 @@ public sealed partial class GameWorld
     /// <c>612E:18DA</c>: less than the hit points takes that many; up to 9
     /// more leaves the creature down (status 3, 0 hit points); more kills it
     /// (5), 10 000 or more destroys it (8). A creature that is no longer
-    /// alive leaves the map, leaving a dead body with what it carried unless
-    /// destroyed (<see cref="LeaveBody"/>); a party member stays where it fell.
+    /// alive leaves the map, leaving a dead body with what it carried
+    /// (<see cref="LeaveBody"/>); a party member stays where it fell.
     /// </summary>
     public void Hurt(WorldObject target, int damage)
     {
@@ -644,17 +658,14 @@ public sealed partial class GameWorld
     /// <paramref name="target"/>'s hit points are gone (here or in a battle): a
     /// creature down, dead or destroyed counts as defeated (experience,
     /// <see cref="Defeated"/>) and leaves the map, its body with what it carried
-    /// unless destroyed; a party member stays where it fell.
+    /// (destroyed too: <c>896E:0C92</c> doesn't ask); a party member stays where it fell.
     /// </summary>
     public void Fell(WorldObject target)
     {
         if (target.Kind != ObjectKind.Party && target.Vitals.Status >= Vitals.Down && this[target.Index] == target)
         {
             Defeated?.Invoke(target);
-            if (target.Vitals.Status < Vitals.Destroyed)
-            {
-                LeaveBody(target);
-            }
+            LeaveBody(target);
             Remove(target);
         }
         else
@@ -669,24 +680,58 @@ public sealed partial class GameWorld
     /// <summary>
     /// <c>REQUEST(1)</c> / <c>REQUEST(4)</c> and the fire pits (<c>87B3:073D(raise, time)</c>):
     /// the party rests. Members who are down (status 2 or 3) get up; with
-    /// <paramref name="raiseDead"/> (REQUEST 1) the dead too. Those standing
-    /// are healed to full (the original's spell and healing details aren't
-    /// traced). <paramref name="time"/> hours pass: <c>8053:0A02(time × 60)</c>,
-    /// PASS_TIME's minutes, each 60 of the clock's seconds (a fire pit's 8 hours
-    /// bring Kurzak's call, GPL 136's 8 h 05 min, nearly due).
+    /// <paramref name="raiseDead"/> (REQUEST 1) everyone does, the dead too. Of
+    /// those standing, the highest-levelled cleric (class codes 1–4, <c>80F5:32B9</c>)
+    /// and druid (5–8, <c>80F5:339B</c>) tend each member: above level 4 either casts
+    /// Cure Disease, Remove Curse and Remove Paralysis (spells 97, 104, 106), a druid
+    /// above 6 Neutralize Poison (119) too. REQUEST 1 also ends poison. Acid stops
+    /// (<c>7D80:15CB(member, 1)</c>), and each member standing is healed to full. But
+    /// whoever was poisoned when the rest began takes 1000 damage, and dies: the
+    /// original looks at the conditions it noted first (<c>7D80:1864</c>), so a cure
+    /// during the rest comes too late. <paramref name="time"/> hours pass:
+    /// <c>8053:0A02(time × 60)</c>, PASS_TIME's minutes, each 60 of the clock's
+    /// seconds (a fire pit's 8 hours bring Kurzak's call, GPL 136's 8 h 05 min, nearly due).
     /// </summary>
     public void Rest(bool raiseDead, int time = 0)
     {
-        foreach (WorldObject member in Party)
+        List<WorldObject> members = [.. Party];
+        foreach (WorldObject member in members)
+        {
+            if (raiseDead || member.Vitals.Status is 2 or 3)
+            {
+                member.Vitals.Status = Vitals.Well;
+            }
+        }
+        int Best(CharacterClass k) =>
+            members.Where(m => m.Vitals.Status == Vitals.Well).Select(m => PartyLevel(m.Index, k)).DefaultIfEmpty(0).Max();
+        int cleric = Best(CharacterClass.Cleric), druid = Best(CharacterClass.Druid);
+        foreach (WorldObject member in members)
         {
             Vitals v = member.Vitals;
-            if (raiseDead || v.Status is 2 or 3)
+            List<Combat.LastingEffect> lasting = PartySheet(member.Index)?.Lasting ?? [];
+            bool poisoned = lasting.Any(e => e.Condition == Combat.Condition.Poisoned && (e.EndsAt is not int end || end > Clock));
+            void End(params Combat.Condition[] conditions) => lasting.RemoveAll(e => conditions.Contains(e.Condition));
+            if (cleric > 4 || druid > 4)
             {
-                v.Status = Vitals.Well;
+                End(Combat.Condition.Diseased, Combat.Condition.Cursed, Combat.Condition.Paralyzed);
             }
+            if (druid > 6)
+            {
+                End(Combat.Condition.Poisoned);
+            }
+            if (raiseDead)
+            {
+                End(Combat.Condition.Poisoned);
+                v.Hp = Math.Max(1, v.Hp);
+            }
+            End(Combat.Condition.Acid);
             if (v.Status == Vitals.Well)
             {
                 v.Hp = v.MaxHp;
+            }
+            if (poisoned)
+            {
+                Hurt(member, 1000); // 612E:18DA
             }
         }
         PassTime(time * 60 * 60);
@@ -705,14 +750,18 @@ public sealed partial class GameWorld
 
     /// <summary>
     /// SEARCH(who, range, criteria…) (<c>043D:08F8</c>): over the items
-    /// <paramref name="who"/> carries (32766: each party member's). Criteria
-    /// with op 4 (<c>=</c>; 5 and 6 taken as <c>&gt;</c> and <c>&lt;</c>,
-    /// unused by the shipped scripts) pick items; the last criterion's op says
-    /// what comes back, combined over members as the original does: 0 the
-    /// smallest value of its field, 1 the largest, 2 the total, 3 how many
-    /// items (assumed: <c>0826:0344</c> is not traced), 4–6 1 if any item
-    /// matches. The range bytes (77–80, 0–0 in the scripts) are not traced and
-    /// not used.
+    /// <paramref name="who"/> carries (32766: each party member's, combined
+    /// as the original does: op 0 the smallest, 1 the largest, 2 and 3 added,
+    /// 4–6 or'ed). Per member (<c>0826:0344</c>, <c>0826:040B</c>) each item
+    /// is weighed: with one criterion, by its field; with more, only an item
+    /// whose first criterion's field equals that criterion's value (whatever
+    /// its op) counts, weighed by the second's field (a third is ignored).
+    /// <c>0826:06A4</c> gathers the smallest weight (99 999 999 with none),
+    /// the largest (0), their total, how many items (one each, not their
+    /// quantity), and whether any equals, exceeds or is below the deciding
+    /// criterion's value; the last criterion's op picks one (0–6 in that
+    /// order). The range bytes (77–80, or 0–0 for the member itself and what
+    /// it holds) both reach the member's items here.
     /// </summary>
     public int Search(int who, IReadOnlyList<GplSearchTest> criteria)
     {
@@ -721,7 +770,7 @@ public sealed partial class GameWorld
             return 0;
         }
         int op = criteria[^1].Op;
-        long result = op == 0 ? int.MaxValue : 0;
+        long result = op == 0 ? SearchNone : 0;
         IEnumerable<WorldObject> holders = who == WholeParty ? Members : who >= 0 && this[who] is { } one ? [one] : [];
         foreach (WorldObject holder in holders)
         {
@@ -737,23 +786,24 @@ public sealed partial class GameWorld
         return (int)Math.Clamp(result, int.MinValue, int.MaxValue);
     }
 
+    /// <summary>SEARCH's smallest weight when no item counts (<c>DS:01DB</c>).</summary>
+    public const int SearchNone = 99_999_999;
+
     private static long SearchOne(WorldObject holder, IReadOnlyList<GplSearchTest> criteria, int op)
     {
-        var tests = criteria.Where(c => c.Op is >= 4 and <= 6).ToList();
-        var matches = holder.Items.Where(i => tests.All(t => t.Op switch
-        {
-            4 => i.Field(t.Field) == t.Value,
-            5 => i.Field(t.Field) > t.Value,
-            _ => i.Field(t.Field) < t.Value,
-        })).ToList();
-        int field = criteria[^1].Field;
+        GplSearchTest weighed = criteria.Count == 1 ? criteria[0] : criteria[1];
+        List<long> weights = [.. holder.Items
+            .Where(i => criteria.Count == 1 || i.Field(criteria[0].Field) == criteria[0].Value)
+            .Select(i => (long)i.Field(weighed.Field))];
         return op switch
         {
-            0 => matches.Count == 0 ? int.MaxValue : matches.Min(i => (long)i.Field(field)),
-            1 => matches.Count == 0 ? 0 : matches.Max(i => (long)i.Field(field)),
-            2 => matches.Sum(i => (long)i.Field(field)),
-            3 => matches.Sum(i => (long)Math.Max(1, i.Quantity)),
-            _ => matches.Count > 0 ? 1 : 0,
+            0 => weights.Count == 0 ? SearchNone : weights.Min(),
+            1 => weights.Count == 0 ? 0 : weights.Max(),
+            2 => weights.Sum(),
+            3 => weights.Count,
+            4 => weights.Any(w => w == weighed.Value) ? 1 : 0,
+            5 => weights.Any(w => w > weighed.Value) ? 1 : 0,
+            _ => weights.Any(w => w < weighed.Value) ? 1 : 0,
         };
     }
 }

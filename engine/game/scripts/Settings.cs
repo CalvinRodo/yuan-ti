@@ -9,12 +9,14 @@ namespace DarkSun.Engine;
 /// window (<see cref="OptionsWindow"/>) changes them; <see cref="Save"/> writes
 /// them back, keeping the file's other keys (the game folder, the SoundFont).
 /// <list type="bullet">
-/// <item><c>[audio]</c> <c>music_volume</c>, <c>sound_volume</c> (0–1), <c>music_on</c>, <c>sound_on</c>;</item>
+/// <item><c>[audio]</c> <c>music_volume</c>, <c>sound_volume</c> (0–1), <c>music_on</c>, <c>sound_on</c>,
+/// <c>music_device</c> (<c>auto</c>, <c>soundfont</c>, <c>adlib</c>, <c>opl3</c>: see <see cref="Music"/>);</item>
 /// <item><c>[display]</c> <c>fullscreen</c>, <c>shadows</c>,
 /// <c>dust</c>, <c>enemy_rings</c> (0 none, 1 under the enemy chosen with Tab, 2 under every enemy);</item>
 /// <item><c>[game]</c> <c>skip_intro</c>, <c>autosave</c> (on entering a region), <c>original_pathfinding</c>,
 /// <c>difficulty</c> (0–3: easy, balanced, hard, hideous), <c>animations</c> (the map's animated things),
-/// <c>choose_enemy_keys</c> (Tab and Enter choose and attack an enemy in a fight), <c>follow_leader</c> (the others
+/// <c>choose_enemy_keys</c> (Tab and Enter choose and attack an enemy in a fight), <c>leader_alone</c> (only the leader
+/// shows on the map, as in the original), <c>follow_leader</c> (the others
 /// follow the member who walks, as in the original), <c>quick_collapse</c> (COLLAPSE PARTY gathers them quickly);</item>
 /// <item><c>[mods]</c> <c>bundled_on</c>: the mods that come with the game turned on (the tabletop rules).</item>
 /// <item><c>[keys]</c> an action's keys, as the key help names them (<c>quick_save = "F5"</c>, <c>"Shift+F11"</c>, several with " / ").</item>
@@ -54,6 +56,18 @@ public static class Settings
     {
         get => Math.Clamp(Get("audio", "sound_volume", 1f), 0f, 1f);
         set => Set("audio", "sound_volume", Math.Clamp(value, 0f, 1f));
+    }
+
+    public const string AutoDevice = "auto", SoundFontDevice = "soundfont", AdLib = "adlib", Opl3 = "opl3";
+
+    /// <summary>The music devices, in the order the Options window steps through them.</summary>
+    public static readonly string[] MusicDevices = [AutoDevice, SoundFontDevice, AdLib, Opl3];
+
+    /// <summary>What plays the music (<see cref="Music"/>).</summary>
+    public static string MusicDevice
+    {
+        get => Get("audio", "music_device", AutoDevice) is var d && MusicDevices.Contains(d) ? d : AutoDevice;
+        set => Set("audio", "music_device", MusicDevices.Contains(value) ? value : AutoDevice);
     }
 
     public static bool MusicOn
@@ -187,6 +201,13 @@ public static class Settings
         set => Set("game", "follow_leader", value);
     }
 
+    /// <summary>As in the original: only the leader shows on the map until COLLAPSE PARTY spreads the party out (the others show in a fight); off, a new game shows everyone.</summary>
+    public static bool LeaderAlone
+    {
+        get => Get("game", "leader_alone", true);
+        set => Set("game", "leader_alone", value);
+    }
+
     /// <summary>As in the original: COLLAPSE PARTY's members walk into the leader quickly; off, at their walking pace.</summary>
     public static bool QuickCollapse
     {
@@ -228,6 +249,10 @@ public static class Settings
         if (Music.Instance is { } music)
         {
             music.Volume = MusicOn ? MusicVolume : 0;
+            if (music.Device != MusicDevice)
+            {
+                music.UseDevice(MusicDevice);
+            }
         }
         if (Sounds.Instance is { } sounds)
         {

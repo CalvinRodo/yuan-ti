@@ -180,12 +180,17 @@ public partial class OptionsWindow : RetroScreen
     private static Row Volume(string name, Func<float> get, Action<float> set, string help) =>
         new(name, () => $"{(int)MathF.Round(get() * 100)}%", step => { set(Math.Clamp(get() + step * 0.1f, 0, 1)); Settings.Apply(); }, help);
 
+    private static readonly string[] DeviceNames = ["AUTO", "SOUNDFONT", "ADLIB", "OPL3"];
+
     private static List<Row> GameRows()
     {
         string[] rings = ["NONE", "CHOSEN", "ALL"];
         return
         [
             Volume("Music volume", () => Settings.MusicVolume, v => Settings.MusicVolume = v, "Click: louder; right-click: softer"),
+            new("Music device", () => DeviceNames[Array.IndexOf(Settings.MusicDevices, Settings.MusicDevice)],
+                step => { Settings.MusicDevice = Settings.MusicDevices[(Array.IndexOf(Settings.MusicDevices, Settings.MusicDevice) + step + DeviceNames.Length) % DeviceNames.Length]; Settings.Apply(); },
+                "SoundFont (General MIDI) or the original's AdLib / OPL3"),
             Volume("Sound volume", () => Settings.SoundVolume, v => Settings.SoundVolume = v, "Click: louder; right-click: softer"),
             Toggle("Full screen", () => Settings.Fullscreen, v => Settings.Fullscreen = v, "The whole screen or a window"),
             Toggle("Skip the opening", () => Settings.SkipIntro, v => Settings.SkipIntro = v, "Start at the main menu"),
@@ -197,6 +202,7 @@ public partial class OptionsWindow : RetroScreen
             new("Enemy rings", () => rings[Settings.EnemyRings], step => Settings.EnemyRings = (Settings.EnemyRings + step + 3) % 3,
                 "Rings under enemies in a fight"),
             Toggle("Party follows", () => Settings.FollowLeader, v => Settings.FollowLeader = v, "The others follow whoever walks (off: each alone)"),
+            Toggle("Leader alone", () => Settings.LeaderAlone, v => Settings.LeaderAlone = v, "Only the leader shows on the map (next game)"),
             Toggle("Quick collapse", () => Settings.QuickCollapse, v => Settings.QuickCollapse = v, "The party gathers fast (off: at a walk)"),
             Toggle("Box selection", () => Settings.BoxSelect, v => Settings.BoxSelect = v, "Drag a box to pick who walks"),
             Toggle("Tab picks enemies", () => Settings.ChooseEnemyKeys, v => Settings.ChooseEnemyKeys = v, "In a fight Tab chooses, Enter attacks"),

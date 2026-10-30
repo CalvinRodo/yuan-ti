@@ -25,6 +25,10 @@ namespace DarkSun.Engine;
 /// numbers), each at its bar's top left, orange (45) and red (77) under
 /// the pointer. The arrow and MORE scroll them. ASK_YES_NO is offered here
 /// as Yes and No under "ANSWER YES OR NO", as DSUN.EXE words it.</item>
+/// <item>The typing window (<c>WIND</c> 3500, <c>84C9:0253</c> mode 4, for
+/// INPUT_STRING and the other INPUT_ commands, <c>7372:1235</c>): opened at
+/// (0, 140) under the text window, which stays; it is only an edit box,
+/// <c>EBOX</c> 4500 (239 × 46 at (56, 6)), where the player types.</item>
 /// </list>
 /// Keys: Space or Enter for MORE, 1–9 for a choice, Y and N for Yes and No,
 /// the mouse wheel to scroll. Text is in the game's font (<see cref="GameFonts"/>),
@@ -50,12 +54,15 @@ public partial class DialogueWindow : Control
     private const int TextColour = 45, OptionColour = 45, OptionHoverColour = 77, TitleColour = 47, TitleShadow = 17;
 
     // The windows' controls.
-    private const int TextWindow = 3007, ChoiceWindow = 3008, ClickArea = 12300, PortraitBox = 2090, TextBox = 4002,
+    private const int TextWindow = 3007, ChoiceWindow = 3008, TypingWindow = 3500, TypingBox = 4500, ClickArea = 12300, PortraitBox = 2090, TextBox = 4002,
         TextUp = 2093, TextMore = 2094, FirstOption = 2076, ChoiceUp = 2095, ChoiceMore = 2096;
 
-    /// <summary>The text window's place (the screen's top) and the choice window's (its bottom).</summary>
-    private Control _panel = null!, _bottom = null!;
-    private UiWindowView? _textMode, _menuMode;
+    /// <summary>Where DSUN.EXE opens the typing window (<c>6BB8:0152(3500, 0, 140)</c>).</summary>
+    private const int TypingTop = 140;
+
+    /// <summary>The text window's place (the screen's top), the choice window's (its bottom) and the typing window's.</summary>
+    private Control _panel = null!, _bottom = null!, _typing = null!;
+    private UiWindowView? _textMode, _menuMode, _typingMode;
     private TextureRect _portrait = null!;
     private RichTextLabel _text = null!;
     private TextureButton? _textUp, _textMore, _menuUp, _menuMore;
@@ -81,7 +88,7 @@ public partial class DialogueWindow : Control
     /// <summary>Resume a script waiting at INPUT_STRING with what the player typed.</summary>
     public Action<string>? AnswerText { get; set; }
 
-    /// <summary>Where the player types for INPUT_STRING, over the text window's bottom line.</summary>
+    /// <summary>Where the player types for INPUT_STRING: the typing window's edit box.</summary>
     private LineEdit _input = null!;
 
     public override void _Ready()
@@ -91,8 +98,10 @@ public partial class DialogueWindow : Control
         SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
         _panel = new Control { Size = new Vector2(Width, Height), MouseFilter = MouseFilterEnum.Stop, ClipContents = true };
         _bottom = new Control { Size = new Vector2(Width, Height), MouseFilter = MouseFilterEnum.Stop, ClipContents = true, Visible = false };
+        _typing = new Control { Size = new Vector2(Width, Height), MouseFilter = MouseFilterEnum.Stop, ClipContents = true, Visible = false };
         AddChild(_panel);
         AddChild(_bottom);
+        AddChild(_typing);
         _text = new RichTextLabel
         {
             BbcodeEnabled = true,
@@ -104,14 +113,12 @@ public partial class DialogueWindow : Control
         _text.GuiInput += TextInput;
         _portrait = new TextureRect { Size = new Vector2(32, 32), MouseFilter = MouseFilterEnum.Ignore };
         _title = new Label { Position = new Vector2(6, 4), Size = new Vector2(296, 11), ClipText = true, MouseFilter = MouseFilterEnum.Ignore };
-        _input = new LineEdit { Visible = false, Size = new Vector2(200, 12), PlaceholderText = "Type, then Enter" };
-        _input.AddThemeFontSizeOverride("font_size", FontSize);
+        _input = new LineEdit { Flat = true, CaretBlink = true, ContextMenuEnabled = false, MouseFilter = MouseFilterEnum.Stop };
         _input.TextSubmitted += text =>
         {
-            _input.Visible = false;
+            _typing.Visible = false;
             AnswerText?.Invoke(text);
         };
-        AddChild(_input);
         Resized += Fit;
         Fit();
     }
@@ -120,15 +127,11 @@ public partial class DialogueWindow : Control
     private void Fit()
     {
         float scale = Math.Max(1f, MathF.Floor(Math.Min(Size.X / RetroScreen.Width, Size.Y / RetroScreen.Height)));
-        _panel.Scale = _bottom.Scale = new Vector2(scale, scale);
+        _panel.Scale = _bottom.Scale = _typing.Scale = new Vector2(scale, scale);
         float left = MathF.Floor((Size.X - Width * scale) / 2);
         _panel.Position = new Vector2(left, 0);
         _bottom.Position = new Vector2(left, Size.Y - Height * scale);
-        if (_input is not null)
-        {
-            _input.Scale = _panel.Scale;
-            _input.Position = _panel.Position + new Vector2(60, Height - 14) * scale;
-        }
+        _typing.Position = new Vector2(left, Size.Y - (RetroScreen.Height - TypingTop) * scale);
     }
 
     /// <param name="portraits">The texture of a <c>PORT</c> number, or null.</param>
@@ -149,9 +152,9 @@ public partial class DialogueWindow : Control
     /// </summary>
     private void BuildWindows(DarkSun.Data.Images.Palette palette)
     {
-        foreach (Node old in new Node?[] { _textMode, _menuMode }.OfType<Node>())
+        foreach (Node old in new Node?[] { _textMode, _menuMode, _typingMode }.OfType<Node>())
         {
-            foreach (Node mine in new Node[] { _text, _portrait, _title })
+            foreach (Node mine in new Node[] { _text, _portrait, _title, _input })
             {
                 if (mine.GetParent() == old)
                 {
@@ -163,12 +166,14 @@ public partial class DialogueWindow : Control
         _options.Clear();
         _textMode = UiWindowView.Build(TextWindow, palette);
         _menuMode = UiWindowView.Build(ChoiceWindow, palette, backdrop: TextWindow);
-        if (_textMode is null || _menuMode is null)
+        _typingMode = UiWindowView.Build(TypingWindow, palette, backdrop: TextWindow);
+        if (_textMode is null || _menuMode is null || _typingMode is null)
         {
             return;
         }
         _panel.AddChild(_textMode);
         _bottom.AddChild(_menuMode);
+        _typing.AddChild(_typingMode);
         Color Of(int index) => palette[index] is var c ? Color.Color8(c.R, c.G, c.B) : GameFonts.Tan;
         Color colour = Of(TextColour);
 
@@ -224,6 +229,21 @@ public partial class DialogueWindow : Control
         }
         _menuUp = Wire(_menuMode.Button(ChoiceUp), Back);
         _menuMore = Wire(_menuMode.Button(ChoiceMore), More);
+
+        // The typing window: what the player types, in the edit box, in the text's colour.
+        Rect2 typed = _typingMode.RectOf("EBOX", TypingBox);
+        if (_typingMode.TextBox(TypingBox) is { } edit)
+        {
+            edit.Visible = false;
+        }
+        _input.Position = typed.Position;
+        _input.Size = new Vector2(typed.Size.X, 12);
+        GameFonts.Use(_input, colour);
+        _input.AddThemeColorOverride("caret_color", colour);
+        _input.AddThemeStyleboxOverride("normal", new StyleBoxEmpty());
+        _input.AddThemeStyleboxOverride("focus", new StyleBoxEmpty());
+        _input.AddThemeConstantOverride("minimum_character_width", 0);
+        _typingMode.AddChild(_input);
     }
 
     private static TextureButton? Wire(TextureButton? button, Action pressed)
@@ -279,16 +299,16 @@ public partial class DialogueWindow : Control
             _ => [],
         };
         bool typing = _dialogue.Prompt is GplTextPrompt;
-        if (typing && !_input.Visible)
+        if (typing && !_typing.Visible)
         {
             _input.MaxLength = ((GplTextPrompt)_dialogue.Prompt!).MaxLength;
             _input.Text = "";
-            _input.Visible = true;
+            _typing.Visible = true;
             _input.CallDeferred(Control.MethodName.GrabFocus);
         }
         else if (!typing)
         {
-            _input.Visible = false;
+            _typing.Visible = false;
         }
         _title.Text = _dialogue.Prompt switch
         {

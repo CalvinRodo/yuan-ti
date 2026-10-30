@@ -709,8 +709,10 @@ From the handlers (2026-10-18):
   * `WIND` 3008, the choices: five `BUTN` 2076–2080 (300 × 10 at (3, 13),
     (3, 21) … (3, 45), `ICON` 12102–12106: stone bars, text drawn on them),
     `BUTN` 2095 (`ICON` 2093) and 2096 (`ICON` 12100) to scroll.
-  * `WIND` 3500 holds only `EBOX` 4500 (239 × 46 at (56, 6)): text without
-    a portrait.
+  * `WIND` 3500 holds only `EBOX` 4500 (239 × 46 at (56, 6)): the typing
+    window. `84C9:0253` mode 4 opens it at (0, 140) under the text window,
+    for the INPUT_ commands (`7372:1235` reads up to 79 characters into
+    `DS:1194`; `7372:11FD` lowercases them).
   * A `BUTN`'s icon is the word at +0x64 (+0x5A is its own number).
   * Controls share a header (tag, length, number at +0x08). The layout
     routine `2A1D` reads the alignment word at +0x58: bits 8–9 place the
@@ -800,7 +802,7 @@ From the handlers (2026-10-18); the engine's model is `DarkSun.Game.World`.
   | 17 | if who < 0, place `OJFF` −who at cell (a, b) (`896E:0E2E`) |
   | 18 | set the allegiance (combat record +0x1D) of matching creatures (index ≥ 4, kind 2) |
   | 19 | `DS:116A` = 1: the main loop (`1512`) ends and the game starts again from the start-up screen, as `612E:3060` does when the whole party has fallen (which also shows `85FE:02C9`'s window). GPL 20's riddle, answered wrong |
-  | 1 / 4 | the party rests (`073D(1, a)` / `073D(0, a)`): "THE PARTY RESTS"; members with status 2 or 3 (with 1: any) get status 1, then healing and spells (not traced further); a passes as PASS_TIME a would (`8053:0A02(a × 60)`). In combat: "NO RESTING DURING COMBAT". USE on a fire pit (`6BB8:0B56`: object +0x1A = `OJFF` 1307 or 1310, six in regions 3, 26, 28, 30 and 41) rests the party with `073D(0, 8)`, before its use trigger runs |
+  | 1 / 4 | the party rests (`073D(1, a)` / `073D(0, a)`): "THE PARTY RESTS"; members with status 2 or 3 (with 1: any) get status 1; the highest cleric level (codes 1–4, `80F5:32B9`) and druid level (5–8, `339B`) among the Okay are the healers: above 4 each casts Cure Disease, Remove Curse and Remove Paralysis (`87B3:0A72` → `80F5:0008` with 0x60, 0x67, 0x69: spells 97, 104, 106) on every member, a druid above 6 Neutralize Poison (0x76, 119); with 1, poison (condition 35) ends and hit points are at least 1; Acid (1) ends (`7D80:15CB`); an Okay member gets its hit points, psionic points and Strength back (not while Diseased if that would raise it); a member Poisoned when the conditions were read at the start (`7D80:1864`) then takes 1000 damage (`612E:18DA`), cures or not; a passes as PASS_TIME a would (`8053:0A02(a × 60)`). In combat: "NO RESTING DURING COMBAT". USE on a fire pit (`6BB8:0B56`: object +0x1A = `OJFF` 1307 or 1310, six in regions 3, 26, 28, 30 and 41) rests the party with `073D(0, 8)`, before its use trigger runs |
   | 2 | a door: `6BB8:0D13(object, a, 1)` (see Doors) |
   | 3 | a thief skill check, skill a, situation b (13 uses: open locks, find/remove traps, climb walls, pick pockets, hear noise; see "Thief skills"). For the party (32766) `028D` means to pick the best member but starts from 0 with an unsigned "keep the lower" test, so it always rolls for slot 0 |
   | 6 | play cinematic a (`0AC7` → `60B9:042E`; 1000 instead when `DS:1162` is 0): 100 the ending (GPL 62), 200 and 300 a `CMAT` / `CPAL` picture (GPL 177, GPL 62); the script goes on after it |
@@ -959,8 +961,20 @@ Ops 2, 9–0x13, 0x17, 0x18, 0x2C, 0x3D, 0x3E, 0x50–0x5A, 0x5C–0x5E, 0x67 an
 
 * Sequences are XMIDI, in four versions per track: `GSEQ` (General MIDI:
   GM programs, drums on channel 10), `LSEQ` (MT-32 / LAPC-1 programs),
-  `PSEQ` and `CSEQ`. `RESOURCE.GFF` holds tracks 1–23 and `CINE.GFF` holds
-  26–29. They are played by the Miles AIL driver (`33A5`) at 120 ticks a second.
+  `PSEQ` (the PC speaker's, a few hundred bytes) and `CSEQ`. `RESOURCE.GFF`
+  holds tracks 1–23 and `CINE.GFF` holds 26–29. They are played by the
+  Miles AIL driver (`33A5`) at 120 ticks a second.
+* **Which version** (`235D`'s loader, by the sound set-up's music device
+  type, `SOUND.CFG` → config +0x32): 0 `PSEQ`, 1 and 2 `FSEQ`, 3 `LSEQ`, 4
+  `GSEQ`. No `FSEQ` is shipped: `3256:00D3` turns types 1 and 2 (the FM
+  cards) into 4, so an AdLib or Sound Blaster plays the General MIDI
+  version, its timbres from AIL's global timbre library `STDPATCH.AD` (128
+  bank-0 instruments, 52 bank-1 effect timbres, 53 bank-127 drums keyed by
+  note; 14-byte AIL OPL2 entries), installed from each sequence's `TIMB`
+  list. GOG's `SOUND.CFG` names `mt32mpu.adv` with type 4 (General MIDI
+  through an MPU-401). The `ADV` resources are the Miles drivers (1 Ad Lib,
+  2 and 19 MT-32 / LAPC-1, 7 SB FM, 9 and 11 SB Pro FM, 12 Ad Lib Gold, 17
+  Gravis UltraSound, the rest digital).
 * **What plays when:**
   * The main menu plays 17 (`8015:0208` → `1A0A:0672(0x11)`).
   * Entering a region plays the byte at `+0x2F` of its `RDAT` record
@@ -1159,10 +1173,19 @@ each record are not read.
   member, an index one object, a name nothing. Each criterion is a field,
   an op byte and, for ops 4–6, a value. The last criterion's op decides
   the result, combined over members: 0 the smallest, 1 the largest, 2 and 3
-  added, 4–6 or'ed (jump table at `043D:0B04`). Per member the work is
-  `0826:0344` (not traced). The fields used: 72 (0x48) the item's id,
-  82 (0x52) its quantity, 85 (0x55) its equipment slot. The range bytes
-  (77–80 or 0–0 in every script) go through `1A0A:0234` per kind.
+  added, 4–6 or'ed (jump table at `043D:0B04`). Per member `0826:0344`
+  walks the member's words between the two range offsets (`1A0A:0234` per
+  kind; 77–80 in most scripts; 0–0 the member itself) and, from each
+  object, everything linked to it (`0826:040B`, `05B5`): its items, and
+  theirs. Each object is weighed (`0826:0009` reads a field; one without it
+  is skipped): with one criterion, by its field; with more, only if the
+  first criterion's field equals that criterion's value (its op is not
+  looked at), by the second's field (a third is ignored). `0826:06A4`
+  gathers {smallest (from 99 999 999, `DS:01DB`), largest (0), total, how
+  many (one per object, not its quantity), any equal, any above, any below
+  the deciding value}, and the last criterion's op 0–6 picks one. The
+  fields used: 72 (0x48) the item's id, 82 (0x52) its quantity, 85 (0x55)
+  its equipment slot.
 * **Equipment slots** (`6466:0854`): 14, item record +0x11 (255 in the
   pack); slot n takes the `IT1R` placement at `3B67:0000` + n: 3 arms,
   11 ammunition, 12 missile weapon, 5 hand, 9 finger, 2 waist, 10 legs,
@@ -1184,10 +1207,27 @@ each record are not read.
   hit points takes them; up to 9 more leaves status 3 and 0 hit points;
   more, status 5 (dead); 10 000 or more, 8. The status is also copied to
   `DS:0333 + |id|` (|id| 1–50). Status above 2 takes it out of combat and
-  calls `612E:1AAF`. An item takes damage above its type's +6 word.
+  calls `612E:1AAF`, which lists it (`47BD:0007`, up to 42); `612E:1AE1`
+  (end of a fight, or at once out of one) hands each to `896E:0C92`: a
+  creature's items go into a new `OJFF` 1101 "Dead Body" put within 7
+  pixels of it each way at random (`612E:2659`: `rand() × 15 / 32768 − 7`;
+  nothing if it carried nothing; its draw flags the items' largest +0x10),
+  whatever its status, and the creature leaves, dissolved away if on the
+  screen (`896E:1009`). An item takes damage above its type's +6 word.
 * **SHOP(merchant)** (`043D:1192` → `7372:08D2` → `74F1:042B(actor,
-  merchant)`, `84C9:11B4`): the shop screen, not traced. Scripts count the
-  merchant's items with SEARCH before and after it to tell whether
+  merchant)`, `84C9:11B4`): the items page as a store (`8A89:073D`): `BMP`
+  12000 at (252, 11), the buttons MORE (13303) and SELL (13304), and the
+  merchant's goods six to a page in `APFM` 11242–11247 (`8A89:055A`: each
+  item record once, others of the same marked +0x11 = 0xFF), priced "%d$"
+  under each (`8A89:0C3B`). A click on one (`8A89:0879`) costs its value
+  (record +6) × its quantity if its type stacks (`IT1R` +0x0F bit 1):
+  NOT ENOUGH MONEY, NO DEAL! while something is offered, else SOLD! and it
+  moves to the deal box (`8A89:0A82`); if the merchant had another of it, a
+  new one is made in its place (`7372:0FEE`). SELL (`8A89:0D50`) on the
+  thing offered: "I'll give you %u$" (`5F6D:0191` at (92, 71)) for the same
+  value × quantity, TAKE IT adds it to the money and destroys the item
+  (`1A0A:1C94`), SOLD!; I COULDN'T SELL THAT if it's worth 0. Scripts count
+  the merchant's items with SEARCH before and after it to tell whether
   something was bought.
 
 ### Starting gear (`6ECD:1D48`)
@@ -1218,7 +1258,15 @@ missile, 3 right hand, 6 legs, 9 chest, 10 left hand. The engine:
   * Type 5 (0–130) is a digitised sample. The descriptor's word +7 is the
     `BVOC` number, which equals n (0 → 1). Byte +5 is an alias that FM
     devices use for `FVOC` sounds (`3348:02D2`).
-  * Type 4 (131–180) are MIDI note effects for the music driver.
+  * Type 4 (131–180) are MIDI note effects for the music driver: 13-byte
+    descriptors {+0 sequence handle, +2 channel, +3 note, +4 velocity, +5
+    timbre bank (1: `STDPATCH.AD`'s effects), +6 program, +7 volume, +8
+    pan, +9 length in ms, +0xB time left}, played by `3172:0AD9` on a
+    locked channel (controller 114 bank, program, pitch bend centred,
+    volume, pan, note on) and released by `3172:09EC` (10 ms a tick). But
+    `3172:0573` only plays one when the device type is 0 *and* 3 (`cmp 0;
+    jne skip; cmp 3; jne skip`), so they never sound; and nothing asks for
+    them (GPL's SOUND uses 1–127, `SCMD` records and cinematics samples).
 * 19 sample numbers have no `BVOC` in the data (15, 16, 19, 24, 27, 28, 30,
   41, 55, 61, 64, 65, 66, 87, 89, 105, 123, 127, 128).
 * `BVOC` files are Creative VOC, all 8000 Hz unsigned 8-bit. BVOC 58 and 70
@@ -2321,6 +2369,50 @@ whoever changed. Magic resistance (`80F5:1901`) is character record +0x29
 rampager 25): +75 against mind spells (flags 0x26) with Mind Bar (32),
 halved by Low Resistance (31), less 30 + level for Lower Resistance.
 
+### The map screen's icon, quick cast and status word
+
+* **The map** is `WIND` 3001 (`1587:1F83`): `APFM` 1000 the whole screen
+  (handler `1587:1053`) and `APFM` 1001, the Dark Sun icon, 28 × 16 at (10,
+  10) (handler `1587:0059`, events 0x166). `191F:037E` draws `BMP` 5012 there
+  (`6BB8:079A` loads it; frame 0 the grey sun, 1 the burning one); `DS:1170`
+  saves what is under it. Its events: 2 (the pointer on it) burning, 4 (off)
+  grey, 0x40 (a left click) the character screens at the page last shown for
+  the member (`DS:4971`: 1 View Character, 2 the items, 4 spells, else effects),
+  0x100 (a right click) the quick cast for `DS:4979`'s member. In a fight
+  `191F:043B` also draws `BMP` 5016 at (215, 4) with the active member's
+  name and status word (`DS:1172` saves under it).
+* **Quick cast** (`5F6D:08EC`, the manual's Quick Cast): each member has six
+  words at `DS:4AFD + 30·member`, a spell (1–138) or power (139–172) plus 1,
+  the latest first: choosing one (`78A9:2324`) puts it first unless it is
+  already there. With none, the Cast Spells page opens (`5F6D:0CB4`).
+  Otherwise `WIND` 14002 opens at (0, 0) (`6BB8:0152(14002, 0, 0, 5F6D:0043)`):
+  in each of its slots `APFM` 11213–11218 frame 2 of `BMP` 13007 (`78A9:3264(8)`),
+  the `ICON` 1 pixel in (20999 + n, or 3000 + n − 139), and frame 6 (the
+  orange X) over one the member can't use now (a spell level with no casts
+  left, not Okay (`8F23:1DED`), or silenced in a fight; a power `6698:0160`).
+  A click casts it as one chosen from the Cast Spells page; `BUTN` 11305
+  opens that page, 10308 closes. A member not under the player's control
+  gets message 0x3EB instead.
+* **The readied weapons** on View Character (`9106:0B64`): `APFM`
+  11215–11217, each `BMP` 13007's stone, then the member's readied items
+  (`612E:234A`): the first in 11215, a later one in 11216 unless its type
+  (+0x11) is 10, which goes in 11217; a picture of 16 × 16 or less is
+  centred, a bigger one scaled down.
+* **The status word** (`78A9:1FBB`): for a member who isn't Okay, the
+  status's name (`DS:11DC`); for an Okay one, the name of its strongest
+  condition (`78A9:20A0(member, 0, 1)`: the conditions of `7D80:1864`, at
+  most 35, sorted by `78A9:2170`'s rank, a jump into a run of `inc dx`), or
+  Okay with none. The names are `3F8D:0000`'s 6-byte entries {name, `ICON`}.
+  Ranks, highest first: Poisoned 68, Blind 67, Cursed 66, Acid 65, Berserk
+  64, Paralyzed 63, Can't Attack 62, Stuck 61, Charmed 60, No spell use 59,
+  Slowed 58, Afraid 57, Diseased 56, Feeblemind 55, Confused 54, Low
+  Resistance 53, Save penalty 52, Weakened 51, Invisible 50, Hasted 49,
+  Stoneskin 48, Biofeedback 47 … Detect Traps 2, Detect Invis 1.
+* **Only the leader on the map** (`DS:1168`, 0 in the EXE): while it is 0,
+  entering a region (`1587:1F83`) and the end of a fight (`1587:1B43`) hide
+  every other member into the leader (`1587:32E2`, flag 0x80); COLLAPSE
+  PARTY (10313, `6B2B`) toggles it.
+
 ### The combat screen
 
 * **The menu** (`1587:2EAF`, from `1587:1B43`): once the active party member
@@ -2389,10 +2481,14 @@ halved by Low Resistance (31), less 30 + level for Lower Resistance.
 | Mode | Goal |
 |---|---|
 | 0 | none (an attack, or idle) |
-| 1 | **flee**: start from the free cell next to the target nearest the mover (`1A0A:2E99`, else the target's cell), then take the free cell within x ± 4, y − 6 … + 4 of the mover that is farthest from it (`1A0A:2C86`); always re-planned |
-| 10, 11, 13 | the target object's cell |
+| 1 | **flee** (FLEE's target is object 0, `043D:1557`): from the target's cell, the free cell within x ± 4, y + 4 … − 6 of the mover (that order, its own footprint left out) strictly farthest from it and farther than the mover stands (`1A0A:2C86`); always re-planned |
+| 10, 11, 13, 18 | the free cell next to the target nearest the mover (`1A0A:2E99`: the ring around both footprints, x ascending, y descending), else the target's cell |
 | 15 | the cell (+0, +2) |
 | others | no new goal |
+
+Reaching the goal just stops the mover (`0D35`): no order ends there. GOXY
+alone ends (mode 0) when its plan is the same as the last one, from the
+same cell to the same goal (`0ED5`).
 
 ### Not traced yet
 

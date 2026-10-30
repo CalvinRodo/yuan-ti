@@ -33,14 +33,18 @@ with `dotnet test` and reused by tools.
 - Godot 4.7.2, **.NET edition**. The Makefile expects it in
   `~/.local/opt/Godot_v4.7.2-stable_mono_linux_x86_64/`; override with
   `GODOT=/path/to/godot`.
-- For music, a General MIDI SoundFont (`.sf2`). The engine uses, in order:
-  the `DARKSUN_SOUNDFONT` environment variable, `soundfont` under `[audio]`
-  in `user://settings.cfg`, any `.sf2` in the Godot user data folder or the
-  game folder, then the system's (`/usr/share/sounds/sf2`,
-  `/usr/share/soundfonts`, …; FluidR3_GM is preferred over the small
-  TimGM6mb that Debian and Ubuntu install by default). Without one the game is
-  silent. Synthesis is done by [MeltySynth](https://github.com/sinshu/meltysynth)
-  (MIT licence), from NuGet.
+- For music, nothing more: without a SoundFont the engine plays the
+  original's AdLib music. For General MIDI music, a SoundFont (`.sf2`): the
+  engine uses, in order, the `DARKSUN_SOUNDFONT` environment variable,
+  `soundfont` under `[audio]` in `user://settings.cfg`, any `.sf2` in the
+  Godot user data folder or the game folder, then the system's
+  (`/usr/share/sounds/sf2`, `/usr/share/soundfonts`, …; FluidR3_GM is
+  preferred over the small TimGM6mb that Debian and Ubuntu install by
+  default). SoundFonts are synthesized by [MeltySynth](https://github.com/sinshu/meltysynth)
+  (MIT licence); the FM music by the Miles AIL drivers of
+  [AIL2.NET](https://github.com/codengine/AIL2.NET) (MIT) on
+  [NukedOPL3Sharp](https://github.com/codengine/NukedOPL3Sharp) (LGPL-2.1),
+  all from NuGet.
 - A copy of the game. The engine looks, in order, at the `DARKSUN_DIR`
   environment variable, the folder chosen on the start screen (saved in
   `user://settings.cfg`), and the repository's `dark_sun/` folder.
@@ -251,8 +255,11 @@ powers known in a discipline (LEVEL's button goes round the disciplines), crosse
 one, and scrolls teach more. A rest (REQUEST 1 or 4) fills the casts again. The small buttons by each box make that member leader
 and turn computer control on or off. A walk click where no way leads says NO PATH FROM HERE, and a verb on
 something out of the leader's sight NO LINE OF SIGHT, in the original's message box (`WIND` 10501 over `BMP`
-10001), until a click or a key. A script's SHOP opens the items as a store: click the goods then
-the pack to buy (at the item's value), put things in the six slots by SELL to sell (at half).
+10001), until a click or a key. A script's SHOP opens the items as the original's store: the
+goods in the six slots on the right, priced (a stack at its value times its quantity), MORE turning their
+pages; a click buys one, and the merchant makes another of what it has two of. SELL, with a thing held (or
+the thing put on the goods), asks "I'll give you N$" for the same value: TAKE IT or LEAVE IT. Quest items
+(worth 9999) aren't traded.
 Esc on the map, or the wide button, opens the original GAME MENU: the character screens, exit, save
 and load, preferences (music and sound, GAME DIFFICULTY scaling creatures' hit points, animations),
 the overhead map, centre on the leader, the move, look and attack cursors, and collapse party (its icon
@@ -264,6 +271,13 @@ highlighted icons (the spell button's flames, the menu button's lava) and enchan
 A right-click on the map turns the pointer the same way (MOVE, ATTACK, LOOK, a held item). As in
 DSUN.EXE (the clock runs only under the move pointer, `1DF3:29E8`), out of a fight the map holds still
 under any pointer but MOVE (creatures, animations, the clock) until a chosen verb sends the character on.
+As in the original (the manual: "by default, only the leader of your party appears on the map"), a new
+game shows the leader alone, the others gathered into it, and they gather again after each fight; COLLAPSE
+PARTY spreads them out and they stay so until it is pressed again (Options → Leader alone off starts new
+games with everyone shown). The Dark Sun icon in the top left corner (`BMP` 5012) opens the character
+screens at the page last shown; a right click opens quick cast: the six spells and powers the member chose
+last, an orange X over those it can't use now; one clicked is cast as from the Cast Spells page (in a fight
+at once, else that page opens with it picked). `--check-quick-cast` tries it.
 COLLAPSE PARTY makes the other members walk into the selected leader and disappear
 (as in the original, quickly: three times their walking pace; Options → Quick collapse off walks them in);
 they travel with that character, still present for scripts, dialogue and character screens.
@@ -643,11 +657,21 @@ a character of every race, gender and class and checks the art is there.
 
 ## Sound
 
-Music: see the SoundFont notes above. The music level, which scripts set
+Music: `[audio] music_device` (Options → Music device) picks what plays it:
+`soundfont` (General MIDI, see the SoundFont notes above), `adlib` or `opl3`
+(the original's FM sound: the Miles AdLib or Sound Blaster Pro driver on an
+emulated OPL chip, with the game's `STDPATCH.AD` timbres; DSUN.EXE plays FM
+cards the General MIDI tracks too), or `auto` (the default: a SoundFont if
+there is one, else AdLib). MT-32 isn't offered (it needs Munt and the
+MT-32's ROMs). The music level, which scripts set
 (REQUEST 16) and fights change (the level the region's `RDAT` gives the
 creature fought, then 1 when it's over), plays a section of the track as in
 the original (`MusicSections`). `-- --check-music` plays every level of
-every region track and checks that its section comes.
+every region track and checks that its section comes, and that every
+track's timbres are in `STDPATCH.AD` and sound on both FM cards (it prints
+their loudness against the SoundFont's). Sounds 131–180, the original's MIDI
+note effects, aren't played: DSUN.EXE never plays them either, and no script
+asks for them.
 Sound effects come from the game
 (`BVOC` in `RESOURCE.GFF`): what animations play (`SCMD`) when the object is
 on screen, and what scripts play (SOUND). `[audio] sound_volume` (0–1, 0

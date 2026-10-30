@@ -264,7 +264,7 @@ public sealed class ViewCharacterText
         }
         _boxHp[slot].Text = m is null ? "" : $"{m.Hp}/{m.MaxHp}";
         _boxPsp[slot].Text = m is null ? "" : $"{m.Psp}/{m.MaxPsp}";
-        _boxStatus[slot].Text = m is null ? "" : PartyFrames.StatusName(m.Status);
+        _boxStatus[slot].Text = m is null ? "" : PartyFrames.StatusName(m.Status, m.Effect);
         Color colour = selected ? Yellow : Grey;
         _boxHp[slot].LabelSettings = GameFonts.Settings(colour);
         _boxStatus[slot].LabelSettings = GameFonts.Settings(colour);

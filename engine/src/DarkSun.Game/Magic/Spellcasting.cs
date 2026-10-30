@@ -207,6 +207,14 @@ public sealed class Spellcasting(CharacterRules rules)
     public bool CanCast(Character c, int number) =>
         Get(number) is { Kind: not SpellKind.Psionic } s && CastsLeft(c, s.Kind, s.Level) > 0 && Known(c, s.Kind, s.Level).Contains(s);
 
+    /// <summary>
+    /// Can the character cast spell or use power <paramref name="number"/> now, as the
+    /// quick-cast window marks it (<c>5F6D:08EC</c>: a spell with a cast of its level
+    /// left, a power known with the points for it)?
+    /// </summary>
+    public bool CanUse(Character c, int number) =>
+        number is >= FirstPower and <= LastPower ? c.Powers.Contains(number) && Psp(c) >= Rules.PowerCost : CanCast(c, number);
+
     /// <summary>Every spell the character could cast now, in number order.</summary>
     public IEnumerable<Spell> Castable(Character c) =>
         Levels(c).Where(l => CastsLeft(c, l.Kind, l.Level) > 0).SelectMany(l => Known(c, l.Kind, l.Level)).OrderBy(s => s.Number);

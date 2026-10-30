@@ -279,12 +279,23 @@ this milestone brings most of the game's content.
       `--check-items`; `--give=RDFF,…` and `--open-items` for testing.
 - [x] FIGHT's combat (M6) and every REQUEST code the shipped scripts use
       (see M6, "The rest of the REQUEST codes").
-- [ ] Not traced (#80): SEARCH's per-member work (`0826:0344`, op 3 is taken to
-      count items), the range bytes, the shop screen, what happens to a
-      dead creature (`612E:1AAF`: here it leaves the map), healing details
-      of a rest, class restrictions on wearing items. FLEE and the orders'
-      arrival distances are approximations; the original order handlers
-      (`1A0A`) are not ported line by line.
+- [x] Traced (#80): SEARCH's per-member work (`0826:0344`: one criterion
+      weighs each item by its field, more filter on the first's value and
+      weigh by the second's; op 3 counts items, not their quantity; the
+      smallest of nothing is 99 999 999), a dead creature (`612E:1AAF` →
+      `896E:0C92` → `612E:2659`: a body within 7 pixels at random takes what
+      it carried, destroyed or not), a rest's healing (`87B3:073D`: the
+      party's best cleric and druid above level 4 cure disease, curse and
+      paralysis, a druid above 6 poison; whoever was poisoned when the rest
+      began dies), the store (`8A89`: goods in the six right-hand slots at
+      their value, sold back at the same, restocked when the merchant has
+      two; MORE pages, SELL asks "I'll give you %u$"), and FLEE (`1A0A:2C86`:
+      away from object 0, to the farthest free cell in reach). The orders'
+      goal is the free cell next to the target (`1A0A:2E99`), FOLLOW's too.
+- [ ] Not traced: class restrictions on wearing items; the original never
+      ends GO, FETCH or FOLLOW on arrival (`1A0A:0B0F` only stops the mover),
+      which the engine still does, as its scripted scenes expect; the store's
+      deal box (a purchase goes to the pack here).
 - [x] SOUND (251 uses): the host queues it and the region view plays it
       through `Sounds`, like `SCMD` sounds (`play_sound_effect`, sound n is
       `BVOC` n). Every script uses a sample number (1–127, none of the MIDI
@@ -371,9 +382,10 @@ this milestone brings most of the game's content.
       MORE (Space, Enter, a click on the text) reads on, answers CONTINUE,
       opens the choices or puts the window away; 1–9 and Y / N choose.
       Scaled with the screen like the 320 × 200 screens, in the game's font
-      (`FONT` 100: `GameFonts`). Not yet: `WIND` 3500 (text without a
-      portrait; every window here has the portrait box; #81). `--check-dialogue`,
-      and `--talk` to start a conversation for testing.
+      (`FONT` 100: `GameFonts`). INPUT_STRING types into `WIND` 3500's
+      edit box (`EBOX` 4500), opened at (0, 140) under the text window, as
+      `84C9:0253` mode 4 does (#81). `--check-dialogue`, `--talk` to start a
+      conversation, and `--gpl=N@addr` to run a script, for testing.
 - [x] The UI approach: screens are Godot `Control`s built from the original
       windows' data and art (`UiWindowView`: a `WIND` with its `BUTN`s,
       `APFM` slots, `EBOX` text boxes, `ACCL` keys and backdrop `BMP`, in the
@@ -517,10 +529,16 @@ this milestone brings most of the game's content.
       "Character screens"): View Character's bars and hover texts, the
       inventory's bars, hit points and status words, as DSUN.EXE draws them
       (`PartyFrames`).
-- [ ] The remaining `APFM`s' drawing (#81): the quick weapons (`9106:0B64`,
-      `WIND` 14002), the status word's current effect for Okay members, and
-      only the leader on the map (the manual: the others show in combat or
-      with COLLAPSE PARTY).
+- [x] The remaining `APFM`s (#81): the Dark Sun icon on the map (`APFM`
+      1001, `BMP` 5012; a left click the character screens at the page last
+      shown, a right click quick cast); quick cast (`WIND` 14002,
+      `5F6D:08EC`: each member's six last spells and powers, crossed out
+      when they can't be used, `Character.QuickCasts`, `--check-quick-cast`);
+      the status word's strongest condition for Okay members (`78A9:20A0`,
+      `Conditions`); only the leader on the map until COLLAPSE PARTY spreads
+      the party out, the others gathered again after a fight (`DS:1168`,
+      `[game] leader_alone`). The readied weapons (`9106:0B64`) were drawn
+      already.
 
 ---
 
@@ -747,13 +765,20 @@ executable, not in the data.
       or configured; the Godot `Music` autoload streams it. The General MIDI
       versions (`GSEQ`) are played. Fades and track changes follow
       `35D1:0265`/`012D`.
-- [ ] Bundle (or offer to download) a good freely licensed SoundFont, for
-      systems without one; a music volume setting (#82).
-- [ ] An OPL (AdLib) emulation option for the original sound (`ADV` drivers,
-      `TIMB` timbres), and MT-32 (`LSEQ`) (#82).
+- [x] The music device (#82, `[audio] music_device`, the Options window's
+      MUSIC DEVICE): a SoundFont, or the original's FM sound, the Miles AdLib
+      or Sound Blaster Pro (OPL3) driver (AIL2.NET) on Nuked-OPL3 with the
+      game's `STDPATCH.AD` timbres (`FmSynth`; FM cards play `GSEQ` in DSUN.EXE
+      too, `3256:00D3`). AUTO, the default, falls back to AdLib without a
+      SoundFont, so no system is silent; a music volume setting. No SoundFont
+      is bundled or downloaded: GeneralUser GS asks not to be linked to
+      directly, and bundling one is a licensing choice for the project.
+- [ ] MT-32 (`LSEQ`): AIL2.NET gives the MT-32 driver's messages, but
+      synthesizing them needs Munt and the MT-32 ROMs, which aren't free.
 - [x] Sound effects: `BVOC` (Creative `.VOC`) decoded by `Voc` to Godot
       `AudioStreamWAV` (`Sounds`). Sounds 131–180 (MIDI notes for the music
-      driver) are not played yet (#82).
+      driver) never play in DSUN.EXE either: `3172:0573` requires the device
+      type to be 0 and 3 at once, and nothing asks for them (#82).
 - [x] Which music plays where: the menu plays 17; a region plays the track
       in its `RDAT` record (`+0x2F`); cinematics play 26–29 (`CINE.GFF`).
       GPL's `MUSIC` command exists but no script uses it.
