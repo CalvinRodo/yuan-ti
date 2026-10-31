@@ -3,10 +3,17 @@ namespace DarkSun.Game.Scripting;
 /// <summary>
 /// A repair to a shipped script: at <paramref name="Offset"/> in GPL
 /// <paramref name="File"/>, the bytes <paramref name="Expect"/> become
-/// <paramref name="Replace"/> (the same length). A script whose bytes differ
-/// (another release, a mod) is left alone.
+/// <paramref name="Replace"/>. A script whose bytes differ (another release, a
+/// mod) is left alone. A longer <paramref name="Replace"/> is a detour: it
+/// goes after the end of the file, followed by a JUMP back, and
+/// <paramref name="Expect"/>'s place becomes a JUMP to it (the rest EXIT_GPL,
+/// never reached), so no address in the file moves.
 /// </summary>
-public sealed record GplRepair(string Id, int File, int Offset, byte[] Expect, byte[] Replace, bool OnByDefault, string What);
+public sealed record GplRepair(string Id, int File, int Offset, byte[] Expect, byte[] Replace, bool OnByDefault, string What)
+{
+    /// <summary>Where in a detour's <see cref="GplRepair.Replace"/> an address (a big-endian word) counts from the detour's start, as an IF's or ELSE's in it does.</summary>
+    public int[] Relocate { get; init; } = [];
+}
 
 /// <summary>
 /// Script bugs in the shipped <c>GPLDATA.GFF</c> (GOG 1.10) and their repairs,
@@ -36,6 +43,34 @@ public static class GplRepairs
         // Gedron: after the extract is delivered, Linara's talk dead-ends with no menu.
         new("script-repairs.linara-menu", 68, 0xAA, Hex("13134e"), Hex("1300d1"), true,
             "Linara's talk goes on to her menu (GPL 68 @209) after the extract, so Jasmine's spellbook can come up"),
+        // The slave pens' halfling (GPL 31) reads the race from the combat record, which has none (0): a halfling
+        // in the party is never greeted as one, and the insult names no race. The race is the sheet's, .71.20.
+        new("script-repairs.halfling-greeting", 31, 0x3B, Hex("18b180250114d78f06"), Hex("18b18025024714d78f06"), true,
+            "the halfling greets a halfling in the party as one of his own (GPL 31 @3B: .71.20, the race)"),
+        new("script-repairs.halfling-insult", 31, 0x254, Hex("17b180250114"), Hex("17b18025024714"), true,
+            "the halfling's insult names the speaker's race (GPL 31 @254: .71.20)"),
+        // Region 8's bodies: the ranger tracking roll (GPL 210 @5F8) can never succeed. The ranger test reads the
+        // usable item classes from the combat record (.17, not .71.17); the level bonus tests class codes as bit
+        // masks (a ranger's code is 13–16); and the roll is the wrong way round (Wisdom + 8 and more < RAND(20)).
+        new("script-repairs.tracking-ranger", 210, 0x5FD, Hex("18e28c20b1802601110200e1"), Hex("18e28c20b180260247110200e1"), true,
+            "a ranger can try to read the tracks by region 8's bodies (GPL 210 @5FD: .71.17, the classes)"),
+        .. new[] { (0x60C, 0x23), (0x622, 0x24), (0x638, 0x25) }.Select((t, i) => new GplRepair($"script-repairs.tracking-level-{i + 1}", 210, t.Item1,
+            Hex($"18e28c20b180260247{t.Item2:x2}0200e1"), Hex($"18e2b180260247{t.Item2:x2}d98f0ce1d5e2b180260247{t.Item2:x2}da8f11e1"), true,
+            $"the tracking roll's ranger level bonus counts class {i + 1} if it is a ranger's, 13–16 (GPL 210 @{t.Item1:X}: .71.{t.Item2} > 12 && < 17)")),
+        new("script-repairs.tracking-roll", 210, 0x6CC, Hex("188204dae28c528f14e1"), Hex("18e28c528f14e1da8204"), true,
+            "the tracking roll succeeds under the ranger's score, not over it (GPL 210 @6CC: RAND(20) < lnum[4])"),
+        // The slave pens' sewer grate (GPL 137): the search for a weapon in hand stops at once (lflag[3] == 1 where
+        // it was just set to 0), so "hack the lock off" is never offered; and a hack that works never opens it.
+        new("script-repairs.grate-hack-offered", 137, 0xA65, Hex("18e28c4989258200e1d5e28e03d78f01e1"), Hex("18e28c4989258200e1d5e28e03d78f00e1"), true,
+            "the sewer grate offers \"hack the lock off\" to a member with a weapon in hand (GPL 137 @A65)"),
+        new("script-repairs.grate-hack-his-her", 137, 0x9E0,
+            Hex("4f0062920541cfae3c7979f3cdd766cf283461c7af9a0e9a32a0d9bf1eb41bf36641df4f4d083469e68018"),
+            // " successfully hacks the lock off with "; IF .71.21 == 1 "his " ELSE "her " ENDIF
+            Hex("4f0062920541cfae3c7979f3cdd766cf283461c7af9a0e9a32a0d9bf1eb41bf36641df4f4d080180"
+                + "18b18025024715d78f013e003f4f00629205d1a79a00603f004c4f00629205d19792006067"), true,
+            "a hack on the sewer grate says his or her as picking it does (GPL 137 @9E0)") { Relocate = [51, 64] },
+        new("script-repairs.grate-hack-opens", 137, 0xA14, Hex("4f006292055c8018"), Hex("4f006292055c80184f00628100168f01cd01f9"), true,
+            "a hack that takes the sewer grate's lock off opens it, as picking it does (GPL 137 @A14: \"The grate opens.\", gflag[505])"),
         // The final battle: the stage gate (GPL 62 @4345) exits without re-arming inside its window. With the
         // game clock running the gate is polled again and waits its window out, so this is off by default.
         new("script-repairs.final-battle-gate", 62, 0x10F1, Hex("10f9"), Hex("00ef"), false,
@@ -46,16 +81,37 @@ public static class GplRepairs
     public static byte[] Apply(int file, byte[] code, IEnumerable<GplRepair> repairs)
     {
         byte[]? patched = null;
+        List<byte>? detours = null;
         foreach (GplRepair r in repairs.Where(r => r.File == file))
         {
-            if (r.Offset + r.Expect.Length <= code.Length && code.AsSpan(r.Offset, r.Expect.Length).SequenceEqual(r.Expect))
+            if (r.Offset + r.Expect.Length > code.Length || !code.AsSpan(r.Offset, r.Expect.Length).SequenceEqual(r.Expect)
+                || r.Replace.Length < r.Expect.Length || r.Replace.Length > r.Expect.Length && r.Expect.Length < 3)
             {
-                patched ??= (byte[])code.Clone();
-                r.Replace.CopyTo(patched, r.Offset);
+                continue;
             }
+            patched ??= (byte[])code.Clone();
+            if (r.Replace.Length == r.Expect.Length)
+            {
+                r.Replace.CopyTo(patched, r.Offset);
+                continue;
+            }
+            detours ??= [GplOpcodes.ExitGpl]; // a script that ran off its end still stops there
+            int at = code.Length + detours.Count;
+            byte[] detour = [.. r.Replace, .. Jump(r.Offset + r.Expect.Length)];
+            foreach (int i in r.Relocate)
+            {
+                int address = (detour[i] << 8 | detour[i + 1]) + at;
+                (detour[i], detour[i + 1]) = ((byte)(address >> 8), (byte)address);
+            }
+            detours.AddRange(detour);
+            patched.AsSpan(r.Offset, r.Expect.Length).Fill(GplOpcodes.ExitGpl);
+            Jump(at).CopyTo(patched, r.Offset);
         }
-        return patched ?? code;
+        return detours is null ? patched ?? code : [.. patched!, .. detours];
     }
+
+    /// <summary>JUMP to <paramref name="address"/> (a 15-bit number).</summary>
+    private static byte[] Jump(int address) => [GplOpcodes.Jump, (byte)(address >> 8), (byte)address];
 }
 
 /// <summary>Scripts with <see cref="GplRepairs"/> applied to the <c>GPL</c> files as they load.</summary>

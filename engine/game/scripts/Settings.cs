@@ -170,7 +170,7 @@ public static class Settings
         set => Set("combat_log", "size", value);
     }
 
-    /// <summary>Repair the shipped scripts' known bugs as they load (<c>GplRepairs</c>: dead triggers in Darkhold, the Lava Rifts ranger, Linara).</summary>
+    /// <summary>Repair the shipped scripts' known bugs as they load (<c>GplRepairs</c>: dead triggers in Darkhold, the Lava Rifts ranger, Linara, the halfling, ranger tracking, the sewer grate).</summary>
     public static bool ScriptRepairs
     {
         get => Get("game", "script_repairs", true);

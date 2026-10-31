@@ -349,8 +349,11 @@ this milestone brings most of the game's content.
       `PartySkillCheckBest`); traps (`REQUEST(7)`); SETTHING and the
       "thing"; STRING_COMPARE; INPUT_STRING (a text box: the manual-word
       check, any case); item charges. OpenDS's script repairs (Darkhold's
-      dead triggers, the Lava Rifts ranger, Linara) apply as the scripts
-      load (`GplRepairs`, `script_repairs`, on); the final battle's gate
+      dead triggers, the Lava Rifts ranger, Linara) and ours (the slave
+      pens' halfling reading the race, region 8's ranger tracking, the
+      sewer grate's hack: #99–#101) apply as the scripts load
+      (`GplRepairs`, `script_repairs`, on; one too long to fit in place
+      runs as a detour after the file's end); the final battle's gate
       repair is there but off (with the clock running the gate waits its
       window out). Conditions outside fights are the spells cast on the map
       or still running from a fight (`Character.Lasting`): the skill checks

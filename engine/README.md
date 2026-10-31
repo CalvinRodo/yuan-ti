@@ -120,7 +120,9 @@ The game clock (`gname[9]`) runs as DSUN.EXE's does, so timed scripts move
 on; thief skills, ability rolls and traps are rolled as the EXE rolls them
 (the skill tables are in `characters.json`). The shipped scripts' known bugs
 found by the OpenDS project (Darkhold's dead triggers, the Lava Rifts ranger,
-Linara's conversation) are repaired as they load; the Options window's
+Linara's conversation) and here (the slave pens' halfling greeting a
+halfling, region 8's ranger tracking, the sewer grate's "hack the lock off")
+are repaired as they load; the Options window's
 "Repair scripts" (`script_repairs`) turns that off.
 PgUp/PgDn browse the other regions, with the party in the middle
 of the map. The party is four placeholder sprites (any object whose `SCMD`

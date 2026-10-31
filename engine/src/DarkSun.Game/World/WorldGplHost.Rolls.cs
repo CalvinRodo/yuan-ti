@@ -24,8 +24,14 @@ public sealed partial class WorldGplHost
     private WorldObject? _thingOwner;
     private int _thingNext;
 
-    /// <summary>The engine variable SETTHING's item lives in (raw 0x2B, <c>gname[11]</c>).</summary>
+    /// <summary>The engine variable SETTHING's item lives in (raw 0x2B, <c>gname[11]</c>), by its id.</summary>
     private const int ThingVariable = 0x2B;
+
+    /// <summary>SET_OTHER's engine variable (raw 0x2C, <c>gname[12]</c>).</summary>
+    private const int OtherVariable = 0x2C;
+
+    /// <summary>A carried item SET_OTHER made "other" (<see cref="SetOther"/>).</summary>
+    private Item? _other;
 
     /// <summary>
     /// The inventory item being used (USE, or the first of USE WITH). Scripts get it in
@@ -59,14 +65,17 @@ public sealed partial class WorldGplHost
         GplRecord? record = field.Id == (0x8000 | ThingVariable) && _thing is { } thing
             ? new GplItemRecord(Fields, thing, world.Items)
             : world.Resolve(field.Id) is { } obj ? new GplObjectRecord(Fields, obj, world, this)
-            : field.Id >= 0x8000 && UsedItem is { } used && world.EngineVariable(field.Id & 0x7FFF) == used.Id
-                ? new GplItemRecord(Fields, used, world.Items) : null;
+            : field.Id >= 0x8000 && CarriedItem(world.EngineVariable(field.Id & 0x7FFF)) is { } carried
+                ? new GplItemRecord(Fields, carried, world.Items) : null;
         foreach (byte f in field.Path[..^1])
         {
             record = record?.Follow(f);
         }
         return record;
     }
+
+    /// <summary>The item in a pack a variable names by its id: the one being used, SETTHING's, or SET_OTHER's.</summary>
+    private Item? CarriedItem(int id) => new[] { UsedItem, _thing, _other }.FirstOrDefault(i => i is not null && i.Id == id);
 
     /// <summary>A party member's combat record (58 bytes) as DSUN.EXE would hold it, from the sheet.</summary>
     internal byte[] PartyCombatBytes(WorldObject o)
@@ -300,6 +309,7 @@ public sealed partial class WorldGplHost
             return 0;
         }
         _thing = owner.Items[_thingNext++];
+        world.SetEngineVariable(ThingVariable, _thing.Id); // gname[11], which SET_OTHER can take
         return 1;
     }
 }
