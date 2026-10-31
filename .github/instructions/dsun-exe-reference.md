@@ -784,7 +784,10 @@ From the handlers (2026-10-18); the engine's model is `DarkSun.Game.World`.
     range, and also sets other.
   * SET_OTHER(e): a name, or 9999, stores its first match's index in
     `gname[12]` (`3781:0361`), with acc 1 if found, else 0. An index is
-    stored as given.
+    stored as given, so `SET_OTHER(gname[11])` makes SETTHING's item (an
+    object in its pack) "other": GPL 137 finds the weapon in hand this way
+    and reads it as `obj_special(0x2c)`. The engine keeps the item's id in
+    `gname[11]` and resolves it to the carried item.
   * GET_STATUS(who) (`1A0A:02B6`) reads, for |who| 1–50, the byte table at
     `DS:0333` (a byte per name), else 8. The table starts at 0 and keeps
     the status a wound left the creature in: `612E:18DA` (damage, in a fight

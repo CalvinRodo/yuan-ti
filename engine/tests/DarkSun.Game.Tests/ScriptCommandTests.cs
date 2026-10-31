@@ -300,6 +300,22 @@ public class ScriptCommandTests
     }
 
     [Fact]
+    public void SetOtherTakesTheThingSoOtherReadsTheItem()
+    {
+        // GPL 137's search for a weapon in hand: SETTHING(gname[5], n); IF .85 == 3: SET_OTHER(gname[11]); then obj_special(0x2c).72.
+        GameWorld world = GameWorldTests.World();
+        world[0]!.Items.Add(world.NewItem(200, slot: 3)!);
+        var (_, host, machine) = Run(world);
+
+        Assert.Equal(1, host.Execute(machine, Command("SETTHING", 0, 9999)));
+        int thing = host.ReadEngineVariable(machine, 0x2B);
+        Assert.Equal(-200, thing);
+        Assert.Equal(1, host.Execute(machine, Command("SET_OTHER", thing)));
+        Assert.Equal(-200, host.ReadField(machine, Ref(0x8000 | 0x2C, 72)));
+        Assert.Equal(3, host.ReadField(machine, Ref(0x8000 | 0x2C, 85)));
+    }
+
+    [Fact]
     public void AnItemUsedFromAPackIsTheTargetScriptsReadAndWrite()
     {
         // USE on the Wand of Metal Detection (GPL 85): obj_special(0x27).86 > 0, then BYTE_DEC it.
@@ -377,7 +393,25 @@ public class ScriptCommandTests
 
         byte[] other = new byte[0x40];
         Assert.Same(other, GplRepairs.Apply(195, other, [guard]));
-        Assert.Equal(6, GplRepairs.All.Count(r => r.OnByDefault));
+        Assert.Equal(16, GplRepairs.All.Count(r => r.OnByDefault));
+    }
+
+    [Fact]
+    public void ARepairLongerThanWhatItReplacesRunsAsADetourAfterTheFile()
+    {
+        // 0: lnum[0] = 1; EXIT. The repair: ACCUM <= 1; IF(@+11) lnum[0] = 2; ENDIF, the IF's address counted from the detour.
+        byte[] code = Convert.FromHexString("168f01820031");
+        var repair = new GplRepair("test", 1, 0, Convert.FromHexString("168f018200"), Convert.FromHexString("188f013e000b168f02820067"), true, "")
+        {
+            Relocate = [4],
+        };
+        byte[] repaired = GplRepairs.Apply(1, code, [repair]);
+
+        // 0: JUMP(@7), never-reached EXIT_GPLs; 6: EXIT, 7: the detour (IF @0x12), JUMP(@5) back.
+        Assert.Equal("1200073131" + "31" + "31" + "188f013e0012168f02820067" + "120005", Convert.ToHexString(repaired).ToLowerInvariant());
+        var m = new GplMachine(new OneScript(repaired), new LoggingGplHost(), [], new BorlandRandom(1));
+        Assert.True(m.Run(new GplEntry(1, 0)).Ok);
+        Assert.Equal(2, m.Memory.Read(new GplVariable(GplVarType.LocalNum, 0)));
     }
 
     [Fact]

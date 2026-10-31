@@ -19,6 +19,7 @@ public static class GplOpcodes
     public const byte Compare = 0x17;
     public const byte LoadAccum = 0x18;
     public const byte EndFunction = 0x19;
+    public const byte ExitGpl = 0x31;
     public const byte Request = 0x22;
     public const byte Search = 0x33;
     public const byte SetRecord = 0x40;

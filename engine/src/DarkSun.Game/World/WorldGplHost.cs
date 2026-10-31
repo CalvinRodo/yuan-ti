@@ -310,9 +310,19 @@ public sealed partial class WorldGplHost : DialogueGplHost
         return null;
     }
 
-    /// <summary>SET_OTHER: a name (or 9999) picks its first match; an index is taken as it is.</summary>
-    private static int SetOther(GameWorld world, int value)
+    /// <summary>
+    /// SET_OTHER: a name (or 9999) picks its first match; an index is taken as it is.
+    /// SETTHING's item (<c>SET_OTHER(gname[11])</c>, GPL 137's weapon in hand) becomes
+    /// "other" itself, for <c>obj_special(0x2c)</c> to read.
+    /// </summary>
+    private int SetOther(GameWorld world, int value)
     {
+        if (_thing is { } thing && value == thing.Id && world.EngineVariable(ThingVariable) == value)
+        {
+            _other = thing;
+            world.SetEngineVariable(OtherVariable, value);
+            return 1;
+        }
         if (value >= 0 && value != GameWorld.None)
         {
             world.SetEngineVariable(0x2C, value);
