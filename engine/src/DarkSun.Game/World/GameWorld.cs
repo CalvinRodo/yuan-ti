@@ -89,6 +89,9 @@ public sealed class WorldObject
     /// <summary>For an item (an object whose <c>RDFF</c> is an item record): that record.</summary>
     public ItemRecord? Item { get; init; }
 
+    /// <summary>The inventory item this object stands in for, off the map (use with… from a pack).</summary>
+    public Item? StandsFor { get; init; }
+
     public Walker? Walker { get; set; }
 
     /// <summary>Cell for objects without a walker.</summary>
@@ -496,6 +499,18 @@ public sealed partial class GameWorld
         }
     }
 
+    /// <summary>
+    /// <c>gname[0]</c> (<c>377E:0019</c>): 0 out of a fight, 1 once one starts (<c>7372:030B</c>,
+    /// <c>612E:1468</c>), 2 once its turns are being taken (<c>1587:3866</c>), 0 again when it is over
+    /// (<c>1587</c> takes <c>612E:04A7</c>'s answer). Scripts exit when it isn't 0: the region exits
+    /// (GPL 80) and most talk, so a member stepping on one mid-fight isn't offered it.
+    /// </summary>
+    public int CombatState
+    {
+        get => EngineVariable(0x20);
+        set => SetEngineVariable(0x20, value);
+    }
+
     /// <summary>The object a special reference names: <c>obj_special(n)</c> is the object whose index engine variable n holds.</summary>
     public WorldObject? Special(int n) => this[EngineVariable(n)];
 
@@ -581,8 +596,30 @@ public sealed partial class GameWorld
         }
     }
 
-    /// <summary>GET_STATUS: the named creature's status, 8 if there is none (<c>1A0A:02B6</c>).</summary>
-    public int Status(int who) => First(who) is { Record: not null } c ? c.Status : 8;
+    /// <summary>
+    /// GET_STATUS (<c>1A0A:02B6</c>): for a creature named 1–50 (|<paramref name="who"/>|) the
+    /// status <see cref="NamedStatuses"/> last kept for it, wherever it is; 8 for any other name.
+    /// </summary>
+    public int Status(int who) => Math.Abs(who) is > 0 and <= LastNamedStatus and var n ? NamedStatuses[n] : Vitals.Destroyed;
+
+    /// <summary>The names GET_STATUS keeps a status for: 1–50.</summary>
+    public const int LastNamedStatus = 50;
+
+    /// <summary>
+    /// GET_STATUS's table (<c>DS:0333</c>, a byte per name 1–50): 0 until the creature of that
+    /// name is first hurt, then the status damage left it in (<c>612E:18DA</c>), kept across
+    /// regions (<see cref="RegionMemory.NamedStatuses"/>); a new one if not given.
+    /// </summary>
+    public int[] NamedStatuses { get; init; } = new int[LastNamedStatus + 1];
+
+    /// <summary><c>612E:18DA</c>: damage to a creature puts its status in <see cref="NamedStatuses"/> under its name, if 1–50.</summary>
+    public void NoteStatus(WorldObject o)
+    {
+        if (o.Kind != ObjectKind.Thing && Math.Abs(o.Id) is > 0 and <= LastNamedStatus and var n)
+        {
+            NamedStatuses[n] = o.Status;
+        }
+    }
 
     /// <summary><c>REQUEST(18)</c> (<c>87B3:12DC</c>): set the allegiance of matching creatures outside the party.</summary>
     public void SetAllegiance(int who, int value)

@@ -71,6 +71,9 @@ public sealed record SaveGame
 
     public List<RegionState> Regions { get; init; } = [];
 
+    /// <summary>GET_STATUS's table (<see cref="RegionMemory.NamedStatuses"/>; empty in saves from before it).</summary>
+    public int[] NamedStatuses { get; init; } = [];
+
     /// <summary>The party's journal: conversations, events, regions visited (null in saves from before it).</summary>
     public History.JournalState? Journal { get; init; }
 
@@ -105,6 +108,7 @@ public sealed record SaveGame
             Sight = [.. machine.Creatures.Sight.Select(s => new SightScriptSave(s.Key, s.Value.Kind, s.Value.Entry, s.Value.Range))],
             Random = machine.Random.State,
             Regions = [.. memory.States.Where(r => r.Region != current), world.Snapshot()],
+            NamedStatuses = [.. world.NamedStatuses],
             Mods = [.. mods],
         };
     }
@@ -144,7 +148,7 @@ public sealed record SaveGame
         machine.Triggers.Load(Triggers, TriggerHeads, TriggerFree);
         machine.Creatures.Load(NoOrders, Sight.Select(s => KeyValuePair.Create(s.Object, (s.Kind, s.Entry, s.Range))));
         machine.Random.State = Random;
-        memory.Load(Regions);
+        memory.Load(Regions, NamedStatuses);
     }
 
     public void Write(string path)

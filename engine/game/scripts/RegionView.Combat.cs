@@ -166,6 +166,7 @@ public partial class RegionView
             }
         }
         _battle = battle;
+        _world.CombatState = 1;
         // 612E:1359 → 6BB8:0EFA: a fight started with a creature takes the music level the region gives it.
         if (attacked is { Kind: not ObjectKind.Party } foe && RegionInfo.Read(Session.Open("RESOURCE.GFF"), _region.Number) is { } region)
         {
@@ -249,6 +250,7 @@ public partial class RegionView
         }
         LeaveFallen(_battle);
         _battle = null;
+        _world.CombatState = 0;
         _combatEvents.Clear();
         (_combatWait, _combatWalk, _castChoice) = (0, null, null);
         _combatPanel.Visible = false;
@@ -279,6 +281,7 @@ public partial class RegionView
             }
         }
         _battle = null;
+        _world.CombatState = 0;
         _castChoice = null;
         _combatPanel.Visible = false;
         HideCombatMenu();
@@ -364,6 +367,10 @@ public partial class RegionView
                     battle.StartRound();
                 }
                 continue;
+            }
+            if (_world.CombatState == 1)
+            {
+                _world.CombatState = 2; // 1587:3866: the fight's turns are under way
             }
             if (current.UnderAi)
             {
@@ -1550,6 +1557,10 @@ public partial class RegionView
         {
             CombatProcess(1.0 / 60);
         }
+        if (_world.CombatState != 2)
+        {
+            problems.Add($"gname[0] is {_world.CombatState} while the fight's turns are taken, not 2 (1587:3866)");
+        }
         if (PlayerTurn is { Source: { } member } caster)
         {
             CheckWandInFight(caster, member, problems);
@@ -1602,6 +1613,10 @@ public partial class RegionView
         if (InCombat)
         {
             problems.Add($"still fighting after {battle.Round} rounds");
+        }
+        else if (_world.CombatState != 0)
+        {
+            problems.Add($"gname[0] is still {_world.CombatState} after the fight");
         }
         int attacks = battle.Log.OfType<AttackRolled>().Count(), damage = battle.Log.OfType<Damaged>().Sum(d => d.Amount);
         if (attacks == 0)

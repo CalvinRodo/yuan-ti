@@ -715,6 +715,7 @@ public partial class RegionView : Node2D
         _objectData = objectData;
         _world = new GameWorld(_region, objectData, Session.ScriptHost.EngineVariables, Session.ScriptHost.PartyMembers, _checking ? 1 : Settings.Difficulty)
         {
+            NamedStatuses = Session.Regions.NamedStatuses,
             PartyClasses = slot => slot < Session.Party.Count
                 ? new DarkSun.Game.Characters.CharacterCreation(Session.Rules, Session.Names, new Random(0)).UsableItemClasses(Session.Party[slot])
                 : null,
@@ -722,6 +723,7 @@ public partial class RegionView : Node2D
             PartySheet = slot => slot < Session.Party.Count ? Session.Party[slot] : null,
             PartyLevel = (slot, k) => slot < Session.Party.Count ? new DarkSun.Game.Magic.Spellcasting(Session.Rules).Level(Session.Party[slot], k) : 0,
         };
+        _world.CombatState = 0; // no fight comes into a region (nor from a save made in one)
         _world.Rested += () =>
         {
             foreach (DarkSun.Game.Characters.Character c in Session.Party)
@@ -2027,7 +2029,7 @@ public partial class RegionView : Node2D
     /// </summary>
     private void SetUseWithItem(Item item)
     {
-        SetUseWith(new WorldObject(item.Id, ObjectKind.Thing, item.Id) { Name = ItemText.Name(_world, item), Item = item.Record });
+        SetUseWith(new WorldObject(item.Id, ObjectKind.Thing, item.Id) { Name = ItemText.Name(_world, item), Item = item.Record, StandsFor = item });
         _useWithItem = item;
     }
 
@@ -2247,6 +2249,7 @@ public partial class RegionView : Node2D
         }
         if (verb == Verb.UseWith && with is not null)
         {
+            Session.ScriptHost.UsedItem = with.StandsFor;
             if (scripts.OnUseWith(actor, with.Index, target.Index) is { } paired)
             {
                 ReportScript($"use {Describe(with)} with {Describe(target)}", paired);
@@ -3433,6 +3436,31 @@ public partial class RegionView : Node2D
         Session.ScriptHost.Dialogue.Clear();
         _dialogueWindow.Refresh();
         me.Items.Remove(journal);
+        // The script reads and spends the used item's own charges: the Wand of Metal Detection (RDFF 30120, GPL 85,
+        // obj_special(0x27).86), asked for copper (one charge; "Any" spends one for itself and one per metal it tries).
+        const int Detector = 30120;
+        if (Session.Scripts.Triggers.MatchObject(GplTriggerList.Use, -Detector) is null)
+        {
+            Session.Scripts.Triggers.AddObject(GplTriggerList.Use, 1, 85, -Detector, global: true); // as MAS 99 makes it
+        }
+        _world.Give(1, -Detector, 0, GameWorld.None);
+        Item detector = me.Items.Last(i => i.Rdff == Detector);
+        detector.Charges = 5;
+        screen.Open(_world, 0, CharacterScreen.Page.Items);
+        screen.Click(Pack, PackIndex(detector), button: MouseButton.Right);
+        window.PressUse();
+        if (Session.ScriptHost.Dialogue.Prompt is GplMenuPrompt)
+        {
+            ReportScript("answer", Session.Scripts.Resume(4)); // Copper
+        }
+        read = string.Concat(Session.ScriptHost.Dialogue.Text.Select(t => t.Text));
+        Expect(detector.Charges == 4 && read.Contains("glows") && !read.Contains("does not activate"),
+            $"USE on the Wand of Metal Detection spends one of its charges ({detector.Charges} left; {read[..Math.Min(read.Length, 80)]})");
+        AnswerForThePlayer();
+        Session.Scripts.Abandon();
+        Session.ScriptHost.Dialogue.Clear();
+        _dialogueWindow.Refresh();
+        me.Items.Remove(detector);
         screen.Open(_world, 0, CharacterScreen.Page.Items);
         screen.Click(Pack, PackIndex(boots), button: MouseButton.Right);
         Expect(window.Visible && !window.UseOffered, "boots have no USE");

@@ -777,8 +777,15 @@ From the handlers (2026-10-18); the engine's model is `DarkSun.Game.World`.
   * SET_OTHER(e): a name, or 9999, stores its first match's index in
     `gname[12]` (`3781:0361`), with acc 1 if found, else 0. An index is
     stored as given.
-  * GET_STATUS(who) is the combat record's status (+0x1C) for |who| 1–50,
-    else 8. BITSNOOP(a, b) is (a & b) == b, computed in the VM.
+  * GET_STATUS(who) (`1A0A:02B6`) reads, for |who| 1–50, the byte table at
+    `DS:0333` (a byte per name), else 8. The table starts at 0 and keeps
+    the status a wound left the creature in: `612E:18DA` (damage, in a fight
+    or from DAMAGE) stores the combat record's +0x1C under |its id +6| when
+    that is 1–50, whatever the damage did. So it answers wherever the
+    creature is: Balkazar (14) is asked after from regions he isn't in, and
+    reads 0 there until he is hurt. (`5E6B`, `6CCA` and `6ECD` also write
+    `DS:0333` + an object *index*; not traced, the engine leaves them out.)
+    BITSNOOP(a, b) is (a & b) == b, computed in the VM.
 * **FIGHT** starts combat at (`gname[1]`, `gname[2]`) (`7372:030B`) and ends
   the script. It starts only if `612E:281F` finds, for one of objects 0–47 that
   is a creature with allegiance bit 1 (the party's side: party members and
@@ -820,7 +827,7 @@ From the handlers (2026-10-18); the engine's model is `DarkSun.Game.World`.
 
   | gname | Address | Meaning |
   |---|---|---|
-  | 0 | `377E:0019` | combat or fast-mode flag (exits refuse when ≠ 0) |
+  | 0 | `377E:0019` | the fight: 0 none, 1 once one starts (FIGHT `7372:030B`, an attack `612E:1468`, a spell `6ECD` / `7D80` on a creature), 2 once its turns are taken (`1587:3866`), 0 again when `612E:04A7` says it is over (`1587`); scripts exit when ≠ 0 (the region exits, GPL 80; most talk) |
   | 1–3 | `377E:001B–1F` | GETXY |
   | 4 | `377E:0021` | current region |
   | 5 | `3781:0369` | active member |
@@ -833,7 +840,12 @@ From the handlers (2026-10-18); the engine's model is `DarkSun.Game.World`.
   | 12 | `0361` | SET_OTHER |
 
   `obj_special(n)` is the object whose index is in raw variable n, so 0x25
-  is the active member.
+  is the active member. An item in a pack is an object too, so USE on one
+  (and the first of USE WITH) makes `obj_special(0x27)` that item: the
+  Wand of Metal Detection spends its own charges (`.86`, GPL 85), the
+  Parting Staff is told by its id (`.72`, GPL 124). The engine, which keeps
+  pack items off the object table, gives the target the item's id and reads
+  that item's record for it (`WorldGplHost.UsedItem`).
 
 ## 5. Validation
 

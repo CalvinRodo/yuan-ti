@@ -35,6 +35,7 @@ public partial class RegionView
             return false;
         }
         string what = $"{_world[member]?.Name ?? "someone"} uses {ItemText.Name(_world, item)}";
+        Session.ScriptHost.UsedItem = item;
         if (scripts.OnObject(GplTriggerList.Use, member, item.Id) is { } run)
         {
             ReportScript(what, run);

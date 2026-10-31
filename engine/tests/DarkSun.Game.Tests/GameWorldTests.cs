@@ -269,11 +269,35 @@ public class GameWorldTests
     public void StatusAndAllegianceComeFromTheCombatRecord()
     {
         GameWorld world = World();
-        Assert.Equal(3, world.Status(-100));
-        Assert.Equal(8, world.Status(-200));
+        Assert.Equal(3, world.First(-100)!.ReadField(73)); // GPLX: field 73 is combat record +0x1C
 
         world.SetAllegiance(-100, 2);
         Assert.Equal(2, world.First(-100)!.ReadField(74)); // GPLX: field 74 is combat record +0x1D
+    }
+
+    [Fact]
+    public void GetStatusAnswersForNamesOneToFiftyFromWhatDamageLeftThem()
+    {
+        // 1A0A:02B6: |name| 1–50 reads DS:0333, 0 until 612E:18DA notes a wound; any other name is 8.
+        var memory = new RegionMemory();
+        var world = new GameWorld(World().Region, new Resources()) { NamedStatuses = memory.NamedStatuses };
+        var balkazar = new WorldObject(40, ObjectKind.Creature, -14) { Vitals = new Vitals { Hp = 10, MaxHp = 10, Status = Vitals.Well } };
+        Assert.Equal(0, world.Status(-14)); // not hurt yet, wherever he is
+        Assert.Equal(8, world.Status(-100)); // the templar is here, but past 50
+
+        world.Hurt(balkazar, 3);
+        Assert.Equal(Vitals.Well, world.Status(14));
+        world.Hurt(balkazar, 20);
+        Assert.Equal(Vitals.Dead, world.Status(-14));
+
+        // Kept for the next region and in saves; a new game forgets it.
+        var next = new GameWorld(World().Region, new Resources()) { NamedStatuses = memory.NamedStatuses };
+        Assert.Equal(Vitals.Dead, next.Status(-14));
+        var loaded = new RegionMemory();
+        loaded.Load([], [.. memory.NamedStatuses]);
+        Assert.Equal(Vitals.Dead, loaded.NamedStatuses[14]);
+        memory.Forget();
+        Assert.Equal(0, next.Status(-14));
     }
 
     [Fact]
