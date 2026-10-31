@@ -46,7 +46,13 @@ internal sealed class GplObjectRecord(GplFieldMap map, WorldObject obj, GameWorl
 
     public override string? Text(int field) => field == GplRecords.NameField && Group == GplFieldMap.Combat ? obj.Name : base.Text(field);
 
-    public override void Write(int field, int value) => obj.WriteField(field, value);
+    public override void Write(int field, int value)
+    {
+        if (Group != GplFieldMap.Combat || obj.Kind != ObjectKind.Party || !host.WritePartyCombat(obj, field, value))
+        {
+            obj.WriteField(field, value);
+        }
+    }
 
     public override GplRecord? Follow(int field)
     {

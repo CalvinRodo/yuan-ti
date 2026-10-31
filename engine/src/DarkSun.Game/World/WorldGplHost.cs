@@ -342,7 +342,7 @@ public sealed partial class WorldGplHost : DialogueGplHost
 
     private static int? Teleport(GameWorld world, IReadOnlyList<int> v)
     {
-        world.Teleport(v[0], v[1], v[2], v[3]);
+        world.Teleport(v[0], v[1], v[2], v[3], v[4]);
         return v[0] == WholeParty ? 1 : null;
     }
 

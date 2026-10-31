@@ -319,7 +319,8 @@ public sealed partial class GameWorld
             ground.Items = item.Contents;
             item.Contents = [];
         }
-        ground.WriteField(82, quantity);
+        ground.WriteField(WorldObject.FieldQuantity, quantity);
+        ground.WriteField(WorldObject.FieldCharges, item.Charges);
         return ground;
     }
 
@@ -340,11 +341,16 @@ public sealed partial class GameWorld
         // A bag or a box is picked up with what is in it.
         item.Contents = ground.Items;
         ground.Items = [];
-        int quantity = ground.ReadField(82);
+        int quantity = ground.ReadField(WorldObject.FieldQuantity);
         item.Quantity = quantity > 0 ? quantity : Math.Max(1, (int)ground.Item.Quantity);
         if (!Stacks(item.Record))
         {
             item.Quantity = 1;
+        }
+        // Charges a script wrote on the map (GPL 86, 124, 198), or the item had when dropped.
+        if (ground.StoredField(WorldObject.FieldCharges) is int charges)
+        {
+            item.Charges = charges;
         }
         taker.Items.Add(item);
         Remove(ground);

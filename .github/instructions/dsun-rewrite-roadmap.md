@@ -245,7 +245,8 @@ this milestone brings most of the game's content.
       asking command, so questions inside expressions work).
 - [x] TELEPORT: the party (region exits: 31 found by `--check-exits`, which
       tries every cell of a box) and named objects (hidden when sent
-      elsewhere); NAMETONUM / NUMTONAME.
+      elsewhere, placed out of the player's sight when the fifth argument
+      is 1); NAMETONUM / NUMTONAME.
 - [x] A creature model (`DarkSun.Game.World`: `GameWorld`, `WorldObject`,
       `WorldGplHost`). Region objects become creatures (those with an `RDFF`
       combat record, indexes 4–47; walkers if their `SCMD` can walk) or

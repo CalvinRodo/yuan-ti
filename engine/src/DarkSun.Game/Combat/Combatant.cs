@@ -351,7 +351,7 @@ public sealed class Combatant
             Stats = r is null ? [10, 10, 10, 10, 10, 10]
                 : [.. r.Stats.Select((s, i) => source?.StoredField(WorldObject.FieldStr + i) ?? s)],
             HomeSide = ch is { HomeAllegiance: > 0 } ? ch.HomeAllegiance : side,
-            Type = r?.SpecialAttack ?? 0,
+            Type = (source?.StoredField(WorldObject.FieldSpecialAttack) ?? r?.SpecialAttack ?? 0) & 0xFF, // GPL 81 takes Balkazar's away
             Mind = source?.Mind ?? r?.Mind ?? 2,
             Level = ch is null ? 1 : Math.Max(1, (int)ch.Levels.ToArray().Max()),
             Race = ch?.Race ?? 0,
@@ -369,7 +369,7 @@ public sealed class Combatant
             MissileWeapon = WornIn(2),
             Ammunition = ammo?.Quantity ?? 0,
             SpellSet = ch?.SpellSet ?? 0,
-            Psp = r?.Psp ?? 0,
+            Psp = source?.StoredField(WorldObject.FieldPsp) ?? r?.Psp ?? 0,
             PsionicSet = ch?.PsionicSet ?? 0,
             Items = carried,
             Source = source,
