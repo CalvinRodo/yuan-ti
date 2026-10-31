@@ -102,7 +102,10 @@ public sealed class GplMachine
         ? _fileStack[^1] with { Address = _pc[_frame] }
         : default;
 
-    /// <summary>Most instructions one run may take, to stop runaway loops.</summary>
+    /// <summary>
+    /// Most instructions a run may take before it waits for the player, to
+    /// stop runaway loops; each resume starts the count again.
+    /// </summary>
     public int InstructionLimit { get; set; } = 100_000;
 
     /// <summary>Called with each instruction before it runs, if set.</summary>
@@ -235,13 +238,15 @@ public sealed class GplMachine
     /// Entering region <paramref name="region"/>: drop its predecessor's
     /// triggers and creature scripts, run <c>MAS</c> <paramref name="region"/>.
     /// (Creature scripts live in the per-object table <c>3972:08AA</c>, whose
-    /// objects belong to the region; that they are cleared is inferred.)
+    /// objects belong to the region; that they are cleared is inferred.) A
+    /// region with no <c>MAS</c> script, such as 255, runs nothing.
     /// </summary>
     public GplRunResult EnterRegion(int region)
     {
         Triggers.ClearRegion();
         Creatures.Clear();
-        return Run(new GplEntry(region, 0, GplFileKind.Mas));
+        var entry = new GplEntry(region, 0, GplFileKind.Mas);
+        return File(region, GplFileKind.Mas) is null ? new GplRunResult(entry, 0, null) : Run(entry);
     }
 
     /// <summary>
@@ -389,6 +394,7 @@ public sealed class GplMachine
         IsSuspended = false;
         _answer = answer;
         _skipPause = true; // the command that asked runs again: don't stop at it twice
+        _runCount = 0; // the cap is for a loop that never waits, not a long conversation
         return Continue();
     }
 
@@ -508,6 +514,21 @@ public sealed class GplMachine
         PopFrame();
     }
 
+    /// <summary>A script, decoded and cached on first use; null if there is none.</summary>
+    private (byte[] Code, GplDecoder Decoder, Dictionary<int, GplInstruction> Cache)? File(int file, GplFileKind kind)
+    {
+        if (!_files.TryGetValue((file, kind), out var loaded))
+        {
+            if (_scripts.Load(file, kind) is not { } code)
+            {
+                return null;
+            }
+            loaded = (code, new GplDecoder(code, _fieldTypes), []);
+            _files[(file, kind)] = loaded;
+        }
+        return loaded;
+    }
+
     /// <summary>Make a file current (<c>043D:03F8</c>); a different file clears the locals.</summary>
     private bool Load(int file, GplFileKind kind, bool clearLocals = true)
     {
@@ -515,15 +536,9 @@ public sealed class GplMachine
         {
             return true;
         }
-        if (!_files.TryGetValue((file, kind), out var loaded))
+        if (File(file, kind) is not { } loaded)
         {
-            byte[]? code = _scripts.Load(file, kind);
-            if (code is null)
-            {
-                return false;
-            }
-            loaded = (code, new GplDecoder(code, _fieldTypes), []);
-            _files[(file, kind)] = loaded;
+            return false;
         }
         if (clearLocals)
         {

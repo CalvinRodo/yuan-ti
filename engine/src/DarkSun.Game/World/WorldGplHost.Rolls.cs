@@ -130,6 +130,20 @@ public sealed partial class WorldGplHost
         return b;
     }
 
+    /// <summary>
+    /// A script writes a party member's combat record: its psionic points (+2, GPL 49 fills
+    /// them) reach the sheet; false for the fields stored with the object.
+    /// </summary>
+    internal bool WritePartyCombat(WorldObject o, int field, int value)
+    {
+        if (SheetOf(o) is not { } c || Fields.OffsetOf(GplFieldMap.Combat, field) != 2)
+        {
+            return false;
+        }
+        c.PspSpent = new Spellcasting(Rules).MaxPsp(c) - value;
+        return true;
+    }
+
     /// <summary>A script writes a party member's sheet: experience, most hit points and the abilities reach it; other fields are dropped.</summary>
     internal void WritePartySheet(WorldObject o, int field, int value)
     {

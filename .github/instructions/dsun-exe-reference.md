@@ -580,12 +580,13 @@ name); 0x80 and up a string in place. The ones scripts use most:
 |---|---|---|---|
 | 19 | combat | +0x28 | name (18 bytes) |
 | 23–28 | combat | +0x22–0x27 | Str, Dex, Con, Int, Wis, Cha |
-| 67 / 68 | combat | +0 / +2 | hit points / psionic points |
+| 67 / 68 | combat | +0 / +2 | hit points / psionic points (GPL 49 fills a member's: `.68 = .71.45`) |
 | 71 | combat | +4 | the character record (a pointer) |
 | 72 | item, combat | +0, +6 | id, what `name(-n)` matches |
 | 73 | combat | +0x1C | status (`.73 > 2`: down or dead) |
 | 74 | combat | +0x1D | allegiance (`REQUEST(18)` sets it) |
 | 75 | combat | +0x1E | what the AI does (`SETRECORD .75 = 2` after `REQUEST(18, …, 2)`: fight) |
+| 89 | combat | +0x16 (word) | special attack, with +0x17 (GPL 81 sets Balkazar's to 0) |
 | 95 | combat | +0x38 | facing |
 | 0 / 82 / 85 / 86 | item | +0x0F / +2 / +0x11 / +0x0E | flags (a door's state) / quantity / slot / charges |
 | 20 / 21 / 22 | character | +0x18 / +0x19 / +0x1A | race / sex / alignment |
@@ -736,6 +737,13 @@ From the handlers (2026-10-18):
     `region_enter_scripts`). The party's orders are cleared; acc = 1.
   * who < 0: every object named −who; who ≥ 0: that object index; each via
     `7372:06DF`. Region 255 takes creatures off the map.
+  * flag (objects only; the party's call passes 0) reaches `find_free_cell`
+    (`7372:0909`), which searches rings out from (x, y), at most 20, for a
+    free cell. With flag 1 (78 calls) a cell is taken only out of the
+    player's sight: its left edge (cell × 16) more than 72 pixels before the
+    view's (`DS:1178`) or 56 past its right edge (+ 320), or the same
+    vertically (`DS:117A`, + 200). So creatures a script brings in don't
+    appear on screen.
 * **Region exits** are move-box triggers on the map edges that run `GPL 80`:
   each entry sets the edge (1 north, 2 east, 3 south, 4 west), and the routine
   at `053C` returns unless the active member faces out through it
