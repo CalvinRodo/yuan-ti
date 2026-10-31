@@ -327,6 +327,22 @@ public class ItemTests
     }
 
     [Fact]
+    public void AnItemsChargesStayWithItOnTheMap()
+    {
+        var (w, party) = World();
+        WorldObject me = w[0]!;
+        w.Give(1, -Bag, 0, GameWorld.None);
+        Item bag = party[0].Items.Single(i => i.Rdff == Bag);
+        bag.Charges = 4;
+
+        WorldObject ground = w.DropItem(me, bag, 1)!;
+        Assert.Equal(4, ground.ReadField(WorldObject.FieldCharges));
+        ground.WriteField(WorldObject.FieldCharges, 2); // a script's obj(…).86 on the map (GPL 198)
+        Assert.True(w.PickUp(me, ground));
+        Assert.Equal(2, party[0].Items.Single(i => i.Rdff == Bag).Charges);
+    }
+
+    [Fact]
     public void DamageHurtsDownsAndKillsAsTheOriginalCounts()
     {
         var (w, party) = World();

@@ -161,6 +161,12 @@ public sealed class WorldObject
     /// <summary>Field 0 of an item, record +0x0F: a door's state (<see cref="DoorFlags"/>).</summary>
     public const int FieldItemFlags = 0;
 
+    /// <summary>Item record fields: 82 the quantity (+2), 86 the charges (+0x0E).</summary>
+    public const int FieldQuantity = 82, FieldCharges = 86;
+
+    /// <summary>Combat record fields: 68 psionic points (+2), 89 the special attack (+0x16, a word with +0x17).</summary>
+    public const int FieldPsp = 68, FieldSpecialAttack = 89;
+
     /// <summary>
     /// Script-visible fields: those modelled (hit points, id, status,
     /// allegiance — a party member's 0 reads as 1, the party's side — mind,
@@ -634,10 +640,12 @@ public sealed partial class GameWorld
 
     /// <summary>
     /// TELEPORT objects (<c>7372:06DF</c>): to another region (255: off the
-    /// map) they leave this one; here they go to the free cell nearest (x, y).
+    /// map) they leave this one; here they go to the free cell nearest (x, y),
+    /// with <paramref name="unseen"/> 1 the nearest out of the player's sight
+    /// (<see cref="OnScreen"/>, <c>7372:0909</c>; 78 calls ask for it, the party's never).
     /// The party (who 32766) to another region becomes <see cref="PendingRegion"/>.
     /// </summary>
-    public void Teleport(int who, int region, int x, int y)
+    public void Teleport(int who, int region, int x, int y, int unseen = 0)
     {
         IEnumerable<WorldObject> targets = who == DialogueGplHost.WholeParty ? Party : Select(who);
         if (who == DialogueGplHost.WholeParty && region != Region.Number)
@@ -665,7 +673,7 @@ public sealed partial class GameWorld
             else
             {
                 obj.Hidden = false;
-                Place(obj, new Cell(x, y));
+                Place(obj, new Cell(x, y), unseen: (unseen & 0xFF) == 1 && who != DialogueGplHost.WholeParty);
             }
             Changed?.Invoke(obj, null);
         }
@@ -1227,11 +1235,19 @@ public sealed partial class GameWorld
         return scmd;
     }
 
-    private void Place(WorldObject obj, Cell near)
+    /// <summary>
+    /// Whether the player sees a cell: the view and a margin round it (<c>7372:0909</c>: the
+    /// cell's left edge from 72 pixels before the view's to 56 past its end, the same
+    /// vertically). Null, as when nothing is drawn, sees nowhere.
+    /// </summary>
+    public Func<Cell, bool>? OnScreen { get; set; }
+
+    private void Place(WorldObject obj, Cell near, bool unseen = false)
     {
+        Func<Cell, bool> seen = unseen && OnScreen is { } sight ? sight : _ => false;
         if (obj.Walker is { } w)
         {
-            if (NearestCell(near, c => w.CanStand(c, Region.IsBlocked)) is { } cell)
+            if (NearestCell(near, c => w.CanStand(c, Region.IsBlocked) && !seen(c)) is { } cell)
             {
                 if (!w.Teleport(cell, Region.IsBlocked))
                 {
@@ -1241,7 +1257,7 @@ public sealed partial class GameWorld
         }
         else
         {
-            obj.FixedCell = near;
+            obj.FixedCell = seen(near) ? NearestCell(near, c => !seen(c)) ?? near : near;
         }
     }
 

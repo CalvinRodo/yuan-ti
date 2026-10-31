@@ -19,7 +19,7 @@ public class ScriptCommandTests
     /// A <c>GPLX</c> with the shipped numbering for the fields tested: combat
     /// record 67 hp (+0), 71 sheet (+4, a pointer to the character record), 72
     /// id (+6), 73 status (+0x1C), 74 allegiance (+0x1D), 75 mind (+0x1E), 23
-    /// Str (+0x22), 19 name (+0x28); character record 87 size (+0x3D), 43 most
+    /// Str (+0x22), 19 name (+0x28), 68 psionic points (+2), 89 special attack (+0x16); character record 87 size (+0x3D), 43 most
     /// hit points (+8), 29 Str (+0x1B); item 72 id (+0), 86 charges (+14), 85 slot (+17).
     /// </summary>
     internal static GplFieldMap Map()
@@ -42,6 +42,8 @@ public class ScriptCommandTests
         Field(GplFieldMap.Combat, 75, 0x1E, 16);
         Field(GplFieldMap.Combat, 23, 0x22, 16);
         Field(GplFieldMap.Combat, 19, 0x28, 0x80 | 18);
+        Field(GplFieldMap.Combat, 68, 2, 19);
+        Field(GplFieldMap.Combat, 89, 0x16, 19);
         Field(GplFieldMap.Character, 87, 0x3D, 16);
         Field(GplFieldMap.Character, 43, 8, 19);
         Field(GplFieldMap.Character, 29, 0x1B, 16);
@@ -107,6 +109,38 @@ public class ScriptCommandTests
         Assert.Equal(19, c.Rolled[0]);
         host.WriteField(machine, Ref(0x8000 | 0x25, 71, 43), 25);
         Assert.Equal((25, 25), (world[0]!.Vitals.MaxHp, c.Hp));
+    }
+
+    [Fact]
+    public void PsionicPointsWrittenOnAPartyMemberReachTheSheet()
+    {
+        var c = new Character { Name = "Kel", Race = Race.Human, Classes = [CharacterClass.Psionicist], Rolled = [10, 10, 16, 16, 16, 10] };
+        var (world, host, machine) = Run(GameWorldTests.World(), sheets: slot => slot == 0 ? c : null);
+        world.ActiveMember = 0;
+        int most = new Magic.Spellcasting(CharacterRules.Default).MaxPsp(c);
+
+        host.WriteField(machine, Ref(0x8000 | 0x25, 68), 0); // GPL 49: emptied, then filled to the most
+        Assert.Equal(most, c.PspSpent);
+        host.WriteField(machine, Ref(0x8000 | 0x25, 68), most);
+        Assert.Equal(0, c.PspSpent);
+        Assert.Equal(most, host.ReadField(machine, Ref(0x8000 | 0x25, 68)));
+        Assert.False(world[0]!.Knows(68)); // not kept on the object, where it would go stale
+    }
+
+    [Fact]
+    public void ACreaturesPsionicPointsAndSpecialAttackAsScriptsSetThemGoIntoAFight()
+    {
+        var (world, host, machine) = Run(GameWorldTests.World());
+        WorldObject templar = world.First(-100)!;
+
+        host.WriteField(machine, Ref(100, 68), 9);
+        host.WriteField(machine, Ref(100, 89), 0x0105);
+        Combatant c = Combatant.FromCreature(templar);
+        Assert.Equal(9, c.Psp);
+        Assert.Equal(5, c.Type); // +0x16, the low byte of the word
+
+        host.WriteField(machine, Ref(100, 89), 0); // GPL 81 on Balkazar
+        Assert.Equal(0, Combatant.FromCreature(templar).Type);
     }
 
     [Fact]

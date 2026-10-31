@@ -255,6 +255,16 @@ public class GplMachineTests
     }
 
     [Fact]
+    public void ARegionWithNoMasScriptRunsNothing()
+    {
+        var (m, _, _) = Make([]);
+
+        GplRunResult run = m.EnterRegion(255);
+        Assert.True(run.Ok);
+        Assert.Equal(0, run.Instructions);
+    }
+
+    [Fact]
     public void FileZeroIsNoScript() => Assert.True(Make([]).Machine.Run(new GplEntry(0, 0)).Ok);
 }
 
@@ -416,6 +426,22 @@ public class GplDialogueTests
         m.Resume(1);
         Assert.Equal("Done.", Assert.Single(host.Dialogue.Text).Text); // the answer emptied it: a new page
         Assert.Equal(pages + 1, host.Dialogue.Pages);
+    }
+
+    [Fact]
+    public void TheInstructionCapCountsOnlyUntilTheScriptWaits()
+    {
+        // 0: lnum[0] = ((ASK_YES_NO)); GOTO 0 — a conversation the player never leaves.
+        var a = new Asm().Op(0x16).Bytes(0x8C, 0x38).Bytes((byte)GplVarType.LocalNum, 0).Op(0x12).Num(0);
+        var (m, _) = Make(a.ToArray());
+        m.InstructionLimit = 5;
+
+        Assert.True(m.Run(new GplEntry(1, 0)).Suspended);
+        for (int i = 0; i < 20; i++)
+        {
+            GplRunResult answered = m.Resume(1);
+            Assert.True(answered.Suspended && answered.Error is null, answered.Error);
+        }
     }
 
     [Fact]

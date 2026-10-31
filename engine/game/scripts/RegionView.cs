@@ -724,6 +724,7 @@ public partial class RegionView : Node2D
             PartyLevel = (slot, k) => slot < Session.Party.Count ? new DarkSun.Game.Magic.Spellcasting(Session.Rules).Level(Session.Party[slot], k) : 0,
         };
         _world.CombatState = 0; // no fight comes into a region (nor from a save made in one)
+        _world.OnScreen = OnScreen;
         _world.Rested += () =>
         {
             foreach (DarkSun.Game.Characters.Character c in Session.Party)
@@ -1374,6 +1375,18 @@ public partial class RegionView : Node2D
         {
             Sounds.Instance?.Play(sound);
         }
+    }
+
+    /// <summary>
+    /// Whether the player sees <paramref name="cell"/>, for TELEPORT's out-of-sight placing
+    /// (<c>7372:0909</c>): its top-left corner from 72 pixels before the view to 56 past it.
+    /// </summary>
+    private bool OnScreen(Cell cell)
+    {
+        Vector2 size = GetViewportRect().Size / _camera.Zoom;
+        Vector2 from = _camera.GetScreenCenterPosition() - size / 2;
+        float x = cell.X * Region.TileSize, y = cell.Y * Region.TileSize;
+        return x + 0x48 >= from.X && x - 0x38 <= from.X + size.X && y + 0x48 >= from.Y && y - 0x38 <= from.Y + size.Y;
     }
 
     /// <summary>
@@ -2461,7 +2474,6 @@ public partial class RegionView : Node2D
     {
         _scriptRuns++;
         _scriptErrors += run.Error is null || run.Suspended ? 0 : 1;
-        if (_checking && run.Error is not null && !run.Suspended) GD.Print($"TEMPERR {what}: {run.Entry.Kind} {run.Entry.File} @{run.Entry.Address:x4}: {run.Error}");
         string status = run.Paused ? $", paused by the debugger ({Session.Scripts.PausedFor}) before {GplBreakpoints.Format(Session.Scripts.Current)}"
             : run.Suspended ? ", waiting for the player" : run.Error is null ? "" : $", stopped: {run.Error}";
         AddScriptLine($"> {what}: {run.Entry.Kind} {run.Entry.File} @{run.Entry.Address:x4}, {run.Instructions} instructions{status}");

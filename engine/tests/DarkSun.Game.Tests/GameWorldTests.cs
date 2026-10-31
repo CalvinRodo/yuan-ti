@@ -655,4 +655,21 @@ public class GameWorldTests
         Assert.Equal([Verb.Get, Verb.Use, Verb.UseWith, Verb.Look], ObjectVerbs.For(torch, world.Items, triggers));
         Assert.Equal([-100], ObjectVerbs.UseWithPartners(torch, triggers));
     }
+
+    [Fact]
+    public void TeleportsFifthArgumentPutsACreatureOutOfSight()
+    {
+        GameWorld world = World();
+        WorldObject templar = world.First(-100)!;
+        world.OnScreen = c => c.X < 15;
+
+        world.Teleport(-100, world.Region.Number, 4, 6); // 7372:0909 with 0: the nearest free cell
+        Assert.Equal(new Cell(4, 6), templar.Cell);
+        world.Teleport(-100, world.Region.Number, 4, 6, 1); // with 1: the nearest the player can't see
+        Assert.Equal(15, templar.Cell.X);
+
+        world.OnScreen = null; // nothing drawn: nowhere is seen
+        world.Teleport(-100, world.Region.Number, 4, 6, 1);
+        Assert.Equal(new Cell(4, 6), templar.Cell);
+    }
 }
