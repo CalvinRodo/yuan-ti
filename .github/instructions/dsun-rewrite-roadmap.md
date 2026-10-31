@@ -351,7 +351,7 @@ this milestone brings most of the game's content.
       check, any case); item charges. OpenDS's script repairs (Darkhold's
       dead triggers, the Lava Rifts ranger, Linara) and ours (the slave
       pens' halfling reading the race, region 8's ranger tracking, the
-      sewer grate's hack: #99–#101) apply as the scripts load
+      sewer grate's hack, and a Strength roll to break its lock by attacking it: #99–#101) apply as the scripts load
       (`GplRepairs`, `script_repairs`, on; one too long to fit in place
       runs as a detour after the file's end); the final battle's gate
       repair is there but off (with the clock running the gate waits its

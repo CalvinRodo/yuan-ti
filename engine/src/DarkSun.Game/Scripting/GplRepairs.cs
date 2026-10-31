@@ -71,6 +71,10 @@ public static class GplRepairs
             "a hack on the sewer grate says his or her as picking it does (GPL 137 @9E0)") { Relocate = [51, 64] },
         new("script-repairs.grate-hack-opens", 137, 0xA14, Hex("4f006292055c8018"), Hex("4f006292055c80184f00628100168f01cd01f9"), true,
             "a hack that takes the sewer grate's lock off opens it, as picking it does (GPL 137 @A14: \"The grate opens.\", gflag[505])"),
+        // An attack on the grate tests .43 < 220, which the grate (an item, no hit points) reads as 0: the lock always
+        // breaks. A Strength roll instead, as ripping it open has (@AA6: RAND(30) < Str).
+        new("script-repairs.grate-attack-roll", 137, 0xB5C, Hex("18b18027012bda00dc"), Hex("18e28c528f1ee1dab180250117"), true,
+            "an attack on the sewer grate breaks its lock on a Strength roll, as ripping it open does (GPL 137 @B5C: RAND(30) < Str)"),
         // The final battle: the stage gate (GPL 62 @4345) exits without re-arming inside its window. With the
         // game clock running the gate is polled again and waits its window out, so this is off by default.
         new("script-repairs.final-battle-gate", 62, 0x10F1, Hex("10f9"), Hex("00ef"), false,
