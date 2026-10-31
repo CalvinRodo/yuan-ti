@@ -633,7 +633,8 @@ public sealed partial class GameWorld
     /// <summary>
     /// <c>612E:18DA</c>: less than the hit points takes that many; up to 9
     /// more leaves the creature down (status 3, 0 hit points); more kills it
-    /// (5), 10 000 or more destroys it (8). A creature that is no longer
+    /// (5), 10 000 or more destroys it (8); either way its status is noted for
+    /// GET_STATUS (<see cref="NoteStatus"/>). A creature that is no longer
     /// alive leaves the map, leaving a dead body with what it carried
     /// (<see cref="LeaveBody"/>); a party member stays where it fell.
     /// </summary>
@@ -647,10 +648,12 @@ public sealed partial class GameWorld
         if (damage < v.Hp)
         {
             v.Hp -= damage;
+            NoteStatus(target);
             return;
         }
         v.Status = damage < v.Hp + 10 ? Vitals.Down : damage < 10000 ? Vitals.Dead : Vitals.Destroyed;
         v.Hp = 0;
+        NoteStatus(target);
         Fell(target);
     }
 

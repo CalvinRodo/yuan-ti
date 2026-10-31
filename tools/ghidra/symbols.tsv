@@ -616,3 +616,4 @@
 7D80:200D	func	burst_animation	(x, y, points, count, template): template +3 OJFF at each point, then a shrinking share over six frames
 896E:0ED3	func	portrait_splash	(member): BMP 5014 frame 4 over the member's portrait while a window covers the map
 1587:22BA	func	window_over_map	display mode DS:0BC9 = 2
+1A0A:02B6	func	int get_status(int name)	GET_STATUS: the byte at DS:0333 + |name| for 1-50 (the status 612E:18DA left that creature in), else 8

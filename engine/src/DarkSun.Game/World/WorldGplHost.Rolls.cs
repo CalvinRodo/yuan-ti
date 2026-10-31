@@ -27,6 +27,15 @@ public sealed partial class WorldGplHost
     /// <summary>The engine variable SETTHING's item lives in (raw 0x2B, <c>gname[11]</c>).</summary>
     private const int ThingVariable = 0x2B;
 
+    /// <summary>
+    /// The inventory item being used (USE, or the first of USE WITH). Scripts get it in
+    /// <c>gname[7]</c> by its id, which no object on the map has; in DSUN.EXE an item in a pack
+    /// is an object like any other, so <c>obj_special(0x27)</c> reads and writes that item:
+    /// the Wand of Metal Detection's charges (<c>.86</c>, GPL 85), which staff it is (<c>.72</c>,
+    /// GPL 124).
+    /// </summary>
+    public Item? UsedItem { get; set; }
+
     private CharacterCreation Creation => new(Rules, CharacterNames.Empty, new Random(0));
 
     private Character? SheetOf(WorldObject o) => o.Kind == ObjectKind.Party ? PartyCharacter(o.Index) : null;
@@ -35,7 +44,8 @@ public sealed partial class WorldGplHost
 
     /// <summary>
     /// The record and field a reference names (<c>obj(id).f.g</c>): from the
-    /// object (SETTHING's item for <c>obj_special(0x2b)</c>), each field but the
+    /// object (SETTHING's item for <c>obj_special(0x2b)</c>; the <see cref="UsedItem"/>
+    /// for a variable holding its id), each field but the
     /// last leading to the next record (<see cref="GplRecord.Follow"/>: the
     /// combat record's sheet, an item's name or type, an object by id or index).
     /// </summary>
@@ -48,7 +58,9 @@ public sealed partial class WorldGplHost
         }
         GplRecord? record = field.Id == (0x8000 | ThingVariable) && _thing is { } thing
             ? new GplItemRecord(Fields, thing, world.Items)
-            : world.Resolve(field.Id) is { } obj ? new GplObjectRecord(Fields, obj, world, this) : null;
+            : world.Resolve(field.Id) is { } obj ? new GplObjectRecord(Fields, obj, world, this)
+            : field.Id >= 0x8000 && UsedItem is { } used && world.EngineVariable(field.Id & 0x7FFF) == used.Id
+                ? new GplItemRecord(Fields, used, world.Items) : null;
         foreach (byte f in field.Path[..^1])
         {
             record = record?.Follow(f);

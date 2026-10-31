@@ -20,7 +20,7 @@ public class ScriptCommandTests
     /// record 67 hp (+0), 71 sheet (+4, a pointer to the character record), 72
     /// id (+6), 73 status (+0x1C), 74 allegiance (+0x1D), 75 mind (+0x1E), 23
     /// Str (+0x22), 19 name (+0x28); character record 87 size (+0x3D), 43 most
-    /// hit points (+8), 29 Str (+0x1B); item 86 charges (+14), 85 slot (+17).
+    /// hit points (+8), 29 Str (+0x1B); item 72 id (+0), 86 charges (+14), 85 slot (+17).
     /// </summary>
     internal static GplFieldMap Map()
     {
@@ -45,6 +45,7 @@ public class ScriptCommandTests
         Field(GplFieldMap.Character, 87, 0x3D, 16);
         Field(GplFieldMap.Character, 43, 8, 19);
         Field(GplFieldMap.Character, 29, 0x1B, 16);
+        Field(GplFieldMap.Item, 72, 0, 18);
         Field(GplFieldMap.Item, 86, 14, 16);
         Field(GplFieldMap.Item, 85, 17, 16);
         return GplFieldMap.Parse(gplx);
@@ -262,6 +263,27 @@ public class ScriptCommandTests
         host.WriteField(machine, Ref(0x8000 | 0x2B, 86), 0); // a wand's charges
         Assert.Equal(0, spare.Charges);
         Assert.Equal(0, host.Execute(machine, Command("SETTHING", 0, 9997)));
+    }
+
+    [Fact]
+    public void AnItemUsedFromAPackIsTheTargetScriptsReadAndWrite()
+    {
+        // USE on the Wand of Metal Detection (GPL 85): obj_special(0x27).86 > 0, then BYTE_DEC it.
+        // The script gets the wand in gname[7] by its id, which nothing on the map has.
+        GameWorld world = GameWorldTests.World();
+        Item wand = world.NewItem(200)!;
+        wand.Charges = 25;
+        world[0]!.Items.Add(wand);
+        var (_, host, machine) = Run(world);
+        host.WriteEngineVariable(machine, 0x27, wand.Id);
+        var charges = Ref(0x8000 | 0x27, 86);
+        Assert.Equal(0, host.ReadField(machine, charges));
+
+        host.UsedItem = wand;
+        Assert.Equal(25, host.ReadField(machine, charges));
+        Assert.Equal(-200, host.ReadField(machine, Ref(0x8000 | 0x27, 72))); // the Parting Staff's name(-30044) test
+        host.WriteField(machine, charges, 24);
+        Assert.Equal(24, wand.Charges);
     }
 
     private static GplCommand Command(string mnemonic, params int[] values)

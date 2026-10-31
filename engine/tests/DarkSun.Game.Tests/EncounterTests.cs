@@ -85,6 +85,22 @@ public class EncounterTests
     }
 
     [Fact]
+    public void AWoundInAFightKeepsANamedCreaturesStatusForGetStatus()
+    {
+        // 612E:18DA: each wound puts the creature's status in DS:0333 under its name (1–50).
+        var (world, creature) = Hostile(2);
+        creature.Id = -14; // Balkazar
+        Battle battle = Encounter.Start(world, _ => null, new ScriptedDice(), Rules)!;
+        Combatant hurt = battle.Combatants.Single(c => c.Source == creature);
+        Assert.Equal(0, world.Status(-14));
+
+        battle.Hurt(null, hurt, 2);
+        Assert.Equal(Vitals.Well, world.Status(-14));
+        battle.Hurt(null, hurt, 20);
+        Assert.Equal(Vitals.Dead, world.Status(-14));
+    }
+
+    [Fact]
     public void NoEnemyNoFight()
     {
         var (world, _) = Hostile(1);

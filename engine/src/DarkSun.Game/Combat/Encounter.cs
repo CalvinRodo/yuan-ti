@@ -70,6 +70,14 @@ public static class Encounter
             MakeCreature = (ojff, cell) => world.Spawn(ojff, cell) is { } summoned
                 ? Combatant.FromCreature(Summoned(summoned), world.Items) : null,
         };
+        // 612E:18DA: each wound leaves the creature's status in GET_STATUS's table.
+        battle.Happened += e =>
+        {
+            if (((e as Damaged)?.Target ?? (e as Fell)?.Actor)?.Source is { } hurt)
+            {
+                world.NoteStatus(hurt);
+            }
+        };
         if (!fallsWhenShown)
         {
             battle.Defeated += c =>

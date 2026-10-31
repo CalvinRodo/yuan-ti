@@ -252,8 +252,8 @@ this milestone brings most of the game's content.
       things (48–319); the party is 0–3. It carries out:
       - the orders HUNT, GO, GOXY, FOLLOW, FLEE, FETCH and WAIT, and READORDERS;
       - the queries GETXY, RANGE and NEXTTO (the exact `0898:000C` distance),
-        GET_LOS (Bresenham over `GMAP` 0x80), SET_OTHER, GET_STATUS and
-        GETPARTY;
+        GET_LOS (Bresenham over `GMAP` 0x80), SET_OTHER, GET_STATUS (the
+        game-wide table of named creatures' statuses) and GETPARTY;
       - CLONE, TELEPORT, BITSNOOP and CLEAR_LOS, and FIGHT, which ends the
         script;
       - REQUEST 5 (toggle state and animation), 10–13 (`GMAP` bits), 17
