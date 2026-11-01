@@ -44,6 +44,11 @@ public partial class ScriptDebugger : PanelContainer
     private bool _dirty = true;
     private double _sinceRefresh;
 
+    /// <summary>Development (<c>--demo</c>): a paused script steps over a command every <see cref="DemoStep"/> seconds, as F10 would, for recordings.</summary>
+    private readonly bool _demo = OS.GetCmdlineUserArgs().Contains("--demo");
+    private double _sinceStep;
+    private const double DemoStep = 0.7;
+
     private Label _status = null!;
     private Button _continue = null!, _over = null!, _into = null!, _out = null!, _stop = null!;
     private CheckBox _breakNext = null!;
@@ -241,6 +246,11 @@ public partial class ScriptDebugger : PanelContainer
         if (Visible && _dirty && _sinceRefresh >= RefreshInterval)
         {
             Refresh();
+        }
+        if (_demo && Visible && Machine().PausedFor is not null && (_sinceStep += delta) >= DemoStep)
+        {
+            _sinceStep = 0;
+            Go(GplStep.Over);
         }
     }
 

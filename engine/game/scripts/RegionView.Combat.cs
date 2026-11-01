@@ -365,6 +365,10 @@ public partial class RegionView
                         _world.PassTime(60); // 612E:0754: a minute a round, not for the first
                     }
                     battle.StartRound();
+                    if (_demoDialogue is not null)
+                    {
+                        GD.Print($"demo: round {battle.Round} at frame {Godot.Engine.GetFramesDrawn()}"); // where a recording's rounds start
+                    }
                 }
                 continue;
             }

@@ -609,6 +609,11 @@ party has been defeated" screen leads back to the main menu. No saving during a 
 region drops it. `-- --new-game --fight` starts a fight with the nearest creature (`--auto`: the
 party fights by itself), `--check-combat` plays one through headless, and `--screenshot=FILE` saves
 the screen after five seconds (`--screenshot-after=N` seconds).
+`--demo` plays by itself, for recordings: the dialogue goes on (MORE, or the first choice) after
+three seconds, the party fights by itself, a paused script debugger steps over a command every 0.7
+seconds, and Character Generation makes a player's choices one at a time; `--walk-to=X,Y` (or
+`X,Y@S`, after S seconds) walks the whole party to a cell. Godot's own `--write-movie DIR/f.png
+--fixed-fps 20` (before the `--`) records them as frames; `docs/demos/` was made so.
 `-- --new-game --check-arena` plays the opening bout, checks that its combatants
 leave, then walks the whole party through the gate and checks for the
 "Citizens of Draj!" announcement.
