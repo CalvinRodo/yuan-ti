@@ -141,6 +141,39 @@ public sealed record ConditionModifier(
 public sealed record ClassSaveBonus(IReadOnlyList<int> Classes, int Bonus, DamageElement Elements = DamageElement.None, int Flags = 0);
 
 /// <summary>
+/// Defiling (not in DSUN.EXE; the bundled Defiling mod turns it on): a wizard
+/// spell cast by a defiler (<see cref="Classes"/>, class code 18) kills the life
+/// around it, and the cells within <see cref="Reach"/> (by the spell's level,
+/// 1–5) of the caster turn to ash for the rest of the fight. A defiler casting
+/// from ash already drained finds less there: its targets add
+/// <see cref="SaveBonusPerLevel"/> × the spell's level to their saves. On ash
+/// nothing grows, so <see cref="NeedsLife"/> (Entangle, Barkskin) don't take
+/// anyone standing there. The ash shows with <see cref="Graphic"/> and
+/// <see cref="Sound"/> (Dehydrate's hit) at the caster's feet. Preservers,
+/// powers and items leave none. <see cref="SpellRules.AshRestorers"/> bring it back.
+/// </summary>
+public sealed record DefilingRules
+{
+    public bool On { get; init; }
+
+    public IReadOnlyList<int> Classes { get; init; } = [18];
+
+    /// <summary>How far from the caster the ash reaches, by spell level 1, 2, 3…</summary>
+    public IReadOnlyList<int> Reach { get; init; } = [1, 1, 1, 2, 2];
+
+    public int SaveBonusPerLevel { get; init; } = 1;
+
+    public IReadOnlyList<int> NeedsLife { get; init; } = [74, 82];
+
+    public int Graphic { get; init; } = 8308;
+
+    public int Sound { get; init; } = 72;
+
+    /// <summary>How far the ash of a spell of <paramref name="level"/> reaches.</summary>
+    public int ReachAt(int level) => Reach.Count == 0 ? 0 : Reach[Math.Clamp(level, 1, Reach.Count) - 1];
+}
+
+/// <summary>
 /// The combat numbers and the AI's choices that DSUN.EXE has in its code, not
 /// its data (<c>dsun-exe-reference.md</c> §8). <see cref="Default"/> is the
 /// original's; a mod can change them with <c>rules/combat.json</c>.
@@ -248,6 +281,9 @@ public sealed record CombatRules
     /// DSUN.EXE has it (<see cref="CombatFixes"/>).
     /// </summary>
     public CombatFixes Fixes { get; init; } = new();
+
+    /// <summary>Defiling leaving ash on the battlefield; off, as in DSUN.EXE (<see cref="DefilingRules"/>).</summary>
+    public DefilingRules Defiling { get; init; } = new();
 
     public static CombatRules Default { get; } = new();
 

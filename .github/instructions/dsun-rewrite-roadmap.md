@@ -885,6 +885,7 @@ than leaving them all for the end:
 | Script debugger and resource viewer, mod folder | M3, §1 |
 | Original-behaviour options (original UI scale, original music) | throughout |
 | Shadows, dust and enemy rings with Tab / Enter to choose and attack, after the Obsidian Edition's (done 2026-10-22: `FloorEffects`) | M2, M6 |
+| Optional content as bundled mods, off by default: defiling's ash and Sweet Water (done 2026-11-01: #136, #143; `CombatRules.Defiling`, `SpellRules.Spells`); more ideas under the `effect idea` label | M6 |
 
 ---
 
