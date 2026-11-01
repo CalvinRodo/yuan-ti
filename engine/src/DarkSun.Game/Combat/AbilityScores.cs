@@ -23,7 +23,9 @@ namespace DarkSun.Game.Combat;
 /// Insight Wis +2; Dag's Dagger Cha +1.</item>
 /// </list>
 /// With any floor at all, each ability is the higher of its two; else the
-/// sum. None goes above 25.
+/// sum. None goes above 25. With <c>wornOnly</c>
+/// (<see cref="Characters.CharacterRules.AbilityItemsWhenWorn"/>) only the items
+/// worn count.
 /// </summary>
 public static class AbilityScores
 {
@@ -34,7 +36,7 @@ public static class AbilityScores
 
     private const int FloorFrom = 16, LossFrom = 32;
 
-    public static int[] Of(IReadOnlyList<int> own, IEnumerable<ActiveEffect> effects, IEnumerable<Item> items)
+    public static int[] Of(IReadOnlyList<int> own, IEnumerable<ActiveEffect> effects, IEnumerable<Item> items, bool wornOnly = false)
     {
         int[] sum = [.. own.Take(6)], floor = [.. own.Take(6)];
         bool floors = false, feebleminded = false;
@@ -54,7 +56,7 @@ public static class AbilityScores
                     break;
             }
         }
-        foreach (Item item in Carried(items))
+        foreach (Item item in wornOnly ? items.Where(i => i.Equipped) : Carried(items))
         {
             int ability = item.Record.Flags - FirstAbilityItem, by = item.Charges & 0xFF;
             if (ability is < 0 or > 5)

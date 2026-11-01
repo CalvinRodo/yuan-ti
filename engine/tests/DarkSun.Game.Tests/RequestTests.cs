@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
 using DarkSun.Data.Regions;
 using DarkSun.Game.Characters;
+using DarkSun.Game.Combat;
 using DarkSun.Game.Rules;
 using DarkSun.Game.Scripting;
 using DarkSun.Game.World;
@@ -23,7 +24,7 @@ public class RequestTests
         return b;
     }
 
-    private static (GplMachine Machine, WorldGplHost Host) Run(string source, MonsterTable monsters)
+    private static (GplMachine Machine, WorldGplHost Host) Run(string source, MonsterTable monsters, CombatFixes? fixes = null)
     {
         GameWorld world = GameWorldTests.World(); // region 5
         // Party strength 3: a fighter/thief (level 1 in each: 1 + 1) and a fighter (1).
@@ -32,7 +33,7 @@ public class RequestTests
             new() { Name = "Rikus", Classes = [CharacterClass.Fighter, CharacterClass.Thief] },
             new() { Name = "Neeva", Classes = [CharacterClass.Fighter] },
         ];
-        var host = new WorldGplHost { Map = world, Monsters = monsters, PartyCharacter = slot => slot < sheets.Length ? sheets[slot] : null };
+        var host = new WorldGplHost { Map = world, Monsters = monsters, Fixes = fixes ?? new(), PartyCharacter = slot => slot < sheets.Length ? sheets[slot] : null };
         var scripts = new Scripts();
         scripts.Files[(1, GplFileKind.Gpl)] = GplAssembler.Assemble(source);
         var machine = new GplMachine(scripts, host, [], new BorlandRandom(1));
@@ -61,6 +62,19 @@ public class RequestTests
         Assert.Equal(3, Gnum(m, 1));   // 2 × 3 / 2; the slot after it is empty (the EXE would divide by 0), so its own strength
         Assert.Equal(160, Gnum(m, 2)); // b ≠ 0: the table used anywhere
         Assert.Equal(6, Gnum(m, 3));   // 2 × 3 / 1: the next slot's strength, as 87B3:0CB4 divides, not its own 3; at most 6
+    }
+
+    [Fact]
+    public void RandomMonsterCountUsesThePicksOwnStrengthWithTheFix()
+    {
+        var (m, _) = Run("""
+              gnum[0] = ((REQUEST(8, 0, 0, 1)))
+              gnum[1] = ((REQUEST(8, 0, 1, 1)))
+              EXIT_GPL
+            """, MonsterTable.Parse(Record(MonsterTable.AnyRegion, (160, 3), (160, 1))), new CombatFixes(MonsterCountFromItsSlot: true));
+
+        Assert.Equal(160, Gnum(m, 0));
+        Assert.Equal(2, Gnum(m, 1)); // 2 × 3 / 3, not 2 × 3 / 1
     }
 
     [Fact]

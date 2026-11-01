@@ -667,7 +667,12 @@ executable, not in the data.
       all off as the original has them: mirror images taking blows, Negative
       Plane Protection's save, Brave against fear, Dexterity against areas,
       no Strength from Absorb Disease, Berserk's side ending, walls from one
-      cell, Bless and Aid's filter measured from the right cell. (A gaze
+      cell, Bless and Aid's filter measured from the right cell, Cause
+      Serious and Critical Wounds with their Cures' dice, a thri-kreen's
+      claws slashing, Scare's elf and half-elf save, random monster groups
+      sized by the picked monster, Psionic Blast's loss wearing off (#122,
+      #125–#127, #129); `rules/characters.json` has the gladiator's armour
+      bonus only in armour and ability items only when worn (#129). (A gaze
       flag, 0x80, is on no record; a mod can set it in `rules/spells.json`.)
 - [x] Power ranks in the character data (2026-10-20): `Character.PowerRanks`
       (saved with the character), and USE on an item that teaches (`RDFF`

@@ -355,7 +355,7 @@ public partial class CharacterScreen : RetroScreen
             _abilities[i].Text = fighter.Score(i).ToString();
         }
         _psp.Text = $"{_magic.Psp(c)}/{_magic.MaxPsp(c)}";
-        _armour.Text = $"AC: {CharacterSheet.ArmorClass(fighter.Score((int)Ability.Dex), Member!.Items, _world.Items, Session.Rules, CharacterSheet.BaseArmorClassOf(c.Race, new CharacterCreation(Session.Rules, Session.Names, new Random()).ActiveLevels(c), Session.Rules)),2}";
+        _armour.Text = $"AC: {CharacterSheet.ArmorClass(fighter.Score((int)Ability.Dex), Member!.Items, _world.Items, Session.Rules, CharacterSheet.BaseArmorClassOf(c.Race, new CharacterCreation(Session.Rules, Session.Names, new Random()).ActiveLevels(c), Member!.Items, _world.Items, Session.Rules)),2}";
         _attacks.Text = string.Join("\n", AttackLines(fighter));
     }
 
@@ -363,11 +363,14 @@ public partial class CharacterScreen : RetroScreen
     /// The attack lines (<c>78A9:28DC</c>): each weapon in hand and the missile
     /// weapon, its name ("%+d %Fs" with a bonus) and its damage
     /// (<c>78A9:2A9F</c>); then the natural attacks in &lt; &gt; (the first not
-    /// while a weapon is in hand). Strength adds to all but missiles'.
+    /// while a weapon is in hand). Strength adds to all but missiles', and a
+    /// weapon's material (<c>6868:0489</c>) to its own, as in a fight. The
+    /// attacks count Haste and Slow, as a fight does (the original's lines don't).
     /// </summary>
     private IEnumerable<string> AttackLines(Combatant fighter)
     {
         int strDamage = Session.Rules.Abilities.StrDamageOf(fighter.Score((int)Ability.Str));
+        int Halves(int halves) => Battle.HalvesFor(fighter, halves);
         foreach (Weapon? w in new[] { fighter.Weapon, fighter.MissileWeapon })
         {
             if (w is null)
@@ -376,13 +379,14 @@ public partial class CharacterScreen : RetroScreen
             }
             string name = w.Item is { } item ? ItemText.Name(_world!, item) : "";
             yield return w.Bonus != 0 ? $"{w.Bonus:+0;-0} {name}" : name;
-            yield return Damage(fighter.AttackHalves, w.Type.DamageDice, w.Type.DamageSides, w.Type.DamageBonus + w.Bonus + (w.IsMissile ? 0 : strDamage));
+            yield return Damage(Halves(fighter.AttackHalves), w.Type.DamageDice, w.Type.DamageSides,
+                w.Type.DamageBonus + w.Bonus + w.MaterialDamage + (w.IsMissile ? 0 : strDamage));
         }
         foreach (var (attack, n) in fighter.NaturalAttacks.Select((a, n) => (a, n)))
         {
             if (n > 0 || fighter.Weapon is null)
             {
-                yield return $"<{Damage(attack.Halves, attack.Dice, attack.Sides, attack.Bonus + strDamage)}>";
+                yield return $"<{Damage(Halves(attack.Halves), attack.Dice, attack.Sides, attack.Bonus + strDamage)}>";
             }
         }
     }

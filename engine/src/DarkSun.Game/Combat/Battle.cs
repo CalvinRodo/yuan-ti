@@ -271,10 +271,19 @@ public sealed partial class Battle
     /// or hurt but alive (status 1–3) gets up, with 1 hit point if it had none.
     /// True when no member was standing with hit points left: the party has
     /// fallen (DSUN.EXE's game over, <c>85FE:02C9</c>), even if some only went down;
-    /// false when no member fought (a bout the party watched).
+    /// false when no member fought (a bout the party watched). Anyone not dead gets
+    /// back what Psionic Blast took (<see cref="CombatFixes.PsionicBlastWearsOff"/>) first.
     /// </summary>
     public bool Finish()
     {
+        foreach (Combatant c in _all.Where(c => c.ImaginedLoss > 0))
+        {
+            if (c.Vitals.Status <= Vitals.Down)
+            {
+                c.Vitals.Hp = Math.Min(c.Vitals.MaxHp, c.Vitals.Hp + c.ImaginedLoss);
+            }
+            c.ImaginedLoss = 0;
+        }
         bool fallen = _all.Any(c => c.PartyMember); // a fight the party only watched isn't lost
         foreach (Combatant c in _all.Where(c => c.PartyMember))
         {

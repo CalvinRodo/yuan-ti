@@ -410,6 +410,20 @@ public sealed record CharacterRules
     /// </summary>
     public bool SilentItemWorks { get; init; }
 
+    /// <summary>
+    /// A class's armour class bonus (<see cref="ClassRules.ArmorBonusPer"/>, the
+    /// gladiator's) counts only with body armour on, as Dark Sun's armour
+    /// optimisation has it; false: always, as DSUN.EXE has it (<c>612E:2113</c>).
+    /// </summary>
+    public bool ArmorBonusNeedsArmor { get; init; }
+
+    /// <summary>
+    /// The items that raise or lower an ability (<see cref="Combat.AbilityScores"/>)
+    /// work only while worn; false: wherever they are carried, the pack and
+    /// containers too, as DSUN.EXE has it (<c>80F5:2BB8</c>).
+    /// </summary>
+    public bool AbilityItemsWhenWorn { get; init; }
+
     /// <summary>STAT_ROLL's difficulties 0–3 (<c>3971:0004</c>): added to the ability the d20 must come under.</summary>
     public IReadOnlyList<int> StatRollModifiers { get; init; } = [5, 0, -5, -10];
 

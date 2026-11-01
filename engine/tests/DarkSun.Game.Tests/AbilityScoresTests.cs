@@ -28,6 +28,14 @@ public class AbilityScoresTests
     }
 
     [Fact]
+    public void OnlyWornItemsCountWhenTheRulesSaySo()
+    {
+        // CharacterRules.AbilityItemsWhenWorn: El's Ring on a finger counts; the Steadfast Ring in the pack or a bag doesn't.
+        var bag = new Item(1100, new ItemRecord(-1100, 1, 0, 0, 0, 0, 0, 0, 0, 6, 255, 0, 0)) { Contents = [Special(0xFC, 3)] };
+        Assert.Equal([12, 16, 14, 15, 16, 17], AbilityScores.Of(Own, [], [Special(0xFB, 3, slot: 5), Special(0xFC, 3), bag], wornOnly: true));
+    }
+
+    [Fact]
     public void ChargesFrom16AreAFloorAndFrom32ALoss()
     {
         // Belt of Might (0xFA, 24): Strength at least 24, and with a floor each ability is the higher of the two.

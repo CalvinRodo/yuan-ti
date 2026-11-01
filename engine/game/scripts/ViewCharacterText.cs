@@ -1,5 +1,6 @@
 using DarkSun.Data.Items;
 using DarkSun.Game.Characters;
+using DarkSun.Game.Combat;
 using DarkSun.Game.Magic;
 using DarkSun.Game.World;
 using Godot;
@@ -109,7 +110,8 @@ public sealed class ViewCharacterText
     /// (none on the creation screen, where the gear isn't given yet): armour
     /// class 10 with Dexterity's adjustment and the worn armour's, and the
     /// damage of the weapon in hand (slot 3), else of bare hands (or a
-    /// thri-kreen's first natural attack), with Strength's bonus.
+    /// thri-kreen's first natural attack), with Strength's bonus and the
+    /// weapon's material (which the original's line, <c>6CCA:1B69</c>, leaves out).
     /// </summary>
     public static CharacterDetailsView Of(Character c, IReadOnlyList<ItemState>? items = null) =>
         items is { Count: > 0 } ? Of(c, Carried(items, Session.ObjectData), ItemCatalog.Load(Session.ObjectData)) : Of(c, [], null);
@@ -121,15 +123,17 @@ public sealed class ViewCharacterText
         var rules = Session.Rules;
         int str = cc.Adjusted(c, Ability.Str), dex = cc.Adjusted(c, Ability.Dex);
         int halves = CharacterSheet.AttackHalves(cc.ActiveLevels(c), rules), strDamage = rules.Abilities.StrDamageOf(str);
-        int baseArmorClass = CharacterSheet.BaseArmorClassOf(c.Race, cc.ActiveLevels(c), rules);
+        // Nothing worn: no class bonus where it needs armour (CharacterRules.ArmorBonusNeedsArmor).
+        int baseArmorClass = rules.ArmorBonusNeedsArmor ? CharacterSheet.BaseArmorClassOf(c.Race, rules) : CharacterSheet.BaseArmorClassOf(c.Race, cc.ActiveLevels(c), rules);
         int armorClass = baseArmorClass + CharacterSheet.DexterityDefence(dex, rules);
         string? damage = null;
         if (catalog is not null && carried.Count > 0)
         {
-            armorClass = CharacterSheet.ArmorClass(dex, carried, catalog, rules, baseArmorClass);
+            armorClass = CharacterSheet.ArmorClass(dex, carried, catalog, rules, CharacterSheet.BaseArmorClassOf(c.Race, cc.ActiveLevels(c), carried, catalog, rules));
             if (carried.FirstOrDefault(i => i.Slot == 3) is { } held && catalog.TypeOf(held.Record) is { IsWeapon: true } weapon)
             {
-                damage = CharacterSheet.DamageText(halves, weapon.DamageDice, weapon.DamageSides, weapon.DamageBonus + held.Record.Bonus + strDamage);
+                damage = CharacterSheet.DamageText(halves, weapon.DamageDice, weapon.DamageSides,
+                    weapon.DamageBonus + held.Record.Bonus + new Weapon(weapon).MaterialDamage + strDamage);
             }
         }
         damage ??= rules.Race(c.Race).NaturalAttacks is [var first, ..]

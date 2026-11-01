@@ -245,8 +245,14 @@ public sealed partial class Battle
         if (e.Damaging && !Spells.IsCure(e.Number))
         {
             var (dice, flat) = e.DamageAt(level);
-            int damage = RollDice(dice, e.Sides) + flat;
-            Note(new DamageRolled(caster, t, dice, e.Sides, flat, 1, damage, e.Number));
+            int sides = e.Sides;
+            if (Rules.Fixes.CauseWoundsAsCures && CauseWounds.TryGetValue(e.Number, out int cures)
+                && Spells.Cures.FirstOrDefault(c => c.Effect == cures) is { } cure)
+            {
+                (dice, sides, flat) = (cure.Dice, cure.Sides, cure.Bonus);
+            }
+            int damage = RollDice(dice, sides) + flat;
+            Note(new DamageRolled(caster, t, dice, sides, flat, 1, damage, e.Number));
             damage = saved ? (e.SaveCancels ? 0 : damage / 2) : damage;
             damage = damage * percent / 100;
             if (damage > 0 && Spells.AreaOf(e) > 8 && Creatures.HasAbility(t.Type, CreatureAbilityBit.DiesToRangedSpells))
@@ -257,6 +263,9 @@ public sealed partial class Battle
         }
         Special(caster, t, e, level, saved);
     }
+
+    /// <summary>Cause Serious and Critical Wounds and the Cures they mirror (<see cref="CombatFixes.CauseWoundsAsCures"/>).</summary>
+    private static readonly Dictionary<int, int> CauseWounds = new() { [114] = 113, [129] = 128 };
 
     /// <summary>Class code 3, a cleric of fire: at level 5 fire can't touch it (<c>80F5:161F</c>).</summary>
     private const int FireCleric = 3;
@@ -319,7 +328,7 @@ public sealed partial class Battle
         return true;
     }
 
-    public const int VampiricTouch = 40, RaiseDead = 136;
+    public const int VampiricTouch = 40, RaiseDead = 136, Scare = 22;
 
     /// <summary>
     /// What makes <paramref name="t"/> untouched by <paramref name="e"/>
@@ -459,13 +468,19 @@ public sealed partial class Battle
     /// poison adjustment, and a dwarf's or halfling's Con × 2 ÷ 7. No save
     /// against Chaos without a warrior's levels, nor against Cloudkill below
     /// level 7, and Scare can't miss below level 6 and can't land from 6
-    /// (<see cref="SpellRules.SaveRules"/>); Dismissal adds the target's level
-    /// less the caster's.
+    /// (<see cref="SpellRules.SaveRules"/>; an elf or half-elf priest rolls
+    /// below 6 with <see cref="CombatFixes.ScareSparesElves"/>); Dismissal adds
+    /// the target's level less the caster's.
     /// </summary>
     public int SaveBonus(Combatant t, SpellEffect e, Combatant? caster, int level, int save)
     {
         foreach (SaveRule r in Spells.SaveRules.Where(r => r.Effect == e.Number))
         {
+            if (Rules.Fixes.ScareSparesElves && r.Effect == Scare && t.Level < r.Level && t.Race is 3 or 4
+                && t.Classes.Any(c => c.Code is >= 1 and <= 8 && c.Level > 0))
+            {
+                continue;
+            }
             SaveOutcome outcome = r.UnlessClasses is { } classes && !classes.Any(code => t.LevelIn(code) > 0) ? SaveOutcome.Fails
                 : t.Level < r.Level ? r.Below : r.From;
             if (outcome != SaveOutcome.Rolled)
@@ -979,7 +994,12 @@ public sealed partial class Battle
                 AddCondition(caster, caster, Condition.ExtraHitPoints, e.Number, level, 600, value: drained);
                 break;
             case 170 when !saved:
-                Hurt(caster, t, t.Vitals.Hp - t.Vitals.MaxHp * 2 / 10);
+                int lost = t.Vitals.Hp - t.Vitals.MaxHp * 2 / 10;
+                Hurt(caster, t, lost);
+                if (Rules.Fixes.PsionicBlastWearsOff && lost > 0 && t.Alive)
+                {
+                    t.ImaginedLoss += lost;
+                }
                 break;
             case 80 or 86 or 90:
                 Conjure(caster, e, level, duration);

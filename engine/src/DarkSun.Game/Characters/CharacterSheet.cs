@@ -42,6 +42,17 @@ public static class CharacterSheet
     public static int BaseArmorClassOf(Race race, IEnumerable<(CharacterClass Class, int Level)> active, CharacterRules? rules = null) =>
         BaseArmorClassOf(race, rules) - active.Sum(a => Of(a.Class, rules) is { ArmorBonusPer: > 0 } k ? a.Level / k.ArmorBonusPer : 0);
 
+    /// <summary>
+    /// The same for one wearing <paramref name="items"/>: without body armour (arms, legs or chest,
+    /// slots 0, 6, 9) the classes' bonus counts only if <see cref="CharacterRules.ArmorBonusNeedsArmor"/> is false.
+    /// </summary>
+    public static int BaseArmorClassOf(Race race, IEnumerable<(CharacterClass Class, int Level)> active, IEnumerable<Item> items, ItemCatalog catalog,
+        CharacterRules? rules = null) =>
+        (rules ?? CharacterRules.Default).ArmorBonusNeedsArmor
+            && !items.Any(i => i.Equipped && i.Slot is 0 or 6 or 9 && catalog.TypeOf(i.Record) is { ArmorClass: > 0 })
+            ? BaseArmorClassOf(race, rules)
+            : BaseArmorClassOf(race, active, rules);
+
     /// <summary>Armour class wearing <paramref name="items"/> (the worn ones count) with Dexterity <paramref name="dex"/>, from <paramref name="baseArmorClass"/> (the race's and its classes', <see cref="BaseArmorClassOf(Race, IEnumerable{ValueTuple{CharacterClass, int}}, CharacterRules?)"/>).</summary>
     public static int ArmorClass(int dex, IEnumerable<Item> items, ItemCatalog catalog, CharacterRules? rules = null, int baseArmorClass = BaseArmorClass)
     {
