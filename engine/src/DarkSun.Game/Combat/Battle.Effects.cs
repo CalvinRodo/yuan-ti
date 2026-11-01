@@ -183,7 +183,10 @@ public sealed partial class Battle
         bool friendly = caster == t || !caster.IsEnemyOf(t);
         if (!friendly)
         {
-            UseCharge(t, Condition.ImprovedAc);
+            if (!Rules.Fixes.OneArmorChargePerWound)
+            {
+                UseCharge(t, Condition.ImprovedAc);
+            }
             if (t.Has(Condition.CloakOfFear) && e.Number != CauseFear)
             {
                 UseCharge(t, Condition.CloakOfFear);

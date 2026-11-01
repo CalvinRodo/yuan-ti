@@ -66,13 +66,15 @@ public sealed record WeaponScoring(int PerDieSide = 1, int DamageBonus = 2, int 
 /// <param name="WallsFromOneCell">A wall cast at one cell runs across the line of fire, its area long (the original's AI gives both ends the same cell, a wall of one point).</param>
 /// <param name="FireElementalResistances">The fire elemental (type 32) needs +2 weapons and the lesser one (33) +1, as the clue book has them, both untouched by fire (the original's rows are the wrong way round: <see cref="Battle.FireElementalRows"/>).</param>
 /// <param name="BlessFilterFromItsCell">Bless and Aid leave out those of their side with an enemy beside them, measured from where they stand (the original measures from (x, x), a slip, <c>80F5:249D</c>).</param>
+/// <param name="OneArmorChargePerWound">Armor loses one charge to a wound, from a blow or a spell (the original takes one when a blow lands, <c>80F5:1999</c>, or a hostile spell does, even one that does no harm, and another for the wound, <c>80F5:0E61</c>).</param>
 public sealed record CombatFixes(
     bool MirrorImagesTakeBlows = false, bool NegativePlaneProtectionSaves = false, bool BraveAgainstFear = false,
     bool DexterityAgainstAreas = false, bool NoStrengthFromAbsorbDisease = false, bool BerserkSideEnds = false,
-    bool WallsFromOneCell = false, bool BlessFilterFromItsCell = false, bool FireElementalResistances = false)
+    bool WallsFromOneCell = false, bool BlessFilterFromItsCell = false, bool FireElementalResistances = false,
+    bool OneArmorChargePerWound = false)
 {
     /// <summary>All of them.</summary>
-    public static CombatFixes All { get; } = new(true, true, true, true, true, true, true, true, true);
+    public static CombatFixes All { get; } = new(true, true, true, true, true, true, true, true, true, true);
 }
 
 /// <summary>

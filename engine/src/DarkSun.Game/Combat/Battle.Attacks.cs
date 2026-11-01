@@ -319,7 +319,10 @@ public sealed partial class Battle
             Note(new Avoided(a, t, "missile"));
             return;
         }
-        UseCharge(t, Condition.ImprovedAc);
+        if (!Rules.Fixes.OneArmorChargePerWound)
+        {
+            UseCharge(t, Condition.ImprovedAc);
+        }
         if (t.Has(Condition.CloakOfFear))
         {
             UseCharge(t, Condition.CloakOfFear);
@@ -453,7 +456,8 @@ public sealed partial class Battle
     /// <summary>
     /// Damage (<c>612E:18DA</c>): less than the hit points takes that many; up to
     /// 9 more leaves it down (status 3), more kills it (5), 10 000 or more
-    /// destroys it (8). Armor loses a charge to every wound (<c>80F5:0E61</c>).
+    /// destroys it (8). Armor loses a charge to every wound (<c>80F5:0E61</c>), on top of
+    /// the one the blow or spell took unless <see cref="CombatFixes.OneArmorChargePerWound"/>.
     /// </summary>
     public void Hurt(Combatant? a, Combatant t, int damage, DamageElement elements = DamageElement.None)
     {
