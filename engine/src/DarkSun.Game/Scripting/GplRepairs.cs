@@ -75,6 +75,11 @@ public static class GplRepairs
         // breaks. A Strength roll instead, as ripping it open has (@AA6: RAND(30) < Str).
         new("script-repairs.grate-attack-roll", 137, 0xB5C, Hex("18b18027012bda00dc"), Hex("18e28c528f1ee1dab180250117"), true,
             "an attack on the sewer grate breaks its lock on a Strength roll, as ripping it open does (GPL 137 @B5C: RAND(30) < Str)"),
+        // The Rebel Mindhome (GPL 204): with the spiders gone, every talk to their leader runs the thanks again and
+        // its 5000 XP award; nothing reads gflag[695], which the first one sets. The award only while it is 0.
+        new("script-repairs.mindhome-reward-once", 204, 0x5C9, Hex("1613888710140087004a"),
+            Hex("18cd02b7d78f003e0014" + "1613888710140087004a" + "67"), true,
+            "the Rebel Mindhome's 5000 XP for the spiders is given once, not at every talk (GPL 204 @5C9: gflag[695] == 0)") { Relocate = [8] },
         // The final battle: the stage gate (GPL 62 @4345) exits without re-arming inside its window. With the
         // game clock running the gate is polled again and waits its window out, so this is off by default.
         new("script-repairs.final-battle-gate", 62, 0x10F1, Hex("10f9"), Hex("00ef"), false,
