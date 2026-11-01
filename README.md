@@ -302,6 +302,7 @@ format. `.github/instructions/` holds the reverse-engineering notes on
 
 ## License
 
-The code is under the [MIT License](LICENSE). The bundled
-`java extractors/dsun_music-master` keeps its own MIT license (John
-Glassmyer). The games' files are not covered and are not included.
+The code is under the [MIT License](LICENSE). The Python GFF code is ported
+from John Glassmyer's MIT-licensed Java tools, so the license carries his
+notice too; the bundled `java extractors/dsun_music-master` keeps its own.
+The games' files are not covered and are not included.
