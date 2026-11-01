@@ -73,7 +73,7 @@ public partial class ModsView : RetroScreen
             {
                 GD.Print($"  problem: {p}");
             }
-            bool rulesOk = CheckTabletopRules();
+            bool rulesOk = CheckTabletopRules() & CheckDefilingMods();
             GetTree().Quit(problems.Count > 0 || !rulesOk ? 1 : 0);
             return;
         }
@@ -133,6 +133,40 @@ public partial class ModsView : RetroScreen
         Session.ReloadMods();
         bool ok = (original, tabletopRules) == (4000, 4500);
         GD.Print($"  tabletop rules: {(wasOn ? "on" : "off")}; a gladiator's level 3 at {original} without them, {tabletopRules} with them{(ok ? "" : " (problem)")}");
+        return ok;
+    }
+
+    /// <summary>
+    /// The Defiling and Sweet Water mods come with the game, off: turned on (for
+    /// this run, not saved), defiling is on and Sweet Water (spell 197) is in the
+    /// spells, its record, name and catalog entry; off again, neither is.
+    /// </summary>
+    private static bool CheckDefilingMods()
+    {
+        string[] names = ["Defiling", "SweetWater"];
+        if (names.FirstOrDefault(n => Session.Mods.All.FirstOrDefault(m => m.Name == n) is not { Bundled: true }) is { } missing)
+        {
+            GD.Print($"  problem: the {missing} mod isn't there");
+            return false;
+        }
+        Dictionary<string, bool> wasOn = names.ToDictionary(n => n, n => Session.Mods.All.First(m => m.Name == n).Enabled);
+        (bool Defiling, bool Effect, bool Spell, string? Name) State() => (Session.CombatRules.Defiling.On, Session.SpellRules.Effect(197) is not null,
+            DarkSun.Game.Magic.Spellcasting.Get(197) is not null, Session.SpellName(197));
+        void Turn(Func<string, bool> on)
+        {
+            foreach (string n in names)
+            {
+                Settings.SetBundledMod(n, on(n));
+            }
+            Session.ReloadMods();
+        }
+        Turn(_ => true);
+        var with = State();
+        Turn(_ => false);
+        var without = State();
+        Turn(n => wasOn[n]);
+        bool ok = with == (true, true, true, "Sweet Water") && without == (false, false, false, null);
+        GD.Print($"  defiling and sweet water: on {with}, off {without}{(ok ? "" : " (problem)")}");
         return ok;
     }
 

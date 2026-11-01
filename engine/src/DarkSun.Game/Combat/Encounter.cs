@@ -133,7 +133,7 @@ public static class Encounter
         };
         Combatant caster = all[casterAt];
         var before = all.ToDictionary(c => c, c => c.Effects.ToHashSet());
-        bool power = number >= Spellcasting.FirstPower && !fromItem;
+        bool power = number is >= Spellcasting.FirstPower and <= Spellcasting.LastPower && !fromItem;
         bool done = power ? battle.UsePower(caster, number, all[targetAt].Cell)
             : battle.Cast(caster, number, fromItem ? ItemMagic.CasterLevel : caster.Level, all[targetAt].Cell, ownSpell: false);
         if (!done)

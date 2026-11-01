@@ -1,0 +1,4 @@
+{
+  "_about": "Turns on defiling (CombatRules.Defiling). Anything not listed here is the original's; the reach, save bonus and the spells that need life can be changed here too.",
+  "Defiling": { "On": true }
+}

@@ -420,7 +420,7 @@ public static class Session
         Files.Clear();
         Assets.Clear();
         (_sprites, _rules, _names, _quests) = (null, null, null, null);
-        (_creatureRules, _combatRules, _spellRules) = (null, null, null);
+        (_creatureRules, _combatRules, _spellRules, _spells) = (null, null, null, null);
         GameFonts.Reset();
         LoadParty();
         _bundledMods ??= BundledMods.Extract();
@@ -430,6 +430,8 @@ public static class Session
         {
             Godot.GD.Print($"Mods: {string.Join(", ", Mods.Mods.Select(m => m.Name))} ({Mods.Count} resources)");
         }
+        // The spells the mods add are cast, learned and listed like the original's.
+        DarkSun.Game.Magic.Spellcasting.UseAdded(SpellRules.Spells.Select(s => s.ToSpell()));
         _scripts = null;
         ScriptHost = NewHost();
         GameStarted = false;

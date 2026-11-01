@@ -212,6 +212,8 @@ public sealed class CombatLog(Func<int, string> effectName, Func<Item, string> i
         FieldMade fm => NotLeast(L(LogKind.Other, null, T($"{effectName(fm.Field.Effect.Number)} covers {fm.Field.Cells.Count} cells"))),
         FieldEnded fe => NotLeast(L(LogKind.Detail, null, T($"{effectName(fe.Field.Effect.Number)} fades"))),
         SideChanged s => Same(L(LogKind.Other, s.Actor, N(s.Actor), T($" now fights for {(s.Side == 1 ? "the party" : "the enemy")}"))),
+        Defiled d => Same(L(LogKind.Other, d.Actor, T("The ground around "), N(d.Actor), T(" turns to ash"))),
+        AshRestored r => Same(L(LogKind.Other, null, T($"Life returns to {r.Cells.Count} cells of ash"))),
         Summoned s => Same(L(LogKind.Other, s.Actor, N(s.Actor), T(" summons "), N(s.Creature))),
         _ => null,
     };

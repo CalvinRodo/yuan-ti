@@ -427,6 +427,11 @@ public partial class RegionView : Node2D
                 CheckCombat();
                 return;
             }
+            if (OS.GetCmdlineUserArgs().Contains("--check-defiling"))
+            {
+                CheckDefiling();
+                return;
+            }
             if (OS.GetCmdlineUserArgs().Contains("--check-arena"))
             {
                 CheckArena();

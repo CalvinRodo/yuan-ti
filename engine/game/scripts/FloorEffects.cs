@@ -14,7 +14,8 @@ public enum FloorTerrain
 /// What the map draws on its floor, under every wall and figure (between the
 /// ground and the sorted sprites), none of it in DSUN.EXE: the figures'
 /// shadows, dust raised by walking on sand or dirt, splashes on water, and in a fight red rings
-/// under the enemies. After the Obsidian Edition's
+/// under the enemies; and, with defiling (<see cref="DarkSun.Game.Combat.DefilingRules"/>),
+/// the ash a defiler leaves. After the Obsidian Edition's
 /// (<c>github.com/daaki85/darksun-obsidian-edition</c>, FEATURES.md, Graphics
 /// and Controls), drawn here with Godot rather than into the game's floor.
 /// </summary>
@@ -38,6 +39,7 @@ public partial class FloorEffects : Node2D
     private static readonly Color RingColor = new(0.85f, 0.15f, 0.1f, 0.85f);
     private static readonly Color ChosenRingColor = new(1f, 0.1f, 0.05f, 1f);
 
+    private AshLayer _ash = null!;
     private CanvasGroup _shadowGroup = null!;
     private DustLayer _dust = null!;
     private RingLayer _rings = null!;
@@ -48,6 +50,8 @@ public partial class FloorEffects : Node2D
 
     public override void _Ready()
     {
+        _ash = new AshLayer();
+        AddChild(_ash);
         // One group, so where shadows overlap the floor is darkened once, not twice.
         _shadowGroup = new CanvasGroup { Modulate = new Color(1, 1, 1, ShadowAlpha) };
         AddChild(_shadowGroup);
@@ -78,6 +82,9 @@ public partial class FloorEffects : Node2D
     /// <summary>Splashes on the floor now.</summary>
     public int SplashCount => _dust.Puffs.Count(p => p.Splash);
 
+    /// <summary>Cells of ash on the floor now.</summary>
+    public int AshCount => _ash.Cells.Count;
+
     /// <summary>Rings on the floor now, and whether one is the chosen enemy's.</summary>
     public (int Count, bool Chosen) RingCount => (_rings.Rings.Count, _rings.Rings.Any(r => r.Chosen));
 
@@ -94,6 +101,22 @@ public partial class FloorEffects : Node2D
         _dust.Puffs.Clear();
         _dust.QueueRedraw();
         ShowRings([]);
+        _ash.Ground = ground;
+        ShowAsh([], []);
+    }
+
+    /// <summary>
+    /// Ash on these cells (<see cref="AshLayer"/>), in <paramref name="palette"/>'s
+    /// colours (the region's); none to clear it.
+    /// </summary>
+    public void ShowAsh(IReadOnlyCollection<Vector2I> cells, IReadOnlyList<Color> palette)
+    {
+        _ash.Cells = [.. cells];
+        if (palette.Count > 0 && !palette.SequenceEqual(_ash.Palette))
+        {
+            _ash.Palette = palette;
+        }
+        _ash.QueueRedraw();
     }
 
     /// <summary>
@@ -274,13 +297,114 @@ public partial class FloorEffects : Node2D
         }
 
         /// <summary>A threshold in [0, 1) for each map pixel, the same every frame.</summary>
-        private static float Dither(int x, int y)
+        public static float Dither(int x, int y)
         {
             uint h = (uint)(x * 73856093) ^ (uint)(y * 19349663);
             h ^= h >> 13;
             h *= 0x5bd1e995;
             h ^= h >> 15;
             return (h & 0xFFFF) / 65536f;
+        }
+    }
+
+    /// <summary>
+    /// Ash: the ground itself burnt out. Each pixel of an ash cell is the floor's
+    /// own colour there, drained of colour and darkened, then the nearest colour
+    /// of the region's palette, so the ground keeps its pattern (sand's ripples,
+    /// a flagstone's cracks) in the palette's dull greys and browns, as the
+    /// original's art is drawn. Where the ash ends it thins out in clumps of
+    /// pixels over a few pixels, not along a straight line. Opaque, so colour
+    /// cycling still reads the floor around it.
+    /// </summary>
+    private sealed partial class AshLayer : Node2D
+    {
+        /// <summary>How far in from bare ground the ash thins, in pixels.</summary>
+        private const float Fade = 7;
+
+        /// <summary>How much colour the ash keeps, and how bright it is beside the ground.</summary>
+        private const float Colour = 0.35f, Darkness = 0.5f;
+
+        private readonly Dictionary<Color, Color> _nearest = [];
+
+        public HashSet<Vector2I> Cells { get; set; } = [];
+
+        public Image? Ground { get; set; }
+
+        public IReadOnlyList<Color> Palette
+        {
+            get;
+            set
+            {
+                field = value;
+                _nearest.Clear();
+            }
+        } = [];
+
+        public override void _Draw()
+        {
+            if (Ground is null || Palette.Count == 0)
+            {
+                return;
+            }
+            int size = Region.TileSize;
+            foreach (Vector2I cell in Cells)
+            {
+                for (int y = 0; y < size; y++)
+                {
+                    for (int x = 0; x < size; x++)
+                    {
+                        int px = cell.X * size + x, py = cell.Y * size + y;
+                        if (px >= Ground.GetWidth() || py >= Ground.GetHeight())
+                        {
+                            continue;
+                        }
+                        // Clumps of 2 × 2 pixels thin out toward bare ground.
+                        float clump = DustLayer.Dither(px / 2, py / 2);
+                        if (Inside(cell, x, y) / Fade < 0.15f + clump * 0.85f)
+                        {
+                            continue;
+                        }
+                        float mottle = 0.92f + 0.16f * DustLayer.Dither(px / 2 + 7919, py / 2 + 104729);
+                        DrawRect(new Rect2(px, py, 1, 1), Ash(Ground.GetPixel(px, py), mottle));
+                    }
+                }
+            }
+        }
+
+        /// <summary>How far pixel (x, y) of <paramref name="cell"/> is from the nearest bare cell's edge or corner (<see cref="Fade"/> or more: deep in the ash).</summary>
+        private float Inside(Vector2I cell, int x, int y)
+        {
+            int size = Region.TileSize;
+            float nearest = Fade;
+            for (int dy = -1; dy <= 1; dy++)
+            {
+                for (int dx = -1; dx <= 1; dx++)
+                {
+                    if ((dx, dy) == (0, 0) || Cells.Contains(cell + new Vector2I(dx, dy)))
+                    {
+                        continue;
+                    }
+                    // Distance to that neighbour's square, along each axis it lies off.
+                    float ax = dx < 0 ? x + 0.5f : dx > 0 ? size - x - 0.5f : 0;
+                    float ay = dy < 0 ? y + 0.5f : dy > 0 ? size - y - 0.5f : 0;
+                    nearest = Math.Min(nearest, MathF.Sqrt(ax * ax + ay * ay));
+                }
+            }
+            return nearest;
+        }
+
+        /// <summary>The ash a floor colour turns to: greyed, darkened, mottled, then the palette's nearest.</summary>
+        private Color Ash(Color floor, float mottle)
+        {
+            float grey = floor.R * 0.3f + floor.G * 0.59f + floor.B * 0.11f;
+            var ash = new Color(grey, grey, grey).Lerp(floor, Colour) * (Darkness * mottle);
+            ash = new Color(MathF.Round(ash.R * 63) / 63, MathF.Round(ash.G * 63) / 63, MathF.Round(ash.B * 63) / 63);
+            if (!_nearest.TryGetValue(ash, out Color found))
+            {
+                found = Palette.MinBy(p => (p.R - ash.R) * (p.R - ash.R) * 0.3f + (p.G - ash.G) * (p.G - ash.G) * 0.59f + (p.B - ash.B) * (p.B - ash.B) * 0.11f);
+                _nearest[ash] = found;
+            }
+            return found;
         }
     }
 

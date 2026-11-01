@@ -1,0 +1,18 @@
+{
+  "_about": "Sweet Water, spell 197: added to the original's tables, which stay as they are. AshRestorers is what brings back a defiler's ash: remove it, or set Reach to 0, to leave the ash alone.",
+  "Effects": [
+    { "Number": 197, "RangeBase": -2, "RangePerLevel": 0, "DurationCount": 0, "DurationSides": 1, "DurationPerLevel": 0, "Unit": 60, "AreaBase": 1, "AreaPerLevel": 0, "Target": 3, "Template": -1, "Flags": 0, "Condition": "None", "Elements": "None", "BaseDice": 0, "DicePerStep": 0, "Sides": 0, "FlatPerStep": 0, "LevelsPerStep": 1, "LevelBonus": 0, "SaveAllowed": 0, "SaveModifier": 0, "SaveCategory": 5, "Purpose": 1 }
+  ],
+  "Looks": [
+    { "Number": 197, "CastGraphic": -1, "CastSound": 83, "Projectile": -1, "FlightSound": 75, "HitGraphic": 8309, "HitSound": 98 }
+  ],
+  "Cures": [
+    { "Effect": 197, "Dice": 1, "Sides": 4, "Bonus": 0, "LevelsPerPoint": 2, "Ends": ["Poisoned", "Diseased"] }
+  ],
+  "Spells": [
+    { "Number": 197, "Level": 2, "Kind": "Priest", "Casters": [4, 8, 16], "Icon": 21071 }
+  ],
+  "AshRestorers": [
+    { "Effect": 197, "Reach": 1 }
+  ]
+}

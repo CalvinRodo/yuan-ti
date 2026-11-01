@@ -506,6 +506,13 @@ public partial class RegionView
             case FieldEnded fe:
                 FieldGone(fe.Field);
                 break;
+            case Defiled d:
+                LookOfDefiling(d);
+                _combatWait = fast ? 0 : CastPause;
+                return;
+            case AshRestored r:
+                LookOfRestoring(r);
+                break;
         }
         _combatWait = fast ? 0 : Math.Max(_combatWait, 0);
     }
@@ -1658,6 +1665,97 @@ public partial class RegionView
             GD.Print($"  PROBLEM: {p}");
         }
         GD.Print(problems.Count == 0 ? "combat: OK" : $"combat: {problems.Count} problems");
+        GetTree().Quit(problems.Count == 0 ? 0 : 1);
+    }
+
+    /// <summary>
+    /// <c>--check-defiling</c> (with <c>--new-game</c>; Main turns the Defiling
+    /// and Sweet Water mods on for the run): in a test fight, on a member's
+    /// turn, the ground around it turns to ash as a defiler's spell leaves it
+    /// (<see cref="Battle.Defile"/>), and the map shows that ash; Sweet Water,
+    /// cast from the combat menu's path at the ash beside it, brings some back,
+    /// and the map shows the floor there again; the fight's end clears the rest.
+    /// </summary>
+    private async void CheckDefiling()
+    {
+        const int SweetWater = 197, MagicMissile = 9;
+        _checking = true;
+        var problems = new List<string>();
+        void Play()
+        {
+            for (int frame = 0; frame < 2_000 && (_combatEvents.Count > 0 || _combatWait > 0); frame++)
+            {
+                CombatProcess(1.0 / 60);
+            }
+        }
+        if (!Session.CombatRules.Defiling.On || Session.SpellRules.Effect(SweetWater) is null)
+        {
+            problems.Add("the Defiling and Sweet Water mods aren't on");
+        }
+        else if (!StartTestFight() || _battle is not { } battle)
+        {
+            problems.Add("no creature to fight in the start region");
+        }
+        else
+        {
+            for (int frame = 0; frame < 20_000 && PlayerTurn is null && InCombat; frame++)
+            {
+                CombatProcess(1.0 / 60);
+            }
+            if (PlayerTurn is not { } member)
+            {
+                problems.Add("no member's turn came");
+            }
+            else
+            {
+                battle.Defile(member, MagicMissile);
+                Play();
+                int ash = _floor.AshCount;
+                if (ash == 0 || ash != battle.Ash.Count)
+                {
+                    problems.Add($"the map shows {ash} cells of ash for the battle's {battle.Ash.Count}");
+                }
+                if (battle.Ash.FirstOrDefault(c => c != member.Cell && battle.At(c) is null && Battle.Distance(member.Cell, c) == 1) is var bare
+                    && bare == default)
+                {
+                    problems.Add($"no bare ash beside {Who(member)}");
+                }
+                else if (!CastAt(member, new CastChoice(SweetWater, 5), bare))
+                {
+                    problems.Add($"Sweet Water couldn't be cast at the ash at {bare}");
+                }
+                else
+                {
+                    Play();
+                    if (_floor.AshCount >= ash || _floor.AshCount != battle.Ash.Count)
+                    {
+                        problems.Add($"after Sweet Water the map shows {_floor.AshCount} cells of ash (before {ash}), the battle has {battle.Ash.Count}");
+                    }
+                    GD.Print($"defiling: {ash} cells of ash around {Who(member)}; Sweet Water at {bare} left {_floor.AshCount}");
+                }
+            }
+            foreach (Combatant c in battle.Combatants.Where(c => c.PartyMember))
+            {
+                c.ComputerControlled = true;
+            }
+            for (int frames = 0; InCombat && battle.Round <= 40 && frames < 200_000; frames++)
+            {
+                CombatProcess(1.0 / 60);
+                if (frames % 500 == 0)
+                {
+                    await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                }
+            }
+            if (!InCombat && _floor.AshCount != 0)
+            {
+                problems.Add($"{_floor.AshCount} cells of ash are left on the map after the fight");
+            }
+        }
+        foreach (string p in problems)
+        {
+            GD.Print($"  PROBLEM: {p}");
+        }
+        GD.Print(problems.Count == 0 ? "defiling: OK" : $"defiling: {problems.Count} problems");
         GetTree().Quit(problems.Count == 0 ? 0 : 1);
     }
 
