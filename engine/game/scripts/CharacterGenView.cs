@@ -178,6 +178,31 @@ public partial class CharacterGenView : RetroScreen
             return;
         }
         Refresh();
+        if (OS.GetCmdlineUserArgs().Contains("--demo"))
+        {
+            Demo();
+        }
+    }
+
+    /// <summary><c>--demo</c>: a player's choices, one at a time, for recordings: the looks, two rolls, the classes, the map icon and the alignment.</summary>
+    private async void Demo()
+    {
+        Action[] steps =
+        [
+            () => _cc.CycleLooks(_c, 1), () => _cc.CycleLooks(_c, 1), () => _cc.CycleLooks(_c, 1),
+            Roll, Roll,
+            () => { foreach (CharacterClass k in _c.Classes.ToList()) { _cc.ToggleClass(_c, k); } },
+            .. new[] { CharacterClass.Gladiator, CharacterClass.Psionicist, CharacterClass.Thief }
+                .Select(k => (Action)(() => { if (_cc.CanAdd(_c, k)) { _cc.ToggleClass(_c, k); } })),
+            () => CycleSprite(1), () => CycleSprite(1),
+            () => _cc.CycleAlignment(_c, 1),
+        ];
+        foreach (Action step in steps)
+        {
+            await ToSignal(GetTree().CreateTimer(1.2), SceneTreeTimer.SignalName.Timeout);
+            step();
+            Refresh();
+        }
     }
 
     public override void _UnhandledInput(InputEvent e)

@@ -88,6 +88,24 @@ or graph routing. Rendered PNGs and connection analysis survive server restarts.
 | ![Creating a character](docs/screenshots/chargen.png) | ![Memorizing spells](docs/screenshots/spells.png) |
 | Creating a character | Memorizing spells |
 
+### In motion
+
+| | |
+|---|---|
+| ![The party walks out into the arena](docs/demos/walking-dust-shadows.gif) | ![The first two rounds of the opening fight](docs/demos/intro-fight.gif) |
+| Shadows under every figure, and dust from their feet on sand | The arena's opening fight, its first two rounds (1.5× speed) |
+| ![Character Generation](docs/demos/character-creation.gif) | ![View Character](docs/demos/view-character.png) |
+| Character Generation: looks, rolls, classes, the map icon, alignment | View Character |
+| ![The inventory](docs/demos/inventory.png) | ![Psionic powers](docs/demos/psionics.png) |
+| The inventory | Psionic powers |
+
+### Debugging
+
+| | |
+|---|---|
+| ![The map's debug overlay](docs/demos/debug-overlay.png) | ![The script debugger stepping through a script](docs/demos/script-debugger.gif) |
+| The debug overlay (F1, F3, F4, F7): blocked cells, object numbers, triggers, the cell under the pointer | The script debugger (F6) stepping through the game-start script |
+
 ## What works
 
 - **The opening:** the intro and the arrival cinematic, with the original music.

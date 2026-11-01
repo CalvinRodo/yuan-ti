@@ -75,6 +75,10 @@ public partial class RegionView : Node2D
     /// <summary>The view as it was before OVERHEAD MAP, to go back to.</summary>
     private (int Zoom, bool Follow, Vector2 At)? _beforeOverhead;
     private ScriptDebugger _debugger = null!;
+
+    /// <summary>Development (<c>--demo</c>): how long the dialogue has shown; after <see cref="DemoReading"/> seconds it goes on as a player's click would.</summary>
+    private double? _demoDialogue;
+    private const double DemoReading = 3;
     private CharacterScreen _character = null!;
     private readonly Dictionary<int, Texture2D?> _itemIcons = [];
     private JournalWindow _journal = null!;
@@ -285,11 +289,24 @@ public partial class RegionView : Node2D
                 // Development: talk to the first object that has a talk trigger (to see dialogue).
                 WhenScriptsFree(() => Act(talker, _selected, Verb.Talk));
             }
+            if (OS.GetCmdlineUserArgs().Contains("--demo"))
+            {
+                // Development: play by itself, for recordings: the dialogue read and answered, the party fighting.
+                (_demoDialogue, _autoParty) = (0, true);
+            }
             if (OS.GetCmdlineUserArgs().Contains("--fight"))
             {
                 // Development: a fight with the nearest creature that fights (--auto: the party fights by itself).
                 _autoParty = OS.GetCmdlineUserArgs().Contains("--auto");
                 Callable.From(() => StartTestFight()).CallDeferred();
+            }
+            if (OS.GetCmdlineUserArgs().FirstOrDefault(a => a.StartsWith("--walk-to=")) is { } walk
+                && walk["--walk-to=".Length..].Split('@') is var walkParts && walkParts[0].Split(',') is [var wx, var wy]
+                && int.TryParse(wx, out int toX) && int.TryParse(wy, out int toY))
+            {
+                // Development: the whole party walks to a cell, at once or after some seconds (--walk-to=X,Y@S), for recordings of the map.
+                double walkAfter = walkParts.Length > 1 && double.TryParse(walkParts[1], System.Globalization.CultureInfo.InvariantCulture, out double s) ? s : 0;
+                GetTree().CreateTimer(walkAfter).Timeout += () => WhenScriptsFree(() => WalkTo(new Cell(toX, toY), wholeParty: true));
             }
             if (OS.GetCmdlineUserArgs().FirstOrDefault(a => a.StartsWith("--picture=")) is { } picture && int.TryParse(picture["--picture=".Length..], out int number))
             {
@@ -1448,6 +1465,10 @@ public partial class RegionView : Node2D
             _clock += delta;
         }
         _running += delta;
+        if (_demoDialogue is double shown)
+        {
+            AnswerAsADemo(shown + delta);
+        }
         UpdatePointer();
         if (InCombat)
         {
@@ -4545,6 +4566,25 @@ public partial class RegionView : Node2D
     }
 
     /// <summary>With no player, answer every prompt: Continue, No (Yes if <paramref name="yes"/>), or each menu's first option.</summary>
+    /// <summary><c>--demo</c>: the dialogue, once read, goes on (MORE, or the first choice), as a player's click does.</summary>
+    private void AnswerAsADemo(double shown)
+    {
+        _demoDialogue = _dialogueWindow.Visible ? shown : 0;
+        if (shown < DemoReading || !_dialogueWindow.Visible)
+        {
+            return;
+        }
+        _demoDialogue = 0;
+        if (_dialogueWindow.ShowingChoices)
+        {
+            _dialogueWindow.Pick(0);
+        }
+        else
+        {
+            _dialogueWindow.PressMore();
+        }
+    }
+
     private void AnswerForThePlayer(bool yes = false)
     {
         _message.Close();
