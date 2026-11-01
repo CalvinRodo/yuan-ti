@@ -250,6 +250,9 @@ public class CombatEffectsTests
     {
         Assert.Equal(DamageElement.Bludgeoning | DamageElement.Plus1, Battle.NaturalHit(Fighter("orc", 2, 0, 0)));      // level 5, race 0
         Assert.Equal(DamageElement.Bludgeoning, Battle.NaturalHit(Fighter("man", 1, 0, 0, race: 1)));
+        Assert.Equal(DamageElement.Bludgeoning, Battle.NaturalHit(Fighter("kreen", 1, 0, 0, race: 8)));
+        Assert.Equal(DamageElement.Slashing, Battle.NaturalHit(Fighter("kreen", 1, 0, 0, race: 8), clawsCut: true)); // CombatFixes.ThriKreenClawsCut
+        Assert.Equal(DamageElement.Bludgeoning, Battle.NaturalHit(Fighter("man", 1, 0, 0, race: 1), clawsCut: true));
     }
 
     [Fact]
@@ -410,6 +413,96 @@ public class CombatEffectsTests
         low.Effects.Add(new ActiveEffect(102, Condition.Prayer, 5, priest));
         Assert.Equal(1, b.SaveBonus(friend, Spell(9), null, 5, 5));
         Assert.Equal(-1, b.SaveBonus(low, Spell(9), null, 5, 5));
+    }
+
+    [Fact]
+    public void ScareSparesAnElfOrHalfElfPriestBelowSixthLevelWithTheFix()
+    {
+        Combatant priest = Fighter("priest", 1, 5, 10);
+        Combatant elf = new() { Name = "elf", Side = 2, Level = 3, Race = 3, Classes = [(1, 3)] };
+        Combatant halfElf = new() { Name = "half-elf", Side = 2, Level = 3, Race = 4, Classes = [(5, 3)] };
+        Combatant fighter = new() { Name = "elf fighter", Side = 2, Level = 3, Race = 3, Classes = [(9, 3)] };
+        Battle original = Started(new ScriptedDice(), null, priest, elf);
+        var b = new Battle([priest, elf, halfElf, fighter], new OpenField(30, 30), new ScriptedDice(),
+            new CombatRules { Fixes = new CombatFixes(ScareSparesElves: true) });
+
+        // 80F5:119C asks for race 3 and race 4 at once, so no one below 6th level gets a roll.
+        Assert.Equal(-100, original.SaveBonus(elf, Spell(22), priest, 5, 5));
+        Assert.InRange(b.SaveBonus(elf, Spell(22), priest, 5, 5), -10, 10);
+        Assert.InRange(b.SaveBonus(halfElf, Spell(22), priest, 5, 5), -10, 10);
+        Assert.Equal(-100, b.SaveBonus(fighter, Spell(22), priest, 5, 5));
+        Assert.Equal(100, b.SaveBonus(new Combatant { Name = "high", Level = 6, Race = 3, Classes = [(1, 6)] }, Spell(22), priest, 5, 5));
+    }
+
+    [Fact]
+    public void ThePreserversDispelMagicLeavesNoOneUnableToCast()
+    {
+        // Record 27's No Spells lasts 0 rounds (0d0, nothing a level), so it is never added.
+        Combatant mage = Fighter("mage", 1, 5, 10), foe = Fighter("foe", 2, 6, 10);
+        Battle b = Started(new ScriptedDice(), null, mage, foe);
+
+        b.Apply(mage, foe, Spell(27), 9);
+        b.Apply(mage, mage, Spell(27), 9);
+
+        Assert.False(foe.Has(Condition.NoSpells));
+        Assert.False(mage.Has(Condition.NoSpells));
+    }
+
+    [Fact]
+    public void AcidArrowsAcidBurnsEachRoundItLasts()
+    {
+        // Record 19 lasts 1 + 20 × level game seconds (unit 1): 221 at level 11, through three more round starts.
+        Combatant mage = Fighter("mage", 1, 5, 10), foe = Fighter("foe", 2, 6, 10, hp: 500);
+        Battle b = Started(new ScriptedDice(Highest), null, mage, foe);
+        b.Apply(mage, foe, Spell(19), 11);
+        Assert.Equal(500 - 8, foe.Vitals.Hp); // the hit: 2d4
+
+        var after = new List<int>();
+        for (int round = 0; round < 5; round++)
+        {
+            b.StartRound();
+            after.Add(foe.Vitals.Hp);
+        }
+
+        Assert.Equal([484, 476, 468, 468, 468], after);
+        Assert.False(foe.Has(Condition.Acid));
+    }
+
+    [Fact]
+    public void PsionicBlastsLossComesBackAfterTheFightWithTheFix()
+    {
+        // The target is a party member keeping up no defence: Wisdom 10 − 7, so the psion's 1 isn't held off.
+        Combatant psion = Fighter("psion", 1, 5, 10), t = Fighter("t", 2, 6, 10, hp: 50, party: true);
+        psion.Psp = 50;
+        var b = new Battle([psion, t], new OpenField(30, 30), new ScriptedDice(),
+            new CombatRules { Fixes = new CombatFixes(PsionicBlastWearsOff: true) });
+        b.StartRound();
+
+        Assert.True(b.UsePower(psion, 170, t.Cell));
+        Assert.Equal(10, t.Vitals.Hp); // down to a fifth
+        b.Hurt(psion, t, 30); // the rest and more, but less than the imagined 40 + 10: knocked out, not killed
+        Assert.Equal(Vitals.Down, t.Vitals.Status);
+
+        b.Finish();
+        Assert.Equal(40, t.Vitals.Hp);
+    }
+
+    [Fact]
+    public void CauseWoundsDoesItsCuresDiceWithTheFix()
+    {
+        foreach (var (spell, dice, sides, flat) in new[] { (114, 2, 8, 1), (129, 3, 8, 3) })
+        {
+            Combatant priest = Fighter("priest", 1, 5, 10), t = Fighter("t", 2, 6, 10, hp: 500);
+            var b = new Battle([priest, t], new OpenField(30, 30), new ScriptedDice(),
+                new CombatRules { Fixes = new CombatFixes(CauseWoundsAsCures: true) });
+            Battle original = Started(new ScriptedDice(), null, priest, t);
+
+            original.Apply(priest, t, Spell(spell), 9);
+            b.Apply(priest, t, Spell(spell), 9);
+
+            Assert.Equal((dice, 9, 0), original.Log.OfType<DamageRolled>().Select(d => (d.Dice, d.Sides, d.Bonus)).Single());
+            Assert.Equal((dice, sides, flat), b.Log.OfType<DamageRolled>().Select(d => (d.Dice, d.Sides, d.Bonus)).Single());
+        }
     }
 
     [Fact]

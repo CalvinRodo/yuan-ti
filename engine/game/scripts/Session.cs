@@ -372,6 +372,7 @@ public static class Session
             Rules = Rules,
             Fields = Open("GPLDATA.GFF").TryRead("GPLX", 1, out var gplx) ? GplFieldMap.Parse(gplx.Span) : GplFieldMap.Empty,
             Monsters = Open("RESOURCE.GFF").TryRead("MONR", 1, out var monr) ? MonsterTable.Parse(monr.Span) : MonsterTable.Empty,
+            Fixes = CombatRules.Fixes,
         };
         host.MusicLevelChanged += level => Music.Instance?.SetLevel(level);
         for (int slot = 0; slot < host.PartyMembers.Count; slot++)
@@ -465,8 +466,20 @@ public static class Session
     public static string? SpellName(int number) =>
         Spells.TryGetValue(number, out SpellInfo? s) ? System.Globalization.CultureInfo.InvariantCulture.TextInfo.ToTitleCase(s.Name.ToLowerInvariant()) : null;
 
-    /// <summary>What a spell or power does (<c>SPIN</c> n after its name), or "".</summary>
-    public static string SpellDescription(int number) => Spells.TryGetValue(number, out SpellInfo? s) ? s.Description : "";
+    /// <summary>What a spell or power does (<c>SPIN</c> n after its name, <see cref="DescriptionFixes"/> made), or "".</summary>
+    public static string SpellDescription(int number) =>
+        !Spells.TryGetValue(number, out SpellInfo? s) ? ""
+        : DescriptionFixes.TryGetValue(number, out var fix) && s.Description.Contains(fix.Was, StringComparison.Ordinal) ? s.Description.Replace(fix.Was, fix.Is)
+        : s.Description;
+
+    /// <summary>
+    /// Where a description is wrong about what the game does, as shipped (a mod's own text is left alone):
+    /// Slay Living's save takes half its 4d8, 2 to 16 (record 137), not 3 to 17.
+    /// </summary>
+    private static readonly Dictionary<int, (string Was, string Is)> DescriptionFixes = new()
+    {
+        [137] = ("suffers 3 to 17 pts", "suffers 2 to 16 pts"),
+    };
 
     public static GffFile Open(string name)
     {

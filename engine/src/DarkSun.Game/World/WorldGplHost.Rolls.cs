@@ -206,7 +206,7 @@ public sealed partial class WorldGplHost
             return 0;
         }
         return SheetOf(o) is { } c
-            ? AbilityScores.Of([.. Enum.GetValues<Ability>().Select(a => Creation.Adjusted(c, a))], [], o.Items)[ability]
+            ? AbilityScores.Of([.. Enum.GetValues<Ability>().Select(a => Creation.Adjusted(c, a))], [], o.Items, Rules.AbilityItemsWhenWorn)[ability]
             : o.Record?.Stats[ability] ?? 0;
     }
 

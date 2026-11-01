@@ -52,7 +52,7 @@ public static class PartyCombatant
                 : null;
         int shields = member.Items.Where(i => i.Equipped && catalog.TypeOf(i.Record) is { Weapon: var w } && (w & WeaponKind.Shield) != 0)
             .Sum(i => catalog.TypeOf(i.Record)!.ArmorClass + Math.Max(0, (int)i.Record.Bonus));
-        int dex = AbilityScores.Of(stats, [], member.Items)[(int)Ability.Dex];
+        int dex = AbilityScores.Of(stats, [], member.Items, rules.AbilityItemsWhenWorn)[(int)Ability.Dex];
         static int LevelKey(SpellKind kind, int level) => (int)kind * 16 + level;
         Dictionary<int, int> castsLeft = magic.Levels(c).Where(l => magic.CastsLeft(c, l.Kind, l.Level) > 0)
             .ToDictionary(l => LevelKey(l.Kind, l.Level), l => magic.CastsLeft(c, l.Kind, l.Level));
@@ -70,7 +70,7 @@ public static class PartyCombatant
             Facing = member.Facing,
             PartyMember = true,
             ComputerControlled = c.ComputerControl,
-            ArmorClass = CharacterSheet.ArmorClass(dex, member.Items, catalog, rules, CharacterSheet.BaseArmorClassOf(c.Race, active, rules))
+            ArmorClass = CharacterSheet.ArmorClass(dex, member.Items, catalog, rules, CharacterSheet.BaseArmorClassOf(c.Race, active, member.Items, catalog, rules))
                 - CharacterSheet.DexterityDefence(dex, rules),
             ShieldClass = shields,
             Thac0 = CharacterSheet.Thac0(active, rules),
@@ -82,6 +82,7 @@ public static class PartyCombatant
             Classes = [.. active.Select(a => (Spellcasting.ClassCode(a.Class, c.Sphere), a.Level))],
             Saves = CharacterSheet.Saves(active, c.Race, stats[(int)Ability.Con], rules),
             AttackHalves = halves,
+            AbilityItemsWorn = rules.AbilityItemsWhenWorn,
             NaturalAttacks = race?.NaturalAttacks is { Count: > 0 } natural ? [.. natural] : [new(halves, rules.UnarmedDice, rules.UnarmedSides, 0)],
             Weapon = WornIn(3),
             MissileWeapon = WornIn(2),

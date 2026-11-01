@@ -903,17 +903,32 @@ public partial class RegionView : Node2D
     private string MemberName(int slot) =>
         slot < Session.Party.Count && Session.Party[slot].Name.Length > 0 ? Session.Party[slot].Name : _world?[slot]?.Name ?? $"Character {slot + 1}";
 
-    /// <summary>An item's picture for the character screens: its map sprite (<c>OJFF</c> = <c>RDFF</c>) in the region's palette.</summary>
+    /// <summary>
+    /// An item's picture for the character screens: its map sprite (<c>OJFF</c> = <c>RDFF</c>) in the region's palette.
+    /// An item without one (the +2 Sling, 2533, has no <c>BMP </c> in the game's data) shows the first item
+    /// of its type that has one.
+    /// </summary>
     private Texture2D? ItemIcon(int rdff)
     {
         if (!_itemIcons.TryGetValue(rdff, out Texture2D? icon))
         {
             var objectData = new GffSet([Session.Open("SEGOBJEX.GFF"), Session.Open("GPLDATA.GFF")]);
-            icon = Region.MakeObject(objectData, rdff, 0, 0, d => Session.Assets.Frames(d)) is { Frames: [var frame, ..] } ? TextureFor(frame) : null;
+            Texture2D? Picture(int n) =>
+                Region.MakeObject(objectData, n, 0, 0, d => Session.Assets.Frames(d)) is { Frames: [var frame, ..] } ? TextureFor(frame) : null;
+            icon = Picture(rdff);
+            if (icon is null && ItemTypeOf(rdff) is short type)
+            {
+                GffFile objects = Session.Open("SEGOBJEX.GFF");
+                icon = objects.DescribeResources().Where(r => r.Tag == "RDFF" && r.Number != rdff && objects.TryRead("BMP ", r.Number, out _)
+                    && ItemTypeOf(r.Number) == type).Select(r => Picture(r.Number)).FirstOrDefault(t => t is not null);
+            }
             _itemIcons[rdff] = icon;
         }
         return icon;
     }
+
+    private static short? ItemTypeOf(int rdff) =>
+        Session.Open("SEGOBJEX.GFF").TryRead("RDFF", rdff, out var data) ? ItemRecord.FromRdff(data)?.Type : null;
 
     /// <summary>
     /// A new game's characters start with the items they bring
@@ -3311,6 +3326,15 @@ public partial class RegionView : Node2D
             Expect(body is not null && _world.IsContainer(body) && body.Items.Any(i => i.Rdff == Water), "the dead creature left a body holding its pot of water");
             Expect(body is not null && ObjectVerbs.For(body, _world.Items, Session.Scripts.Triggers, _world.IsContainer(body)).Contains(Verb.Open), "the body offers Open");
             Expect(body is not null && !_world.PickUp(me, body), "a body with something in it isn't picked up");
+            int bodyAt = body?.Index ?? -1;
+            ShowRegion(home + 1);
+            AnswerForThePlayer();
+            ShowRegion(home);
+            AnswerForThePlayer();
+            me = _world[0]!;
+            body = _world[bodyAt];
+            Expect(body is not null && body.Id == -GameWorld.DeadBody && !body.Hidden && body.Items.Any(i => i.Rdff == Water),
+                "the body and its pot are still there after leaving");
             Expect(body is not null && _world.MoveItem(body, me, body.Items[0]) && body.Items.Count == 0, "took the pot out of the body");
         }
         else

@@ -1,4 +1,5 @@
 using DarkSun.Data.Regions;
+using DarkSun.Game.Combat;
 using DarkSun.Game.Rules;
 using DarkSun.Game.Scripting;
 
@@ -8,6 +9,9 @@ public sealed partial class WorldGplHost
 {
     /// <summary>The random monsters of each region (<c>RESOURCE.GFF</c> <c>MONR</c> 1), for <c>REQUEST(8)</c>.</summary>
     public MonsterTable Monsters { get; set; } = MonsterTable.Empty;
+
+    /// <summary><c>rules/combat.json</c>'s fixes; <see cref="CombatFixes.MonsterCountFromItsSlot"/> sizes random monster groups.</summary>
+    public CombatFixes Fixes { get; set; } = new();
 
     /// <summary>The monster <c>REQUEST(8, …, 0)</c> picked last (<c>4FAA:00B0</c>), which <c>REQUEST(8, …, 1)</c> counts.</summary>
     private int _randomMonster;
@@ -20,7 +24,8 @@ public sealed partial class WorldGplHost
     /// strength over the slot's strength, 1 to 6. The EXE divides by the strength of the slot
     /// <em>after</em> the pick's (its search loop counts one past the match; <c>87B3:0D3F</c>), as
     /// here; where that is 0 (an empty slot, or past the record's end) it would divide by zero,
-    /// and the pick's own strength is used. 0 if the region has no table or the pick isn't in it.
+    /// and the pick's own strength is used, as it always is with <see cref="CombatFixes.MonsterCountFromItsSlot"/>.
+    /// 0 if the region has no table or the pick isn't in it.
     /// GPL 99 and 106 then CLONE that many.
     /// </summary>
     private int RandomMonster(GplMachine machine, GameWorld world, int a, int b)
@@ -54,7 +59,8 @@ public sealed partial class WorldGplHost
         {
             return 0;
         }
-        int strength = at + 1 < slots.Count && slots[at + 1].Strength != 0 ? slots[at + 1].Strength : slots[at].Strength;
+        int strength = !Fixes.MonsterCountFromItsSlot && at + 1 < slots.Count && slots[at + 1].Strength != 0
+            ? slots[at + 1].Strength : slots[at].Strength;
         return strength == 0 ? 1 : Math.Clamp(2 * party / strength, 1, 6);
     }
 

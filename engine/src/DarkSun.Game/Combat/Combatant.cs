@@ -100,7 +100,10 @@ public sealed class Combatant
     public int[] Stats { get; init; } = [10, 10, 10, 10, 10, 10];
 
     /// <summary>Ability <paramref name="ability"/> (0 Str … 5 Cha) with its effects and items (combat record +0x22, <see cref="AbilityScores"/>).</summary>
-    public int Score(int ability) => AbilityScores.Of(Stats, Effects, Items)[ability];
+    public int Score(int ability) => AbilityScores.Of(Stats, Effects, Items, AbilityItemsWorn)[ability];
+
+    /// <summary>Only worn items change its abilities (<see cref="Characters.CharacterRules.AbilityItemsWhenWorn"/>).</summary>
+    public bool AbilityItemsWorn { get; init; }
 
     /// <summary>Strength with its effects and items (<see cref="Score"/>).</summary>
     public int Strength => Score(0);
@@ -158,6 +161,9 @@ public sealed class Combatant
 
     /// <summary>Attacks a round in halves (+0x2A; 3 alternates 1 and 2).</summary>
     public int AttackHalves { get; init; } = 2;
+
+    /// <summary>Hit points Psionic Blast took that come back after the fight (<see cref="CombatFixes.PsionicBlastWearsOff"/>).</summary>
+    public int ImaginedLoss { get; set; }
 
     /// <summary>Attacks without a weapon (+0x2B …).</summary>
     public IReadOnlyList<NaturalAttack> NaturalAttacks { get; init; } = [new(2, 1, 2, 0)];

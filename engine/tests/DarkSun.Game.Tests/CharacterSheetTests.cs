@@ -107,4 +107,20 @@ public class GladiatorArmorTests
         Assert.Equal(10, At(CharacterClass.Fighter, 9));
         Assert.Equal(9, CharacterSheet.BaseArmorClassOf(Race.Human, [(CharacterClass.Fighter, 6), (CharacterClass.Gladiator, 6)]));
     }
+
+    [Fact]
+    public void AGladiatorsBonusCanNeedArmour()
+    {
+        // Type 0: chest armour, AC 2. Type 1: a shield, AC 1.
+        byte[] it1r = [.. new byte[9], 1, .. new byte[8], 2, 0, .. new byte[9], 5, .. new byte[8], 1, 0];
+        var catalog = new ItemCatalog(ItemType.ParseAll(it1r), Data.Text.NameTable.Parse(new byte[25]));
+        static ItemRecord Of(int type) => new(-1, 1, 0, 10, 0, (short)type, 0, 0, 0, 6, 255, 0, 0);
+        Item armour = new(1, Of(0), slot: 9), shield = new(2, Of(1), slot: 3);
+        CharacterRules needs = CharacterRules.Default with { ArmorBonusNeedsArmor = true };
+        (CharacterClass, int)[] gladiator = [(CharacterClass.Gladiator, 5)];
+
+        Assert.Equal(9, CharacterSheet.BaseArmorClassOf(Race.Human, gladiator, [], catalog)); // as DSUN.EXE: always
+        Assert.Equal(10, CharacterSheet.BaseArmorClassOf(Race.Human, gladiator, [shield], catalog, needs));
+        Assert.Equal(9, CharacterSheet.BaseArmorClassOf(Race.Human, gladiator, [armour, shield], catalog, needs));
+    }
 }

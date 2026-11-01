@@ -67,14 +67,20 @@ public sealed record WeaponScoring(int PerDieSide = 1, int DamageBonus = 2, int 
 /// <param name="FireElementalResistances">The fire elemental (type 32) needs +2 weapons and the lesser one (33) +1, as the clue book has them, both untouched by fire (the original's rows are the wrong way round: <see cref="Battle.FireElementalRows"/>).</param>
 /// <param name="BlessFilterFromItsCell">Bless and Aid leave out those of their side with an enemy beside them, measured from where they stand (the original measures from (x, x), a slip, <c>80F5:249D</c>).</param>
 /// <param name="OneArmorChargePerWound">Armor loses one charge to a wound, from a blow or a spell (the original takes one when a blow lands, <c>80F5:1999</c>, or a hostile spell does, even one that does no harm, and another for the wound, <c>80F5:0E61</c>).</param>
+/// <param name="CauseWoundsAsCures">Cause Serious and Critical Wounds (114, 129) do the dice their Cures heal, 2d8+1 and 3d8+3 (the original's records have 2d9 and 3d9; Cause Light Wounds already does Cure Light's 1d8).</param>
+/// <param name="ThriKreenClawsCut">A thri-kreen's (race 8) blows without a weapon slash (the original makes every natural attack bludgeon, <c>612E:151F</c>, so a creature immune to bludgeoning is safe from its claws).</param>
+/// <param name="ScareSparesElves">Against Scare an elf or half-elf priest below 6th level rolls its save, as the code means (the original asks for a creature that is both an elf and a half-elf, <c>80F5:119C</c>, so everyone below 6th level fails).</param>
+/// <param name="PsionicBlastWearsOff">The hit points Psionic Blast takes are imagined, as its description has it: they come back when the fight ends, and losing the rest only knocks the target out (the original takes them for good, record 170).</param>
+/// <param name="MonsterCountFromItsSlot">A random monster group (<c>REQUEST(8)</c>) is sized by the picked monster's own strength (the original's search counts one slot past it, <c>87B3:0D3F</c>, and divides by the next monster's).</param>
 public sealed record CombatFixes(
     bool MirrorImagesTakeBlows = false, bool NegativePlaneProtectionSaves = false, bool BraveAgainstFear = false,
     bool DexterityAgainstAreas = false, bool NoStrengthFromAbsorbDisease = false, bool BerserkSideEnds = false,
     bool WallsFromOneCell = false, bool BlessFilterFromItsCell = false, bool FireElementalResistances = false,
-    bool OneArmorChargePerWound = false)
+    bool OneArmorChargePerWound = false, bool CauseWoundsAsCures = false, bool ThriKreenClawsCut = false,
+    bool ScareSparesElves = false, bool MonsterCountFromItsSlot = false, bool PsionicBlastWearsOff = false)
 {
     /// <summary>All of them.</summary>
-    public static CombatFixes All { get; } = new(true, true, true, true, true, true, true, true, true, true);
+    public static CombatFixes All { get; } = new(true, true, true, true, true, true, true, true, true, true, true, true, true, true, true);
 }
 
 /// <summary>

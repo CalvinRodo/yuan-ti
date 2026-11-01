@@ -8,18 +8,22 @@ namespace DarkSun.Game.Combat;
 
 public sealed partial class Battle
 {
+    /// <summary>A thri-kreen's race code.</summary>
+    public const int ThriKreen = 8;
+
     /// <summary>The physical elements, what Stoneskin and Ironskin stop.</summary>
     public const DamageElement PhysicalElements = DamageElement.Bludgeoning | DamageElement.Slashing | DamageElement.Piercing;
 
     /// <summary>
-    /// What a hit without a weapon is made of (<c>612E:1359</c>): bludgeoning;
+    /// What a hit without a weapon is made of (<c>612E:1359</c>): bludgeoning
+    /// (a thri-kreen's slashing, with <paramref name="clawsCut"/>: <see cref="CombatFixes.ThriKreenClawsCut"/>);
     /// a creature that isn't of a player race (race 0 or above 8) counts as
     /// magic of + (level − 2) ÷ 2 for resistances.
     /// </summary>
-    public static DamageElement NaturalHit(Combatant a)
+    public static DamageElement NaturalHit(Combatant a, bool clawsCut = false)
     {
         int plus = a.Race is 0 or > 8 ? (a.Level - 2) / 2 : 0;
-        return DamageElement.Bludgeoning | plus switch
+        return (clawsCut && a.Race == ThriKreen ? DamageElement.Slashing : DamageElement.Bludgeoning) | plus switch
         {
             <= 0 => DamageElement.None,
             1 => DamageElement.Plus1,
@@ -39,11 +43,11 @@ public sealed partial class Battle
         && (!missile || a.CanShoot);
 
     /// <summary>Attacks this round from <paramref name="halves"/> (halves a round): Hasted doubles, Slowed halves, odd halves alternate.</summary>
-    public int AttacksThisRound(Combatant c, int halves)
-    {
-        int h = c.Has(Condition.Hasted) ? halves * 2 : c.Has(Condition.Slowed) ? halves / 2 : halves;
-        return (h + (Round & 1)) / 2;
-    }
+    public int AttacksThisRound(Combatant c, int halves) => (HalvesFor(c, halves) + (Round & 1)) / 2;
+
+    /// <summary><paramref name="halves"/> (attacks a round in halves) as <paramref name="c"/>'s Haste doubles them and Slow halves them.</summary>
+    public static int HalvesFor(Combatant c, int halves) =>
+        c.Has(Condition.Hasted) ? halves * 2 : c.Has(Condition.Slowed) ? halves / 2 : halves;
 
     /// <summary>Is <paramref name="a"/> behind <paramref name="t"/>: does <paramref name="t"/> face away from it (<c>612E:1B5E</c>)?</summary>
     public static bool FromBehind(Combatant a, Combatant t) => (Direction(t.Cell, a.Cell) + 4) % 8 == t.Facing;
@@ -265,7 +269,7 @@ public sealed partial class Battle
         int times = Backstabs(a, t, w) ? Math.Min(5, (a.ThiefLevel - 1) / 4 + 2) : 1;
         damage *= times;
         Note(new DamageRolled(a, t, dice, sides, bonus, times, damage));
-        Hit(a, t, damage, w?.Elements ?? NaturalHit(a), first, last && natural is not null, missile: !melee);
+        Hit(a, t, damage, w?.Elements ?? NaturalHit(a, Rules.Fixes.ThriKreenClawsCut), first, last && natural is not null, missile: !melee);
         if (w?.Item is { } item)
         {
             WeaponSpell(a, t, item);
@@ -474,7 +478,8 @@ public sealed partial class Battle
             v.Hp -= damage;
             return;
         }
-        v.Status = damage < v.Hp + 10 ? Vitals.Down : damage < 10000 ? Vitals.Dead : Vitals.Destroyed;
+        // With PsionicBlastWearsOff the hit points it took still count: losing the rest only knocks one out.
+        v.Status = damage < v.Hp + t.ImaginedLoss + 10 ? Vitals.Down : damage < 10000 ? Vitals.Dead : Vitals.Destroyed;
         v.Hp = 0;
         t.Effects.Clear();
         t.Guarding = false;
