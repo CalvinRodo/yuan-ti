@@ -299,3 +299,9 @@ format. `.github/instructions/` holds the reverse-engineering notes on
 - [OpenDS](https://github.com/VirInvictus/opends) documented many of the
   shipped scripts' bugs that the engine repairs.
 - Music is synthesized with [MeltySynth](https://github.com/sinshu/meltysynth) (MIT).
+
+## License
+
+The code is under the [MIT License](LICENSE). The bundled
+`java extractors/dsun_music-master` keeps its own MIT license (John
+Glassmyer). The games' files are not covered and are not included.
