@@ -80,6 +80,17 @@ public static class GplRepairs
         new("script-repairs.mindhome-reward-once", 204, 0x5C9, Hex("1613888710140087004a"),
             Hex("18cd02b7d78f003e0014" + "1613888710140087004a" + "67"), true,
             "the Rebel Mindhome's 5000 XP for the spiders is given once, not at every talk (GPL 204 @5C9: gflag[695] == 0)") { Relocate = [8] },
+        // Region 9: MAS 9 registers the messenger's sight trigger (−1297, GPL 133) only if the elves have left
+        // (gflag[245]) when the region loads; they leave during a stay (GPL 58), so without a second visit he never
+        // comes. Where GPL 58 sets the flag, the trigger as MAS 9 registers it (while gflag[339] == 0).
+        .. new[] { 0x1A, 0x99, 0xCC }.Select((at, i) => new GplRepair($"script-repairs.messenger-trigger-{i + 1}", 58, at, Hex("168f018df5"),
+            Hex("168f018df5" + "18cd0153d78f00" + "3e0019" + "1b000100859105118f0f" + "67"), true,
+            $"the messenger in region 9 comes once the elves have left, without leaving the region first (GPL 58 @{at:X}: MAS 9's sight trigger on −1297)") { Relocate = [13] }),
+        // Region 38's exit to region 10 (GPL 60 @CD1) takes the following serf along only within 14 cells; one
+        // further behind stays, without his orders, and talking to him again runs the whole deal and gives a second
+        // obelisk gem (−1352), while MAS 10 brings a copy of him along anyway. Any distance; off by default.
+        new("script-repairs.serf-comes-along", 60, 0xCD8, Hex("18e28c808925910103e1da8f0e"), Hex("18e28c808925910103e1da8f7f"), false,
+            "the Draj serf comes along to region 10 however far behind, so he can't give a second obelisk gem (GPL 60 @CD8: range < 127)"),
         // The final battle: the stage gate (GPL 62 @4345) exits without re-arming inside its window. With the
         // game clock running the gate is polled again and waits its window out, so this is off by default.
         new("script-repairs.final-battle-gate", 62, 0x10F1, Hex("10f9"), Hex("00ef"), false,

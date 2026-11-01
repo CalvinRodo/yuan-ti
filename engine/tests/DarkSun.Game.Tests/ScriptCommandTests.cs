@@ -393,7 +393,7 @@ public class ScriptCommandTests
 
         byte[] other = new byte[0x40];
         Assert.Same(other, GplRepairs.Apply(195, other, [guard]));
-        Assert.Equal(18, GplRepairs.All.Count(r => r.OnByDefault));
+        Assert.Equal(21, GplRepairs.All.Count(r => r.OnByDefault));
     }
 
     [Fact]
