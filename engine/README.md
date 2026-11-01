@@ -121,7 +121,7 @@ on; thief skills, ability rolls and traps are rolled as the EXE rolls them
 (the skill tables are in `characters.json`). The shipped scripts' known bugs
 found by the OpenDS project (Darkhold's dead triggers, the Lava Rifts ranger,
 Linara's conversation) and here (the slave pens' halfling greeting a
-halfling, region 8's ranger tracking, the sewer grate's "hack the lock off", a Strength roll when it is attacked, the Rebel Mindhome's reward given at every talk, and region 9's messenger waiting for a second visit)
+halfling, region 8's ranger tracking, the sewer grate's "hack the lock off", a Strength roll when it is attacked, the Rebel Mindhome's reward given at every talk, region 9's messenger waiting for a second visit, and Kurzak and Dinos speaking of Legcrusher after he's killed)
 are repaired as they load; the Options window's
 "Repair scripts" (`script_repairs`) turns that off.
 PgUp/PgDn browse the other regions, with the party in the middle
@@ -572,7 +572,7 @@ last rounds or a number of charges (Armor's hits, Mirror Image's images, Poison'
 linger (fog, webs, clouds, walls) stay on the map as `Battle.Fields`, acting on whoever enters or
 stays in them; walls block and fog hides. A creature's casts come from its classes and health, a
 charm takes it to the caster's side, and larger creatures stand and reach by their footprint. Where the
-original is odd (mirror images ignore blows, Negative Plane Protection never saves, …) `combat.json`'s
+original is odd (mirror images ignore blows, Negative Plane Protection never saves, Armor loses two charges a hit, …) `combat.json`'s
 `Fixes` turn on a fix; all are off by default. A creature's abilities ride on its hits by ability bit (a spider's poison,
 a babau corroding armour and weapons), and its immunities keep effects off it. `Battle.RunAi` is the
 original AI (`612E:0BAD`): its steps (spells, ability, psionics, attack, move, missile, guard), their

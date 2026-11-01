@@ -58,6 +58,16 @@ public class GplAssemblerTests
     }
 
     [Fact]
+    public void SaysWhereLabelAddressesAreForCodeThatWillMove()
+    {
+        // ACCUM <= 1 (3 bytes); IF(@skip) (its address at 4); lflag[5] = 1; JUMP(@0010), a literal address, stays.
+        byte[] code = GplAssembler.AssembleMovable("ACCUM <= 1\nIF(@skip)\nlflag[5] = 1\nskip:\nENDIF\nJUMP(@0010)", out int[] labels);
+
+        Assert.Equal([4], labels);
+        Assert.Equal(11, code[4] << 8 | code[5]);
+    }
+
+    [Fact]
     public void DisassemblesToSourceThatAssemblesToTheSameBytes()
     {
         byte[] code = [.. GplAssembler.Assemble(Script), 0x26, 0xEE];

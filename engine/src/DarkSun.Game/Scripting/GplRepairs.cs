@@ -91,11 +91,45 @@ public static class GplRepairs
         // obelisk gem (−1352), while MAS 10 brings a copy of him along anyway. Any distance; off by default.
         new("script-repairs.serf-comes-along", 60, 0xCD8, Hex("18e28c808925910103e1da8f0e"), Hex("18e28c808925910103e1da8f7f"), false,
             "the Draj serf comes along to region 10 however far behind, so he can't give a second obelisk gem (GPL 60 @CD8: range < 127)"),
+        // The slave pens (region 41): the party can kill Legcrusher (−326), and Kurzak goes on calling for him,
+        // greeting them as if he were about, and Dinos warns of him. Each line first asks if he is still on the map
+        // (RANGE from the active member is 999 once he's dead or gone, as GPL 139 @275 asks it of −182).
+        WithoutLegcrusher(1, 136, 0x130, ["Legcrusher! Get gladiators!"],
+            ["Legcrusher! ... Legcrusher? Bah! Gladiators, get up here before I come down and drag you up!"],
+            "Kurzak's call to the arena (GPL 136 @130)"),
+        WithoutLegcrusher(2, 141, 0x6B4, ["Good thing you got here. I thought I was going to have to send out ", "Legcrusher. "],
+            ["Good thing you got here. With Legcrusher gone, I'd have had to come down and fetch you myself. "],
+            "Kurzak's greeting (GPL 141 @6B4)"),
+        WithoutLegcrusher(3, 141, 0x70B, ["I had to send Legcrusher after you. It's good that you found me before ", "I found you. "],
+            ["I sent Legcrusher after you, and he never came back. I don't suppose you'd know why. "],
+            "Kurzak's greeting once he sent Legcrusher (GPL 141 @70B)"),
+        WithoutLegcrusher(4, 141, 0x766, ["I'm glad you listened to Legcrusher. I hate it when we lose gladiators ", "that way. "],
+            ["So Legcrusher found you. Then why didn't he come back with you? "],
+            "Kurzak's greeting once Legcrusher found them (GPL 141 @766)"),
+        WithoutLegcrusher(5, 141, 0xF29, ["Oh, that's the monster trainer. His name is Legcrusher. ", "He's not too bright, but he's good with monsters. "],
+            ["That was Legcrusher, the monster trainer. Nobody has seen him lately. ", "He's not too bright, but he's good with monsters. "],
+            "Kurzak's answer to \"Who is the half-giant?\" (GPL 141 @F29)"),
+        WithoutLegcrusher(6, 139, 0x218, ["Kurzak's looking for you. You better go fight before he sends ", "out Legcrusher. "],
+            ["Kurzak's looking for you. You better go fight before he comes down here himself. "],
+            "Dinos's warning (GPL 139 @218)"),
         // The final battle: the stage gate (GPL 62 @4345) exits without re-arming inside its window. With the
         // game clock running the gate is polled again and waits its window out, so this is off by default.
         new("script-repairs.final-battle-gate", 62, 0x10F1, Hex("10f9"), Hex("00ef"), false,
             "the final battle's next stage starts at once (GPL 62 @239), without the pause between stages"),
     ];
+
+    /// <summary>A detour written as GPL source: <paramref name="original"/>'s bytes become <paramref name="detour"/>'s, its labels relocated.</summary>
+    private static GplRepair Detour(string id, int file, int offset, string original, string detour, bool onByDefault, string what) =>
+        new(id, file, offset, GplAssembler.Assemble(original), GplAssembler.AssembleMovable(detour, out int[] labels), onByDefault, what) { Relocate = labels };
+
+    /// <summary>The game's lines <paramref name="said"/> while Legcrusher is on the map, else <paramref name="without"/>.</summary>
+    private static GplRepair WithoutLegcrusher(int n, int file, int offset, string[] said, string[] without, string where)
+    {
+        static string Say(string[] lines) => string.Join('\n', lines.Select(l => $"PRINT_STRING(115, \"{l}\")"));
+        return Detour($"script-repairs.legcrusher-gone-{n}", file, offset, Say(said),
+            $"ACCUM <= (((RANGE(gname[5], name(-326))))) < 999\nIF(@gone)\n{Say(said)}\ngone:\nELSE(@done)\n{Say(without)}\ndone:\nENDIF", true,
+            $"{where} stops speaking of Legcrusher as if he were about once he's dead or gone");
+    }
 
     /// <summary><paramref name="code"/> (GPL <paramref name="file"/>) with the <paramref name="repairs"/> that fit it applied.</summary>
     public static byte[] Apply(int file, byte[] code, IEnumerable<GplRepair> repairs)

@@ -65,7 +65,16 @@ public static class GplAssembler
     /// command starts at: <paramref name="lines"/> maps a command's address
     /// to its line (a menu's to its <c>MENU</c> line). For the debugger.
     /// </summary>
-    public static byte[] Assemble(string source, out IReadOnlyDictionary<int, int> lines)
+    public static byte[] Assemble(string source, out IReadOnlyDictionary<int, int> lines) => Assemble(source, out lines, out _);
+
+    /// <summary>
+    /// Assemble <paramref name="source"/>, and say where in the bytes each
+    /// label's address (a two-byte word) was written, for code that will be
+    /// moved: a <see cref="GplRepair"/>'s detour (<see cref="GplRepair.Relocate"/>).
+    /// </summary>
+    public static byte[] AssembleMovable(string source, out int[] labelAddresses) => Assemble(source, out _, out labelAddresses);
+
+    private static byte[] Assemble(string source, out IReadOnlyDictionary<int, int> lines, out int[] labelAddresses)
     {
         var map = new Dictionary<int, int>();
         lines = map;
@@ -131,6 +140,7 @@ public static class GplAssembler
             throw new GplAssemblyException(menuLine, "MENU without MENU_END");
         }
         w.ResolveFixups();
+        labelAddresses = [.. w.Fixups.Select(f => f.At)];
         return [.. w.Bytes];
     }
 

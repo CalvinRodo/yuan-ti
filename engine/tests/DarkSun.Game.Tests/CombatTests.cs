@@ -197,6 +197,23 @@ public class CombatTests
         Assert.Contains(b.Log, e => e is ConditionEnded { Condition: Condition.ImprovedAc });
     }
 
+    [Fact]
+    public void ArmorLosesOneChargeAWoundWithTheFix()
+    {
+        Combatant a = Fighter("a", 1, 5, 5), t = Fighter("t", 2, 6, 5, hp: 500, ac: 10);
+        var b = new Battle([a, t], new OpenField(30, 30), new ScriptedDice(), new CombatRules { Fixes = new CombatFixes(OneArmorChargePerWound: true) });
+        b.StartRound();
+        Assert.True(b.AddCondition(t, t, SpellRules.Default.Effect(1)!, level: 2));
+
+        for (int i = 0; i < 9; i++)
+        {
+            b.Hit(a, t, 1, Battle.PhysicalElements);
+        }
+        Assert.Equal(1, t.Effects.Single().Charges);
+        b.Hit(a, t, 1, Battle.PhysicalElements);
+        Assert.False(t.Has(Condition.ImprovedAc));
+    }
+
     /// <summary>A missile weapon: a chatkcha (thrown, range 9, 1d6, IT1R type 48) or a bow (shoots ammunition, range 17).</summary>
     private static Weapon Missile(bool bow) => new(new ItemType(
         bow ? 1 : 48, bow ? WeaponKind.Missile | WeaponKind.UsesAmmunition : WeaponKind.Missile | WeaponKind.Thrown, 0,
