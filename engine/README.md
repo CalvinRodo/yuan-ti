@@ -582,6 +582,13 @@ class, saves and damage (Bless +1, Shield caps armour class at 4 from the front,
 halve their element) are `CombatRules` (`rules/combat.json`); what each spell, power and monster
 effect does is `SpellRules` (`rules/spells.json`, DSUN.EXE's 196 records and 45 area templates, one
 a line, with the cures, what Dispel Magic can't end, whom effects take and the saves set by level).
+A mod's `spells.json` need only hold what it changes: an entry of the effects, looks, powers, cures,
+added spells or ash restorers replaces the original's of its number (fields left out kept) or is
+added; any other list replaces the original's whole. A mod can add a spell past the original's 196
+effects: its record in `Effects` with the next number, its look, and in `Spells` its level, kind, the
+class codes that may cast it and one of the original's icons; its name and description go in the
+mod's `RESOURCE.GFF/SPIN/n.txt` ("NAME:  what it does"). Priests then know it and wizards can learn
+it like the original's.
 What rides on a creature's hits is `CreatureRules.OnHit`. `Battle.Log` lists what happened for the combat log.
 
 Fights happen on the region map. FIGHT, or attacking a creature that has no attack trigger, starts one
@@ -649,6 +656,24 @@ until it is turned on in the mod list: AD&D 2nd edition's and the manual's exper
 per day, Wisdom bonus (only for spell levels the priest can already cast), spellbook size by
 Intelligence, and Constitution's hit points. Rules take effect from a new game; characters keep their
 experience, so their levels follow the rules in play.
+
+Two more come with the game, off, for Dark Sun's defilers (`engine/game/mods/Defiling` and
+`SweetWater`; not in DSUN.EXE):
+
+- **Defiling** (`combat.json`'s `Defiling`): a defiler's wizard spell (class code 18; in Dark Sun only
+  creatures are defilers) turns the ground within a cell of it to ash for the rest of the fight, two
+  cells for 4th- and 5th-level spells. Casting again from ash already drained, its targets add the
+  spell's level to their saves; Entangle and Barkskin don't take anyone standing on ash. The ash is the
+  floor itself burnt out: each pixel the ground's colour greyed and darkened, then the region palette's
+  nearest, thinning in clumps where it ends, with Dehydrate's hit graphic and sound at the caster's feet.
+- **Sweet Water** (spell 197, a 2nd-level spell of the clerics, druids and rangers of water): heals
+  1d4 + 1 per two levels and ends poison and disease, with Cure Light Wounds' icon and look. It can be
+  cast at a creature or, with Defiling on, at bare ash, and brings back the ash within a cell of where it
+  lands (`AshRestorers` in its `spells.json`: remove it, or set `Reach` to 0, to leave the ash alone).
+
+`-- --new-game --check-defiling` turns both on for the run, defiles the ground around a member in a
+test fight, checks that the map shows that ash, casts Sweet Water at the ash beside it and checks it
+goes, and plays the fight out; `--check-mods` checks that both load and unload.
 
 Mods in `engine/game/mods` are packed with the game, copied to `bundled-mods` in the Godot user data
 folder each time it starts, and loaded after the player's own mods (theirs win). Their on/off

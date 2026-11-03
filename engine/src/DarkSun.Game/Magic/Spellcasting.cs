@@ -14,11 +14,12 @@ public enum SpellKind { Wizard, Priest, Psionic }
 /// <c>SPIN</c> order (139–144 psychokinesis, 145–158 psychometabolism,
 /// 159–172 telepathy), as DSUN.EXE's "Kinetics", "Metabolic", "Telepath" do.
 /// </summary>
-public sealed record Spell(int Number, int Level, uint Casters, SpellKind Kind, Discipline? Discipline = null)
+public sealed record Spell(int Number, int Level, uint Casters, SpellKind Kind, Discipline? Discipline = null, int? IconNumber = null)
 {
     public const int IconBase = 20999, PowerIconBase = 3000;
 
-    public int Icon => Kind == SpellKind.Psionic ? PowerIconBase + Number - Spellcasting.FirstPower : IconBase + Number;
+    /// <summary>Its <c>ICON</c>: <see cref="IconNumber"/> if given (a mod's spell has none of its own), else by its number.</summary>
+    public int Icon => IconNumber ?? (Kind == SpellKind.Psionic ? PowerIconBase + Number - Spellcasting.FirstPower : IconBase + Number);
 }
 
 /// <summary>
@@ -64,15 +65,35 @@ public sealed class Spellcasting(CharacterRules rules)
         (5, 0x1003C2), (5, 0x110112),
     ];
 
-    /// <summary>Every spell (1–138) and power (139–172).</summary>
-    public static IReadOnlyList<Spell> All { get; } =
+    /// <summary>The original's spells (1–138) and powers (139–172).</summary>
+    public static IReadOnlyList<Spell> Original { get; } =
     [
         .. Table.Select((t, i) => new Spell(i + 1, t.Level, t.Casters, i + 1 < 70 ? SpellKind.Wizard : SpellKind.Priest)),
         .. Enumerable.Range(FirstPower, LastPower - FirstPower + 1).Select(n => new Spell(n, 1, 0, SpellKind.Psionic,
             n <= 144 ? Discipline.Psychokinesis : n <= 158 ? Discipline.Psychometabolism : Discipline.Telepathy)),
     ];
 
-    public static Spell? Get(int number) => number >= 1 && number <= All.Count ? All[number - 1] : null;
+    private static Dictionary<int, Spell> _added = [];
+
+    /// <summary>Every spell and power: the original's, then the mods' (<see cref="UseAdded"/>).</summary>
+    public static IReadOnlyList<Spell> All { get; private set; } = Original;
+
+    /// <summary>
+    /// The spells the mods add (<see cref="Combat.SpellRules.Spells"/>), numbered
+    /// past the original's 196 effects; they replace any added before. Spells cast,
+    /// learned and listed take them in like the original's.
+    /// </summary>
+    public static void UseAdded(IEnumerable<Spell> spells)
+    {
+        _added = spells.Where(s => s.Number > ItemMagic.LastEffect).ToDictionary(s => s.Number);
+        All = [.. Original, .. _added.Values.OrderBy(s => s.Number)];
+    }
+
+    public static Spell? Get(int number) =>
+        number >= 1 && number <= Original.Count ? Original[number - 1] : _added.GetValueOrDefault(number);
+
+    /// <summary>A wizard's or priest's spell, the original's or a mod's (not a power or a creature's effect).</summary>
+    public static bool IsSpell(int number) => Get(number) is { Kind: not SpellKind.Psionic };
 
     public CharacterRules Rules { get; } = rules;
 

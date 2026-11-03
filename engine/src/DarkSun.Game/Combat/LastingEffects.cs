@@ -48,7 +48,7 @@ public static class LastingEffects
     {
         sheet.Lasting =
         [
-            .. c.Effects.Where(e => e.Effect > 0 && (powers || e.Effect < Spellcasting.FirstPower) && e.Field is null && !FightOnly.Contains(e.Condition)
+            .. c.Effects.Where(e => e.Effect > 0 && (powers || Spellcasting.IsSpell(e.Effect)) && e.Field is null && !FightOnly.Contains(e.Condition)
                     && (e.EndsAt is not int end || end > battleClock))
                 .Select(e => new LastingEffect(e.Effect, e.Condition, e.Level, e.Value, e.Charges,
                     e.EndsAt is int end ? clock + end - battleClock : null)),

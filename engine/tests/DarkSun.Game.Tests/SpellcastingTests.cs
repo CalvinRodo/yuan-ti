@@ -11,11 +11,14 @@ public class SpellcastingTests
     /// <summary>The tabletop rules mod that comes with the game (<c>engine/game/mods/Tabletop</c>).</summary>
     internal static CharacterRules Tabletop => CharacterRules.Read(TabletopFile("characters.json"));
 
-    internal static string TabletopFile(string name)
+    internal static string TabletopFile(string name) => BundledModFile("Tabletop", Path.Combine("rules", name));
+
+    /// <summary>A file of a mod that comes with the game (<c>engine/game/mods/<paramref name="mod"/></c>).</summary>
+    internal static string BundledModFile(string mod, string name)
     {
         for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
         {
-            string path = Path.Combine(dir.FullName, "engine", "game", "mods", "Tabletop", "rules", name);
+            string path = Path.Combine(dir.FullName, "engine", "game", "mods", mod, name);
             if (File.Exists(path))
             {
                 return path;

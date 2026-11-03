@@ -127,6 +127,8 @@ public partial class RegionView
         _fieldGraphics.Clear();
         _castLook = null;
         _lastAttack = null;
+        _shownAsh.Clear();
+        _floor.ShowAsh([], []);
     }
 
     /// <summary>Where a combatant's feet are, in map pixels.</summary>
@@ -367,6 +369,31 @@ public partial class RegionView
 
     /// <summary>A step of a burst's animation (DSUN.EXE: a frame each, <c>0980:5814</c>).</summary>
     private const double BurstStep = 0.07;
+
+    /// <summary>The ash shown so far: the battle's, as far as the playback has come.</summary>
+    private readonly HashSet<Vector2I> _shownAsh = [];
+
+    /// <summary>
+    /// A defiler's spell drained the ground (<see cref="DefilingRules"/>): its
+    /// graphic and sound at the caster's feet, then the ash on the floor.
+    /// </summary>
+    private void LookOfDefiling(Defiled d)
+    {
+        if (_battle is { } battle)
+        {
+            Play(battle.Rules.Defiling.Sound);
+            ShowGraphic(battle.Rules.Defiling.Graphic, Feet(d.Actor.Cell));
+        }
+        _shownAsh.UnionWith(d.Cells.Select(c => new Vector2I(c.X, c.Y)));
+        _floor.ShowAsh(_shownAsh, Colours(_palette));
+    }
+
+    /// <summary>Ash brought back (<see cref="SpellRules.AshRestorers"/>): the floor shows through again.</summary>
+    private void LookOfRestoring(AshRestored r)
+    {
+        _shownAsh.ExceptWith(r.Cells.Select(c => new Vector2I(c.X, c.Y)));
+        _floor.ShowAsh(_shownAsh, Colours(_palette));
+    }
 
     /// <summary>A field laid (<c>7D80:2782</c>): its template's graphic on each of its cells while it lasts.</summary>
     private void LookOfField(AreaField f)

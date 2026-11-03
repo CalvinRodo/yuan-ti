@@ -107,5 +107,11 @@ public sealed record FieldEnded(AreaField Field) : CombatEvent;
 /// <summary>A charm or Berserk moved a combatant to another side.</summary>
 public sealed record SideChanged(Combatant Actor, int Side) : CombatEvent;
 
+/// <summary>A defiler's spell turned <paramref name="Cells"/> to ash (<see cref="DefilingRules"/>).</summary>
+public sealed record Defiled(Combatant Actor, IReadOnlyList<Cell> Cells) : CombatEvent;
+
+/// <summary>Ash brought back to life (<see cref="SpellRules.AshRestorers"/>).</summary>
+public sealed record AshRestored(IReadOnlyList<Cell> Cells) : CombatEvent;
+
 /// <summary>A summoning brought <see cref="Creature"/> into the fight.</summary>
 public sealed record Summoned(Combatant Actor, Combatant Creature) : CombatEvent;

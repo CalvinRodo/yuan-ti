@@ -42,7 +42,7 @@ public sealed partial class Battle
     /// </summary>
     public bool Cast(Combatant caster, int effect, int level, Cell at, Cell? end = null, bool ownSpell = true)
     {
-        if (Spells.Effect(effect) is not { } e || caster.Has(Condition.NoSpells) && effect < Spellcasting.FirstPower || ownSpell && caster.WasHit)
+        if (Spells.Effect(effect) is not { } e || caster.Has(Condition.NoSpells) && Spellcasting.IsSpell(effect) || ownSpell && caster.WasHit)
         {
             return false;
         }
@@ -51,6 +51,8 @@ public sealed partial class Battle
             UseCast(caster, effect);
         }
         Note(new Cast(caster, effect, at));
+        bool defiles = ownSpell && Defiles(caster, effect);
+        _drawsFromAsh = defiles && _ash.Contains(caster.Cell) ? caster : null;
         if (e.Damaging || e.Condition != Condition.None && !OnSide(caster, at))
         {
             UseCharge(caster, Condition.Invisible);
@@ -77,9 +79,62 @@ public sealed partial class Battle
             }
         }
         ClearFields(caster, e, level, at, end);
+        _drawsFromAsh = null;
+        if (defiles)
+        {
+            Defile(caster, effect);
+        }
+        if (Spells.AshRestorers.FirstOrDefault(r => r.Effect == effect) is { } restorer)
+        {
+            RestoreAsh(at, restorer.Reach);
+        }
         EndTurn(caster);
         return true;
     }
+
+    // -- defiling (not in DSUN.EXE: CombatRules.Defiling) ---------------------------------------
+
+    private readonly HashSet<Cell> _ash = [];
+
+    /// <summary>The defiler casting from ash already drained, while its spell acts (<see cref="DefilingRules.SaveBonusPerLevel"/>).</summary>
+    private Combatant? _drawsFromAsh;
+
+    /// <summary>The cells turned to ash this fight (<see cref="DefilingRules"/>).</summary>
+    public IReadOnlySet<Cell> Ash => _ash;
+
+    /// <summary>Does <paramref name="caster"/> casting <paramref name="effect"/> defile: a wizard spell of a defiler's, with defiling on?</summary>
+    public bool Defiles(Combatant caster, int effect) =>
+        Rules.Defiling.On && Spellcasting.Get(effect) is { Kind: SpellKind.Wizard }
+        && Rules.Defiling.Classes.Any(code => caster.LevelIn(code) > 0);
+
+    /// <summary>
+    /// The ground within the reach of <paramref name="caster"/>'s spell <paramref name="effect"/>
+    /// turns to ash, where it can be walked: what a defiler's spell does as it is cast.
+    /// </summary>
+    public void Defile(Combatant caster, int effect)
+    {
+        int reach = Rules.Defiling.ReachAt(Spellcasting.Get(effect)?.Level ?? 1);
+        List<Cell> cells = [.. Within(caster.Cell, reach).Where(c => Map.Walkable(c) && _ash.Add(c))];
+        Note(new Defiled(caster, cells));
+    }
+
+    /// <summary>Ash within <paramref name="reach"/> of <paramref name="at"/> comes back to life.</summary>
+    private void RestoreAsh(Cell at, int reach)
+    {
+        List<Cell> cells = [.. Within(at, reach).Where(_ash.Remove)];
+        if (cells.Count > 0)
+        {
+            Note(new AshRestored(cells));
+        }
+    }
+
+    private static IEnumerable<Cell> Within(Cell at, int reach) =>
+        from dy in Enumerable.Range(-reach, 2 * reach + 1)
+        from dx in Enumerable.Range(-reach, 2 * reach + 1)
+        select new Cell(at.X + dx, at.Y + dy);
+
+    /// <summary>On ash nothing grows: <see cref="DefilingRules.NeedsLife"/> doesn't take <paramref name="t"/> there.</summary>
+    private bool OnDeadGround(Combatant t, SpellEffect e) => Rules.Defiling.NeedsLife.Contains(e.Number) && _ash.Contains(t.Cell);
 
     private bool OnSide(Combatant caster, Cell at) => At(at) is { } t && !caster.IsEnemyOf(t);
 
@@ -100,6 +155,13 @@ public sealed partial class Battle
         if (e.Target is 7 or 8)
         {
             return SpellAim.Ok;
+        }
+        if (e.SingleTarget && TargetAt(e, at) is null && _ash.Contains(at) && Spells.AshRestorers.Any(r => r.Effect == e.Number))
+        {
+            // A spell that brings back ash may be cast at the ash itself.
+            return Distance(caster.Cell, at) > e.RangeCells(level) ? SpellAim.OutOfRange
+                : !InSight(caster.Cell, at) ? SpellAim.NoLineOfSight
+                : SpellAim.Ok;
         }
         if (e.SingleTarget)
         {
@@ -180,6 +242,11 @@ public sealed partial class Battle
             Note(new Avoided(caster, t, "immune"));
             return;
         }
+        if (OnDeadGround(t, e))
+        {
+            Note(new Avoided(caster, t, "nothing grows"));
+            return;
+        }
         bool friendly = caster == t || !caster.IsEnemyOf(t);
         if (!friendly)
         {
@@ -220,7 +287,7 @@ public sealed partial class Battle
             Note(new Avoided(caster, t, "mind defended"));
             return;
         }
-        if (!friendly && e.Number < Spellcasting.FirstPower)
+        if (!friendly && Spellcasting.IsSpell(e.Number))
         {
             int mr = MagicResistance(t, e, level), d100 = Roll(1, 100);
             if (mr > 0)
@@ -302,7 +369,7 @@ public sealed partial class Battle
 
     /// <summary>A wizard or priest spell of level 1–3 (<c>80F5:31FC</c>): what Minor Globe and Minor Spell Turning stop.</summary>
     private static bool LowLevelSpell(SpellEffect e) =>
-        e.Number < Spellcasting.FirstPower && Spellcasting.Get(e.Number) is { Level: >= 1 and <= 3 };
+        Spellcasting.Get(e.Number) is { Kind: not SpellKind.Psionic, Level: >= 1 and <= 3 };
 
     /// <summary>
     /// Negative Plane Protection (<c>80F5:1999</c>): an undead's negative-energy
@@ -359,7 +426,7 @@ public sealed partial class Battle
             return true;
         }
         bool mind = (e.Flags & SpellFlags.MindAffecting) != 0;
-        int spellLevel = e.Number > Spellcasting.LastPower ? 3 : Spellcasting.Get(e.Number) is { Kind: not SpellKind.Psionic } s ? s.Level : 0;
+        int spellLevel = Spellcasting.Get(e.Number) is { } s ? (s.Kind == SpellKind.Psionic ? 0 : s.Level) : e.Number > Spellcasting.LastPower ? 3 : 0;
         if (spellLevel > 0 && (mind && spellLevel <= t.Score(4) - 18 || (e.Flags & SpellFlags.Illusion) != 0 && spellLevel <= t.Score(3) - 18))
         {
             return true;
@@ -470,7 +537,9 @@ public sealed partial class Battle
     /// level 7, and Scare can't miss below level 6 and can't land from 6
     /// (<see cref="SpellRules.SaveRules"/>; an elf or half-elf priest rolls
     /// below 6 with <see cref="CombatFixes.ScareSparesElves"/>); Dismissal adds
-    /// the target's level less the caster's.
+    /// the target's level less the caster's. A defiler casting from ash
+    /// already drained gives its targets <see cref="DefilingRules.SaveBonusPerLevel"/>
+    /// × the spell's level.
     /// </summary>
     public int SaveBonus(Combatant t, SpellEffect e, Combatant? caster, int level, int save)
     {
@@ -517,6 +586,10 @@ public sealed partial class Battle
         if ((e.Flags & SpellFlags.WisdomSave) != 0)
         {
             b += Abilities.WisDefenceOf(t.Score(4));
+        }
+        if (caster is not null && caster == _drawsFromAsh)
+        {
+            b += Rules.Defiling.SaveBonusPerLevel * (Spellcasting.Get(e.Number)?.Level ?? 1);
         }
         if (save == 1)
         {
@@ -901,7 +974,11 @@ public sealed partial class Battle
         switch (e.Number)
         {
             case var n when Spells.Cures.FirstOrDefault(c => c.Effect == n) is { } cure:
-                Heal(t, RollDice(cure.Dice, cure.Sides) + cure.Bonus);
+                Heal(t, cure.Heals(level, RollDice(cure.Dice, cure.Sides)));
+                foreach (Condition c in cure.Ends ?? [])
+                {
+                    EndCondition(t, c);
+                }
                 break;
             case var n when Spells.Dispels.Contains(n):
                 foreach (ActiveEffect a in t.Effects.Where(a => !Spells.Undispellable.Contains(a.Condition)).ToList())

@@ -253,6 +253,12 @@ public partial class Main : Control
             GetTree().Quit(install is null ? 1 : 0);
             return;
         }
+        if (args.Contains("--check-defiling"))
+        {
+            // For this run (not saved): the mods the check is about.
+            Settings.SetBundledMod("Defiling", true);
+            Settings.SetBundledMod("SweetWater", true);
+        }
         ShowStatus(install, null);
         if (args.Contains("--check-windows"))
         {

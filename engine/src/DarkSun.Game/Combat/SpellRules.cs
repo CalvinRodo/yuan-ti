@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using DarkSun.Data.Items;
@@ -203,8 +204,35 @@ public sealed record SpellLook(int Number, int CastGraphic, int CastSound, int P
 public sealed record PsionicPower(
     int Number, int Ability, int Modifier, int Cost, int Maintenance, int Discipline, int Science, int Defence, int AttackMode);
 
-/// <summary>A cure (<c>80F5:05E6</c>): effect <paramref name="Effect"/> heals <paramref name="Dice"/>d<paramref name="Sides"/> + <paramref name="Bonus"/>.</summary>
-public sealed record Cure(int Effect, int Dice, int Sides, int Bonus);
+/// <summary>
+/// A cure (<c>80F5:05E6</c>): effect <paramref name="Effect"/> heals <paramref name="Dice"/>d<paramref name="Sides"/> + <paramref name="Bonus"/>,
+/// and a point more for every <paramref name="LevelsPerPoint"/> of the caster's levels (0: none, as the original's);
+/// it also ends <paramref name="Ends"/>.
+/// </summary>
+public sealed record Cure(
+    int Effect, int Dice, int Sides, int Bonus,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int LevelsPerPoint = 0,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] IReadOnlyList<Condition>? Ends = null)
+{
+    public int Heals(int level, int roll) => roll + Bonus + (LevelsPerPoint > 0 ? Math.Max(1, level) / LevelsPerPoint : 0);
+}
+
+/// <summary>
+/// A spell a mod adds (<see cref="SpellRules.Spells"/>): its <c>SPIN</c> number,
+/// past the original's 196 effects, with its record in <see cref="SpellRules.Effects"/>
+/// and its name in a mod's <c>RESOURCE.GFF/SPIN/n.txt</c>; its level, kind, the
+/// class codes that may cast it (<see cref="Magic.Spellcasting.ClassCode"/>: 4 a
+/// cleric of water, 8 a druid of water, 16 a ranger of water…) and the <c>ICON</c>
+/// it shows (one of the original's).
+/// </summary>
+public sealed record AddedSpell(int Number, int Level, Magic.SpellKind Kind, IReadOnlyList<int> Casters, int Icon)
+{
+    public Magic.Spell ToSpell() =>
+        new(Number, Level, Casters.Aggregate(0u, (mask, code) => mask | 1u << (code + 1)), Kind, IconNumber: Icon);
+}
+
+/// <summary>Effect <paramref name="Effect"/> brings back the ash of defiling (<see cref="DefilingRules"/>) within <paramref name="Reach"/> cells of where it is cast.</summary>
+public sealed record AshRestorer(int Effect, int Reach);
 
 /// <summary>Whose side a <see cref="TargetFilter"/> takes.</summary>
 public enum TargetSide { Any, Caster, Other }
@@ -276,6 +304,12 @@ public sealed partial record SpellRules
 
     /// <summary>The cures (<c>80F5:05E6</c>): Cure Light (1d8), Serious (2d8 + 1) and Critical Wounds (3d8 + 3), and effect 152 (2).</summary>
     public IReadOnlyList<Cure> Cures { get; init; } = [new(72, 1, 8, 0), new(113, 2, 8, 1), new(128, 3, 8, 3), new(152, 0, 0, 2)];
+
+    /// <summary>Spells a mod adds past the original's (none in DSUN.EXE).</summary>
+    public IReadOnlyList<AddedSpell> Spells { get; init; } = [];
+
+    /// <summary>The effects that bring back defiled ground (none in DSUN.EXE, which has no ash).</summary>
+    public IReadOnlyList<AshRestorer> AshRestorers { get; init; } = [];
 
     /// <summary>Dispel Magic, wizard's and priest's (<c>80F5:05E6</c> cases 26 and 98): each effect ends 50 in 100 (<see cref="CombatRules.DispelChance"/>).</summary>
     public IReadOnlyList<int> Dispels { get; init; } = [27, 99];
@@ -364,7 +398,8 @@ public sealed partial record SpellRules
         SpellRules rules;
         try
         {
-            rules = JsonSerializer.Deserialize<SpellRules>(File.ReadAllText(path), Json) ?? throw new InvalidDataException("empty file");
+            JsonObject mod = JsonNode.Parse(File.ReadAllText(path)) as JsonObject ?? throw new InvalidDataException("not a JSON object");
+            rules = Merged(mod).Deserialize<SpellRules>(Json) ?? throw new InvalidDataException("empty file");
         }
         catch (JsonException e)
         {
@@ -378,7 +413,62 @@ public sealed partial record SpellRules
         {
             throw new InvalidDataException("saveCategories: saves are 1–5");
         }
+        if (rules.Spells.FirstOrDefault(s => s.Number <= World.ItemMagic.LastEffect || rules.Effect(s.Number) is null) is { } stray)
+        {
+            throw new InvalidDataException($"spells: {stray.Number} needs a number past {World.ItemMagic.LastEffect} and an entry in effects");
+        }
         return rules;
+    }
+
+    /// <summary>The lists merged by their entries' key rather than replaced whole (<see cref="Merged"/>).</summary>
+    private static readonly Dictionary<string, string> Keyed = new()
+    {
+        ["Effects"] = "Number", ["Looks"] = "Number", ["Powers"] = "Number", ["Spells"] = "Number", ["Cures"] = "Effect",
+        ["AshRestorers"] = "Effect",
+    };
+
+    /// <summary>
+    /// A mod's file on top of the original's, so it need only hold what it
+    /// changes: what it leaves out is DSUN.EXE's; an entry of the effects,
+    /// looks, powers, spells, cures or ash restorers replaces the original's of
+    /// its number (fields it leaves out kept) or adds one; any other list
+    /// replaces the original's whole. An entry listed twice is refused.
+    /// </summary>
+    private static JsonObject Merged(JsonObject mod)
+    {
+        var merged = (JsonObject)JsonNode.Parse(Default.ToJson())!;
+        foreach (var (name, value) in mod.ToList())
+        {
+            if (Keyed.TryGetValue(name, out string? key) && value is JsonArray entries && merged[name] is JsonArray original)
+            {
+                if (entries.OfType<JsonObject>().GroupBy(e => e[key]?.ToJsonString()).FirstOrDefault(g => g.Count() > 1) is { } twice)
+                {
+                    throw new InvalidDataException($"{name}: {key} {twice.Key} is listed more than once");
+                }
+                foreach (JsonObject entry in entries.OfType<JsonObject>())
+                {
+                    if (original.OfType<JsonObject>().FirstOrDefault(o => o[key]?.ToJsonString() == entry[key]?.ToJsonString()) is { } same)
+                    {
+                        foreach (var (field, v) in entry.ToList())
+                        {
+                            same[field] = v?.DeepClone();
+                        }
+                    }
+                    else
+                    {
+                        original.Add(entry.DeepClone());
+                    }
+                }
+                var sorted = original.OfType<JsonObject>().OrderBy(o => o[key]?.GetValue<int>() ?? 0).Select(o => o.DeepClone()).ToList();
+                original.Clear();
+                sorted.ForEach(original.Add);
+            }
+            else
+            {
+                merged[name] = value?.DeepClone();
+            }
+        }
+        return merged;
     }
 
     /// <summary>The rules as JSON, each record on one line.</summary>

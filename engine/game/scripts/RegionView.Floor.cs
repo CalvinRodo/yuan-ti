@@ -57,6 +57,10 @@ public partial class RegionView
         return terrain;
     }
 
+    /// <summary>The region palette's colours, for the ash (<see cref="FloorEffects.ShowAsh"/>).</summary>
+    internal static IReadOnlyList<Color> Colours(DarkSun.Data.Images.Palette palette) =>
+        [.. Enumerable.Range(0, palette.Count).Select(i => palette[i]).Select(c => Color.Color8(c.R, c.G, c.B))];
+
     /// <summary>
     /// The floor's shadows and dust follow the living figures as drawn this
     /// frame, and in a fight the enemies' rings (<see cref="FloorEffects"/>).
