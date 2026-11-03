@@ -202,7 +202,7 @@ public sealed class CombatLog(Func<int, string> effectName, Func<Item, string> i
         SaveRolled s => Save(s),
         ResistanceRolled m => Resistance(m),
         Cast c => Same(L(LogKind.Other, c.Actor, N(c.Actor),
-            T($" {(c.Effect is >= Spellcasting.FirstPower and <= Spellcasting.LastPower ? "uses" : "casts")} {effectName(c.Effect)}"))),
+            T($" {(Spellcasting.IsPower(c.Effect) ? "uses" : "casts")} {effectName(c.Effect)}"))),
         ConditionGained g => Same(L(LogKind.Other, g.Target, N(g.Target), T($" is {Words(g.Condition)}"))),
         ConditionEnded x => NotLeast(L(LogKind.Detail, x.Target, N(x.Target), T($" is no longer {Words(x.Condition)}"))),
         Guarded g => NotLeast(L(LogKind.Turn, g.Actor, N(g.Actor), T(" guards"))),
@@ -215,6 +215,8 @@ public sealed class CombatLog(Func<int, string> effectName, Func<Item, string> i
         Defiled d => Same(L(LogKind.Other, d.Actor, T("The ground around "), N(d.Actor), T(" turns to ash"))),
         AshRestored r => Same(L(LogKind.Other, null, T($"Life returns to {r.Cells.Count} cells of ash"))),
         Summoned s => Same(L(LogKind.Other, s.Actor, N(s.Actor), T(" summons "), N(s.Creature))),
+        Pushed p => Same(L(LogKind.Other, p.Actor, N(p.Actor), T($" is blown back {Battle.Distance(p.From, p.To)} cells"))),
+        Teleported t => Same(L(LogKind.Other, t.Actor, N(t.Actor), T(" vanishes and reappears"))),
         _ => null,
     };
 

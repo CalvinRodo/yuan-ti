@@ -1,0 +1,15 @@
+{
+  "_about": "Spike Stones, spell 202: added to the original's tables, which stay as they are. Template 46 is its field on the ground, acting on each step taken in it.",
+  "Effects": [
+    { "Number": 202, "RangeBase": 180, "RangePerLevel": 0, "DurationCount": 0, "DurationSides": 1, "DurationPerLevel": 0, "Unit": 60, "AreaBase": 8, "AreaPerLevel": 3, "Target": 1, "Template": 46, "Flags": 16384, "Condition": "None", "Elements": "Piercing", "BaseDice": 1, "DicePerStep": 0, "Sides": 4, "FlatPerStep": 0, "LevelsPerStep": 1, "LevelBonus": 0, "SaveAllowed": 0, "SaveModifier": 0, "SaveCategory": 6, "Purpose": 2 }
+  ],
+  "Templates": [
+    { "Index": 46, "Kind": 2, "Shape": 1, "Effect": 202, "Flags": 0, "Turn": 0, "Width": 1, "Length": 1, "DurationDice": 3, "DurationSides": 4, "DurationPerLevel": 0, "DurationUnit": 60, "Graphic": 8417 }
+  ],
+  "Looks": [
+    { "Number": 202, "CastGraphic": 8303, "CastSound": 82, "Projectile": -1, "FlightSound": 74, "HitGraphic": -1, "HitSound": 82 }
+  ],
+  "Spells": [
+    { "Number": 202, "Level": 4, "Kind": "Priest", "Casters": [2, 6, 14], "Icon": 21075 }
+  ]
+}

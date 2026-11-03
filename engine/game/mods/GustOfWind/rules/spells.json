@@ -1,0 +1,18 @@
+{
+  "_about": "Gust of Wind, spell 201: added to the original's tables, which stay as they are. Template 45 is its line, a square wide; Gusts is the push and the clearing of clouds.",
+  "Effects": [
+    { "Number": 201, "RangeBase": 40, "RangePerLevel": 0, "DurationCount": 0, "DurationSides": 1, "DurationPerLevel": 0, "Unit": 60, "AreaBase": 0, "AreaPerLevel": 16, "Target": 1, "Template": 45, "Flags": 0, "Condition": "None", "Elements": "None", "BaseDice": 0, "DicePerStep": 0, "Sides": 0, "FlatPerStep": 0, "LevelsPerStep": 1, "LevelBonus": 0, "SaveAllowed": 0, "SaveModifier": 0, "SaveCategory": 6, "Purpose": 2 }
+  ],
+  "Templates": [
+    { "Index": 45, "Kind": 1, "Shape": 0, "Effect": 201, "Flags": 0, "Turn": 0, "Width": -16, "Length": 1, "DurationDice": 0, "DurationSides": 0, "DurationPerLevel": 0, "DurationUnit": 2, "Graphic": 8300 }
+  ],
+  "Looks": [
+    { "Number": 201, "CastGraphic": 8309, "CastSound": 80, "Projectile": -1, "FlightSound": 73, "HitGraphic": 8300, "HitSound": 80 }
+  ],
+  "Gusts": [
+    { "Effect": 201, "Push": 2, "ClearsClouds": true }
+  ],
+  "Spells": [
+    { "Number": 201, "Level": 3, "Kind": "Priest", "Casters": [1, 5, 13], "Icon": 21083 }
+  ]
+}

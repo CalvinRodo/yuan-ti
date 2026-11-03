@@ -432,6 +432,11 @@ public partial class RegionView : Node2D
                 CheckDefiling();
                 return;
             }
+            if (OS.GetCmdlineUserArgs().Contains("--check-effect-spells"))
+            {
+                CheckEffectSpells();
+                return;
+            }
             if (OS.GetCmdlineUserArgs().Contains("--check-arena"))
             {
                 CheckArena();

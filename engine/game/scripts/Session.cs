@@ -301,9 +301,30 @@ public static class Session
     public static DarkSun.Game.Combat.CombatRules CombatRules =>
         _combatRules ??= ModRules("combat.json", DarkSun.Game.Combat.CombatRules.Read, DarkSun.Game.Combat.CombatRules.Default);
 
-    /// <summary>What spells, powers and monster effects do in combat: a mod's <c>rules/spells.json</c>, else DSUN.EXE's.</summary>
-    public static DarkSun.Game.Combat.SpellRules SpellRules =>
-        _spellRules ??= ModRules("spells.json", DarkSun.Game.Combat.SpellRules.Read, DarkSun.Game.Combat.SpellRules.Default);
+    /// <summary>
+    /// What spells, powers and monster effects do in combat: DSUN.EXE's with every mod's
+    /// <c>rules/spells.json</c> on top, the first mod's entries winning (<see cref="DarkSun.Game.Combat.SpellRules.Read"/>);
+    /// a file that can't be used is left out, with a warning.
+    /// </summary>
+    public static DarkSun.Game.Combat.SpellRules SpellRules => _spellRules ??= StackedSpellRules();
+
+    private static DarkSun.Game.Combat.SpellRules StackedSpellRules()
+    {
+        List<string> usable = [];
+        foreach (string path in Mods.Mods.Select(m => Path.Combine(m.Directory, "rules", "spells.json")).Where(File.Exists))
+        {
+            try
+            {
+                DarkSun.Game.Combat.SpellRules.Read([.. usable, path]);
+                usable.Add(path);
+            }
+            catch (InvalidDataException e)
+            {
+                Godot.GD.PushWarning($"Mod file not used: {path}: {e.Message}");
+            }
+        }
+        return usable.Count == 0 ? DarkSun.Game.Combat.SpellRules.Default : DarkSun.Game.Combat.SpellRules.Read([.. usable]);
+    }
 
     /// <summary>The first mod's <c>rules/<paramref name="file"/></c>, else <paramref name="original"/> (with a warning if a mod's can't be used).</summary>
     private static T ModRules<T>(string file, Func<string, T> read, T original)

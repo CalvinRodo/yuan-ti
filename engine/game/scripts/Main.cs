@@ -259,6 +259,14 @@ public partial class Main : Control
             Settings.SetBundledMod("Defiling", true);
             Settings.SetBundledMod("SweetWater", true);
         }
+        if (args.Contains("--check-effect-spells"))
+        {
+            // For this run (not saved): the mods the check is about.
+            foreach (string mod in RegionView.EffectSpellMods)
+            {
+                Settings.SetBundledMod(mod, true);
+            }
+        }
         ShowStatus(install, null);
         if (args.Contains("--check-windows"))
         {

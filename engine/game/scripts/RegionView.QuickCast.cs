@@ -82,7 +82,7 @@ public partial class RegionView
             ChooseCast(number);
             return;
         }
-        bool power = number is >= Spellcasting.FirstPower and <= Spellcasting.LastPower;
+        bool power = Spellcasting.IsPower(number);
         _character.Open(_world, QuickCaster, power ? CharacterScreen.Page.Psionics : CharacterScreen.Page.Spells);
         _character.PickToCast(number);
     }
