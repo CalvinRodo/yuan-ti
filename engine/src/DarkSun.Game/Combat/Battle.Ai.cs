@@ -401,10 +401,22 @@ public sealed partial class Battle
                 c.Psp -= p.Maintenance;
                 continue;
             }
-            c.Maintained.Remove(number);
-            foreach (ActiveEffect e in c.Effects.Where(e => e.Effect == number).ToList())
+            DropPower(c, number);
+        }
+    }
+
+    /// <summary>
+    /// <paramref name="c"/> stops keeping power <paramref name="number"/> up: its effects end, on
+    /// <paramref name="c"/> and (a mod's power can hold another: <see cref="SpellRules.RoundDamages"/>) on anyone it was used on.
+    /// </summary>
+    private void DropPower(Combatant c, int number)
+    {
+        c.Maintained.Remove(number);
+        foreach (Combatant holder in _all)
+        {
+            foreach (ActiveEffect e in holder.Effects.Where(e => e.Effect == number && (holder == c || e.Caster == c)).ToList())
             {
-                EndEffect(c, e);
+                EndEffect(holder, e);
             }
         }
     }

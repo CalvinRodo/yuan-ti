@@ -1,0 +1,1 @@
+CERULEAN HAIL:  Calls down a storm of fist-sized blue hailstones. Inflicts 1 to 4 pts of damage per level of the caster (to 10 to 40 pts) on all within its area of effect, half if they save. Those who fail are slowed for a round.

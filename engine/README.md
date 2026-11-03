@@ -582,13 +582,21 @@ class, saves and damage (Bless +1, Shield caps armour class at 4 from the front,
 halve their element) are `CombatRules` (`rules/combat.json`); what each spell, power and monster
 effect does is `SpellRules` (`rules/spells.json`, DSUN.EXE's 196 records and 45 area templates, one
 a line, with the cures, what Dispel Magic can't end, whom effects take and the saves set by level).
-A mod's `spells.json` need only hold what it changes: an entry of the effects, looks, powers, cures,
-added spells or ash restorers replaces the original's of its number (fields left out kept) or is
-added; any other list replaces the original's whole. A mod can add a spell past the original's 196
-effects: its record in `Effects` with the next number, its look, and in `Spells` its level, kind, the
-class codes that may cast it and one of the original's icons; its name and description go in the
-mod's `RESOURCE.GFF/SPIN/n.txt` ("NAME:  what it does"). Priests then know it and wizards can learn
-it like the original's.
+Every mod's `spells.json` is read, one on top of the other (the first mod's entries win), and each
+need only hold what it changes: an entry of the effects, looks, powers, cures, added spells, ash
+restorers, save riders, round damages, gusts or teleports replaces the one of its number (fields left
+out kept) or is added; area templates given an `Index` replace the one there or are added (one past
+the end leaves unused ones between); any other list replaces the whole. A mod can add a spell past the
+original's 196 effects: its record in `Effects` with a number of its own (numbers past 196 may be
+skipped, so mods needn't know of each other's), its look, and in `Spells` its level, kind, the class
+codes that may cast it and one of the original's icons; its name and description go in the mod's
+`RESOURCE.GFF/SPIN/n.txt` ("NAME:  what it does"). Priests then know it and wizards can learn it like
+the original's. A power (kind `Psionic`) names its `Discipline` and has its record in `Powers`;
+psionicists study it with that discipline's. What no record says, a mod's spell can take from:
+`SaveRiders` (a condition a failed save also gives, for the round and N more), `RoundDamages`
+(damage each round while it holds, more against metal, ending when the caster loses sight; a power
+kept up ends it when dropped), `Gusts` (a Strength check or blown back, losing the round, and the
+clouds and fog it reaches blown away) and `Teleports` (the caster to a free cell in sight and range).
 What rides on a creature's hits is `CreatureRules.OnHit`. `Battle.Log` lists what happened for the combat log.
 
 Fights happen on the region map. FIGHT, or attacking a creature that has no attack trigger, starts one
@@ -674,6 +682,32 @@ Two more come with the game, off, for Dark Sun's defilers (`engine/game/mods/Def
 `-- --new-game --check-defiling` turns both on for the run, defiles the ground around a member in a
 test fight, checks that the map shows that ash, casts Sweet Water at the ash beside it and checks it
 goes, and plays the fight out; `--check-mods` checks that both load and unload.
+
+Five more each add a spell or power, off until turned on, with only the original's icons, graphics
+and sounds (`engine/game/mods/CeruleanHail`, `DimensionDoor`, `MolecularAgitation`, `GustOfWind`,
+`SpikeStones`; issues #137–#141):
+
+- **Cerulean Hail** (198, a 4th-level wizard spell): 1d4 cold a level (at most 10d4) in a small
+  circle, half with a save; a failed save also slows through the next round. Ice Storm's icon and look.
+- **Dimension Door** (199, a psychokinetic science; 4 PSPs, Con −1): the psionicist to a free cell in
+  sight up to 10 cells away, no step taken, so no guard strikes. Displacement's icon, Blink's look.
+- **Molecular Agitation** (200, a psychokinetic devotion; 6 PSPs, Int −3, 2 a round to keep up): 1d6
+  fire at once and each round, +1 a die against a metal weapon or metal armour, until dropped or out
+  of sight. Project Force's icon, Focus Heat's look.
+- **Gust of Wind** (201, a 3rd-level spell of the clerics, druids and rangers of air): a line a cell
+  wide and a cell a level long; a failed Strength check blows each in it 2 cells from the caster
+  (short of a wall or anyone in the way) and ends their round; it blows away the clouds and fog it
+  reaches. Dust Devil's icon and look; its template is 45.
+- **Spike Stones** (202, a 4th-level spell of the clerics, druids and rangers of earth): a field on the
+  ground for 3d4 rounds that cuts for 1d4, no save, as it rises and for each cell walked in it; flyers
+  and burrowers are untouched, as with the other ground fields. Magical Stone's icon, Quicksand's
+  casting, Wall of Stone's graphic for the stones; its template is 46.
+
+DSUN.EXE has only three disciplines, so the two powers are psychokinesis ("Kinetics") rather than
+psychoportation. `-- --new-game --check-effect-spells` turns all five on for the run and, in a test
+fight, uses Dimension Door and casts the four spells at a foe, checking that the figures stand where
+the battle has them after the teleport and the push and that Spike Stones lays its field;
+`--check-mods` checks that they load and unload with Sweet Water.
 
 Mods in `engine/game/mods` are packed with the game, copied to `bundled-mods` in the Godot user data
 folder each time it starts, and loaded after the player's own mods (theirs win). Their on/off

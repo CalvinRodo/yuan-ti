@@ -113,5 +113,11 @@ public sealed record Defiled(Combatant Actor, IReadOnlyList<Cell> Cells) : Comba
 /// <summary>Ash brought back to life (<see cref="SpellRules.AshRestorers"/>).</summary>
 public sealed record AshRestored(IReadOnlyList<Cell> Cells) : CombatEvent;
 
+/// <summary>A wind blew <paramref name="Actor"/> back (<see cref="Gust"/>).</summary>
+public sealed record Pushed(Combatant Actor, Cell From, Cell To) : CombatEvent;
+
+/// <summary><paramref name="Actor"/> vanished and came back elsewhere (<see cref="Teleport"/>).</summary>
+public sealed record Teleported(Combatant Actor, Cell From, Cell To) : CombatEvent;
+
 /// <summary>A summoning brought <see cref="Creature"/> into the fight.</summary>
 public sealed record Summoned(Combatant Actor, Combatant Creature) : CombatEvent;

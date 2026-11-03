@@ -20,6 +20,8 @@ public enum Condition
     FleshArmor = 59, MagicalVestments = 60, AnimalAffinity = 61, BodyWeaponry = 62, StrengthEnhanced = 63,
     StrengthBorrowed = 64, StrengthLent = 65, AdrenalinControl = 66, Strength = 67, Weakened = 68, ExtraHitPoints = 69,
     FlameBlade = 70, SpiritualHammer = 71, Shillelagh = 72, Prayer = 73,
+    /// <summary>The engine's: hurt each round by a mod's effect (<see cref="RoundDamage"/>).</summary>
+    Heated = 74,
 }
 
 /// <summary>

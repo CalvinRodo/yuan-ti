@@ -1,0 +1,15 @@
+{
+  "_about": "Cerulean Hail, spell 198: added to the original's tables, which stay as they are. It uses Ice Storm's area template (18); SaveRiders gives the Slowed of a failed save.",
+  "Effects": [
+    { "Number": 198, "RangeBase": 0, "RangePerLevel": 20, "DurationCount": 0, "DurationSides": 1, "DurationPerLevel": 0, "Unit": 60, "AreaBase": 40, "AreaPerLevel": 0, "Target": 1, "Template": 18, "Flags": 16384, "Condition": "None", "Elements": "Cold, Magic", "BaseDice": 0, "DicePerStep": 1, "Sides": 4, "FlatPerStep": 0, "LevelsPerStep": 1, "LevelBonus": 0, "SaveAllowed": 1, "SaveModifier": 0, "SaveCategory": 5, "Purpose": 2 }
+  ],
+  "Looks": [
+    { "Number": 198, "CastGraphic": 8304, "CastSound": 77, "Projectile": -1, "FlightSound": 71, "HitGraphic": -1, "HitSound": 95 }
+  ],
+  "SaveRiders": [
+    { "Effect": 198, "Condition": "Slowed", "Rounds": 1 }
+  ],
+  "Spells": [
+    { "Number": 198, "Level": 4, "Kind": "Wizard", "Casters": [11, 18], "Icon": 21045 }
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "_about": "Molecular Agitation, power 200: added to the original's tables, which stay as they are. RoundDamages is the heat each round; MetalBonus the point a die against metal.",
+  "Effects": [
+    { "Number": 200, "RangeBase": 200, "RangePerLevel": 0, "DurationCount": 0, "DurationSides": 1, "DurationPerLevel": 0, "Unit": -9999, "AreaBase": 1, "AreaPerLevel": 0, "Target": 4, "Template": -1, "Flags": 0, "Condition": "Heated", "Elements": "Fire", "BaseDice": 0, "DicePerStep": 0, "Sides": 0, "FlatPerStep": 0, "LevelsPerStep": 1, "LevelBonus": 0, "SaveAllowed": 0, "SaveModifier": 0, "SaveCategory": 6, "Purpose": 0 }
+  ],
+  "Looks": [
+    { "Number": 200, "CastGraphic": 8304, "CastSound": 82, "Projectile": -1, "FlightSound": 73, "HitGraphic": 8308, "HitSound": 82 }
+  ],
+  "Powers": [
+    { "Number": 200, "Ability": 3, "Modifier": -3, "Cost": 6, "Maintenance": 2, "Discipline": 0, "Science": 0, "Defence": 0, "AttackMode": -1 }
+  ],
+  "RoundDamages": [
+    { "Effect": 200, "Dice": 1, "Sides": 6, "MetalBonus": 1 }
+  ],
+  "Spells": [
+    { "Number": 200, "Level": 1, "Kind": "Psionic", "Casters": [], "Icon": 3002, "Discipline": "Psychokinesis" }
+  ]
+}

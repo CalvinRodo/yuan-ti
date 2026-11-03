@@ -290,11 +290,7 @@ public sealed partial class Battle
             EndCondition(c, Condition.Paralyzed);
             foreach (int power in c.Maintained.ToList())
             {
-                c.Maintained.Remove(power);
-                foreach (ActiveEffect e in c.Effects.Where(e => e.Effect == power).ToList())
-                {
-                    EndEffect(c, e);
-                }
+                DropPower(c, power);
             }
             Vitals v = c.Vitals;
             if (v.Status is >= Vitals.Well and <= Vitals.Down)
@@ -459,11 +455,7 @@ public sealed partial class Battle
             c.Flags &= ~TurnFlags.MayMove;
         }
         c.Facing = Direction(from, to);
-        c.Cell = to;
-        if (c.Source is { } obj)
-        {
-            obj.FixedCell = to;
-        }
+        Place(c, to);
         Note(new Moved(c, from, to));
         UpdateFields(c, moved: true, turn: false);
         foreach (Combatant guard in _all.Where(g => g.Guarding && g != c && g.Vitals.Status == Vitals.Well

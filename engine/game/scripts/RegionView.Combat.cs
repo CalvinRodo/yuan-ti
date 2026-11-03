@@ -513,6 +513,15 @@ public partial class RegionView
             case AshRestored r:
                 LookOfRestoring(r);
                 break;
+            case Pushed p:
+                PlaceSprite(p.Actor, p.To);
+                LookOfSpellOn(p.Actor);
+                break;
+            case Teleported t:
+                PlaceSprite(t.Actor, t.To);
+                LookOfArrival(t);
+                _combatWait = fast ? 0 : CastPause;
+                return;
         }
         _combatWait = fast ? 0 : Math.Max(_combatWait, 0);
     }
@@ -541,6 +550,25 @@ public partial class RegionView
         }
         obj.FixedCell = to;
         OnWorldChanged(obj, null);
+    }
+
+    /// <summary>Blown or teleported (<see cref="Pushed"/>, <see cref="Teleported"/>): the sprite is on its new cell at once, no step walked.</summary>
+    private void PlaceSprite(Combatant c, Cell to)
+    {
+        if (c.Source is not { } obj)
+        {
+            return;
+        }
+        if (obj.Walker is { } walker)
+        {
+            walker.Teleport(to, (_, _) => false);
+        }
+        else
+        {
+            obj.FixedCell = to;
+            OnWorldChanged(obj, null);
+        }
+        MoveTriggers(c, to);
     }
 
     /// <summary>A number or word rising over a combatant and fading.</summary>
@@ -960,7 +988,7 @@ public partial class RegionView
             }
             return true;
         }
-        bool power = spell is >= DarkSun.Game.Magic.Spellcasting.FirstPower and <= DarkSun.Game.Magic.Spellcasting.LastPower;
+        bool power = DarkSun.Game.Magic.Spellcasting.IsPower(spell);
         if (power ? !battle.UsePower(c, spell, at) : !battle.Cast(c, spell, cast.Level, at))
         {
             Notice(power ? "Not enough psionic strength." : $"{Who(c)} can't cast now.");
@@ -1756,6 +1784,102 @@ public partial class RegionView
             GD.Print($"  PROBLEM: {p}");
         }
         GD.Print(problems.Count == 0 ? "defiling: OK" : $"defiling: {problems.Count} problems");
+        GetTree().Quit(problems.Count == 0 ? 0 : 1);
+    }
+
+    /// <summary>The bundled mods of issues #137–#141, each adding one spell or power (198–202).</summary>
+    public static readonly string[] EffectSpellMods = ["CeruleanHail", "DimensionDoor", "MolecularAgitation", "GustOfWind", "SpikeStones"];
+
+    /// <summary>
+    /// <c>--check-effect-spells</c>, with the five mods on: in a fight in the start region a member
+    /// uses Dimension Door to a free cell, then casts Gust of Wind, Cerulean Hail, Spike Stones and
+    /// Molecular Agitation at a foe (from no slot of its own); each plays through, the member's and
+    /// the foe's figures stand on their combatants' cells after the teleport and any push, and Spike
+    /// Stones lays its field.
+    /// </summary>
+    private void CheckEffectSpells()
+    {
+        const int CeruleanHail = 198, DimensionDoor = 199, MolecularAgitation = 200, GustOfWind = 201, SpikeStones = 202;
+        _checking = true;
+        var problems = new List<string>();
+        void Play()
+        {
+            for (int frame = 0; frame < 2_000 && (_combatEvents.Count > 0 || _combatWait > 0); frame++)
+            {
+                CombatProcess(1.0 / 60);
+            }
+        }
+        Cell? Shown(Combatant c) => c.Source is not { } obj ? null : obj.Walker is { } w ? w.Cell : obj.FixedCell;
+        void Expect(bool ok, string problem)
+        {
+            if (!ok)
+            {
+                problems.Add(problem);
+            }
+        }
+        if (new[] { CeruleanHail, DimensionDoor, MolecularAgitation, GustOfWind, SpikeStones }
+                .FirstOrDefault(n => Session.SpellRules.Effect(n) is null || DarkSun.Game.Magic.Spellcasting.Get(n) is null) is var missing and > 0)
+        {
+            problems.Add($"effect {missing} isn't there: the mods aren't on");
+        }
+        else if (!StartTestFight() || _battle is not { } battle)
+        {
+            problems.Add("no creature to fight in the start region");
+        }
+        else
+        {
+            for (int frame = 0; frame < 20_000 && PlayerTurn is null && InCombat; frame++)
+            {
+                CombatProcess(1.0 / 60);
+            }
+            if (PlayerTurn is not { } member || battle.Combatants.FirstOrDefault(c => c.Alive && member.IsEnemyOf(c)) is not { } foe)
+            {
+                problems.Add("no member's turn came, or no foe");
+            }
+            else
+            {
+                SpellEffect door = battle.Spells.Effect(DimensionDoor)!;
+                Cell from = member.Cell;
+                Cell? to = Enumerable.Range(-6, 13).SelectMany(dy => Enumerable.Range(-6, 13).Select(dx => new Cell(from.X + dx, from.Y + dy)))
+                    .Where(c => c != from && battle.Aim(member, door, member.Level, c) == SpellAim.Ok)
+                    .OrderByDescending(c => Battle.Distance(from, c)).Cast<Cell?>().FirstOrDefault();
+                if (to is not { } cell)
+                {
+                    problems.Add($"no free cell in sight for Dimension Door from {from}");
+                }
+                else
+                {
+                    battle.Cast(member, DimensionDoor, member.Level, cell, ownSpell: false);
+                    Play();
+                    Expect(member.Cell == cell && Shown(member) == cell, $"after Dimension Door to {cell} {Who(member)} is at {member.Cell}, shown at {Shown(member)}");
+                }
+                foe.Stats[0] = 3; // a Strength the gust's d20 is very likely over
+                int pushes = 0;
+                for (int i = 0; i < 4 && pushes == 0 && foe.Alive; i++)
+                {
+                    battle.Cast(member, GustOfWind, 10, foe.Cell, ownSpell: false);
+                    Play();
+                    pushes = battle.Log.OfType<Pushed>().Count();
+                }
+                Expect(pushes > 0, "Gust of Wind blew no one back in four tries");
+                Expect(!foe.Alive || Shown(foe) == foe.Cell, $"{Who(foe)} is at {foe.Cell} but shown at {Shown(foe)}");
+                foreach (int spell in new[] { SpikeStones, CeruleanHail, MolecularAgitation })
+                {
+                    if (foe.Alive)
+                    {
+                        battle.Cast(member, spell, 10, foe.Cell, ownSpell: false);
+                        Play();
+                    }
+                }
+                Expect(!foe.Alive || battle.Log.OfType<FieldMade>().Any(f => f.Field.Effect.Number == SpikeStones), "Spike Stones laid no field");
+                GD.Print($"effect spells: {Who(member)} went {from} → {member.Cell}; {pushes} pushed; {battle.Fields.Count} fields; {Who(foe)} {foe.Vitals.Hp} HP");
+            }
+        }
+        foreach (string p in problems)
+        {
+            GD.Print($"  PROBLEM: {p}");
+        }
+        GD.Print(problems.Count == 0 ? "effect spells: OK" : $"effect spells: {problems.Count} problems");
         GetTree().Quit(problems.Count == 0 ? 0 : 1);
     }
 

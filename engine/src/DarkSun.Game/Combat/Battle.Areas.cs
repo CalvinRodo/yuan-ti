@@ -283,18 +283,20 @@ public sealed partial class Battle
 
     /// <summary>
     /// After a cast (<c>7D80:003B</c>): Dispel Magic (both), effect 195 and any
-    /// fire clear the fields they reach; fire only those that burn.
+    /// fire clear the fields they reach; fire only those that burn. A mod's wind
+    /// blows away the clouds and fog it reaches (<see cref="Gust.ClearsClouds"/>).
     /// </summary>
     private void ClearFields(Combatant caster, SpellEffect e, int level, Cell at, Cell? end)
     {
-        bool fire = (e.Elements & DamageElement.Fire) != 0;
-        if (_fields.Count == 0 || !fire && !Spells.Dispels.Contains(e.Number) && !Spells.AfflictionCures.Contains(e.Number))
+        bool fire = (e.Elements & DamageElement.Fire) != 0, wind = Spells.Gusts.Any(g => g.Effect == e.Number && g.ClearsClouds);
+        if (_fields.Count == 0 || !fire && !wind && !Spells.Dispels.Contains(e.Number) && !Spells.AfflictionCures.Contains(e.Number))
         {
             return;
         }
         Shape? shape = Spells.TemplateOf(e) is { } t && !e.SingleTarget ? ShapeOf(caster, e, t, level, at, end) : null;
         bool reaches(Cell cell) => shape is null ? cell == at : Covers(shape, Centre(cell).X, Centre(cell).Y);
-        foreach (AreaField f in _fields.Where(f => (!fire || f.Template.Burns || Spells.Dispels.Contains(e.Number)) && f.Cells.Any(reaches)).ToList())
+        bool clears(AreaField f) => wind ? f.Template.Kind is AreaTemplate.Cloud or AreaTemplate.Fog : !fire || f.Template.Burns || Spells.Dispels.Contains(e.Number);
+        foreach (AreaField f in _fields.Where(f => clears(f) && f.Cells.Any(reaches)).ToList())
         {
             RemoveField(f);
         }

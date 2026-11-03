@@ -223,13 +223,37 @@ public sealed record Cure(
 /// and its name in a mod's <c>RESOURCE.GFF/SPIN/n.txt</c>; its level, kind, the
 /// class codes that may cast it (<see cref="Magic.Spellcasting.ClassCode"/>: 4 a
 /// cleric of water, 8 a druid of water, 16 a ranger of water…) and the <c>ICON</c>
-/// it shows (one of the original's).
+/// it shows (one of the original's). A psionic power (<see cref="Magic.SpellKind.Psionic"/>)
+/// names its <paramref name="Discipline"/> instead of casters, and has its record in <see cref="SpellRules.Powers"/>.
 /// </summary>
-public sealed record AddedSpell(int Number, int Level, Magic.SpellKind Kind, IReadOnlyList<int> Casters, int Icon)
+public sealed record AddedSpell(int Number, int Level, Magic.SpellKind Kind, IReadOnlyList<int> Casters, int Icon,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] Characters.Discipline? Discipline = null)
 {
     public Magic.Spell ToSpell() =>
-        new(Number, Level, Casters.Aggregate(0u, (mask, code) => mask | 1u << (code + 1)), Kind, IconNumber: Icon);
+        new(Number, Level, Casters.Aggregate(0u, (mask, code) => mask | 1u << (code + 1)), Kind, Discipline, IconNumber: Icon);
 }
+
+/// <summary>On a failed save, effect <paramref name="Effect"/> also gives <paramref name="Condition"/> for the rest of the round and <paramref name="Rounds"/> more (none in DSUN.EXE).</summary>
+public sealed record SaveRider(int Effect, Condition Condition, int Rounds);
+
+/// <summary>
+/// Effect <paramref name="Effect"/> hurts the one it holds <paramref name="Dice"/>d<paramref name="Sides"/>
+/// as it lands and again each round, a point more a die if it carries metal (a weapon in hand or
+/// armour worn, <paramref name="MetalBonus"/>); it ends when its caster can't see it any more (none in DSUN.EXE).
+/// </summary>
+public sealed record RoundDamage(int Effect, int Dice, int Sides,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int MetalBonus = 0);
+
+/// <summary>
+/// Effect <paramref name="Effect"/> is a wind: whoever it reaches fails a Strength check (d20 over
+/// Strength) or is blown <paramref name="Push"/> cells away from the caster and loses the rest of
+/// the round; with <paramref name="ClearsClouds"/> it blows away the clouds and fog it reaches (none in DSUN.EXE).
+/// </summary>
+public sealed record Gust(int Effect, int Push,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool ClearsClouds = false);
+
+/// <summary>Effect <paramref name="Effect"/> takes its caster to the free cell it is cast at, in sight and range (none in DSUN.EXE).</summary>
+public sealed record Teleport(int Effect);
 
 /// <summary>Effect <paramref name="Effect"/> brings back the ash of defiling (<see cref="DefilingRules"/>) within <paramref name="Reach"/> cells of where it is cast.</summary>
 public sealed record AshRestorer(int Effect, int Reach);
@@ -270,14 +294,17 @@ public sealed record SaveRule(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] IReadOnlyList<int>? UnlessClasses = null);
 
 /// <summary>
-/// DSUN.EXE's spell, power and area tables (<see cref="Default"/>); a mod can
-/// replace them with <c>rules/spells.json</c> (<see cref="Read"/>).
+/// DSUN.EXE's spell, power and area tables (<see cref="Default"/>); each mod can
+/// change or add to them with <c>rules/spells.json</c>, the mods' files together (<see cref="Read"/>).
 /// </summary>
 public sealed partial record SpellRules
 {
     private static readonly JsonSerializerOptions Json = new() { WriteIndented = true, Converters = { new JsonStringEnumConverter() } };
 
-    /// <summary>One per <c>SPIN</c> number, from 1.</summary>
+    /// <summary>
+    /// One per <c>SPIN</c> number, from 1, in order: the original's 1–196 with none missing; a mod's
+    /// past them may leave numbers out (another mod's), so mods adding spells need not know of each other's.
+    /// </summary>
     public required IReadOnlyList<SpellEffect> Effects { get; init; }
 
     public required IReadOnlyList<AreaTemplate> Templates { get; init; }
@@ -310,6 +337,18 @@ public sealed partial record SpellRules
 
     /// <summary>The effects that bring back defiled ground (none in DSUN.EXE, which has no ash).</summary>
     public IReadOnlyList<AshRestorer> AshRestorers { get; init; } = [];
+
+    /// <summary>Conditions a failed save also gives (none in DSUN.EXE).</summary>
+    public IReadOnlyList<SaveRider> SaveRiders { get; init; } = [];
+
+    /// <summary>Effects that hurt each round while they hold (none in DSUN.EXE; its acid and poison are conditions).</summary>
+    public IReadOnlyList<RoundDamage> RoundDamages { get; init; } = [];
+
+    /// <summary>Winds that push (none in DSUN.EXE).</summary>
+    public IReadOnlyList<Gust> Gusts { get; init; } = [];
+
+    /// <summary>Effects that take the caster elsewhere on the battlefield (none in DSUN.EXE).</summary>
+    public IReadOnlyList<Teleport> Teleports { get; init; } = [];
 
     /// <summary>Dispel Magic, wizard's and priest's (<c>80F5:05E6</c> cases 26 and 98): each effect ends 50 in 100 (<see cref="CombatRules.DispelChance"/>).</summary>
     public IReadOnlyList<int> Dispels { get; init; } = [27, 99];
@@ -379,7 +418,9 @@ public sealed partial record SpellRules
     /// </summary>
     public IReadOnlyList<int> SaveCategories { get; init; } = [1, 1, 1, 2, 3, 3, 4, 5, 5, 5];
 
-    public SpellEffect? Effect(int number) => number >= 1 && number <= Effects.Count ? Effects[number - 1] : null;
+    public SpellEffect? Effect(int number) =>
+        number >= 1 && number <= Effects.Count && Effects[number - 1].Number == number ? Effects[number - 1]
+            : number > World.ItemMagic.LastEffect ? Effects.FirstOrDefault(e => e.Number == number) : null;
 
     public AreaTemplate? TemplateOf(SpellEffect e) => e.Template >= 0 && e.Template < Templates.Count ? Templates[e.Template] : null;
 
@@ -393,21 +434,31 @@ public sealed partial record SpellRules
     public int AreaOf(SpellEffect e, int level = 1) =>
         e.Target is 3 or 4 or 5 or 7 or 8 ? 8 : e.AreaSize(level) * (TemplateOf(e) is { Shape: AreaTemplate.Circle } ? 2 : 1);
 
-    public static SpellRules Read(string path)
+    /// <summary>
+    /// The mods' <c>rules/spells.json</c> files on top of the original's (<see cref="Merge"/>):
+    /// <paramref name="paths"/> in the mods' order, so the first's entries win over the later ones'.
+    /// </summary>
+    public static SpellRules Read(params string[] paths)
     {
         SpellRules rules;
         try
         {
-            JsonObject mod = JsonNode.Parse(File.ReadAllText(path)) as JsonObject ?? throw new InvalidDataException("not a JSON object");
-            rules = Merged(mod).Deserialize<SpellRules>(Json) ?? throw new InvalidDataException("empty file");
+            var merged = (JsonObject)JsonNode.Parse(Default.ToJson())!;
+            foreach (string path in paths.Reverse())
+            {
+                JsonObject mod = JsonNode.Parse(File.ReadAllText(path)) as JsonObject ?? throw new InvalidDataException("not a JSON object");
+                Merge(merged, mod);
+            }
+            rules = merged.Deserialize<SpellRules>(Json) ?? throw new InvalidDataException("empty file");
         }
         catch (JsonException e)
         {
             throw new InvalidDataException(e.Message, e);
         }
-        if (rules.Effects.Select((e, i) => (e, i)).FirstOrDefault(p => p.e.Number != p.i + 1) is { e: not null } bad)
+        if (rules.Effects.Select((e, i) => (e, i)).FirstOrDefault(p => p.i < World.ItemMagic.LastEffect ? p.e.Number != p.i + 1
+                : p.e.Number <= rules.Effects[p.i - 1].Number) is { e: not null } bad)
         {
-            throw new InvalidDataException($"effects: entry {bad.i + 1} is numbered {bad.e.Number}; they run from 1 in order");
+            throw new InvalidDataException($"effects: entry {bad.i + 1} is numbered {bad.e.Number}; they run from 1 in order, none of the first {World.ItemMagic.LastEffect} missing");
         }
         if (rules.SaveCategories.Any(s => s is < 1 or > 5))
         {
@@ -417,29 +468,43 @@ public sealed partial record SpellRules
         {
             throw new InvalidDataException($"spells: {stray.Number} needs a number past {World.ItemMagic.LastEffect} and an entry in effects");
         }
+        if (rules.Spells.FirstOrDefault(s => s.Kind == Magic.SpellKind.Psionic && (rules.Power(s.Number) is null || s.Discipline is null)) is { } power)
+        {
+            throw new InvalidDataException($"spells: power {power.Number} needs an entry in powers and a discipline");
+        }
+        if (rules.Effects.FirstOrDefault(e => e.Template >= rules.Templates.Count) is { } unknown)
+        {
+            throw new InvalidDataException($"effects: {unknown.Number} uses template {unknown.Template}, past the {rules.Templates.Count} there are");
+        }
         return rules;
     }
 
-    /// <summary>The lists merged by their entries' key rather than replaced whole (<see cref="Merged"/>).</summary>
+    /// <summary>The lists merged by their entries' key rather than replaced whole (<see cref="Merge"/>).</summary>
     private static readonly Dictionary<string, string> Keyed = new()
     {
         ["Effects"] = "Number", ["Looks"] = "Number", ["Powers"] = "Number", ["Spells"] = "Number", ["Cures"] = "Effect",
-        ["AshRestorers"] = "Effect",
+        ["AshRestorers"] = "Effect", ["SaveRiders"] = "Effect", ["RoundDamages"] = "Effect", ["Gusts"] = "Effect", ["Teleports"] = "Effect",
     };
 
     /// <summary>
-    /// A mod's file on top of the original's, so it need only hold what it
-    /// changes: what it leaves out is DSUN.EXE's; an entry of the effects,
-    /// looks, powers, spells, cures or ash restorers replaces the original's of
-    /// its number (fields it leaves out kept) or adds one; any other list
-    /// replaces the original's whole. An entry listed twice is refused.
+    /// A mod's file on top of the original's (or the mods' before it), so it
+    /// need only hold what it changes: what it leaves out stays; an entry of the
+    /// effects, looks, powers, spells, cures, ash restorers, save riders, round
+    /// damages, gusts or teleports replaces the one of its number (fields it
+    /// leaves out kept) or adds one; area templates given an <c>Index</c> replace
+    /// the one there or, at the end, add one; any other list replaces the whole.
+    /// An entry listed twice is refused.
     /// </summary>
-    private static JsonObject Merged(JsonObject mod)
+    private static void Merge(JsonObject merged, JsonObject mod)
     {
-        var merged = (JsonObject)JsonNode.Parse(Default.ToJson())!;
         foreach (var (name, value) in mod.ToList())
         {
-            if (Keyed.TryGetValue(name, out string? key) && value is JsonArray entries && merged[name] is JsonArray original)
+            if (name == "Templates" && value is JsonArray templates && templates.OfType<JsonObject>().Any(t => t.ContainsKey("Index"))
+                && merged[name] is JsonArray originalTemplates)
+            {
+                PlaceTemplates(originalTemplates, templates);
+            }
+            else if (Keyed.TryGetValue(name, out string? key) && value is JsonArray entries && merged[name] is JsonArray original)
             {
                 if (entries.OfType<JsonObject>().GroupBy(e => e[key]?.ToJsonString()).FirstOrDefault(g => g.Count() > 1) is { } twice)
                 {
@@ -468,7 +533,40 @@ public sealed partial record SpellRules
                 merged[name] = value?.DeepClone();
             }
         }
-        return merged;
+    }
+
+    /// <summary>
+    /// Templates with an <c>Index</c>: each replaces the one at it (fields it leaves out kept) or
+    /// is added there; one past the end leaves bursts that nothing uses in between, so mods adding
+    /// templates of their own need not know of each other's.
+    /// </summary>
+    private static void PlaceTemplates(JsonArray original, JsonArray templates)
+    {
+        if (templates.OfType<JsonObject>().FirstOrDefault(t => t["Index"] is null) is not null)
+        {
+            throw new InvalidDataException("templates: give every entry an Index, or none to replace them all");
+        }
+        if (templates.OfType<JsonObject>().GroupBy(t => t["Index"]!.GetValue<int>()).FirstOrDefault(g => g.Count() > 1) is { } twice)
+        {
+            throw new InvalidDataException($"templates: Index {twice.Key} is listed more than once");
+        }
+        foreach (JsonObject t in templates.OfType<JsonObject>().OrderBy(t => t["Index"]!.GetValue<int>()))
+        {
+            int index = t["Index"]!.GetValue<int>();
+            if (index < 0)
+            {
+                throw new InvalidDataException($"templates: Index {index} is below 0");
+            }
+            while (original.Count <= index)
+            {
+                original.Add(new JsonObject { ["Kind"] = AreaTemplate.Burst, ["Shape"] = AreaTemplate.Line });
+            }
+            var target = (JsonObject)original[index]!;
+            foreach (var (field, v) in t.ToList().Where(f => f.Key != "Index"))
+            {
+                target[field] = v?.DeepClone();
+            }
+        }
     }
 
     /// <summary>The rules as JSON, each record on one line.</summary>

@@ -1,0 +1,18 @@
+{
+  "_about": "Dimension Door, power 199: added to the original's tables, which stay as they are. Teleports is what moves the psionicist to the spot it is used at.",
+  "Effects": [
+    { "Number": 199, "RangeBase": 40, "RangePerLevel": 0, "DurationCount": 0, "DurationSides": 1, "DurationPerLevel": 0, "Unit": 0, "AreaBase": 1, "AreaPerLevel": 0, "Target": 1, "Template": -1, "Flags": 0, "Condition": "None", "Elements": "None", "BaseDice": 0, "DicePerStep": 0, "Sides": 0, "FlatPerStep": 0, "LevelsPerStep": 1, "LevelBonus": 0, "SaveAllowed": 0, "SaveModifier": 0, "SaveCategory": 6, "Purpose": 3 }
+  ],
+  "Looks": [
+    { "Number": 199, "CastGraphic": 8305, "CastSound": 78, "Projectile": -1, "FlightSound": 75, "HitGraphic": 8305, "HitSound": 78 }
+  ],
+  "Powers": [
+    { "Number": 199, "Ability": 2, "Modifier": -1, "Cost": 4, "Maintenance": 99, "Discipline": 0, "Science": 1, "Defence": 0, "AttackMode": -1 }
+  ],
+  "Teleports": [
+    { "Effect": 199 }
+  ],
+  "Spells": [
+    { "Number": 199, "Level": 1, "Kind": "Psionic", "Casters": [], "Icon": 3014, "Discipline": "Psychokinesis" }
+  ]
+}

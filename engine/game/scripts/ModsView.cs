@@ -73,7 +73,7 @@ public partial class ModsView : RetroScreen
             {
                 GD.Print($"  problem: {p}");
             }
-            bool rulesOk = CheckTabletopRules() & CheckDefilingMods();
+            bool rulesOk = CheckTabletopRules() & CheckDefilingMods() & CheckEffectSpellMods();
             GetTree().Quit(problems.Count > 0 || !rulesOk ? 1 : 0);
             return;
         }
@@ -167,6 +167,41 @@ public partial class ModsView : RetroScreen
         Turn(n => wasOn[n]);
         bool ok = with == (true, true, true, "Sweet Water") && without == (false, false, false, null);
         GD.Print($"  defiling and sweet water: on {with}, off {without}{(ok ? "" : " (problem)")}");
+        return ok;
+    }
+
+    /// <summary>
+    /// The mods of issues #137–#141 come with the game, off: turned on together (for this run, not
+    /// saved), with Sweet Water, each adds its spell or power (198–202) with its name; off, none is there.
+    /// </summary>
+    private static bool CheckEffectSpellMods()
+    {
+        string[] names = [.. RegionView.EffectSpellMods, "SweetWater"];
+        string[] spells = ["Cerulean Hail", "Dimension Door", "Molecular Agitation", "Gust Of Wind", "Spike Stones", "Sweet Water"]; // SPIN names, title-cased as the game shows them
+        int[] numbers = [198, 199, 200, 201, 202, 197];
+        if (names.FirstOrDefault(n => Session.Mods.All.FirstOrDefault(m => m.Name == n) is not { Bundled: true }) is { } missing)
+        {
+            GD.Print($"  problem: the {missing} mod isn't there");
+            return false;
+        }
+        Dictionary<string, bool> wasOn = names.ToDictionary(n => n, n => Session.Mods.All.First(m => m.Name == n).Enabled);
+        string State() => string.Join(", ", numbers.Select(n =>
+            Session.SpellRules.Effect(n) is not null && DarkSun.Game.Magic.Spellcasting.Get(n) is not null ? Session.SpellName(n) : "-"));
+        void Turn(Func<string, bool> on)
+        {
+            foreach (string n in names)
+            {
+                Settings.SetBundledMod(n, on(n));
+            }
+            Session.ReloadMods();
+        }
+        Turn(_ => true);
+        string with = State();
+        Turn(_ => false);
+        string without = State();
+        Turn(n => wasOn[n]);
+        bool ok = with == string.Join(", ", spells) && without == string.Join(", ", numbers.Select(_ => "-"));
+        GD.Print($"  effect spells: on {with}; off {without}{(ok ? "" : " (problem)")}");
         return ok;
     }
 

@@ -38,7 +38,8 @@ public sealed partial class Battle
     /// (<see cref="AffectedBy"/>). Damage from a party member turns a neutral
     /// creature hostile. Fire and dispelling clear fields they reach. A spell the
     /// caster had is used up (not one cast from an item, <paramref name="ownSpell"/>
-    /// false); its turn ends. <paramref name="end"/> is a wall's other end.
+    /// false); its turn ends. <paramref name="end"/> is a wall's other end. A mod's
+    /// teleport takes the caster to <paramref name="at"/> instead (<see cref="SpellRules.Teleports"/>).
     /// </summary>
     public bool Cast(Combatant caster, int effect, int level, Cell at, Cell? end = null, bool ownSpell = true)
     {
@@ -61,6 +62,10 @@ public sealed partial class Battle
         if (e.Summons)
         {
             Summon(caster, e, at);
+        }
+        else if (Spells.Teleports.Any(t => t.Effect == effect))
+        {
+            Teleport(caster, at);
         }
         else if (Spells.TemplateOf(e) is { Lingers: true } template && !e.SingleTarget)
         {
@@ -155,6 +160,13 @@ public sealed partial class Battle
         if (e.Target is 7 or 8)
         {
             return SpellAim.Ok;
+        }
+        if (Spells.Teleports.Any(t => t.Effect == e.Number))
+        {
+            return !Fits(caster, at) ? SpellAim.NoTarget
+                : Distance(caster.Cell, at) > e.RangeCells(level) ? SpellAim.OutOfRange
+                : !InSight(caster.Cell, at) ? SpellAim.NoLineOfSight
+                : SpellAim.Ok;
         }
         if (e.SingleTarget && TargetAt(e, at) is null && _ash.Contains(at) && Spells.AshRestorers.Any(r => r.Effect == e.Number))
         {
@@ -262,7 +274,7 @@ public sealed partial class Battle
                     Apply(t, caster, fear, CloakOfFearLevel);
                 }
             }
-            bool small = Spells.AreaOf(e) <= 8 && (e.Number < Spellcasting.FirstPower || e.Number > Spellcasting.LastPower);
+            bool small = Spells.AreaOf(e) <= 8 && !Spellcasting.IsPower(e.Number);
             if (small && Turned(caster, t, e, level))
             {
                 return;
@@ -867,7 +879,8 @@ public sealed partial class Battle
     /// bit 17, up to its most hit points), a Poisoned charge (1000 damage when the
     /// last goes), an Acid charge with 2d4 damage, and Protection from Evil 10'
     /// Radius giving Protection from Evil (effect 122) to its side within 40
-    /// sixteenths.
+    /// sixteenths. A mod's burning effect hurts again while its caster sees its holder
+    /// (<see cref="SpellRules.RoundDamages"/>), and ends when it doesn't.
     /// </summary>
     private void RoundEffects(Combatant c)
     {
@@ -887,6 +900,19 @@ public sealed partial class Battle
         {
             UseCharge(c, Condition.Acid);
             Hurt(null, c, RollDice(2, 4));
+        }
+        foreach (ActiveEffect a in c.Effects.ToList())
+        {
+            if (!c.Alive || Spells.RoundDamages.FirstOrDefault(r => r.Effect == a.Effect) is not { } burn)
+            {
+                continue;
+            }
+            if (a.Caster is not { Alive: true } caster || !InSight(caster, c))
+            {
+                EndEffect(c, a);
+                continue;
+            }
+            Burn(caster, c, burn, Spells.Effect(a.Effect)?.Elements ?? DamageElement.None);
         }
         if (c.Alive && c.Has(Condition.ProtectionFromEvil10) && Spells.Effect(ProtectionFromEvil10) is { } aura)
         {
@@ -952,6 +978,60 @@ public sealed partial class Battle
         }
     }
 
+    /// <summary>A burning effect's damage (<see cref="RoundDamage"/>): its dice, a point more each if <paramref name="t"/> carries metal.</summary>
+    private void Burn(Combatant caster, Combatant t, RoundDamage burn, DamageElement elements)
+    {
+        int metal = CarriesMetal(t) ? burn.MetalBonus * burn.Dice : 0;
+        int damage = RollDice(burn.Dice, burn.Sides) + metal;
+        Note(new DamageRolled(caster, t, burn.Dice, burn.Sides, metal, 1, damage, burn.Effect));
+        Hurt(caster, t, damage * DamagePercent(t, elements) / 100, elements);
+    }
+
+    /// <summary>A metal weapon in hand or metal armour worn (<see cref="ItemMaterial.Metal"/>).</summary>
+    private bool CarriesMetal(Combatant t) =>
+        t.Weapon?.Type.MadeOf == ItemMaterial.Metal
+        || t.Items.Any(i => i.Equipped && Catalog?.TypeOf(i.Record) is { MadeOf: ItemMaterial.Metal, ArmorClass: > 0 });
+
+    /// <summary>
+    /// A wind blows <paramref name="t"/> up to <paramref name="cells"/> cells straight away from
+    /// <paramref name="from"/> (<see cref="Gust"/>), stopping before a wall or anyone in the way;
+    /// the fields it lands in act as on a step.
+    /// </summary>
+    private void Push(Combatant from, Combatant t, int cells)
+    {
+        Cell start = t.Cell, to = start, away = Around[Direction(from.Cell, start)];
+        for (int i = 0; i < cells && Fits(t, to + away); i++)
+        {
+            to += away;
+        }
+        if (to == start)
+        {
+            Note(new Avoided(from, t, "nowhere to go"));
+            return;
+        }
+        Place(t, to);
+        Note(new Pushed(t, start, to));
+        UpdateFields(t, moved: true, turn: false);
+    }
+
+    /// <summary>A mod's teleport (<see cref="SpellRules.Teleports"/>): the caster is at <paramref name="at"/> at once, no step taken, so no guard strikes.</summary>
+    private void Teleport(Combatant caster, Cell at)
+    {
+        Cell from = caster.Cell;
+        Place(caster, at);
+        Note(new Teleported(caster, from, at));
+        UpdateFields(caster, moved: false, turn: false);
+    }
+
+    private static void Place(Combatant c, Cell at)
+    {
+        c.Cell = at;
+        if (c.Source is { } obj)
+        {
+            obj.FixedCell = at;
+        }
+    }
+
     // -- effects' own handling (80F5:05E6) ----------------------------------------------------------------
 
     /// <summary>
@@ -973,6 +1053,20 @@ public sealed partial class Battle
         int duration = Duration(e, level);
         switch (e.Number)
         {
+            case var n when Spells.RoundDamages.FirstOrDefault(r => r.Effect == n) is { } burn:
+                Burn(caster, t, burn, e.Elements);
+                break;
+            case var n when Spells.Gusts.FirstOrDefault(g => g.Effect == n) is { } gust && t != caster:
+                if (Roll(1, 20) > t.Strength)
+                {
+                    Push(caster, t, gust.Push);
+                    EndTurn(t);
+                }
+                else
+                {
+                    Note(new Avoided(caster, t, "stands firm"));
+                }
+                break;
             case var n when Spells.Cures.FirstOrDefault(c => c.Effect == n) is { } cure:
                 Heal(t, cure.Heals(level, RollDice(cure.Dice, cure.Sides)));
                 foreach (Condition c in cure.Ends ?? [])
@@ -1119,6 +1213,10 @@ public sealed partial class Battle
         if (saved || !t.Alive)
         {
             return;
+        }
+        foreach (SaveRider rider in Spells.SaveRiders.Where(r => r.Effect == e.Number))
+        {
+            AddCondition(caster, t, rider.Condition, e.Number, level, (rider.Rounds + 1) * SpellEffect.Round);
         }
         switch (e.Number)
         {

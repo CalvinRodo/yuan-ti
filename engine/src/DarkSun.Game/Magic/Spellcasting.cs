@@ -95,6 +95,9 @@ public sealed class Spellcasting(CharacterRules rules)
     /// <summary>A wizard's or priest's spell, the original's or a mod's (not a power or a creature's effect).</summary>
     public static bool IsSpell(int number) => Get(number) is { Kind: not SpellKind.Psionic };
 
+    /// <summary>A psionic power, the original's (139–172) or a mod's.</summary>
+    public static bool IsPower(int number) => Get(number) is { Kind: SpellKind.Psionic };
+
     public CharacterRules Rules { get; } = rules;
 
     private CharacterCreation Creation => new(Rules, CharacterNames.Empty, new Random(0));
@@ -234,7 +237,7 @@ public sealed class Spellcasting(CharacterRules rules)
     /// left, a power known with the points for it)?
     /// </summary>
     public bool CanUse(Character c, int number) =>
-        number is >= FirstPower and <= LastPower ? c.Powers.Contains(number) && Psp(c) >= Rules.PowerCost : CanCast(c, number);
+        IsPower(number) ? c.Powers.Contains(number) && Psp(c) >= Rules.PowerCost : CanCast(c, number);
 
     /// <summary>Every spell the character could cast now, in number order.</summary>
     public IEnumerable<Spell> Castable(Character c) =>
@@ -274,11 +277,10 @@ public sealed class Spellcasting(CharacterRules rules)
     /// <summary>
     /// The powers a psionicist who gained a level may pick in <paramref name="discipline"/>
     /// (<c>8CCC:0BA7</c>): those of the discipline not yet at <see cref="MaxPowerRank"/>, known
-    /// (to enhance) or not (to learn).
+    /// (to enhance) or not (to learn); a mod's powers after the original's.
     /// </summary>
     public static IReadOnlyList<int> PowersToStudy(Character c, Discipline discipline) =>
-        [.. Enumerable.Range(FirstPower, LastPower - FirstPower + 1)
-            .Where(n => Get(n) is { Discipline: var d } && d == discipline && c.PowerRank(n) < MaxPowerRank)];
+        [.. All.Where(s => s.Kind == SpellKind.Psionic && s.Discipline == discipline && c.PowerRank(s.Number) < MaxPowerRank).Select(s => s.Number)];
 
     /// <summary>
     /// Pick power <paramref name="number"/> (<c>8CCC</c>): learned at rank 1 ("IS LEARNED"), or,

@@ -223,6 +223,17 @@ public partial class RegionView
         ShowGraphic(graphic, Feet(target.Cell));
     }
 
+    /// <summary>A teleport (<see cref="Teleported"/>): its cast graphic played where the caster left, its hit graphic and sound where it comes back.</summary>
+    private void LookOfArrival(Teleported t)
+    {
+        if (_castLook is not { } cast)
+        {
+            return;
+        }
+        Play(cast.Look.HitSound);
+        ShowGraphic(cast.Look.HitGraphic, Feet(t.To));
+    }
+
     /// <summary>Damage: a blow's hurt sound, and the number on its splash.</summary>
     private void LookOfDamage(Damaged d)
     {
