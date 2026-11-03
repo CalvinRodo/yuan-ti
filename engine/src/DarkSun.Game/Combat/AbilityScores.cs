@@ -11,7 +11,9 @@ namespace DarkSun.Game.Combat;
 /// <item>Effects (the table at <c>cs:2F00</c>): Strength Enhanced (63) makes
 /// Strength at least 24; Borrowed, Lent, Adrenalin Control, Strength and
 /// Weakened (64–68) add their value to it, kept within 3–24 after each;
-/// Feebleminded (19) makes Intelligence and Wisdom 3 whatever else.</item>
+/// Feebleminded (19) makes Intelligence and Wisdom 3 whatever else. With the engine's
+/// Sunstroke (a mod's) the Strength spells give does nothing: Enhanced, and what
+/// Borrowed, Adrenalin Control and Strength add (losses still count).</item>
 /// <item>Items: every item carried, worn or in the pack or a container (the
 /// holder's whole tree, <c>1A0A:1A2D</c>; unlike armour class, nothing asks
 /// whether it is worn), whose record +0x0F is 0xFA–0xFF, works on ability
@@ -40,18 +42,20 @@ public static class AbilityScores
     {
         int[] sum = [.. own.Take(6)], floor = [.. own.Take(6)];
         bool floors = false, feebleminded = false;
-        foreach (ActiveEffect e in effects)
+        List<ActiveEffect> all = [.. effects];
+        bool sunstruck = all.Any(e => e.Condition == Condition.Sunstroke);
+        foreach (ActiveEffect e in all)
         {
             switch (e.Condition)
             {
                 case Condition.Feebleminded:
                     feebleminded = true;
                     break;
-                case Condition.StrengthEnhanced:
+                case Condition.StrengthEnhanced when !sunstruck:
                     floors = true;
                     floor[0] = Math.Max(floor[0], EffectHighest);
                     break;
-                case >= Condition.StrengthBorrowed and <= Condition.Weakened:
+                case >= Condition.StrengthBorrowed and <= Condition.Weakened when !sunstruck || e.Value < 0:
                     sum[0] = Math.Clamp(sum[0] + e.Value, Least, EffectHighest);
                     break;
             }

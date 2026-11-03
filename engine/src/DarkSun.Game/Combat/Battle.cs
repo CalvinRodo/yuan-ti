@@ -82,7 +82,7 @@ public sealed partial class Battle
     /// keep the fight going.
     /// </summary>
     public bool Over => !_all.Any(p => p.Fights && (p.Side & 1) != 0
-        && _all.Any(e => e.Fights && (e.Side & 2) != 0 && Distance(p, e) <= Rules.SightRange && InSight(p, e)));
+        && _all.Any(e => e.Fights && (e.Side & 2) != 0 && Distance(p, e) <= Rules.SightRange && InSight(p.Cell, e.Cell)));
 
     public void Add(Combatant c)
     {
@@ -370,7 +370,17 @@ public sealed partial class Battle
         return true;
     }
 
-    public bool InSight(Combatant a, Combatant b) => InSight(a.Cell, b.Cell);
+    /// <summary>
+    /// Can <paramref name="a"/> see <paramref name="b"/>: in sight, and in a sandstorm
+    /// (<see cref="Sandstorm"/>) no farther than it lets anyone see.
+    /// </summary>
+    public bool InSight(Combatant a, Combatant b) => InSight(a.Cell, b.Cell) && (Sandstorm is null || Distance(a, b) <= Sandstorm.Sight);
+
+    /// <summary>A cell seen from another: in sight, and within a sandstorm's sight.</summary>
+    public bool Sees(Cell from, Cell to) => InSight(from, to) && (Sandstorm is null || Distance(from, to) <= Sandstorm.Sight);
+
+    /// <summary>The sandstorm the fight is in, if any (a mod's weather, <see cref="WeatherRules"/>; none in DSUN.EXE).</summary>
+    public Sandstorm? Sandstorm { get; init; }
 
     /// <summary>Someone standing (alive) on the cell, or with the cell in its footprint.</summary>
     public Combatant? At(Cell cell) => _all.FirstOrDefault(c => c.Alive && (c.Size == 0 ? c.Cell == cell : c.Footprint.Contains(cell)));

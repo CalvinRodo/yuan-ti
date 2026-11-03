@@ -1,0 +1,18 @@
+{
+  "_about": "Sunstroke, spell 203: added to the original's tables, which stay as they are. Sunstroke is one of the engine's conditions: ConditionModifiers gives its numbers, Immunities whom it can't touch (race 14 is the elementals and the others from beyond Athas).",
+  "Effects": [
+    { "Number": 203, "RangeBase": 90, "RangePerLevel": 0, "DurationCount": 0, "DurationSides": 1, "DurationPerLevel": 1, "Unit": 60, "AreaBase": 1, "AreaPerLevel": 0, "Target": 4, "Template": -1, "Flags": 0, "Condition": "Sunstroke", "Elements": "None", "BaseDice": 0, "DicePerStep": 0, "Sides": 0, "FlatPerStep": 0, "LevelsPerStep": 1, "LevelBonus": 0, "SaveAllowed": 1, "SaveModifier": 0, "SaveCategory": 5, "Purpose": 0 }
+  ],
+  "Looks": [
+    { "Number": 203, "CastGraphic": -1, "CastSound": 79, "Projectile": -1, "FlightSound": 72, "HitGraphic": 8308, "HitSound": 95 }
+  ],
+  "ConditionModifiers": [
+    { "Condition": "Sunstroke", "ToHit": -2, "ArmorClass": 2 }
+  ],
+  "Immunities": [
+    { "Effect": 203, "Undead": true, "Races": [14], "Conditions": ["ProtectionFromFire"] }
+  ],
+  "Spells": [
+    { "Number": 203, "Level": 2, "Kind": "Priest", "Casters": [3, 7, 15], "Icon": 21116 }
+  ]
+}

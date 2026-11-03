@@ -22,6 +22,10 @@ public enum Condition
     FlameBlade = 70, SpiritualHammer = 71, Shillelagh = 72, Prayer = 73,
     /// <summary>The engine's: hurt each round by a mod's effect (<see cref="RoundDamage"/>).</summary>
     Heated = 74,
+    /// <summary>The engine's: a mod's heat-stroke; Strength from spells does nothing while it holds (<see cref="AbilityScores"/>).</summary>
+    Sunstroke = 75,
+    /// <summary>The engine's: a mod's wracking pain (its modifiers in <see cref="SpellRules.ConditionModifiers"/>).</summary>
+    Pained = 76,
 }
 
 /// <summary>

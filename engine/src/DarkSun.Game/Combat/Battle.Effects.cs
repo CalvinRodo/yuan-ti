@@ -165,14 +165,14 @@ public sealed partial class Battle
         {
             return !Fits(caster, at) ? SpellAim.NoTarget
                 : Distance(caster.Cell, at) > e.RangeCells(level) ? SpellAim.OutOfRange
-                : !InSight(caster.Cell, at) ? SpellAim.NoLineOfSight
+                : !Sees(caster.Cell, at) ? SpellAim.NoLineOfSight
                 : SpellAim.Ok;
         }
         if (e.SingleTarget && TargetAt(e, at) is null && _ash.Contains(at) && Spells.AshRestorers.Any(r => r.Effect == e.Number))
         {
             // A spell that brings back ash may be cast at the ash itself.
             return Distance(caster.Cell, at) > e.RangeCells(level) ? SpellAim.OutOfRange
-                : !InSight(caster.Cell, at) ? SpellAim.NoLineOfSight
+                : !Sees(caster.Cell, at) ? SpellAim.NoLineOfSight
                 : SpellAim.Ok;
         }
         if (e.SingleTarget)
@@ -183,7 +183,7 @@ public sealed partial class Battle
                 : SpellAim.Ok;
         }
         int range = e.Target == 6 ? Math.Max(1, Spells.AreaOf(e, level) / 16) : e.RangeCells(level);
-        return !InSight(caster.Cell, at) ? SpellAim.NoLineOfSight
+        return !Sees(caster.Cell, at) ? SpellAim.NoLineOfSight
             : Distance(caster.Cell, at) > range ? SpellAim.OutOfRange
             : SpellAim.Ok;
     }
@@ -422,10 +422,16 @@ public sealed partial class Battle
     /// (burrowing, flying) against lingering areas, bit 9 against those on the
     /// ground; type 12 against Web; a grafted weapon against Graft Weapon; Blink
     /// against small effects once it has acted this round (initiative −1,
-    /// <c>37BD:00D9</c>); the carrier of item 30021 against effect 196.
+    /// <c>37BD:00D9</c>); the carrier of item 30021 against effect 196. A mod's
+    /// effect also spares whom its <see cref="SpellRules.Immunities"/> name.
     /// </summary>
     public bool Immune(Combatant t, SpellEffect e)
     {
+        if (Spells.Immunities.Any(i => i.Effect == e.Number && (i.Undead && t.IsUndead || i.Races?.Contains(t.Race) == true
+            || i.Conditions?.Any(t.Has) == true)))
+        {
+            return true;
+        }
         if (Blinked(t) && Spells.AreaOf(e) < 9 || e.Number == DetonateShrapnel && t.Items.Any(i => i.Rdff == ShrapnelGuard))
         {
             return true;

@@ -103,6 +103,43 @@ public partial class Sounds : Node
         }
     }
 
+    private AudioStreamPlayer? _ambient;
+    private int _ambientId;
+
+    /// <summary>The sound playing over and over in the background (<see cref="PlayAmbient"/>), or 0.</summary>
+    public int Ambient => _ambient is { Playing: true } ? _ambientId : 0;
+
+    /// <summary>
+    /// Sound <paramref name="id"/> over and over in the background at <paramref name="volume"/>
+    /// (0–1) of the effects' loudness, on a voice of its own that other sounds don't stop: weather.
+    /// </summary>
+    public void PlayAmbient(int id, float volume)
+    {
+        if (Ambient == id || Volume <= 0 || Stream(id) is not { } entry)
+        {
+            return;
+        }
+        var stream = (AudioStreamWav)entry.Stream.Duplicate();
+        stream.LoopMode = AudioStreamWav.LoopModeEnum.Forward;
+        stream.LoopBegin = 0;
+        stream.LoopEnd = stream.Data.Length / 2;
+        _ambient ??= new AudioStreamPlayer();
+        if (_ambient.GetParent() is null)
+        {
+            AddChild(_ambient);
+        }
+        _ambient.Stream = stream;
+        _ambient.VolumeDb = Mathf.LinearToDb(Volume * Math.Clamp(volume, 0, 1));
+        _ambient.Play();
+        _ambientId = id;
+    }
+
+    public void StopAmbient()
+    {
+        _ambient?.Stop();
+        _ambientId = 0;
+    }
+
     public void Play(IEnumerable<int> ids)
     {
         foreach (int id in ids)

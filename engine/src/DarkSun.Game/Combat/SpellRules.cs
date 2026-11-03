@@ -233,7 +233,10 @@ public sealed record AddedSpell(int Number, int Level, Magic.SpellKind Kind, IRe
         new(Number, Level, Casters.Aggregate(0u, (mask, code) => mask | 1u << (code + 1)), Kind, Discipline, IconNumber: Icon);
 }
 
-/// <summary>On a failed save, effect <paramref name="Effect"/> also gives <paramref name="Condition"/> for the rest of the round and <paramref name="Rounds"/> more (none in DSUN.EXE).</summary>
+/// <summary>
+/// Unless saved against (or with no save, always), effect <paramref name="Effect"/> also gives
+/// <paramref name="Condition"/> for the rest of the round and <paramref name="Rounds"/> more (none in DSUN.EXE).
+/// </summary>
 public sealed record SaveRider(int Effect, Condition Condition, int Rounds);
 
 /// <summary>
@@ -251,6 +254,15 @@ public sealed record RoundDamage(int Effect, int Dice, int Sides,
 /// </summary>
 public sealed record Gust(int Effect, int Push,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool ClearsClouds = false);
+
+/// <summary>
+/// Whom effect <paramref name="Effect"/> can't touch (none in DSUN.EXE): the undead with
+/// <paramref name="Undead"/>, races <paramref name="Races"/>, and anyone with one of <paramref name="Conditions"/>.
+/// </summary>
+public sealed record Immunity(int Effect,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool Undead = false,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] IReadOnlyList<int>? Races = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] IReadOnlyList<Condition>? Conditions = null);
 
 /// <summary>Effect <paramref name="Effect"/> takes its caster to the free cell it is cast at, in sight and range (none in DSUN.EXE).</summary>
 public sealed record Teleport(int Effect);
@@ -349,6 +361,15 @@ public sealed partial record SpellRules
 
     /// <summary>Effects that take the caster elsewhere on the battlefield (none in DSUN.EXE).</summary>
     public IReadOnlyList<Teleport> Teleports { get; init; } = [];
+
+    /// <summary>Whom a mod's effects can't touch (none in DSUN.EXE).</summary>
+    public IReadOnlyList<Immunity> Immunities { get; init; } = [];
+
+    /// <summary>
+    /// What a mod's conditions change, with <see cref="CombatRules.ConditionModifiers"/> (none in
+    /// DSUN.EXE): here so a spell's mod can give its own condition its numbers in <c>spells.json</c>.
+    /// </summary>
+    public IReadOnlyList<ConditionModifier> ConditionModifiers { get; init; } = [];
 
     /// <summary>Dispel Magic, wizard's and priest's (<c>80F5:05E6</c> cases 26 and 98): each effect ends 50 in 100 (<see cref="CombatRules.DispelChance"/>).</summary>
     public IReadOnlyList<int> Dispels { get; init; } = [27, 99];
@@ -484,13 +505,15 @@ public sealed partial record SpellRules
     {
         ["Effects"] = "Number", ["Looks"] = "Number", ["Powers"] = "Number", ["Spells"] = "Number", ["Cures"] = "Effect",
         ["AshRestorers"] = "Effect", ["SaveRiders"] = "Effect", ["RoundDamages"] = "Effect", ["Gusts"] = "Effect", ["Teleports"] = "Effect",
+        ["Immunities"] = "Effect", ["ConditionModifiers"] = "Condition",
     };
 
     /// <summary>
     /// A mod's file on top of the original's (or the mods' before it), so it
     /// need only hold what it changes: what it leaves out stays; an entry of the
     /// effects, looks, powers, spells, cures, ash restorers, save riders, round
-    /// damages, gusts or teleports replaces the one of its number (fields it
+    /// damages, gusts, teleports or immunities replaces the one of its number, and
+    /// a condition modifier the one of its condition (fields it
     /// leaves out kept) or adds one; area templates given an <c>Index</c> replace
     /// the one there or, at the end, add one; any other list replaces the whole.
     /// An entry listed twice is refused.
@@ -524,9 +547,12 @@ public sealed partial record SpellRules
                         original.Add(entry.DeepClone());
                     }
                 }
-                var sorted = original.OfType<JsonObject>().OrderBy(o => o[key]?.GetValue<int>() ?? 0).Select(o => o.DeepClone()).ToList();
-                original.Clear();
-                sorted.ForEach(original.Add);
+                if (original.OfType<JsonObject>().All(o => o[key] is JsonValue v && v.TryGetValue(out int _)))
+                {
+                    var sorted = original.OfType<JsonObject>().OrderBy(o => o[key]!.GetValue<int>()).Select(o => o.DeepClone()).ToList();
+                    original.Clear();
+                    sorted.ForEach(original.Add);
+                }
             }
             else
             {

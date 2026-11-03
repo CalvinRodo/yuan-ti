@@ -259,6 +259,11 @@ public partial class Main : Control
             Settings.SetBundledMod("Defiling", true);
             Settings.SetBundledMod("SweetWater", true);
         }
+        if (args.Contains("--check-sandstorm") || args.Contains("--storm"))
+        {
+            // For this run (not saved): the mod the check is about.
+            Settings.SetBundledMod("Sandstorms", true);
+        }
         if (args.Contains("--check-effect-spells"))
         {
             // For this run (not saved): the mods the check is about.

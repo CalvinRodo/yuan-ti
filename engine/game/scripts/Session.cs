@@ -326,6 +326,12 @@ public static class Session
         return usable.Count == 0 ? DarkSun.Game.Combat.SpellRules.Default : DarkSun.Game.Combat.SpellRules.Read([.. usable]);
     }
 
+    /// <summary>The weather: a mod's <c>rules/weather.json</c> (sandstorms), else the original's clear skies.</summary>
+    public static DarkSun.Game.World.WeatherRules WeatherRules =>
+        _weatherRules ??= ModRules("weather.json", DarkSun.Game.World.WeatherRules.Read, DarkSun.Game.World.WeatherRules.Default);
+
+    private static DarkSun.Game.World.WeatherRules? _weatherRules;
+
     /// <summary>The first mod's <c>rules/<paramref name="file"/></c>, else <paramref name="original"/> (with a warning if a mod's can't be used).</summary>
     private static T ModRules<T>(string file, Func<string, T> read, T original)
     {
@@ -441,7 +447,7 @@ public static class Session
         Files.Clear();
         Assets.Clear();
         (_sprites, _rules, _names, _quests) = (null, null, null, null);
-        (_creatureRules, _combatRules, _spellRules, _spells) = (null, null, null, null);
+        (_creatureRules, _combatRules, _spellRules, _weatherRules, _spells) = (null, null, null, null, null);
         GameFonts.Reset();
         LoadParty();
         _bundledMods ??= BundledMods.Extract();

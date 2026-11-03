@@ -33,6 +33,7 @@ public partial class RegionView
         Session.ScriptHost.LevelGained -= LevelGained;
         Pointers.Reset();
         Sounds.Instance?.StopRepeating();
+        Sounds.Instance?.StopAmbient();
         ColourCycling.Instance?.Stop();
     }
 

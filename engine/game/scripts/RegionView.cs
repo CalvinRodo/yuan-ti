@@ -68,6 +68,12 @@ public partial class RegionView : Node2D
     private double _clock;
     private Node2D _ground = null!;
     private FloorEffects _floor = null!;
+
+    /// <summary>A mod's sandstorm over the map (<see cref="UpdateWeather"/>).</summary>
+    private SandstormLayer _sandstorm = null!;
+
+    /// <summary>Seconds until the weather is looked at again.</summary>
+    private double _weatherCheck;
     private Node2D _sorted = null!;
     private DebugOverlay _overlay = null!;
     private OverheadMarkers _overheadMarks = null!;
@@ -185,6 +191,8 @@ public partial class RegionView : Node2D
         AddChild(_box);
         _sorted = new Node2D { YSortEnabled = true };
         AddChild(_sorted);
+        _sandstorm = new SandstormLayer();
+        AddChild(_sandstorm);
         _overlay = new DebugOverlay { Visible = false };
         AddChild(_overlay);
         _overheadMarks = new OverheadMarkers { Visible = false, Marks = OverheadMarks };
@@ -385,6 +393,17 @@ public partial class RegionView : Node2D
                 {
                     Callable.From(() => _containerWindow.Open(body, _world[_selected]!, _palette, new Vector2(200, 150))).CallDeferred();
                 }
+            }
+            if (OS.GetCmdlineUserArgs().Contains("--storm") && Session.WeatherRules.Sandstorm is { } storm
+                && storm.Regions.Contains(_world.Region.Number))
+            {
+                // Testing: the clock goes to a little after the start of this region's next sandstorm.
+                _world.Clock = storm.StormIn(_world.Region.Number, _world.Clock / (storm.EveryHours * 3600) + 1).Start + 60;
+            }
+            if (OS.GetCmdlineUserArgs().Contains("--check-sandstorm"))
+            {
+                CheckSandstorm();
+                return;
             }
             if (OS.GetCmdlineUserArgs().Contains("--check-journal"))
             {
@@ -720,6 +739,7 @@ public partial class RegionView : Node2D
         // The map left takes its sounds with it: a repeating one playing, and any its scripts asked for that
         // weren't played yet (a script sending the party on queues them while the screen fades, which stops the frames).
         Sounds.Instance?.StopRepeating();
+        Sounds.Instance?.StopAmbient();
         Session.ScriptHost.Sounds.Clear();
         foreach (Node child in _ground.GetChildren().Concat(_sorted.GetChildren()))
         {
@@ -841,6 +861,8 @@ public partial class RegionView : Node2D
             _ground.MoveChild(flat, -1);
         }
         _floor.SetGround(floorImage);
+        _sandstorm.SetGround(floorImage);
+        _weatherCheck = 0;
         // DSUN.EXE draws row by row (draw_objects_and_walls, 1DBD:0002): before
         // an object whose ETAB y is in row y >> 4 it draws the walls of every
         // row above. So a wall on cell row r sorts just before y = (r + 1) * 16,
@@ -1468,6 +1490,94 @@ public partial class RegionView : Node2D
         ClampCamera();
     }
 
+    /// <summary>
+    /// A mod's sandstorm (<see cref="Session.WeatherRules"/>), looked at once a second:
+    /// while one blows the sand drifts over the map and its sound plays softly over and
+    /// over; when it ends both go.
+    /// </summary>
+    private void UpdateWeather(double delta)
+    {
+        if ((_weatherCheck -= delta) > 0)
+        {
+            return;
+        }
+        _weatherCheck = 1;
+        var storm = Session.WeatherRules.StormAt(_world.Region.Number, _world.Clock);
+        _sandstorm.Blowing = storm is not null;
+        if (storm is not null && !_checking)
+        {
+            Sounds.Instance?.PlayAmbient(storm.Sound, storm.Volume);
+        }
+        else if (Sounds.Instance is { Ambient: > 0 } sounds)
+        {
+            sounds.StopAmbient();
+        }
+    }
+
+    /// <summary>
+    /// <c>--check-sandstorm</c> (with <c>--region=4</c>, or another open-desert region), with the
+    /// Sandstorms mod on: at the clock of the region's first storm the sand blows up over the map
+    /// and a fight begun then is in it (its sight short); a minute after the storm it dies down.
+    /// </summary>
+    private async void CheckSandstorm()
+    {
+        _checking = true;
+        var problems = new List<string>();
+        int region = _world.Region.Number;
+        async Task Settle()
+        {
+            UpdateWeather(1);
+            // Until it has blown up or died down (a few seconds).
+            for (int frame = 0; frame < 2_000 && _sandstorm.Strength != (_sandstorm.Blowing ? 1 : 0); frame++)
+            {
+                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            }
+        }
+        if (Session.WeatherRules.Sandstorm is not { } storm)
+        {
+            problems.Add("the Sandstorms mod isn't on");
+        }
+        else if (!storm.Regions.Contains(region))
+        {
+            problems.Add($"region {region} has no sandstorms: run with --region=4");
+        }
+        else
+        {
+            var (start, length) = storm.StormIn(region, 1);
+            _world.Clock = start + length / 2;
+            await Settle();
+            if (!_sandstorm.Blowing || !_sandstorm.Visible || _sandstorm.Strength < 1)
+            {
+                problems.Add($"at {_world.Clock} the sand isn't shown (blowing {_sandstorm.Blowing}, strength {_sandstorm.Strength})");
+            }
+            if (!StartTestFight() || _battle is not { } battle)
+            {
+                problems.Add("no creature to fight");
+            }
+            else
+            {
+                if (battle.Sandstorm != storm)
+                {
+                    problems.Add("the fight isn't in the storm");
+                }
+                AbandonCombat();
+            }
+            _world.Clock = start + length + 60;
+            await Settle();
+            if (_sandstorm.Blowing || _sandstorm.Visible)
+            {
+                problems.Add($"after the storm the sand is still shown (strength {_sandstorm.Strength})");
+            }
+            GD.Print($"sandstorm: region {region}, storm at {start} for {length / 60} min; shown, a fight in it, gone after");
+        }
+        foreach (string p in problems)
+        {
+            GD.Print($"  PROBLEM: {p}");
+        }
+        GD.Print(problems.Count == 0 ? "sandstorm: OK" : $"sandstorm: {problems.Count} problems");
+        GetTree().Quit(problems.Count == 0 ? 0 : 1);
+    }
+
     /// <summary>Put the view where the camera is at once (new region, teleport), without easing.</summary>
     private void SnapCamera()
     {
@@ -1485,6 +1595,7 @@ public partial class RegionView : Node2D
         {
             return; // the game menu (or saving, loading, the preferences) stops the game, a fight too
         }
+        UpdateWeather(delta);
         if (InCombat || !MapHeld)
         {
             _clock += delta;
