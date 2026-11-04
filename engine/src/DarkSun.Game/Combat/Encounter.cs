@@ -23,11 +23,12 @@ public static class Encounter
     /// the map at once (<see cref="GameWorld.Fell"/>: its body, the party's
     /// experience for it); with <paramref name="fallsWhenShown"/> the caller
     /// does that as it plays the battle's <see cref="Fell"/> back, since the
-    /// battle runs ahead of what the screen shows.
+    /// battle runs ahead of what the screen shows. A fight begun in a mod's
+    /// <paramref name="sandstorm"/> stays in it (<see cref="Battle.Sandstorm"/>).
     /// </summary>
     public static Battle? Start(GameWorld world, Func<int, Character?> sheets, ICombatDice dice, CharacterRules characterRules,
         CombatRules? rules = null, SpellRules? spells = null, CreatureRules? creatures = null, WorldObject? attacked = null,
-        bool fallsWhenShown = false)
+        bool fallsWhenShown = false, Sandstorm? sandstorm = null)
     {
         rules ??= CombatRules.Default;
         world.ExpandParty();
@@ -66,6 +67,7 @@ public static class Encounter
             Catalog = world.Items,
             Characters = characterRules,
             Difficulty = world.Difficulty,
+            Sandstorm = sandstorm,
             NewItem = rdff => world.NewItem(rdff, 1, 3),
             MakeCreature = (ojff, cell) => world.Spawn(ojff, cell) is { } summoned
                 ? Combatant.FromCreature(Summoned(summoned), world.Items) : null,

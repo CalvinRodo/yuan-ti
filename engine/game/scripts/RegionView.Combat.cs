@@ -140,7 +140,8 @@ public partial class RegionView
         _keyboardWalker = null;
         ClearPicked();
         Battle? battle = Encounter.Start(_world, slot => slot < Session.Party.Count ? Session.Party[slot] : null, dice, Session.Rules,
-            Session.CombatRules, Session.SpellRules, Session.CreatureRules, attacked, fallsWhenShown: true);
+            Session.CombatRules, Session.SpellRules, Session.CreatureRules, attacked, fallsWhenShown: true,
+            sandstorm: Session.WeatherRules.StormAt(_world.Region.Number, _world.Clock));
         if (battle is null)
         {
             AddScriptLine($"> {why}: no one to fight");

@@ -1,0 +1,21 @@
+{
+  "_about": "Inflict Pain, power 204: added to the original's tables, which stay as they are. Pained is one of the engine's conditions (ConditionModifiers: -4 to hit); SaveRiders adds No spell use. Kept up, both go on.",
+  "Effects": [
+    { "Number": 204, "RangeBase": 120, "RangePerLevel": 0, "DurationCount": 2, "DurationSides": 1, "DurationPerLevel": 0, "Unit": 60, "AreaBase": 1, "AreaPerLevel": 0, "Target": 4, "Template": -1, "Flags": 16, "Condition": "Pained", "Elements": "Psionic", "BaseDice": 0, "DicePerStep": 0, "Sides": 0, "FlatPerStep": 0, "LevelsPerStep": 1, "LevelBonus": 0, "SaveAllowed": 0, "SaveModifier": 0, "SaveCategory": 5, "Purpose": 0 }
+  ],
+  "Looks": [
+    { "Number": 204, "CastGraphic": 8004, "CastSound": 80, "Projectile": 11, "FlightSound": 71, "HitGraphic": 8206, "HitSound": 94 }
+  ],
+  "Powers": [
+    { "Number": 204, "Ability": 2, "Modifier": -4, "Cost": 2, "Maintenance": 2, "Discipline": 2, "Science": 0, "Defence": 0, "AttackMode": -1 }
+  ],
+  "ConditionModifiers": [
+    { "Condition": "Pained", "ToHit": -4 }
+  ],
+  "SaveRiders": [
+    { "Effect": 204, "Condition": "NoSpells", "Rounds": 1 }
+  ],
+  "Spells": [
+    { "Number": 204, "Level": 1, "Kind": "Psionic", "Casters": [], "Icon": 3025, "Discipline": "Telepathy" }
+  ]
+}

@@ -584,8 +584,8 @@ effect does is `SpellRules` (`rules/spells.json`, DSUN.EXE's 196 records and 45 
 a line, with the cures, what Dispel Magic can't end, whom effects take and the saves set by level).
 Every mod's `spells.json` is read, one on top of the other (the first mod's entries win), and each
 need only hold what it changes: an entry of the effects, looks, powers, cures, added spells, ash
-restorers, save riders, round damages, gusts or teleports replaces the one of its number (fields left
-out kept) or is added; area templates given an `Index` replace the one there or are added (one past
+restorers, save riders, round damages, gusts, teleports or immunities replaces the one of its number,
+and a condition modifier the one of its condition (fields left out kept), or is added; area templates given an `Index` replace the one there or are added (one past
 the end leaves unused ones between); any other list replaces the whole. A mod can add a spell past the
 original's 196 effects: its record in `Effects` with a number of its own (numbers past 196 may be
 skipped, so mods needn't know of each other's), its look, and in `Spells` its level, kind, the class
@@ -596,7 +596,10 @@ psionicists study it with that discipline's. What no record says, a mod's spell 
 `SaveRiders` (a condition a failed save also gives, for the round and N more), `RoundDamages`
 (damage each round while it holds, more against metal, ending when the caster loses sight; a power
 kept up ends it when dropped), `Gusts` (a Strength check or blown back, losing the round, and the
-clouds and fog it reaches blown away) and `Teleports` (the caster to a free cell in sight and range).
+clouds and fog it reaches blown away), `Teleports` (the caster to a free cell in sight and range),
+`Immunities` (the undead, races or those with a condition it can't touch) and `ConditionModifiers`
+(to-hit, armour class and saves for a condition, as `combat.json`'s, so a spell's mod can give its own
+condition its numbers). A power kept up keeps what it timed on others going through the next round.
 What rides on a creature's hits is `CreatureRules.OnHit`. `Battle.Log` lists what happened for the combat log.
 
 Fights happen on the region map. FIGHT, or attacking a creature that has no attack trigger, starts one
@@ -708,6 +711,28 @@ psychoportation. `-- --new-game --check-effect-spells` turns all five on for the
 fight, uses Dimension Door and casts the four spells at a foe, checking that the figures stand where
 the battle has them after the teleport and the push and that Spike Stones lays its field;
 `--check-mods` checks that they load and unload with Sweet Water.
+
+Three more (issues #142, #144, #145), off until turned on:
+
+- **Sunstroke** (`engine/game/mods/Sunstroke`; 203, a 2nd-level spell of the clerics, druids and
+  rangers of fire): one creature that fails a save against spells has the engine's Sunstroke for a
+  round a level: −2 to hit, armour class 2 worse, and the Strength spells give does nothing (Strength,
+  Enhanced Strength, Adrenalin Control, a lent Strength; losses still count). Those protected from fire,
+  the undead and race 14 (the elementals and the others from beyond Athas) are immune. Focus Heat's
+  icon, Dehydrate's look.
+- **Inflict Pain** (`InflictPain`; 204, a telepathic devotion; 2 PSPs, Con −4, 2 a round to keep up):
+  unless the target's psionic defence holds, the engine's Pained (−4 to hit) and No spell use for the
+  round and the next, and on while it is kept up. Ego Whip's icon and look.
+- **Sandstorms** (`Sandstorms`, `rules/weather.json`, read as the other rule files: the first mod's):
+  in the open-desert regions (2, 4, 5, 7, 8, 9, 10, 18, 20, 33, 34, 35) a storm blows once in each six
+  hours of game time, 10–30 minutes, at a time each region and period pick from the clock alone (so
+  nothing is saved, and a loaded game has the same weather). Sand drifts over the map and its figures
+  in the region's own sand colours, whole map pixels, dithered and moving in steps; Dust Cloud's
+  sound 97 loops softly on a voice of its own. A fight begun in it keeps it: no one sees past 4 cells
+  (who can be aimed at, attacked from range or picked by the AI; the fight's end still looks 24), missiles
+  are −4 to hit, and clouds and fog last a round. `-- --new-game --storm` sets the clock to just
+  after the region's next storm, to see one; `--region=4 --check-sandstorm` checks it blows up, holds a
+  fight and dies down. Scripts can't start one: the original's GPL has no command for it.
 
 Mods in `engine/game/mods` are packed with the game, copied to `bundled-mods` in the Godot user data
 folder each time it starts, and loaded after the player's own mods (theirs win). Their on/off

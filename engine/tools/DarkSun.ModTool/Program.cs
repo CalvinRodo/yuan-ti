@@ -23,7 +23,8 @@
 // and fails unless every one comes back byte for byte. rules writes the
 // original's rule tables into <mod-dir>/rules/ (characters.json, creatures.json,
 // combat.json, spells.json), keeping any that are there; check also reads the
-// mods' rule files.
+// mods' rule files, weather.json among them (which rules doesn't write: the
+// original has no weather, and an empty file would hide a later mod's).
 
 using System.Globalization;
 using System.Text;
@@ -46,6 +47,7 @@ string[] textTags = ["TEXT", "MERR", "SPIN"];
     ("creatures.json", p => CreatureRules.Read(p), () => CreatureRules.Default.ToJson()),
     ("combat.json", p => CombatRules.Read(p), () => CombatRules.Default.ToJson()),
     ("spells.json", p => SpellRules.Read(p), () => SpellRules.Default.ToJson()),
+    ("weather.json", p => DarkSun.Game.World.WeatherRules.Read(p), () => ""),
 ];
 
 if (args.Length >= 6 && args[0] == "export")
@@ -163,7 +165,7 @@ if (args.Length == 2 && args[0] == "rules")
 {
     string dir = Path.Combine(args[1], "rules");
     Directory.CreateDirectory(dir);
-    foreach (var (file, _, original) in ruleFiles)
+    foreach (var (file, _, original) in ruleFiles.Where(r => r.File != "weather.json"))
     {
         string path = Path.Combine(dir, file);
         if (File.Exists(path))

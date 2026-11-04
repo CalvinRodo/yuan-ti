@@ -1,0 +1,4 @@
+{
+  "_about": "Sandstorms over the open desert. Regions are region numbers (RGNxx's hex): the rocky wastes 2, 4, 5, the red desert 7, 8, the pale flats 9, 10, 18, 20, the sand sea 33, 34, 35. A storm blows once in each EveryHours of game time, at a time each region and period pick, ShortestMinutes to LongestMinutes long. Sight is in squares; Volume is of the sound effects' loudness.",
+  "Sandstorm": { "Regions": [2, 4, 5, 7, 8, 9, 10, 18, 20, 33, 34, 35], "EveryHours": 6, "ShortestMinutes": 10, "LongestMinutes": 30, "Sight": 4, "MissileToHit": -4, "CloudRounds": 1, "Sound": 97, "Volume": 0.35 }
+}

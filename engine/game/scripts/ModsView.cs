@@ -171,14 +171,16 @@ public partial class ModsView : RetroScreen
     }
 
     /// <summary>
-    /// The mods of issues #137–#141 come with the game, off: turned on together (for this run, not
-    /// saved), with Sweet Water, each adds its spell or power (198–202) with its name; off, none is there.
+    /// The mods of issues #137–#145 come with the game, off: turned on together (for this run, not
+    /// saved), with Sweet Water, each adds its spell or power (197–204) with its name, and Sandstorms
+    /// its weather; off, none is there.
     /// </summary>
     private static bool CheckEffectSpellMods()
     {
-        string[] names = [.. RegionView.EffectSpellMods, "SweetWater"];
-        string[] spells = ["Cerulean Hail", "Dimension Door", "Molecular Agitation", "Gust Of Wind", "Spike Stones", "Sweet Water"]; // SPIN names, title-cased as the game shows them
-        int[] numbers = [198, 199, 200, 201, 202, 197];
+        string[] names = [.. RegionView.EffectSpellMods, "SweetWater", "Sunstroke", "InflictPain", "Sandstorms"];
+        string[] spells = ["Cerulean Hail", "Dimension Door", "Molecular Agitation", "Gust Of Wind", "Spike Stones", "Sweet Water", "Sunstroke",
+            "Inflict Pain"]; // SPIN names, title-cased as the game shows them
+        int[] numbers = [198, 199, 200, 201, 202, 197, 203, 204];
         if (names.FirstOrDefault(n => Session.Mods.All.FirstOrDefault(m => m.Name == n) is not { Bundled: true }) is { } missing)
         {
             GD.Print($"  problem: the {missing} mod isn't there");
@@ -186,7 +188,8 @@ public partial class ModsView : RetroScreen
         }
         Dictionary<string, bool> wasOn = names.ToDictionary(n => n, n => Session.Mods.All.First(m => m.Name == n).Enabled);
         string State() => string.Join(", ", numbers.Select(n =>
-            Session.SpellRules.Effect(n) is not null && DarkSun.Game.Magic.Spellcasting.Get(n) is not null ? Session.SpellName(n) : "-"));
+            Session.SpellRules.Effect(n) is not null && DarkSun.Game.Magic.Spellcasting.Get(n) is not null ? Session.SpellName(n) : "-"))
+            + (Session.WeatherRules.Sandstorm is null ? "; clear skies" : "; sandstorms");
         void Turn(Func<string, bool> on)
         {
             foreach (string n in names)
@@ -200,7 +203,7 @@ public partial class ModsView : RetroScreen
         Turn(_ => false);
         string without = State();
         Turn(n => wasOn[n]);
-        bool ok = with == string.Join(", ", spells) && without == string.Join(", ", numbers.Select(_ => "-"));
+        bool ok = with == string.Join(", ", spells) + "; sandstorms" && without == string.Join(", ", numbers.Select(_ => "-")) + "; clear skies";
         GD.Print($"  effect spells: on {with}; off {without}{(ok ? "" : " (problem)")}");
         return ok;
     }

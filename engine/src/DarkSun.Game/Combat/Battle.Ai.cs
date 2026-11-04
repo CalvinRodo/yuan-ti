@@ -390,7 +390,9 @@ public sealed partial class Battle
 
     /// <summary>
     /// Each round, a party member pays for the powers it keeps up (<c>6698:04C7</c>);
-    /// one it can't pay for ends with its effects (<c>6698:060D</c>).
+    /// one it can't pay for ends with its effects (<c>6698:060D</c>). One paid for
+    /// keeps what it timed on others going through the next round (a mod's: the
+    /// original's kept-up powers have no time).
     /// </summary>
     private void KeepUpPowers(Combatant c)
     {
@@ -399,6 +401,11 @@ public sealed partial class Battle
             if (Spells.Power(number) is { } p && p.Maintenance <= c.Psp)
             {
                 c.Psp -= p.Maintenance;
+                foreach (ActiveEffect e in _all.Where(h => h != c).SelectMany(h => h.Effects)
+                    .Where(e => e.Effect == number && e.Caster == c && e.EndsAt is not null))
+                {
+                    e.EndsAt = Math.Max(e.EndsAt!.Value, Clock + 2 * SpellEffect.Round);
+                }
                 continue;
             }
             DropPower(c, number);

@@ -196,12 +196,17 @@ public sealed partial class Battle
 
     /// <summary>
     /// A lingering area cast (<c>7D80:05C7</c>): it stays on the cells its shape
-    /// covers for its template's time and acts on whoever is in it now.
+    /// covers for its template's time and acts on whoever is in it now. In a
+    /// sandstorm clouds and fog last at most its <see cref="Sandstorm.CloudRounds"/>.
     /// </summary>
     private AreaField MakeField(Combatant caster, SpellEffect e, AreaTemplate t, int level, Cell at, Cell? end)
     {
         int? endsAt = t.DurationUnit == AreaTemplate.Permanent ? null
             : Clock + t.DurationUnit * (RollDice(t.DurationDice, t.DurationSides) + t.DurationPerLevel * Math.Min(level, SpellEffect.MaxLevel));
+        if (Sandstorm is { } storm && t.Kind is AreaTemplate.Cloud or AreaTemplate.Fog)
+        {
+            endsAt = Math.Min(endsAt ?? int.MaxValue, Clock + storm.CloudRounds * SpellEffect.Round);
+        }
         var field = new AreaField(Spells.Effect(t.Effect) ?? e, t, caster, level, CellsOf(ShapeOf(caster, e, t, level, at, end)), endsAt);
         _fields.Add(field);
         Note(new FieldMade(field));

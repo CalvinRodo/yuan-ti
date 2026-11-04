@@ -116,7 +116,8 @@ public sealed partial class Battle
     }
 
     /// <summary>The <see cref="CombatRules.ConditionModifiers"/> of the conditions <paramref name="c"/> has.</summary>
-    private IEnumerable<ConditionModifier> ModifiersOf(Combatant c) => Rules.ConditionModifiers.Where(m => c.Has(m.Condition));
+    private IEnumerable<ConditionModifier> ModifiersOf(Combatant c) =>
+        Rules.ConditionModifiers.Concat(Spells.ConditionModifiers).Where(m => c.Has(m.Condition));
 
     private bool Backstabs(Combatant a, Combatant t, Weapon? w) =>
         a.ThiefLevel > 0 && w is not { IsMissile: true } && (w is null || w.Type.Weight < 41) && FromBehind(a, t);
@@ -130,7 +131,8 @@ public sealed partial class Battle
     /// (<c>80F5:3849</c>) Bless +1, Curse −1, Slow −4, a grafted weapon +1,
     /// Prayer +1 when its priest is on the attacker's side and −1 when not, −2
     /// against a blurred target, and +1 for a halfling with a weapon at more than
-    /// 28 cells (beyond any combat range, so never).
+    /// 28 cells (beyond any combat range, so never). In a mod's sandstorm missiles
+    /// take its penalty (<see cref="Sandstorm.MissileToHit"/>).
     /// </summary>
     public int ToHitNeeded(Combatant a, Combatant t, Weapon? w) => ToHitTerms(a, t, w).Sum(term => term.Value);
 
@@ -157,6 +159,10 @@ public sealed partial class Battle
         if (a.Effects.FirstOrDefault(e => e.Condition == Condition.Prayer) is { Caster: { } priest })
         {
             Less("Prayer", priest.Side == a.Side ? 1 : -1);
+        }
+        if (missile && Sandstorm is { } storm)
+        {
+            Less("sandstorm", storm.MissileToHit);
         }
         if (a.Race == 6 && w is not null && Distance(a, t) > 28)
         {

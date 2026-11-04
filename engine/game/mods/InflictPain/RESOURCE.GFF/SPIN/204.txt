@@ -1,0 +1,1 @@
+INFLICT PAIN:  Wracks the target's mind with pain. Unless its mind is defended it is -4 to hit and cannot cast spells for a round, longer if the power is maintained.
