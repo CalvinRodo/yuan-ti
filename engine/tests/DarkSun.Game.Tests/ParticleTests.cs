@@ -241,4 +241,20 @@ public class ParticleTests
         effect.Update(ParticleEffect.Step);
         Assert.All(effect.Particles, p => Assert.InRange(p.Position.Y, 100 - 48 - 8, 100 - 48 + 8));
     }
+
+    [Fact]
+    public void EveryShippedConeSpraysAtItsPoint()
+    {
+        var cones = Directory.GetFiles(Path.Combine(LooksFolder(), "particles"), "*.json")
+            .Select(p => (Name: Path.GetFileName(p), Definition: ParticleDefinition.Parse(File.ReadAllText(p))))
+            .Where(c => c.Definition.Shape == ParticleShape.Cone).ToList();
+        Assert.NotEmpty(cones);
+        Vector2 way = Vector2.Normalize(To - From);
+        foreach (var (name, cone) in cones)
+        {
+            var effect = new ParticleEffect(cone, From, To, [], 0, false, 3);
+            effect.Update(0.1);
+            Assert.True(effect.Particles.All(p => Vector2.Dot(Vector2.Normalize(p.Velocity), way) > 0.8f), $"{name} sprays off its way");
+        }
+    }
 }

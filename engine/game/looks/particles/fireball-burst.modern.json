@@ -1,7 +1,7 @@
 {
   "Shape": "Cell",
-  "Burst": 200,
-  "Rate": 260,
+  "Burst": 400,
+  "Rate": 520,
   "Seconds": 0.35,
   "Lifetime": [0.3, 0.7],
   "Speed": [6, 34],
@@ -10,7 +10,7 @@
   "Drag": 2.5,
   "Size": [6, 4, 1.5],
   "Alpha": [1, 0.8, 0.4, 0],
-  "Max": 800,
+  "Max": 1600,
   "Colors": ["#fff0b0", "#ffa030f0", "#e04810d0", "#80200080", "#30101000"],
   "Texture": "Glow",
   "Glow": {"Radius": 70, "Color": "#ff8030", "Alpha": 0.5}

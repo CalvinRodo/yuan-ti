@@ -1,8 +1,8 @@
 {
   "Shape": "Circle",
   "Radius": 7,
-  "Burst": 14,
-  "Rate": 24,
+  "Burst": 35,
+  "Rate": 60,
   "Seconds": 0.4,
   "Lifetime": [0.5, 0.8],
   "Speed": [2, 8],

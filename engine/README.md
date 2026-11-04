@@ -927,7 +927,7 @@ and `looks/particles/fizz.json`:
 | `Offset` | where particles start from where the shape puts them (x, y; not a cone's): `[0, -30]` about the head of one stood at the point, `[0, -48]` above an area's cells for hail |
 | `Rate`, `Burst`, `Seconds`, `Max` | particles a second (a field's per cell, a flight's per head), at once at the start, seconds given off (flights and fields: while they last), most alive at once (default 300) |
 | `Lifetime`, `Speed` | ranges rolled per particle: seconds, pixels a second |
-| `Direction`, `Spread`, `Aim`, `Radial` | degrees (0 right, 90 down) ± `Spread`; `Aim`: from the way from the caster to the point (a hit's `Direction` 180 flies back to the caster); `Radial`: from the way out from the (offset) point, so 0 out, 90 around, 180 in |
+| `Direction`, `Spread`, `Aim`, `Radial` | degrees (0 right, 90 down; default -90, up) ± `Spread`; a cone's and `Aim`'s are from the way to the point, so give a cone `Direction` 0 to spray straight at it; `Aim`: from the way from the caster to the point (a hit's `Direction` 180 flies back to the caster); `Radial`: from the way out from the (offset) point, so 0 out, 90 around, 180 in |
 | `Gravity`, `Pull`, `Drag` | pixels a second added each second (x, y); added toward the (offset) point (below 0: away; with `Radial` 90, a swirl); the share of speed lost a second |
 | `Size`, `Alpha` | over the life, keys spread evenly (pixels; 0–1) |
 | `Palette` / `Colors`, `RandomColor` | palette indexes stepped through (the pixel style), or `#rrggbb[aa]` blended (the modern; the pixel style without a palette); `RandomColor`: each particle keeps one, picked at its birth (a rainbow) |

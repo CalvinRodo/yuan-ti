@@ -1,15 +1,16 @@
 {
   "Shape": "Cone",
+  "Direction": 0,
   "Spread": 24,
-  "Burst": 100,
-  "Rate": 420,
+  "Burst": 220,
+  "Rate": 900,
   "Seconds": 0.35,
   "Lifetime": [0.3, 0.7],
   "Speed": [60, 140],
   "Drag": 1.8,
   "Size": [1.5, 4, 7],
   "Alpha": [1, 0.8, 0.4, 0],
-  "Max": 900,
+  "Max": 1800,
   "Colors": ["#ff6848e0", "#a01010c0", "#30000080", "#10000000"],
   "Texture": "Glow"
 }

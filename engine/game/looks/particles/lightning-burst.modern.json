@@ -1,7 +1,7 @@
 {
   "Shape": "Line",
-  "Burst": 200,
-  "Rate": 600,
+  "Burst": 320,
+  "Rate": 900,
   "Seconds": 0.3,
   "Lifetime": [0.08, 0.25],
   "Speed": [0, 30],
@@ -9,7 +9,7 @@
   "Drag": 4,
   "Size": [2.5, 1],
   "Texture": "Spark",
-  "Max": 900,
+  "Max": 1400,
   "Colors": ["#ffffff", "#c0f8ff", "#5090ff00"],
   "Blend": "Add",
   "Glow": {"Radius": 40, "Color": "#80c8ff", "Alpha": 0.6}

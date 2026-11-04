@@ -1,14 +1,15 @@
 {
   "Shape": "Cone",
+  "Direction": 0,
   "Spread": 22,
-  "Burst": 60,
-  "Rate": 260,
+  "Burst": 150,
+  "Rate": 650,
   "Seconds": 0.35,
   "Lifetime": [0.3, 0.6],
   "Speed": [50, 120],
   "Drag": 1.5,
-  "Size": [1, 2],
+  "Size": [2, 3],
   "Alpha": [1, 1, 0.4, 0],
-  "Max": 400,
+  "Max": 1200,
   "Palette": [46, 167, 244, 245, 246, 247, 248]
 }

@@ -193,9 +193,9 @@ def drain(t, n):
 def puff(t, n):
     """A hit: a cloud puffing up around the one reached."""
     return look(n, t,
-                dict(Shape='Circle', Radius=7, Burst=10, Rate=20, Seconds=0.4, Lifetime=[0.4, 0.7], Speed=[2, 6], Direction=-90, Spread=90,
+                dict(Shape='Circle', Radius=7, Burst=25, Rate=50, Seconds=0.4, Lifetime=[0.4, 0.7], Speed=[2, 6], Direction=-90, Spread=90,
                      Size=[1, 2], Alpha=[1, 1, 0]),
-                dict(Shape='Circle', Radius=7, Burst=14, Rate=24, Seconds=0.4, Lifetime=[0.5, 0.8], Speed=[2, 8], Direction=-90, Spread=90,
+                dict(Shape='Circle', Radius=7, Burst=35, Rate=60, Seconds=0.4, Lifetime=[0.5, 0.8], Speed=[2, 8], Direction=-90, Spread=90,
                      Size=[3, 6], Alpha=[0.9, 0.7, 0]))
 
 
@@ -276,10 +276,10 @@ def wave(t, n):
 def explode(t, n):
     """A burst: an explosion over its cells."""
     return look(n, t,
-                dict(Shape='Cell', Burst=120, Rate=200, Seconds=0.3, Lifetime=[0.25, 0.6], Speed=[8, 34], Spread=180, Gravity=[0, -30],
-                     Drag=2, Size=[2, 1], Alpha=[1, 1, 0.5, 0], Max=500),
-                dict(Shape='Cell', Burst=200, Rate=260, Seconds=0.3, Lifetime=[0.3, 0.7], Speed=[10, 46], Spread=180, Gravity=[0, -40],
-                     Drag=2.5, Size=[5, 3, 1], Alpha=[1, 0.8, 0.4, 0], Max=800, glow=(60, 0.55)))
+                dict(Shape='Cell', Burst=240, Rate=400, Seconds=0.3, Lifetime=[0.25, 0.6], Speed=[8, 34], Spread=180, Gravity=[0, -30],
+                     Drag=2, Size=[2, 1], Alpha=[1, 1, 0.5, 0], Max=1200),
+                dict(Shape='Cell', Burst=400, Rate=520, Seconds=0.3, Lifetime=[0.3, 0.7], Speed=[10, 46], Spread=180, Gravity=[0, -40],
+                     Drag=2.5, Size=[5, 3, 1], Alpha=[1, 0.8, 0.4, 0], Max=1600, glow=(60, 0.55)))
 
 
 def fall(t, n):
@@ -294,27 +294,27 @@ def fall(t, n):
 def cone(t, n):
     """A burst: a cone sprayed from the caster."""
     return look(n, t,
-                dict(Shape='Cone', Spread=22, Burst=60, Rate=260, Seconds=0.35, Lifetime=[0.3, 0.6], Speed=[50, 120], Drag=1.5, Size=[1, 2],
-                     Alpha=[1, 1, 0.4, 0], Max=400),
-                dict(Shape='Cone', Spread=24, Burst=100, Rate=420, Seconds=0.35, Lifetime=[0.3, 0.7], Speed=[60, 140], Drag=1.8,
-                     Size=[1.5, 4, 7], Alpha=[1, 0.8, 0.4, 0], Max=900, glow=(34, 0.4)))
+                dict(Shape='Cone', Direction=0, Spread=22, Burst=150, Rate=650, Seconds=0.35, Lifetime=[0.3, 0.6], Speed=[50, 120], Drag=1.5, Size=[2, 3],
+                     Alpha=[1, 1, 0.4, 0], Max=1200),
+                dict(Shape='Cone', Direction=0, Spread=24, Burst=220, Rate=900, Seconds=0.35, Lifetime=[0.3, 0.7], Speed=[60, 140], Drag=1.8,
+                     Size=[1.5, 4, 7], Alpha=[1, 0.8, 0.4, 0], Max=1800, glow=(34, 0.4)))
 
 
 def cloud(t, n):
     """A field: a cloud drifting over its cells."""
     return look(n, t,
-                dict(Shape='Cell', Rate=5, Lifetime=[1.2, 2.0], Speed=[2, 6], Spread=180, Drag=0.5, Size=[2, 3, 3], Alpha=[0, 0.7, 0.7, 0],
-                     Max=400),
-                dict(Shape='Cell', Rate=3, Lifetime=[1.4, 2.4], Speed=[2, 6], Spread=180, Drag=0.4, Size=[6, 12, 15],
-                     Alpha=[0, 0.8, 0.7, 0], Max=300))
+                dict(Shape='Cell', Rate=12, Lifetime=[1.2, 2.0], Speed=[2, 6], Spread=180, Drag=0.5, Size=[2, 3, 3], Alpha=[0, 0.7, 0.7, 0],
+                     Max=1000),
+                dict(Shape='Cell', Rate=7, Lifetime=[1.4, 2.4], Speed=[2, 6], Spread=180, Drag=0.4, Size=[6, 12, 15],
+                     Alpha=[0, 0.8, 0.7, 0], Max=800))
 
 
 def flames(t, n):
     """A field: flames licking up off its cells."""
     return look(n, t,
-                dict(Shape='Cell', Rate=12, Lifetime=[0.4, 0.8], Speed=[10, 24], Direction=-90, Spread=15, Alpha=[1, 1, 0.5, 0], Max=500),
-                dict(Shape='Cell', Rate=12, Lifetime=[0.4, 0.8], Speed=[12, 30], Direction=-90, Spread=15, Gravity=[0, -10],
-                     Size=[5, 3.5, 1], Alpha=[1, 0.9, 0.5, 0], Max=600, glow=(40, 0.45)))
+                dict(Shape='Cell', Rate=20, Lifetime=[0.4, 0.8], Speed=[10, 24], Direction=-90, Spread=15, Alpha=[1, 1, 0.5, 0], Max=900),
+                dict(Shape='Cell', Rate=20, Lifetime=[0.4, 0.8], Speed=[12, 30], Direction=-90, Spread=15, Gravity=[0, -10],
+                     Size=[5, 3.5, 1], Alpha=[1, 0.9, 0.5, 0], Max=1100, glow=(40, 0.45)))
 
 
 def shards(t, n):
@@ -384,10 +384,10 @@ def kept():
     # The fireball fills its circle, as the original's sheet of flame does; the modern one's colours
     # are darker (added onto sand they would turn white).
     d('fireball-burst', 'fire',
-      dict(Shape='Cell', Burst=260, Rate=420, Seconds=0.35, Lifetime=[0.3, 0.6], Speed=[4, 22], Spread=180, Gravity=[0, -30], Drag=2,
-           Size=[3, 2], Alpha=[1, 1, 0.5, 0], Max=900),
-      dict(Shape='Cell', Burst=200, Rate=260, Seconds=0.35, Lifetime=[0.3, 0.7], Speed=[6, 34], Spread=180, Gravity=[0, -40], Drag=2.5,
-           Size=[6, 4, 1.5], Alpha=[1, 0.8, 0.4, 0], Max=800, glow=(70, 0.5)))
+      dict(Shape='Cell', Burst=420, Rate=680, Seconds=0.35, Lifetime=[0.3, 0.6], Speed=[4, 22], Spread=180, Gravity=[0, -30], Drag=2,
+           Size=[3, 2], Alpha=[1, 1, 0.5, 0], Max=1600),
+      dict(Shape='Cell', Burst=400, Rate=520, Seconds=0.35, Lifetime=[0.3, 0.7], Speed=[6, 34], Spread=180, Gravity=[0, -40], Drag=2.5,
+           Size=[6, 4, 1.5], Alpha=[1, 0.8, 0.4, 0], Max=1600, glow=(70, 0.5)))
     DEFS['fireball-burst.pixel']['Palette'] = [46, 244, 243, 242, 241, 165, 164, 163]
     DEFS['fireball-burst.modern']['Colors'] = ['#fff0b0', '#ffa030f0', '#e04810d0', '#80200080', '#30101000']
     DEFS['fireball-burst.modern'].pop('Blend')
@@ -397,14 +397,14 @@ def kept():
            Max=600, glow=(24, 0.5)))
     DEFS['bolt-flight.pixel']['Palette'] = [46, 220]
     d('lightning-burst', 'bolt',
-      dict(Shape='Line', Burst=120, Rate=360, Seconds=0.3, Lifetime=[0.08, 0.25], Speed=[0, 14], Spread=180, Alpha=[1, 1, 0], Max=400),
-      dict(Shape='Line', Burst=200, Rate=600, Seconds=0.3, Lifetime=[0.08, 0.25], Speed=[0, 30], Spread=180, Drag=4, Size=[2.5, 1],
-           Texture='Spark', Max=900, glow=(40, 0.6)))
+      dict(Shape='Line', Burst=200, Rate=600, Seconds=0.3, Lifetime=[0.08, 0.25], Speed=[0, 14], Spread=180, Alpha=[1, 1, 0], Max=800),
+      dict(Shape='Line', Burst=320, Rate=900, Seconds=0.3, Lifetime=[0.08, 0.25], Speed=[0, 30], Spread=180, Drag=4, Size=[2.5, 1],
+           Texture='Spark', Max=1400, glow=(40, 0.6)))
     d('cone-of-cold-burst', 'cold',
-      dict(Shape='Cone', Spread=22, Burst=60, Rate=260, Seconds=0.35, Lifetime=[0.3, 0.6], Speed=[50, 120], Drag=1.5, Size=[1, 2],
-           Alpha=[1, 1, 0.4, 0], Max=400),
-      dict(Shape='Cone', Spread=24, Burst=100, Rate=420, Seconds=0.35, Lifetime=[0.3, 0.7], Speed=[60, 140], Drag=1.8, Size=[1.5, 4, 7],
-           Alpha=[1, 0.8, 0.4, 0], Max=900, glow=(34, 0.4)))
+      dict(Shape='Cone', Direction=0, Spread=22, Burst=150, Rate=650, Seconds=0.35, Lifetime=[0.3, 0.6], Speed=[50, 120], Drag=1.5, Size=[2, 3],
+           Alpha=[1, 1, 0.4, 0], Max=1200),
+      dict(Shape='Cone', Direction=0, Spread=24, Burst=220, Rate=900, Seconds=0.35, Lifetime=[0.3, 0.7], Speed=[60, 140], Drag=1.8, Size=[1.5, 4, 7],
+           Alpha=[1, 0.8, 0.4, 0], Max=1800, glow=(34, 0.4)))
     DEFS['cone-of-cold-burst.modern']['Colors'] = ['#ffffff', '#d8f6ff', '#90c8ff80', '#6090ff00']
     d('cold-hit', 'cold',
       dict(Shape='Circle', Radius=8, Burst=20, Rate=20, Seconds=0.3, Lifetime=[0.3, 0.6], Speed=[2, 8], Direction=90, Spread=40,
@@ -418,14 +418,14 @@ def kept():
            Gravity=[0, -30], Size=[4, 2, 0.5], Alpha=[1, 0.8, 0], glow=(26, 0.5)))
     DEFS['fire-hit.modern']['Colors'] = ['#fff0c0', '#ffa030', '#ff401000']
     d('wall-of-fire-field', 'fire',
-      dict(Shape='Cell', Rate=12, Lifetime=[0.4, 0.8], Speed=[10, 24], Direction=-90, Spread=15, Alpha=[1, 1, 0.5, 0], Max=500),
-      dict(Shape='Cell', Rate=12, Lifetime=[0.4, 0.8], Speed=[12, 30], Direction=-90, Spread=15, Gravity=[0, -10], Size=[5, 3.5, 1],
-           Alpha=[1, 0.9, 0.5, 0], Max=600, glow=(40, 0.45)))
+      dict(Shape='Cell', Rate=20, Lifetime=[0.4, 0.8], Speed=[10, 24], Direction=-90, Spread=15, Alpha=[1, 1, 0.5, 0], Max=900),
+      dict(Shape='Cell', Rate=20, Lifetime=[0.4, 0.8], Speed=[12, 30], Direction=-90, Spread=15, Gravity=[0, -10], Size=[5, 3.5, 1],
+           Alpha=[1, 0.9, 0.5, 0], Max=1100, glow=(40, 0.45)))
     DEFS['wall-of-fire-field.pixel']['Palette'] = [46, 244, 243, 242, 241, 240, 248]
     DEFS['wall-of-fire-field.modern']['Colors'] = ['#fff0b0', '#ffb030', '#ff5010', '#60100000']
     d('stinking-cloud-field', 'poison',
-      dict(Shape='Cell', Rate=5, Lifetime=[1.2, 2.0], Speed=[2, 6], Spread=180, Drag=0.5, Size=[2, 3, 3], Alpha=[0, 0.7, 0.7, 0], Max=400),
-      dict(Shape='Cell', Rate=3, Lifetime=[1.4, 2.4], Speed=[2, 6], Spread=180, Drag=0.4, Size=[6, 12, 15], Alpha=[0, 0.8, 0.7, 0], Max=300))
+      dict(Shape='Cell', Rate=12, Lifetime=[1.2, 2.0], Speed=[2, 6], Spread=180, Drag=0.5, Size=[2, 3, 3], Alpha=[0, 0.7, 0.7, 0], Max=1000),
+      dict(Shape='Cell', Rate=7, Lifetime=[1.4, 2.4], Speed=[2, 6], Spread=180, Drag=0.4, Size=[6, 12, 15], Alpha=[0, 0.8, 0.7, 0], Max=800))
     DEFS['stinking-cloud-field.pixel']['Palette'] = [173, 172, 171, 57, 56]
     DEFS['stinking-cloud-field.modern']['Colors'] = ['#d8e0a000', '#b0c88080', '#78a06070', '#40603000']
     d('dust-devil-arrival', 'sand',

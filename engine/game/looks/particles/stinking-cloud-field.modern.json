@@ -1,13 +1,13 @@
 {
   "Shape": "Cell",
-  "Rate": 3,
+  "Rate": 7,
   "Lifetime": [1.4, 2.4],
   "Speed": [2, 6],
   "Spread": 180,
   "Drag": 0.4,
   "Size": [6, 12, 15],
   "Alpha": [0, 0.8, 0.7, 0],
-  "Max": 300,
+  "Max": 800,
   "Colors": ["#d8e0a000", "#b0c88080", "#78a06070", "#40603000"],
   "Texture": "Glow"
 }
