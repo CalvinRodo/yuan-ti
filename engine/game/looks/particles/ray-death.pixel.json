@@ -1,0 +1,10 @@
+{
+  "Rate": 240,
+  "Lifetime": [0.1, 0.25],
+  "Speed": [0, 3],
+  "Spread": 180,
+  "HeadSize": 2,
+  "Alpha": [1, 1, 0],
+  "Max": 300,
+  "Palette": [46, 3, 4, 208]
+}

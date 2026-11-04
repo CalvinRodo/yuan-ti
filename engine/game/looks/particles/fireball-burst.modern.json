@@ -1,18 +1,17 @@
 {
   "Shape": "Cell",
-  "Burst": 260,
-  "Rate": 320,
-  "Seconds": 0.3,
+  "Burst": 200,
+  "Rate": 260,
+  "Seconds": 0.35,
   "Lifetime": [0.3, 0.7],
-  "Speed": [10, 46],
+  "Speed": [6, 34],
   "Spread": 180,
   "Gravity": [0, -40],
   "Drag": 2.5,
-  "Size": [7, 4, 1.5],
-  "Colors": ["#ffffff", "#ffd060", "#ff7020", "#a0200080", "#30101000"],
-  "Alpha": [1, 0.9, 0.5, 0],
+  "Size": [6, 4, 1.5],
+  "Alpha": [1, 0.8, 0.4, 0],
+  "Max": 800,
+  "Colors": ["#fff0b0", "#ffa030f0", "#e04810d0", "#80200080", "#30101000"],
   "Texture": "Glow",
-  "Blend": "Add",
-  "Max": 900,
-  "Glow": {"Radius": 70, "Color": "#ff7030", "Alpha": 0.7}
+  "Glow": {"Radius": 70, "Color": "#ff8030", "Alpha": 0.5}
 }

@@ -1,0 +1,14 @@
+{
+  "Shape": "Cell",
+  "Radial": true,
+  "Burst": 60,
+  "Rate": 120,
+  "Seconds": 0.3,
+  "Lifetime": [0.3, 0.6],
+  "Speed": [30, 50],
+  "Spread": 10,
+  "Drag": 1.5,
+  "Alpha": [1, 1, 0],
+  "Max": 500,
+  "Palette": [46, 220, 161, 160]
+}

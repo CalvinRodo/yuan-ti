@@ -11,10 +11,10 @@
   "HeadSize": 6,
   "ArriveBurst": 16,
   "Size": [2.5, 1.2, 0.3],
-  "Colors": ["#d8ecff", "#4a7cff", "#2228ff00"],
   "Alpha": [1, 0.8, 0],
+  "Max": 1000,
+  "Colors": ["#d8ecff", "#4a7cff", "#2228ff00"],
   "Texture": "Glow",
   "Blend": "Add",
-  "Max": 1000,
-  "Glow": {"Radius": 18, "Color": "#5a80ff", "Alpha": 0.55}
+  "Glow": {"Radius": 18, "Color": "#4a78ff", "Alpha": 0.55}
 }

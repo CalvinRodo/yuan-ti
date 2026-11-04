@@ -85,7 +85,10 @@ public partial class SpellParticles : Node2D
 
     private static Vector2 V(System.Numerics.Vector2 v) => new(v.X, v.Y);
 
-    /// <summary>A particle's colour at <paramref name="t"/> of its life: its palette's index, else its colours blended.</summary>
+    /// <summary>A particle's colour: the one picked for it, else its colour at that point of its life.</summary>
+    private Color ColourOf(ParticleDefinition d, Particle p) => ColourAt(d, d.RandomColor ? p.Pick : p.T);
+
+    /// <summary>The colour at <paramref name="t"/> (0–1) of the palette's indexes, stepped, else of its colours, blended.</summary>
     private Color ColourAt(ParticleDefinition d, float t)
     {
         if (d.Palette.Length > 0)
@@ -122,11 +125,11 @@ public partial class SpellParticles : Node2D
             {
                 if (style == ParticleStyle.Pixel)
                 {
-                    DrawPixels(layer, d, V(p.Position), V(p.Velocity), ParticleEffect.Over(d.Size, p.T), ColourAt(d, p.T), ParticleEffect.Over(d.Alpha, p.T));
+                    DrawPixels(layer, d, V(p.Position), V(p.Velocity), ParticleEffect.Over(d.Size, p.T), ColourOf(d, p), ParticleEffect.Over(d.Alpha, p.T));
                 }
                 else
                 {
-                    DrawSoft(layer, d, V(p.Position), V(p.Velocity), ParticleEffect.Over(d.Size, p.T), ColourAt(d, p.T), ParticleEffect.Over(d.Alpha, p.T));
+                    DrawSoft(layer, d, V(p.Position), V(p.Velocity), ParticleEffect.Over(d.Size, p.T), ColourOf(d, p), ParticleEffect.Over(d.Alpha, p.T));
                 }
             }
             if (d.HeadSize > 0)

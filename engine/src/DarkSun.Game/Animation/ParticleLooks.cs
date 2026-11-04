@@ -21,6 +21,9 @@ public enum ParticleShape
 
     /// <summary>Anywhere in one of the area's cells (a burst's or a field's).</summary>
     Cell,
+
+    /// <summary>On the rim of <see cref="ParticleDefinition.Radius"/> around the point, flattened as the floor is seen (a ward, a swirl).</summary>
+    Ring,
 }
 
 /// <summary>What a particle is drawn as.</summary>
@@ -93,6 +96,18 @@ public sealed record ParticleDefinition
     /// <summary><see cref="Direction"/> is from the way to the point, not the screen's (a cone's always is).</summary>
     public bool Aim { get; init; }
 
+    /// <summary>
+    /// <see cref="Direction"/> is from the way out from the point where the particle starts (a circle's or a
+    /// ring's): 0 out, 90 around, 180 in.
+    /// </summary>
+    public bool Radial { get; init; }
+
+    /// <summary>Pixels a second added to the speed each second toward the point (less than 0: away); with <see cref="Radial"/> 90, a swirl.</summary>
+    public float Pull { get; init; }
+
+    /// <summary>Where particles start from where the shape puts them (x, y; not a cone's): up over the feet it is shown at, say. A circle, ring or point's pull pulls toward its point moved so.</summary>
+    public float[] Offset { get; init; } = [0, 0];
+
     /// <summary>Pixels a second added to the speed each second (x, y).</summary>
     public float[] Gravity { get; init; } = [0, 0];
 
@@ -108,6 +123,9 @@ public sealed record ParticleDefinition
 
     /// <summary>Colours over its life, <c>#rrggbb</c> or <c>#rrggbbaa</c> (the modern style, or the pixel style without a palette).</summary>
     public string[] Colors { get; init; } = [];
+
+    /// <summary>Each particle keeps one of <see cref="Palette"/> or <see cref="Colors"/>, picked at its birth, not them over its life (a rainbow, glitter).</summary>
+    public bool RandomColor { get; init; }
 
     public ParticleTexture Texture { get; init; } = ParticleTexture.Pixel;
 
@@ -168,9 +186,9 @@ public sealed record ParticleDefinition
         {
             throw new InvalidDataException(e.Message, e);
         }
-        if (d.Lifetime is not [> 0, var longest] || longest < d.Lifetime[0] || d.Speed is not [_, _] || d.Gravity is not [_, _])
+        if (d.Lifetime is not [> 0, var longest] || longest < d.Lifetime[0] || d.Speed is not [_, _] || d.Gravity is not [_, _] || d.Offset is not [_, _])
         {
-            throw new InvalidDataException("lifetime needs [shortest > 0, longest], speed and gravity two numbers each");
+            throw new InvalidDataException("lifetime needs [shortest > 0, longest], speed, gravity and offset two numbers each");
         }
         if (d.Size.Length == 0 || d.Alpha.Length == 0 || d.Palette.Length == 0 && d.Colors.Length == 0)
         {

@@ -11,7 +11,7 @@
   "Gravity": [0, -12],
   "Drag": 0.8,
   "Size": [3, 7, 10],
-  "Colors": ["#e8d4a0c0", "#c8a87090", "#a0805000"],
   "Alpha": [0.9, 0.6, 0],
+  "Colors": ["#f0dcb0c0", "#c8a870a0", "#a0805000"],
   "Texture": "Glow"
 }

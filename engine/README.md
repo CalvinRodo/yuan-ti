@@ -884,13 +884,21 @@ Not in DSUN.EXE. **Spell effects** in the Options window (`[display] spell_effec
 Each spell is drawn in up to five parts, `Cast` (over the caster), `Flight` (the projectile,
 caster to point), `Burst` (where an area spell lands), `Hit` (on each one it reaches unhurt; for a
 summoning, where the creature comes) and `Field` (a lingering area, while it lasts). A part with
-particles in the chosen style draws them; any other keeps the original's `OJFF`, so looks can be
-replaced one at a time. Flights fly the projectile's way in its time unless their look sets
+particles in the chosen style draws them; any other keeps the original's `OJFF` (a mod's own
+spell, say, until it gives one particles). Flights fly the projectile's way in its time unless their look sets
 `MinSeconds` (the modern Magic Missile's swarm: a second); bursts keep the original's timing;
 nothing about the rules changes. A field's particles come and go with it, from one emitter for all its
 cells. Particles move in fixed steps from a seeded roll (`ParticleEffect`, `DarkSun.Game`), so an
-effect plays the same way at any frame rate. The starter set: Magic Missile, Fireball, Lightning
-Bolt, Cone of Cold, Stinking Cloud, Wall of Fire (both), Cure Light Wounds, Ego Whip and Dust Devil.
+effect plays the same way at any frame rate.
+
+Every part of each of the original's 196 looks has particles in both styles. Where the original
+shares one animation among many spells (a cyan sparkle for most casts, a purple one for every ward,
+one burst for Bless, Curse, Haste, Slow and Dispel Magic), each now has its own, by what it does:
+Bless's motes rise gold off each one blessed, Curse's settle dark onto them; wards circle the one
+warded, holds bind it in bands, the mind's spells swirl about the head, drains flow back to the
+caster, summonings rise in a vortex. `tools/particle_looks.py` writes them (an archetype, how the
+particles move, in a theme, their colours) and says which spell has which; change it and run
+`uv run python3 tools/particle_looks.py` rather than editing its JSON.
 
 The looks are data. `game/looks/particle_looks.json` maps spell number → part → style (`Pixel`,
 `Modern`) → a name, and `game/looks/particles/NAME.json` defines it; a mod's
@@ -915,13 +923,14 @@ and `looks/particles/fizz.json`:
 
 | Field | Meaning |
 |-------|---------|
-| `Shape` | `Point` (at the point; a flight's heads), `Circle` (within `Radius` of it, flattened as the floor), `Cone` (from the caster, within `Spread` of the way to the point), `Line` (along the area from the caster's end to the far one), `Cell` (anywhere in the area's cells) |
+| `Shape` | `Point` (at the point; a flight's heads), `Circle` (within `Radius` of it, flattened as the floor), `Ring` (on that circle's rim), `Cone` (from the caster, within `Spread` of the way to the point), `Line` (along the area from the caster's end to the far one), `Cell` (anywhere in the area's cells) |
+| `Offset` | where particles start from where the shape puts them (x, y; not a cone's): `[0, -30]` about the head of one stood at the point, `[0, -48]` above an area's cells for hail |
 | `Rate`, `Burst`, `Seconds`, `Max` | particles a second (a field's per cell, a flight's per head), at once at the start, seconds given off (flights and fields: while they last), most alive at once (default 300) |
 | `Lifetime`, `Speed` | ranges rolled per particle: seconds, pixels a second |
-| `Direction`, `Spread`, `Aim` | degrees (0 right, 90 down) ± `Spread`; `Aim`: from the way to the point |
-| `Gravity`, `Drag` | pixels a second added each second (x, y); the share of speed lost a second |
+| `Direction`, `Spread`, `Aim`, `Radial` | degrees (0 right, 90 down) ± `Spread`; `Aim`: from the way from the caster to the point (a hit's `Direction` 180 flies back to the caster); `Radial`: from the way out from the (offset) point, so 0 out, 90 around, 180 in |
+| `Gravity`, `Pull`, `Drag` | pixels a second added each second (x, y); added toward the (offset) point (below 0: away; with `Radial` 90, a swirl); the share of speed lost a second |
 | `Size`, `Alpha` | over the life, keys spread evenly (pixels; 0–1) |
-| `Palette` / `Colors` | palette indexes stepped through (the pixel style), or `#rrggbb[aa]` blended (the modern; the pixel style without a palette) |
+| `Palette` / `Colors`, `RandomColor` | palette indexes stepped through (the pixel style), or `#rrggbb[aa]` blended (the modern; the pixel style without a palette); `RandomColor`: each particle keeps one, picked at its birth (a rainbow) |
 | `Texture`, `Blend` | `Pixel`, `Glow`, `Spark`; `Mix` or `Add` (the pixel style never blends) |
 | `Blocks` | the playback waits until it is done (flights always wait for their flight) |
 | `Heads`, `Wander`, `Stagger`, `MinSeconds`, `HeadSize`, `ArriveBurst` | flights: how many fly, how far off the straight way they swing, the share of the flight by which they land one after another, the least flight time, a head's size, particles where each lands |
@@ -929,8 +938,9 @@ and `looks/particles/fizz.json`:
 
 Distances are map pixels; keys starting with `_` in the map are notes. A file that can't be used is
 left out with a warning. `-- --new-game --check-spell-effects` checks that every spell part the
-original draws has particles or an `OJFF` that loads in each of the three modes and that every
-look names particles that are there, then casts the starter set in a fight in each mode, played at
+original draws has particles or an `OJFF` that loads in each of the three modes (the original's
+196: particles in both styles) and that every look names particles that are there, then casts a
+spell of each kind (Magic Missile, Fireball, Bless, Curse, Hold Person, Vampiric Touch...) in a fight in each mode, played at
 the game's pace: each look's particles show, the cast takes the original's time (longer only by
 a flight's `MinSeconds`), and the fields' particles go with them.
 

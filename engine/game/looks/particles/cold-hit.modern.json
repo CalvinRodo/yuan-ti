@@ -10,8 +10,8 @@
   "Spread": 40,
   "Gravity": [0, 12],
   "Size": [2.5, 1.5],
-  "Colors": ["#ffffff", "#c8ecff", "#80b0ff00"],
+  "Colors": ["#ffffff", "#d8f6ff", "#90c8ff", "#6090ff00"],
   "Texture": "Glow",
   "Blend": "Add",
-  "Glow": {"Radius": 22, "Color": "#a0d0ff", "Alpha": 0.4}
+  "Glow": {"Radius": 22, "Color": "#a0d8ff", "Alpha": 0.4}
 }

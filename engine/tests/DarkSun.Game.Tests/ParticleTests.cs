@@ -29,12 +29,12 @@ public class ParticleTests
     {
         string folder = LooksFolder();
         var definitions = Directory.GetFiles(Path.Combine(folder, "particles"), "*.json")
-            .ToDictionary(Path.GetFileNameWithoutExtension, p => ParticleDefinition.Parse(File.ReadAllText(p)));
-        var looks = new ParticleLooks([File.ReadAllText(Path.Combine(folder, "particle_looks.json"))], definitions!);
+            .ToDictionary(p => Path.GetFileNameWithoutExtension(p), p => ParticleDefinition.Parse(File.ReadAllText(p)));
+        var looks = new ParticleLooks([File.ReadAllText(Path.Combine(folder, "particle_looks.json"))], definitions);
 
         Assert.Empty(looks.Missing);
-        // The starter set: Magic Missile, Stinking Cloud, Fireball, Lightning Bolt, Wall of Fire (both), Cone of Cold, Cure Light Wounds, Dust Devil, Ego Whip.
-        foreach (int spell in new[] { 9, 23, 28, 33, 55, 59, 72, 84, 138, 164 })
+        // Each of the original's 196 looks (which of its parts: --check-spell-effects).
+        foreach (int spell in Enumerable.Range(1, 196))
         {
             foreach (ParticleStyle style in Enum.GetValues<ParticleStyle>())
             {
@@ -44,7 +44,7 @@ public class ParticleTests
         Assert.All(looks.Looks.Where(l => l.Key.Style == ParticleStyle.Pixel), l => Assert.NotEmpty(definitions[l.Value].Palette));
         Assert.NotNull(looks.For(9, LookPart.Flight, ParticleStyle.Modern));
         Assert.Null(looks.For(9, LookPart.Burst, ParticleStyle.Modern)); // not given: the original's OJFF
-        Assert.Null(looks.For(1, LookPart.Cast, ParticleStyle.Pixel));
+        Assert.Null(looks.For(197, LookPart.Cast, ParticleStyle.Pixel)); // a mod's own spell: its OJFFs
     }
 
     [Fact]
@@ -72,6 +72,7 @@ public class ParticleTests
     [InlineData("""{"Palette": [300]}""")]
     [InlineData("""{"Palette": [46], "Shape": "Square"}""")]
     [InlineData("""{"Palette": [46], "Stagger": 1}""")]
+    [InlineData("""{"Palette": [46], "Offset": [0]}""")]
     public void ADefinitionThatCantBeUsedIsRefused(string json) => Assert.Throws<InvalidDataException>(() => Def(json));
 
     [Theory]
@@ -178,5 +179,66 @@ public class ParticleTests
         burst.Update(0.1);
         Assert.True(burst.Done);
         Assert.False(burst.Blocks);
+    }
+
+    [Fact]
+    public void ARingStartsOnItsRimAboutTheOffsetPointAndRadialGoesOutOrAround()
+    {
+        ParticleDefinition ward = Def("""{"Shape": "Ring", "Radius": 12, "Offset": [0, -10], "Radial": true, "Direction": 0, "Spread": 0, "Burst": 40, "Speed": [10, 10], "Lifetime": [1, 1], "Palette": [46]}""");
+        var effect = new ParticleEffect(ward, From, To, [], 0, false, 9);
+        effect.Update(ParticleEffect.Step);
+        var centre = To + new Vector2(0, -10);
+        Assert.Equal(40, effect.Particles.Count);
+        foreach (Particle p in effect.Particles)
+        {
+            Vector2 off = p.Position - p.Velocity * ParticleEffect.Step - centre;
+            Assert.Equal(1, MathF.Sqrt(off.X * off.X / 144 + off.Y * off.Y / 36), 2); // on the flattened rim
+            Assert.True(Vector2.Dot(Vector2.Normalize(off), Vector2.Normalize(p.Velocity)) > 0.99f, "out from the centre");
+        }
+
+        var around = new ParticleEffect(ward with { Direction = 90 }, From, To, [], 0, false, 9);
+        around.Update(ParticleEffect.Step);
+        Assert.All(around.Particles, p => Assert.True(MathF.Abs(Vector2.Dot(Vector2.Normalize(p.Position - centre), Vector2.Normalize(p.Velocity))) < 0.2f));
+    }
+
+    [Fact]
+    public void APullDrawsParticlesToThePoint()
+    {
+        ParticleDefinition swirl = Def("""{"Shape": "Ring", "Radius": 20, "Radial": true, "Direction": 90, "Spread": 0, "Burst": 30, "Speed": [20, 20], "Pull": 60, "Lifetime": [2, 2], "Palette": [46]}""");
+        var pulled = new ParticleEffect(swirl, From, To, [], 0, false, 4);
+        var free = new ParticleEffect(swirl with { Pull = 0 }, From, To, [], 0, false, 4);
+        pulled.Update(1);
+        free.Update(1);
+        Assert.True(pulled.Particles.Average(p => Vector2.Distance(p.Position, To)) < free.Particles.Average(p => Vector2.Distance(p.Position, To)) - 10);
+    }
+
+    [Fact]
+    public void AnAimedHitFliesBackToTheCaster()
+    {
+        ParticleDefinition drain = Def("""{"Aim": true, "Direction": 180, "Spread": 0, "Burst": 10, "Speed": [50, 50], "Lifetime": [1, 1], "Palette": [219]}""");
+        var effect = new ParticleEffect(drain, From, To, [], 0, false, 2);
+        effect.Update(0.5);
+        Assert.All(effect.Particles, p => Assert.True(Vector2.Distance(p.Position, From) < Vector2.Distance(To, From) - 20));
+    }
+
+    [Fact]
+    public void ARandomColourIsPickedOnceAParticle()
+    {
+        ParticleDefinition rainbow = Def("""{"Burst": 50, "Lifetime": [1, 1], "Palette": [223, 166, 178, 220], "RandomColor": true}""");
+        var effect = new ParticleEffect(rainbow, From, To, [], 0, false, 6);
+        effect.Update(0.1);
+        Assert.Equal(4, effect.Particles.Select(p => ParticleEffect.Stepped(rainbow.Palette, p.Pick)).Distinct().Count());
+        float[] picks = [.. effect.Particles.Select(p => p.Pick)];
+        effect.Update(0.5);
+        Assert.Equal(picks, effect.Particles.Select(p => p.Pick));
+    }
+
+    [Fact]
+    public void AnOffsetMovesAnAreasParticlesToo()
+    {
+        ParticleDefinition hail = Def("""{"Shape": "Cell", "Offset": [0, -48], "Burst": 30, "Lifetime": [1, 1], "Palette": [46]}""");
+        var effect = new ParticleEffect(hail, From, To, [new(100, 100)], 0, false, 8);
+        effect.Update(ParticleEffect.Step);
+        Assert.All(effect.Particles, p => Assert.InRange(p.Position.Y, 100 - 48 - 8, 100 - 48 + 8));
     }
 }

@@ -1,0 +1,19 @@
+{
+  "Shape": "Ring",
+  "Radius": 20,
+  "Offset": [0, -2],
+  "Radial": true,
+  "Direction": 90,
+  "Spread": 5,
+  "Burst": 20,
+  "Rate": 90,
+  "Seconds": 0.6,
+  "Lifetime": [0.5, 0.9],
+  "Speed": [28, 34],
+  "Pull": 56,
+  "Gravity": [0, -20],
+  "Size": [2, 2.5, 1],
+  "Alpha": [0, 1, 0],
+  "Colors": ["#f0f0f0", "#a8a8a8", "#606060c0", "#30303000"],
+  "Texture": "Glow"
+}

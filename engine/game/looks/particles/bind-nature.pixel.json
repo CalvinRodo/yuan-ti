@@ -1,0 +1,17 @@
+{
+  "Size": [2, 1],
+  "Shape": "Ring",
+  "Radius": 10,
+  "Offset": [0, -14],
+  "Radial": true,
+  "Direction": 90,
+  "Spread": 2,
+  "Burst": 16,
+  "Rate": 50,
+  "Seconds": 0.6,
+  "Lifetime": [0.3, 0.5],
+  "Speed": [40, 48],
+  "Pull": 160,
+  "Alpha": [1, 1, 0],
+  "Palette": [43, 42, 55, 54, 205]
+}

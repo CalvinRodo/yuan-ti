@@ -8,10 +8,10 @@
   "Speed": [60, 140],
   "Drag": 1.8,
   "Size": [1.5, 4, 7],
-  "Colors": ["#ffffff", "#d8f6ff", "#90c8ff80", "#6090ff00"],
   "Alpha": [1, 0.8, 0.4, 0],
+  "Max": 900,
+  "Colors": ["#ffffff", "#d8f6ff", "#90c8ff80", "#6090ff00"],
   "Texture": "Glow",
   "Blend": "Add",
-  "Max": 900,
   "Glow": {"Radius": 34, "Color": "#a0d8ff", "Alpha": 0.4}
 }

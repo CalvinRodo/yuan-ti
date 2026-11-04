@@ -10,6 +10,9 @@ public struct Particle
     public float Age;
     public float Life;
 
+    /// <summary>Where in its palette or colours it is, 0–1, if they are picked (<see cref="ParticleDefinition.RandomColor"/>).</summary>
+    public float Pick;
+
     /// <summary>0 at its birth, 1 at its death.</summary>
     public readonly float T => Age / Life;
 }
@@ -141,12 +144,13 @@ public sealed class ParticleEffect(ParticleDefinition definition, Vector2 from, 
                 _arrived[i] = true;
                 for (int n = 0; n < d.ArriveBurst; n++)
                 {
-                    Add(To, Aimed());
+                    Add(To, Aimed(To));
                 }
             }
         }
-        var pull = new Vector2(d.Gravity[0], d.Gravity[1]) * Step;
+        var gravity = new Vector2(d.Gravity[0], d.Gravity[1]) * Step;
         float keep = Math.Max(0, 1 - d.Drag * Step);
+        Vector2 centre = Centre;
         for (int i = _particles.Count - 1; i >= 0; i--)
         {
             Particle p = _particles[i];
@@ -156,7 +160,8 @@ public sealed class ParticleEffect(ParticleDefinition definition, Vector2 from, 
                 _particles.RemoveAt(i);
                 continue;
             }
-            p.Velocity = (p.Velocity + pull) * keep;
+            Vector2 pull = d.Pull != 0 && centre != p.Position ? Vector2.Normalize(centre - p.Position) * d.Pull * Step : Vector2.Zero;
+            p.Velocity = (p.Velocity + gravity + pull) * keep;
             p.Position += p.Velocity * Step;
             _particles[i] = p;
         }
@@ -171,7 +176,7 @@ public sealed class ParticleEffect(ParticleDefinition definition, Vector2 from, 
             Vector2 at = flight > 0
                 ? heads.Count == 0 ? To : heads[n % heads.Count]
                 : Start();
-            Add(at, Aimed());
+            Add(at, Aimed(at));
         }
     }
 
@@ -188,37 +193,50 @@ public sealed class ParticleEffect(ParticleDefinition definition, Vector2 from, 
             Position = at,
             Velocity = Angle(direction) * speed,
             Life = Roll(d.Lifetime[0], d.Lifetime[1]),
+            Pick = d.RandomColor ? (float)_random.NextDouble() : 0,
         });
     }
 
-    /// <summary>Where a particle starts, by the shape.</summary>
+    /// <summary>The point a circle, ring or point is about, and a pull pulls toward: the point, moved by the offset.</summary>
+    private Vector2 Centre => To + new Vector2(Definition.Offset[0], Definition.Offset[1]);
+
+    /// <summary>Where a particle starts, by the shape (an area's cells and a line moved by the offset, too: hail falling onto them, say).</summary>
     private Vector2 Start()
     {
         ParticleDefinition d = Definition;
+        var offset = new Vector2(d.Offset[0], d.Offset[1]);
         switch (d.Shape)
         {
-            case ParticleShape.Circle:
-                float r = d.Radius * MathF.Sqrt((float)_random.NextDouble());
+            case ParticleShape.Circle or ParticleShape.Ring:
+                float r = d.Radius * (d.Shape == ParticleShape.Ring ? 1 : MathF.Sqrt((float)_random.NextDouble()));
                 Vector2 off = Angle((float)(_random.NextDouble() * MathF.Tau)) * r;
-                return To + off with { Y = off.Y / 2 };
+                return Centre + off with { Y = off.Y / 2 };
             case ParticleShape.Cone:
                 return From;
             case ParticleShape.Line:
                 var (a, b) = cells.Count == 0 ? (From, To) : (cells.MinBy(c => Vector2.Distance(c, From)), cells.MaxBy(c => Vector2.Distance(c, From)));
-                return Vector2.Lerp(a, b, (float)_random.NextDouble()) + Jitter(2);
+                return Vector2.Lerp(a, b, (float)_random.NextDouble()) + Jitter(2) + offset;
             case ParticleShape.Cell when cells.Count > 0:
-                return cells[_random.Next(cells.Count)] + Jitter(HalfCell);
+                return cells[_random.Next(cells.Count)] + Jitter(HalfCell) + offset;
+            case ParticleShape.Point:
+                return Centre;
             default:
                 return To;
         }
     }
 
-    /// <summary>A direction to fly, in radians: the definition's, from the way to the point for a cone or when aimed.</summary>
-    private float Aimed()
+    /// <summary>
+    /// A direction to fly from <paramref name="at"/>, in radians: the definition's, from the way to the point for
+    /// a cone or when aimed, from the way out from the centre when radial.
+    /// </summary>
+    private float Aimed(Vector2 at)
     {
         ParticleDefinition d = Definition;
         float spread = Roll(-d.Spread, d.Spread);
-        float aim = (d.Aim || d.Shape == ParticleShape.Cone) && To != From ? MathF.Atan2(To.Y - From.Y, To.X - From.X) * 180 / MathF.PI : 0;
+        static float Degrees(Vector2 v) => MathF.Atan2(v.Y, v.X) * 180 / MathF.PI;
+        float aim = d.Radial && at != Centre ? Degrees(at - Centre)
+            : (d.Aim || d.Shape == ParticleShape.Cone) && To != From ? Degrees(To - From)
+            : 0;
         return (aim + d.Direction + spread) * MathF.PI / 180;
     }
 

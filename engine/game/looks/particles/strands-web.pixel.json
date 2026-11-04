@@ -1,0 +1,12 @@
+{
+  "Shape": "Cell",
+  "Rate": 4,
+  "Lifetime": [0.8, 1.4],
+  "Speed": [3, 6],
+  "Spread": 180,
+  "Size": [3],
+  "Texture": "Spark",
+  "Alpha": [0, 1, 0],
+  "Max": 300,
+  "Palette": [52, 51, 50]
+}

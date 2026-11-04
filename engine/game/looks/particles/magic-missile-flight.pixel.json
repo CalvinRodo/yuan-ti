@@ -8,7 +8,7 @@
   "Spread": 180,
   "HeadSize": 2,
   "ArriveBurst": 5,
-  "Palette": [46, 220, 161, 160],
   "Alpha": [1, 0.7, 0],
-  "Max": 200
+  "Max": 200,
+  "Palette": [46, 220, 161, 160]
 }

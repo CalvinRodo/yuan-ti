@@ -1,0 +1,13 @@
+{
+  "Rate": 480,
+  "Lifetime": [0.1, 0.3],
+  "Speed": [0, 5],
+  "Spread": 180,
+  "HeadSize": 5,
+  "Size": [2, 1],
+  "Texture": "Spark",
+  "Max": 800,
+  "Colors": ["#ffffff", "#88ffb8", "#20a060", "#00301000"],
+  "Blend": "Add",
+  "Glow": {"Radius": 22, "Color": "#40ff90", "Alpha": 0.5}
+}

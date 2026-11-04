@@ -142,12 +142,15 @@ public partial class RegionView
         return _particles.Add(effect, Settings.SpellEffects ?? ParticleStyle.Pixel);
     }
 
-    /// <summary>A look at one point (a cast over the caster, a hit on one reached): its particles, else <c>OJFF</c> <paramref name="ojff"/>.</summary>
-    private void ShowLook(int spell, LookPart part, int ojff, Vector2 at)
+    /// <summary>
+    /// A look at one point (a cast over the caster, a hit on one reached): its particles (from
+    /// <paramref name="from"/>, the caster, for those aimed back at it), else <c>OJFF</c> <paramref name="ojff"/>.
+    /// </summary>
+    private void ShowLook(int spell, LookPart part, int ojff, Vector2 at, Vector2? from = null)
     {
         if (ParticlesOf(spell, part) is { } particles)
         {
-            ShowParticles(particles, spell, part, at, at);
+            ShowParticles(particles, spell, part, from ?? at, at);
         }
         else
         {
@@ -271,7 +274,7 @@ public partial class RegionView
         }
         int graphic = cast.Look.HitGraphic >= 0 ? cast.Look.HitGraphic : cast.Template;
         Play(cast.Look.HitSound);
-        ShowLook(cast.Look.Number, LookPart.Hit, graphic, Feet(target.Cell));
+        ShowLook(cast.Look.Number, LookPart.Hit, graphic, Feet(target.Cell), Feet(cast.Caster.Cell));
     }
 
     /// <summary>A teleport (<see cref="Teleported"/>): its cast graphic played where the caster left, its hit graphic and sound where it comes back.</summary>

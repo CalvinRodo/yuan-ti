@@ -1,0 +1,17 @@
+{
+  "Shape": "Circle",
+  "Radius": 12,
+  "Offset": [0, -14],
+  "Burst": 24,
+  "Rate": 50,
+  "Seconds": 0.7,
+  "Lifetime": [0.4, 0.8],
+  "Speed": [30, 60],
+  "Spread": 180,
+  "Pull": 180,
+  "Drag": 2,
+  "Size": [1.5],
+  "Texture": "Pixel",
+  "Alpha": [1, 1, 0],
+  "Colors": ["#302820", "#201810", "#10080800"]
+}

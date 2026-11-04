@@ -1887,19 +1887,24 @@ public partial class RegionView
         GetTree().Quit(problems.Count == 0 ? 0 : 1);
     }
 
-    /// <summary>The particle looks' starter set (issue #147), cast by <c>--check-spell-effects</c>.</summary>
+    /// <summary>Spells of each kind of particle look (a missile, a blast, a cone, a field, a help, a harm, a draining, a hold), cast by <c>--check-spell-effects</c>.</summary>
     private static readonly (int Spell, string Name)[] ParticleStarters =
     [
         (9, "Magic Missile"), (28, "Fireball"), (33, "Lightning Bolt"), (59, "Cone of Cold"), (23, "Stinking Cloud"),
         (55, "Wall of Fire"), (72, "Cure Light Wounds"), (164, "Ego Whip"), (84, "Dust Devil"),
+        (70, "Bless"), (71, "Curse"), (40, "Vampiric Touch"), (31, "Hold Person"), (46, "Ice Storm"), (5, "Color Spray"),
     ];
+
+    /// <summary>The original's looks (1–196): each part of each has particles in both styles.</summary>
+    private const int OriginalLooks = 196;
 
     /// <summary>
     /// <c>--check-spell-effects</c>: every spell has a look that works in each mode of
     /// <c>[display] spell_effects</c> (each part the original draws has particles, or an <c>OJFF</c>
-    /// that loads; every look names particles that are there). Then, in a fight in the start region,
-    /// in each mode a member casts the starter set (<see cref="ParticleStarters"/>: at a foe, Cure Light
-    /// Wounds on itself, Dust Devil beside it; from no slot of its own), played as the game plays it:
+    /// that loads; each of the original's has particles in both styles; every look names particles that
+    /// are there). Then, in a fight in the start region, in each mode a member casts a spell of each kind
+    /// (<see cref="ParticleStarters"/>: at a foe, Cure Light Wounds on itself, Dust Devil beside it; from
+    /// no slot of its own), played as the game plays it:
     /// each look's cast, flight, burst and field show their particles; the playback takes the
     /// original's time (longer only by a flight's <see cref="ParticleDefinition.MinSeconds"/>); the
     /// fields' particles go with their fields; none are left after.
@@ -1931,6 +1936,10 @@ public partial class RegionView
                     if (style is { } st && looks.For(look.Number, part, st) is not null)
                     {
                         withParticles++;
+                    }
+                    else if (style is { } missing && look.Number <= OriginalLooks)
+                    {
+                        problems.Add($"spell {look.Number} {part} ({missing}): no particles");
                     }
                     else if (!(loads.TryGetValue(ojff, out bool ok) ? ok
                         : loads[ojff] = Region.MakeObject(_objectData, ojff, 0, 0, d => Session.Assets.Frames(d)) is not null))

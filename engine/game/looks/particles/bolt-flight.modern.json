@@ -7,9 +7,9 @@
   "Spread": 180,
   "HeadSize": 4,
   "Size": [2, 1],
-  "Colors": ["#ffffff", "#b0f4ff", "#60a0ff00"],
   "Texture": "Spark",
-  "Blend": "Add",
   "Max": 600,
-  "Glow": {"Radius": 24, "Color": "#80d0ff", "Alpha": 0.5}
+  "Colors": ["#ffffff", "#c0f8ff", "#5090ff00"],
+  "Blend": "Add",
+  "Glow": {"Radius": 24, "Color": "#80c8ff", "Alpha": 0.5}
 }

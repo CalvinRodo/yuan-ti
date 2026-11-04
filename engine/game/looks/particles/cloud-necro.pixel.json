@@ -1,0 +1,12 @@
+{
+  "Shape": "Cell",
+  "Rate": 5,
+  "Lifetime": [1.2, 2.0],
+  "Speed": [2, 6],
+  "Spread": 180,
+  "Drag": 0.5,
+  "Size": [2, 3, 3],
+  "Alpha": [0, 0.7, 0.7, 0],
+  "Max": 400,
+  "Palette": [219, 4, 191, 208]
+}

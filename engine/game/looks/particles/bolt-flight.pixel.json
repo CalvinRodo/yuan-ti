@@ -6,6 +6,6 @@
   "Speed": [0, 4],
   "Spread": 180,
   "HeadSize": 2,
-  "Palette": [46, 220],
-  "Max": 200
+  "Max": 200,
+  "Palette": [46, 220]
 }

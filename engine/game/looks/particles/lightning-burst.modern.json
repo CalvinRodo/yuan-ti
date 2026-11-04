@@ -8,9 +8,9 @@
   "Spread": 180,
   "Drag": 4,
   "Size": [2.5, 1],
-  "Colors": ["#ffffff", "#c0f8ff", "#5090ff00"],
   "Texture": "Spark",
-  "Blend": "Add",
   "Max": 900,
+  "Colors": ["#ffffff", "#c0f8ff", "#5090ff00"],
+  "Blend": "Add",
   "Glow": {"Radius": 40, "Color": "#80c8ff", "Alpha": 0.6}
 }
