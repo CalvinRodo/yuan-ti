@@ -1,0 +1,18 @@
+{
+  "Shape": "Cell",
+  "Burst": 260,
+  "Rate": 320,
+  "Seconds": 0.3,
+  "Lifetime": [0.3, 0.7],
+  "Speed": [10, 46],
+  "Spread": 180,
+  "Gravity": [0, -40],
+  "Drag": 2.5,
+  "Size": [7, 4, 1.5],
+  "Colors": ["#ffffff", "#ffd060", "#ff7020", "#a0200080", "#30101000"],
+  "Alpha": [1, 0.9, 0.5, 0],
+  "Texture": "Glow",
+  "Blend": "Add",
+  "Max": 900,
+  "Glow": {"Radius": 70, "Color": "#ff7030", "Alpha": 0.7}
+}

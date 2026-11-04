@@ -1,0 +1,12 @@
+{
+  "Shape": "Line",
+  "Burst": 120,
+  "Rate": 360,
+  "Seconds": 0.3,
+  "Lifetime": [0.08, 0.25],
+  "Speed": [0, 14],
+  "Spread": 180,
+  "Palette": [46, 220, 161, 13, 12, 11],
+  "Alpha": [1, 1, 0],
+  "Max": 400
+}

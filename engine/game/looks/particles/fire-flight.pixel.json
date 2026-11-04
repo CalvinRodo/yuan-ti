@@ -1,0 +1,12 @@
+{
+  "Rate": 70,
+  "Lifetime": [0.2, 0.45],
+  "Speed": [2, 10],
+  "Direction": -90,
+  "Spread": 180,
+  "Gravity": [0, -20],
+  "HeadSize": 3,
+  "Palette": [46, 167, 244, 245, 246, 247, 248],
+  "Alpha": [1, 1, 0],
+  "Max": 200
+}

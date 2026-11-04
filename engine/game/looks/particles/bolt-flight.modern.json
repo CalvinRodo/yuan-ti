@@ -1,0 +1,15 @@
+{
+  "Heads": 3,
+  "Wander": 12,
+  "Rate": 260,
+  "Lifetime": [0.06, 0.16],
+  "Speed": [0, 10],
+  "Spread": 180,
+  "HeadSize": 4,
+  "Size": [2, 1],
+  "Colors": ["#ffffff", "#b0f4ff", "#60a0ff00"],
+  "Texture": "Spark",
+  "Blend": "Add",
+  "Max": 600,
+  "Glow": {"Radius": 24, "Color": "#80d0ff", "Alpha": 0.5}
+}

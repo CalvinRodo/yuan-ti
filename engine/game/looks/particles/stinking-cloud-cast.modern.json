@@ -1,0 +1,14 @@
+{
+  "Shape": "Circle",
+  "Radius": 6,
+  "Burst": 16,
+  "Rate": 30,
+  "Seconds": 0.4,
+  "Lifetime": [0.5, 0.9],
+  "Speed": [4, 12],
+  "Direction": -90,
+  "Spread": 60,
+  "Size": [3, 6],
+  "Colors": ["#d0ffb0c0", "#70d05080", "#30803000"],
+  "Texture": "Glow"
+}

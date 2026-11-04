@@ -1,0 +1,13 @@
+{
+  "_about": "Particle looks by spell number and part (Cast, Flight, Burst, Hit, Field) and style (Pixel, Modern), naming looks/particles/NAME.json. A spell, part or style not here keeps its original OJFF.",
+  "9": {"Cast": {"Pixel": "arcane-cast.pixel", "Modern": "arcane-cast.modern"}, "Flight": {"Pixel": "magic-missile-flight.pixel", "Modern": "magic-missile-flight.modern"}, "Hit": {"Pixel": "arcane-hit.pixel", "Modern": "arcane-hit.modern"}},
+  "23": {"Cast": {"Pixel": "stinking-cloud-cast.pixel", "Modern": "stinking-cloud-cast.modern"}, "Field": {"Pixel": "stinking-cloud-field.pixel", "Modern": "stinking-cloud-field.modern"}, "Hit": {"Pixel": "stinking-cloud-hit.pixel", "Modern": "stinking-cloud-hit.modern"}},
+  "28": {"Flight": {"Pixel": "fire-flight.pixel", "Modern": "fire-flight.modern"}, "Burst": {"Pixel": "fireball-burst.pixel", "Modern": "fireball-burst.modern"}, "Hit": {"Pixel": "fire-hit.pixel", "Modern": "fire-hit.modern"}},
+  "33": {"Cast": {"Pixel": "arcane-cast.pixel", "Modern": "arcane-cast.modern"}, "Flight": {"Pixel": "bolt-flight.pixel", "Modern": "bolt-flight.modern"}, "Burst": {"Pixel": "lightning-burst.pixel", "Modern": "lightning-burst.modern"}, "Hit": {"Pixel": "bolt-hit.pixel", "Modern": "bolt-hit.modern"}},
+  "55": {"Cast": {"Pixel": "wall-of-fire-cast.pixel", "Modern": "wall-of-fire-cast.modern"}, "Field": {"Pixel": "wall-of-fire-field.pixel", "Modern": "wall-of-fire-field.modern"}, "Hit": {"Pixel": "fire-hit.pixel", "Modern": "fire-hit.modern"}},
+  "59": {"Burst": {"Pixel": "cone-of-cold-burst.pixel", "Modern": "cone-of-cold-burst.modern"}, "Hit": {"Pixel": "cold-hit.pixel", "Modern": "cold-hit.modern"}},
+  "72": {"Hit": {"Pixel": "heal-hit.pixel", "Modern": "heal-hit.modern"}},
+  "84": {"Cast": {"Pixel": "dust-devil-cast.pixel", "Modern": "dust-devil-cast.modern"}, "Hit": {"Pixel": "dust-devil-arrival.pixel", "Modern": "dust-devil-arrival.modern"}},
+  "138": {"Cast": {"Pixel": "wall-of-fire-cast.pixel", "Modern": "wall-of-fire-cast.modern"}, "Field": {"Pixel": "wall-of-fire-field.pixel", "Modern": "wall-of-fire-field.modern"}, "Hit": {"Pixel": "fire-hit.pixel", "Modern": "fire-hit.modern"}},
+  "164": {"Cast": {"Pixel": "psionic-cast.pixel", "Modern": "psionic-cast.modern"}, "Flight": {"Pixel": "ego-whip-flight.pixel", "Modern": "ego-whip-flight.modern"}, "Hit": {"Pixel": "psionic-hit.pixel", "Modern": "psionic-hit.modern"}}
+}
