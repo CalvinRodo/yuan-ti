@@ -50,6 +50,12 @@ public partial class RegionView : Node2D
     /// </summary>
     private static readonly float[] ZoomLevels = [0.5f, 1f, 2f, 3f, 4f];
 
+    /// <summary>The original's view: zoom 2 on the 640 × 400 viewport.</summary>
+    private static readonly int OriginalZoomLevel = Array.IndexOf(ZoomLevels, 2f);
+
+    /// <summary>With the view locked (<see cref="Settings.LockView"/>), no zooming out past the original's.</summary>
+    private static int LeastZoomLevel => Settings.LockView ? OriginalZoomLevel : 0;
+
     /// <summary>How quickly the camera catches up with the character it follows.</summary>
     private const float CameraSmoothing = 6f;
 
@@ -145,7 +151,7 @@ public partial class RegionView : Node2D
     private readonly Dictionary<int, ImageTexture?> _portraits = [];
     private readonly HashSet<RegionObject> _hidden = [];
     private readonly Dictionary<RegionObject, Vector2> _moved = [];
-    private int _zoomLevel = Array.IndexOf(ZoomLevels, 2f);
+    private int _zoomLevel = OriginalZoomLevel;
     private Vector2 _mapSize;
 
     private long Now => (long)(_clock * ScmdAnimator.TicksPerSecond);
@@ -1487,6 +1493,10 @@ public partial class RegionView : Node2D
         {
             _camera.Position = new Vector2(member.Walker.Feet.X, member.Walker.Feet.Y);
         }
+        if (_zoomLevel < LeastZoomLevel && !OverheadShown)
+        {
+            Zoom(0); // the view locked in Options while zoomed out
+        }
         ClampCamera();
     }
 
@@ -2030,7 +2040,7 @@ public partial class RegionView : Node2D
         {
             return;
         }
-        _zoomLevel = Math.Clamp(_zoomLevel + step, 0, ZoomLevels.Length - 1);
+        _zoomLevel = Math.Clamp(_zoomLevel + step, LeastZoomLevel, ZoomLevels.Length - 1);
         _camera.Zoom = Vector2.One * ZoomLevels[_zoomLevel];
         ClampCamera();
     }
@@ -3422,6 +3432,25 @@ public partial class RegionView : Node2D
             $"OVERHEAD MAP shows the whole region, stopped, the party marked ({marks.Count(m => !m.Enemy)} members, {marks.Count(m => m.Enemy)} enemies)");
         OverheadMap();
         Expect(!OverheadShown && !_overheadMarks.Visible && _camera.Zoom == zoomBefore, "and goes back to the view as it was");
+
+        // The view locked (the default): no zooming out past the original's; unlocked, out to ½.
+        bool lockedBefore = Settings.LockView;
+        int zoomLevelBefore = _zoomLevel;
+        Settings.LockView = true;
+        Zoom(-ZoomLevels.Length);
+        Expect(_camera.Zoom.X == 2f, $"the view locked, zooming out stops at the original's (zoom {_camera.Zoom.X})");
+        Expect(PixelScaler.Fitting(new Vector2I(1920, 1080), true) == (PixelScaler.MinimumSize, 2)
+            && PixelScaler.Fitting(new Vector2I(1920, 1080), false) == (new Vector2I(960, 540), 2),
+            "and a bigger window borders the original's 640 × 400 instead of showing more");
+        Settings.LockView = false;
+        Zoom(-ZoomLevels.Length);
+        Expect(_camera.Zoom.X == ZoomLevels[0], $"unlocked, it zooms out to ½ (zoom {_camera.Zoom.X})");
+        Settings.LockView = true;
+        FollowCharacter();
+        Expect(_camera.Zoom.X == 2f, $"and locking it again brings the view back to the original's (zoom {_camera.Zoom.X})");
+        Settings.LockView = lockedBefore;
+        _zoomLevel = zoomLevelBefore;
+        _camera.Zoom = Vector2.One * ZoomLevels[_zoomLevel];
 
         Item boots = party[0].Items.First(i => i.Rdff == Boots);
         Expect(_world.Equip(me, boots) == EquipResult.Worn && boots.Slot == 13, $"boots worn on the feet (slot {boots.Slot})");

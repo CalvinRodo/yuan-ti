@@ -11,7 +11,7 @@ namespace DarkSun.Engine;
 /// <list type="bullet">
 /// <item><c>[audio]</c> <c>music_volume</c>, <c>sound_volume</c> (0–1), <c>music_on</c>, <c>sound_on</c>,
 /// <c>music_device</c> (<c>auto</c>, <c>soundfont</c>, <c>adlib</c>, <c>opl3</c>: see <see cref="Music"/>);</item>
-/// <item><c>[display]</c> <c>fullscreen</c>, <c>shadows</c>,
+/// <item><c>[display]</c> <c>fullscreen</c>, <c>lock_view</c> (no more of the map than the original's screen), <c>shadows</c>,
 /// <c>dust</c>, <c>enemy_rings</c> (0 none, 1 under the enemy chosen with Tab, 2 under every enemy);</item>
 /// <item><c>[game]</c> <c>skip_intro</c>, <c>autosave</c> (on entering a region), <c>original_pathfinding</c>,
 /// <c>difficulty</c> (0–3: easy, balanced, hard, hideous), <c>animations</c> (the map's animated things),
@@ -100,6 +100,17 @@ public static class Settings
     {
         get => Get("display", "fullscreen", false);
         set => Set("display", "fullscreen", value);
+    }
+
+    /// <summary>
+    /// The view shows no more of a map than the original's 320 × 200 screen (<see cref="PixelScaler"/>: the
+    /// viewport kept at 640 × 400, bordered in a bigger window; no zooming out past the original's), so a
+    /// region's size isn't given away. Off, the viewport fills the window and the map zooms out to ½.
+    /// </summary>
+    public static bool LockView
+    {
+        get => Get("display", "lock_view", true);
+        set => Set("display", "lock_view", value);
     }
 
     /// <summary>Living figures on the map cast shadows (<see cref="FloorEffects"/>; after the Obsidian Edition's).</summary>
@@ -259,6 +270,7 @@ public static class Settings
             sounds.Volume = SoundOn ? SoundVolume : 0;
         }
         Walker.UseOriginalPathfinding = OriginalPathfinding;
+        PixelScaler.Instance?.Fit();
         if (DisplayServer.GetName() != "headless")
         {
             DisplayServer.WindowMode wanted = Fullscreen ? DisplayServer.WindowMode.Fullscreen : DisplayServer.WindowMode.Windowed;
