@@ -185,12 +185,15 @@ public partial class RegionView : Node2D
         AddChild(_ground);
         _floor = new FloorEffects();
         AddChild(_floor);
+        _particles = new SpellParticles();
         _marker = new SelectionMarker();
         AddChild(_marker);
         _box = new BoxSelection();
         AddChild(_box);
         _sorted = new Node2D { YSortEnabled = true };
         AddChild(_sorted);
+        AddChild(_particles);
+        _floor.AddSibling(_particles.Ground); // the modern style's light, on the floor under the figures
         _sandstorm = new SandstormLayer();
         AddChild(_sandstorm);
         _overlay = new DebugOverlay { Visible = false };
@@ -454,6 +457,11 @@ public partial class RegionView : Node2D
             if (OS.GetCmdlineUserArgs().Contains("--check-effect-spells"))
             {
                 CheckEffectSpells();
+                return;
+            }
+            if (OS.GetCmdlineUserArgs().Contains("--check-spell-effects"))
+            {
+                CheckSpellEffects();
                 return;
             }
             if (OS.GetCmdlineUserArgs().Contains("--check-arena"))
@@ -797,6 +805,7 @@ public partial class RegionView : Node2D
         }
         _itemIcons.Clear();
         _palette = _region.LoadPalette(Session.Open("GPLDATA.GFF"), Session.Open("RESOURCE.GFF"), Session.Assets);
+        _particles.Palette = Colours(ColourCycling.Keyed(_palette));
 
         // The region's music (RDAT +0x2F), changed with the original's 5-second fades.
         RegionInfo? regionInfo = RegionInfo.Read(Session.Open("RESOURCE.GFF"), _region.Number);

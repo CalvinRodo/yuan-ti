@@ -1,0 +1,18 @@
+{
+  "Shape": "Cell",
+  "Offset": [0, 0],
+  "Burst": 220,
+  "Rate": 600,
+  "Seconds": 0.35,
+  "Lifetime": [0.4, 0.9],
+  "Speed": [6, 20],
+  "Direction": -90,
+  "Spread": 25,
+  "Gravity": [0, 18.0],
+  "Size": [2, 4, 1.5],
+  "Alpha": [0, 1, 0],
+  "Max": 1400,
+  "Colors": ["#fff060", "#ffa020", "#ff4848", "#f050e8", "#a868ff", "#6890ff", "#58f0f0", "#68ff68"],
+  "Texture": "Glow",
+  "RandomColor": true
+}

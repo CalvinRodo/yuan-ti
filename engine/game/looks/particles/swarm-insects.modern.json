@@ -1,0 +1,13 @@
+{
+  "Shape": "Cell",
+  "Rate": 8,
+  "Lifetime": [0.4, 0.8],
+  "Speed": [30, 60],
+  "Spread": 180,
+  "Drag": 3,
+  "Size": [1.5],
+  "Texture": "Pixel",
+  "Alpha": [1, 1, 0],
+  "Max": 500,
+  "Colors": ["#302820", "#201810", "#10080800"]
+}

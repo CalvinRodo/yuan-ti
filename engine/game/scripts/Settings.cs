@@ -12,7 +12,8 @@ namespace DarkSun.Engine;
 /// <item><c>[audio]</c> <c>music_volume</c>, <c>sound_volume</c> (0–1), <c>music_on</c>, <c>sound_on</c>,
 /// <c>music_device</c> (<c>auto</c>, <c>soundfont</c>, <c>adlib</c>, <c>opl3</c>: see <see cref="Music"/>);</item>
 /// <item><c>[display]</c> <c>fullscreen</c>, <c>shadows</c>,
-/// <c>dust</c>, <c>enemy_rings</c> (0 none, 1 under the enemy chosen with Tab, 2 under every enemy);</item>
+/// <c>dust</c>, <c>enemy_rings</c> (0 none, 1 under the enemy chosen with Tab, 2 under every enemy),
+/// <c>spell_effects</c> (<c>original</c>, <c>particles_pixel</c>, <c>particles_modern</c>: see <see cref="SpellEffectsMode"/>);</item>
 /// <item><c>[game]</c> <c>skip_intro</c>, <c>autosave</c> (on entering a region), <c>original_pathfinding</c>,
 /// <c>difficulty</c> (0–3: easy, balanced, hard, hideous), <c>animations</c> (the map's animated things),
 /// <c>choose_enemy_keys</c> (Tab and Enter choose and attack an enemy in a fight), <c>leader_alone</c> (only the leader
@@ -122,6 +123,43 @@ public static class Settings
         get => Math.Clamp(Get("display", "enemy_rings", 1), 0, 2);
         set => Set("display", "enemy_rings", Math.Clamp(value, 0, 2));
     }
+
+    public const string OriginalEffects = "original", PixelParticles = "particles_pixel", ModernParticles = "particles_modern";
+
+    /// <summary>The spell looks, in the order the Options window steps through them.</summary>
+    public static readonly string[] SpellEffectModes = [OriginalEffects, PixelParticles, ModernParticles];
+
+    /// <summary>
+    /// How spells look in a fight (<c>[display] spell_effects</c>): <c>original</c>, DSUN.EXE's animations, or particles
+    /// (<c>SpellParticles</c>) in the game's own pixels and palette (<c>particles_pixel</c>) or in a modern style
+    /// (<c>particles_modern</c>); a spell with no particles keeps the original's. <see cref="SpellEffectsForRun"/> overrides it.
+    /// </summary>
+    public static string SpellEffectsMode
+    {
+        get => _spellEffectsForRun ?? (Get("display", "spell_effects", OriginalEffects) is var m && SpellEffectModes.Contains(m) ? m : OriginalEffects);
+        set
+        {
+            _spellEffectsForRun = null; // chosen in the Options window: that, from now on
+            Set("display", "spell_effects", SpellEffectModes.Contains(value) ? value : OriginalEffects);
+        }
+    }
+
+    /// <summary>The particles' style, or null for the original's animations.</summary>
+    public static DarkSun.Game.Animation.ParticleStyle? SpellEffects => SpellEffectsMode switch
+    {
+        PixelParticles => DarkSun.Game.Animation.ParticleStyle.Pixel,
+        ModernParticles => DarkSun.Game.Animation.ParticleStyle.Modern,
+        _ => null,
+    };
+
+    /// <summary>The spell looks for this run only, not saved (<c>--spell-effects=MODE</c>, the checks); null goes back to the saved one.</summary>
+    public static string? SpellEffectsForRun
+    {
+        get => _spellEffectsForRun;
+        set => _spellEffectsForRun = value is null || SpellEffectModes.Contains(value) ? value : OriginalEffects;
+    }
+
+    private static string? _spellEffectsForRun;
 
     /// <summary>In a fight, Tab chooses an enemy (Shift+Tab goes back) and Enter attacks it (after the Obsidian Edition's).</summary>
     public static bool ChooseEnemyKeys

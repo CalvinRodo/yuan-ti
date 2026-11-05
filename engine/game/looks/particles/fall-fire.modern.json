@@ -1,0 +1,18 @@
+{
+  "Shape": "Cell",
+  "Offset": [0, -48],
+  "Burst": 60,
+  "Rate": 320,
+  "Seconds": 0.35,
+  "Lifetime": [0.3, 0.34],
+  "Speed": [140, 160],
+  "Direction": 90,
+  "Spread": 4,
+  "Size": [1, 1.5],
+  "Alpha": [0.7, 0.9],
+  "Texture": "Spark",
+  "Max": 900,
+  "Colors": ["#fff6d0", "#ffc040", "#ff6010", "#80200000"],
+  "Blend": "Add",
+  "Glow": {"Radius": 56, "Color": "#ff8030", "Alpha": 0.4}
+}

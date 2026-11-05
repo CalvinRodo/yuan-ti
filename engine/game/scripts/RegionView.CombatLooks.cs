@@ -20,7 +20,9 @@ namespace DarkSun.Engine;
 /// graphic and sound, <c>80F5:0079</c>), the hurt sound of a blow that wounds
 /// (the target's, else 4; 5 when a hit does nothing), damage as a number on a
 /// splash whose look says what hit (<c>BMP</c> 5014, <c>896E:0A0E</c>), and
-/// the lingering fields' graphic on each of their cells.
+/// the lingering fields' graphic on each of their cells. With <c>[display] spell_effects</c> on, a
+/// spell's cast, flight, burst, hit and field are particles instead where its look has them
+/// (<see cref="SpellParticles"/>, <see cref="Session.ParticleLooks"/>), in the same places and times.
 /// </summary>
 public partial class RegionView
 {
@@ -40,6 +42,13 @@ public partial class RegionView
     private readonly List<CombatGraphic> _graphics = [];
     private readonly Dictionary<AreaField, List<CombatGraphic>> _fieldGraphics = [];
     private IReadOnlyList<ImageFrame>? _splashFrames;
+    private SpellParticles _particles = null!;
+    private readonly Dictionary<AreaField, ParticleEffect> _fieldParticles = [];
+
+    /// <summary>A check that watches the spells' looks (<c>--check-spell-effects</c>): they are drawn, as the other checks don't.</summary>
+    private bool _checkingLooks;
+
+    private bool LooksHidden => _checking && !_checkingLooks;
 
     /// <summary>The spell being played back: its look, and who has shown its hit graphic.</summary>
     private (Combatant Caster, SpellLook Look, int Template, HashSet<Combatant> Shown)? _castLook;
@@ -66,7 +75,7 @@ public partial class RegionView
     /// </summary>
     private CombatGraphic? ShowGraphic(int ojff, Vector2 feet, Vector2? fliesTo = null, bool lasts = false, bool blocks = false)
     {
-        if (ojff <= 0 || _checking
+        if (ojff <= 0 || LooksHidden
             || Region.MakeObject(_objectData, ojff, (int)feet.X, (int)feet.Y, d => Session.Assets.Frames(d)) is not { } obj
             || AddSprite(obj.Frame, feet, new Vector2(obj.X, obj.Y), obj.Mirrored) is not { } sprite)
         {
@@ -112,10 +121,42 @@ public partial class RegionView
                 _graphics.Remove(g);
             }
         }
+        _particles.Advance(delta);
     }
 
-    /// <summary>A graphic the playback waits for: a missile or spell in flight.</summary>
-    private bool GraphicsBlock => _graphics.Any(g => g.Blocks);
+    /// <summary>A graphic the playback waits for: a missile or spell in flight, or particles that block.</summary>
+    private bool GraphicsBlock => _graphics.Any(g => g.Blocks) || _particles.Blocking;
+
+    /// <summary>
+    /// The particles of spell <paramref name="spell"/>'s <paramref name="part"/> in the chosen style
+    /// (<c>[display] spell_effects</c>), or null: the original's <c>OJFF</c> then.
+    /// </summary>
+    private ParticleDefinition? ParticlesOf(int spell, LookPart part) =>
+        LooksHidden || Settings.SpellEffects is not { } style ? null : Session.ParticleLooks.For(spell, part, style);
+
+    private ParticleEffect ShowParticles(ParticleDefinition d, int spell, LookPart part, Vector2 from, Vector2 to,
+        IEnumerable<Vector2>? cells = null, double flight = 0, bool lasts = false)
+    {
+        static System.Numerics.Vector2 N(Vector2 v) => new(v.X, v.Y);
+        var effect = new ParticleEffect(d, N(from), N(to), [.. (cells ?? []).Select(N)], (float)flight, lasts, ParticleEffect.SeedOf(spell, part, N(from), N(to)));
+        return _particles.Add(effect, Settings.SpellEffects ?? ParticleStyle.Pixel);
+    }
+
+    /// <summary>
+    /// A look at one point (a cast over the caster, a hit on one reached): its particles (from
+    /// <paramref name="from"/>, the caster, for those aimed back at it), else <c>OJFF</c> <paramref name="ojff"/>.
+    /// </summary>
+    private void ShowLook(int spell, LookPart part, int ojff, Vector2 at, Vector2? from = null)
+    {
+        if (ParticlesOf(spell, part) is { } particles)
+        {
+            ShowParticles(particles, spell, part, from ?? at, at);
+        }
+        else
+        {
+            ShowGraphic(ojff, at);
+        }
+    }
 
     private void ClearGraphics()
     {
@@ -125,6 +166,8 @@ public partial class RegionView
         }
         _graphics.Clear();
         _fieldGraphics.Clear();
+        _particles.Clear();
+        _fieldParticles.Clear();
         _castLook = null;
         _lastAttack = null;
         _shownAsh.Clear();
@@ -136,6 +179,9 @@ public partial class RegionView
 
     /// <summary>About the middle of a creature standing on the cell: where missiles leave and land.</summary>
     private static Vector2 Middle(Cell cell) => Feet(cell) - new Vector2(0, 12);
+
+    /// <summary>The middle of a cell's square, in map pixels: where particles over an area start.</summary>
+    private static Vector2 Centre(Cell cell) => new((cell.X + 0.5f) * Region.TileSize, (cell.Y + 0.5f) * Region.TileSize);
 
     private void Play(int sound)
     {
@@ -193,12 +239,20 @@ public partial class RegionView
         int template = battle.Spells.Effect(c.Effect) is { } e && battle.Spells.TemplateOf(e) is { } t ? t.Graphic : -1;
         _castLook = (c.Actor, look, template, []);
         Play(look.CastSound);
-        ShowGraphic(look.CastGraphic, Feet(c.Actor.Cell));
-        if (battle.Spells.ProjectileOf(look) is int projectile && ShowGraphic(projectile, Middle(c.Actor.Cell), Middle(c.At), blocks: true) is { } flying)
+        ShowLook(c.Effect, LookPart.Cast, look.CastGraphic, Feet(c.Actor.Cell));
+        Vector2 from = Middle(c.Actor.Cell), to = Middle(c.At);
+        double flight = from.DistanceTo(to) / ProjectileSpeed;
+        // Particles fly the projectile's way in its time, or longer where their look says (a swarm).
+        ParticleDefinition? particles = ParticlesOf(c.Effect, LookPart.Flight);
+        flight = Math.Max(flight, particles?.MinSeconds ?? 0);
+        if (battle.Spells.ProjectileOf(look) is int projectile && (particles is not null || ShowGraphic(projectile, from, to, blocks: true) is not null))
         {
+            if (particles is not null)
+            {
+                ShowParticles(particles, c.Effect, LookPart.Flight, from, to, flight: flight);
+            }
             // The burst plays where the projectile lands (7D80:003B, then 7D80:05C7).
             Play(look.FlightSound);
-            double flight = Middle(c.Actor.Cell).DistanceTo(Middle(c.At)) / ProjectileSpeed;
             GetTree().CreateTimer(flight).Timeout += () =>
             {
                 if (InCombat)
@@ -220,7 +274,7 @@ public partial class RegionView
         }
         int graphic = cast.Look.HitGraphic >= 0 ? cast.Look.HitGraphic : cast.Template;
         Play(cast.Look.HitSound);
-        ShowGraphic(graphic, Feet(target.Cell));
+        ShowLook(cast.Look.Number, LookPart.Hit, graphic, Feet(target.Cell), Feet(cast.Caster.Cell));
     }
 
     /// <summary>A teleport (<see cref="Teleported"/>): its cast graphic played where the caster left, its hit graphic and sound where it comes back.</summary>
@@ -231,7 +285,16 @@ public partial class RegionView
             return;
         }
         Play(cast.Look.HitSound);
-        ShowGraphic(cast.Look.HitGraphic, Feet(t.To));
+        ShowLook(cast.Look.Number, LookPart.Hit, cast.Look.HitGraphic, Feet(t.To));
+    }
+
+    /// <summary>A creature summoned (<see cref="Summoned"/>): the original shows nothing; particles, the spell's hit where it comes.</summary>
+    private void LookOfSummoning(Summoned s)
+    {
+        if (_castLook is { } cast && ParticlesOf(cast.Look.Number, LookPart.Hit) is { } particles)
+        {
+            ShowParticles(particles, cast.Look.Number, LookPart.Hit, Feet(s.Creature.Cell), Feet(s.Creature.Cell));
+        }
     }
 
     /// <summary>Damage: a blow's hurt sound, and the number on its splash.</summary>
@@ -346,8 +409,21 @@ public partial class RegionView
     /// </summary>
     private bool Burst(Combatant caster, int effect, Cell at)
     {
-        if (_checking || _battle is not { } battle || battle.Spells.Effect(effect) is not { } e
-            || battle.Spells.TemplateOf(e) is not { Kind: AreaTemplate.Burst, Graphic: > 0 } template)
+        if (LooksHidden || _battle is not { } battle || battle.Spells.Effect(effect) is not { } e
+            || battle.Spells.TemplateOf(e) is not { Kind: AreaTemplate.Burst } template)
+        {
+            return false;
+        }
+        if (ParticlesOf(effect, LookPart.Burst) is { } particles)
+        {
+            List<Vector2> cells = [.. battle.AreaCells(caster, e, caster.Level, at).Select(Centre)];
+            if (cells.Count > 0)
+            {
+                ShowParticles(particles, effect, LookPart.Burst, Feet(caster.Cell), Feet(at), cells);
+            }
+            return cells.Count > 0;
+        }
+        if (template.Graphic <= 0)
         {
             return false;
         }
@@ -409,6 +485,12 @@ public partial class RegionView
     /// <summary>A field laid (<c>7D80:2782</c>): its template's graphic on each of its cells while it lasts.</summary>
     private void LookOfField(AreaField f)
     {
+        if (ParticlesOf(f.Effect.Number, LookPart.Field) is { } particles && f.Cells.Count > 0)
+        {
+            Vector2 centre = f.Cells.Select(Centre).Aggregate((a, b) => a + b) / f.Cells.Count;
+            _fieldParticles[f] = ShowParticles(particles, f.Effect.Number, LookPart.Field, Feet(f.Caster.Cell), centre, f.Cells.Select(Centre), lasts: true);
+            return;
+        }
         if (f.Template.Graphic <= 0)
         {
             return;
@@ -418,6 +500,10 @@ public partial class RegionView
 
     private void FieldGone(AreaField f)
     {
+        if (_fieldParticles.Remove(f, out ParticleEffect? particles))
+        {
+            particles.Stop();
+        }
         if (_fieldGraphics.Remove(f, out var shown))
         {
             foreach (CombatGraphic g in shown)

@@ -1,0 +1,18 @@
+{
+  "Shape": "Cone",
+  "Direction": 0,
+  "Spread": 24,
+  "Burst": 220,
+  "Rate": 900,
+  "Seconds": 0.35,
+  "Lifetime": [0.3, 0.7],
+  "Speed": [60, 140],
+  "Drag": 1.8,
+  "Size": [1.5, 4, 7],
+  "Alpha": [1, 0.8, 0.4, 0],
+  "Max": 1800,
+  "Colors": ["#ffffff", "#88ffb8", "#20a060", "#00301000"],
+  "Texture": "Glow",
+  "Blend": "Add",
+  "Glow": {"Radius": 34, "Color": "#40ff90", "Alpha": 0.4}
+}

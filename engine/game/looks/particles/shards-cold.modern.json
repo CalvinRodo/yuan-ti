@@ -1,0 +1,15 @@
+{
+  "Shape": "Cell",
+  "Rate": 6,
+  "Lifetime": [0.6, 1.1],
+  "Speed": [2, 8],
+  "Direction": -90,
+  "Spread": 10,
+  "Size": [1, 3, 1],
+  "Texture": "Spark",
+  "Alpha": [0, 1, 0],
+  "Max": 400,
+  "Colors": ["#ffffff", "#d8f6ff", "#90c8ff", "#6090ff00"],
+  "Blend": "Add",
+  "Glow": {"Radius": 30, "Color": "#a0d8ff", "Alpha": 0.25}
+}

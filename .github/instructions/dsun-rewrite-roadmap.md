@@ -885,6 +885,7 @@ than leaving them all for the end:
 | Script debugger and resource viewer, mod folder | M3, §1 |
 | Original-behaviour options (original UI scale, original music) | throughout |
 | Shadows, dust and enemy rings with Tab / Enter to choose and attack, after the Obsidian Edition's (done 2026-10-22: `FloorEffects`) | M2, M6 |
+| Spell effects as particles, original or modern style, off by default (done 2026-11-04: #147; all 196 looks in both styles; `ParticleLooks`, `ParticleEffect`, `SpellParticles`, `[display] spell_effects`, `looks/particles/`, `tools/particle_looks.py`) | M6 |
 | Optional content as bundled mods, off by default: defiling's ash and Sweet Water (done 2026-11-01: #136, #143; `CombatRules.Defiling`, `SpellRules.Spells`); Cerulean Hail, Dimension Door, Molecular Agitation, Gust of Wind, Spike Stones (done 2026-11-02: #137–#141; every mod's `spells.json` read together, mods' powers, `SaveRiders`, `RoundDamages`, `Gusts`, `Teleports`); Sunstroke, Inflict Pain, sandstorms (done 2026-11-02: #142, #144, #145; `Immunities`, `SpellRules.ConditionModifiers`, `rules/weather.json`); more ideas under the `effect idea` label | M6 |
 
 ---

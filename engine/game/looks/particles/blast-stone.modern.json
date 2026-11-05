@@ -1,0 +1,17 @@
+{
+  "Shape": "Circle",
+  "Radius": 6,
+  "Offset": [0, -8],
+  "Burst": 80,
+  "Rate": 60,
+  "Seconds": 0.15,
+  "Lifetime": [0.3, 0.7],
+  "Speed": [20, 60],
+  "Spread": 180,
+  "Gravity": [0, 40],
+  "Drag": 2.5,
+  "Size": [4, 2.5, 1],
+  "Alpha": [1, 0.9, 0],
+  "Colors": ["#f0f0f0", "#a8a8a8", "#606060c0", "#30303000"],
+  "Texture": "Glow"
+}

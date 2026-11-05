@@ -1,0 +1,16 @@
+{
+  "Size": [2, 1],
+  "Shape": "Circle",
+  "Radius": 6,
+  "Offset": [0, -14],
+  "Aim": true,
+  "Direction": 180,
+  "Spread": 14,
+  "Burst": 10,
+  "Rate": 40,
+  "Seconds": 0.5,
+  "Lifetime": [0.4, 0.7],
+  "Speed": [60, 110],
+  "Alpha": [1, 1, 0],
+  "Palette": [219, 4, 191, 208]
+}
