@@ -13,7 +13,8 @@ namespace DarkSun.Engine;
 /// <c>music_device</c> (<c>auto</c>, <c>soundfont</c>, <c>adlib</c>, <c>opl3</c>: see <see cref="Music"/>);</item>
 /// <item><c>[display]</c> <c>fullscreen</c>, <c>lock_view</c> (no more of the map than the original's screen), <c>shadows</c>,
 /// <c>dust</c>, <c>enemy_rings</c> (0 none, 1 under the enemy chosen with Tab, 2 under every enemy),
-/// <c>spell_effects</c> (<c>original</c>, <c>particles_pixel</c>, <c>particles_modern</c>: see <see cref="SpellEffectsMode"/>);</item>
+/// <c>spell_effects</c> (<c>original</c>, <c>particles_pixel</c>, <c>particles_modern</c>: see <see cref="SpellEffectsMode"/>),
+/// <c>lighting</c> (<c>off</c>, <c>pixel</c>, <c>smooth</c>: see <see cref="LightingMode"/>), <c>day_night</c>, <c>spell_lights</c>;</item>
 /// <item><c>[game]</c> <c>skip_intro</c>, <c>autosave</c> (on entering a region), <c>original_pathfinding</c>,
 /// <c>difficulty</c> (0–3: easy, balanced, hard, hideous), <c>animations</c> (the map's animated things),
 /// <c>choose_enemy_keys</c> (Tab and Enter choose and attack an enemy in a fight), <c>leader_alone</c> (only the leader
@@ -171,6 +172,49 @@ public static class Settings
     }
 
     private static string? _spellEffectsForRun;
+
+    public const string LightingOff = "off", PixelLighting = "pixel", SmoothLighting = "smooth";
+
+    /// <summary>The lightings, in the order the Options window steps through them.</summary>
+    public static readonly string[] LightingModes = [LightingOff, PixelLighting, SmoothLighting];
+
+    /// <summary>
+    /// The map's light (<c>[display] lighting</c>; none in DSUN.EXE, so <c>off</c>, the map as the original draws it, is the
+    /// default): <c>pixel</c> lights it in steps, each colour one of the region's palette's, or <c>smooth</c> (<see cref="LightingLayer"/>).
+    /// <see cref="LightingForRun"/> overrides it.
+    /// </summary>
+    public static string LightingMode
+    {
+        get => _lightingForRun ?? (Get("display", "lighting", LightingOff) is var m && LightingModes.Contains(m) ? m : LightingOff);
+        set
+        {
+            _lightingForRun = null;
+            Set("display", "lighting", LightingModes.Contains(value) ? value : LightingOff);
+        }
+    }
+
+    /// <summary>The lighting for this run only, not saved (<c>--lighting=MODE</c>, the checks); null goes back to the saved one.</summary>
+    public static string? LightingForRun
+    {
+        get => _lightingForRun;
+        set => _lightingForRun = value is null || LightingModes.Contains(value) ? value : LightingOff;
+    }
+
+    private static string? _lightingForRun;
+
+    /// <summary>With the lighting on, the sky outdoors follows the game clock (off: always the light of noon).</summary>
+    public static bool DayNight
+    {
+        get => Get("display", "day_night", true);
+        set => Set("display", "day_night", value);
+    }
+
+    /// <summary>With the lighting on, spells throw light where they are cast, fly, burst and lie.</summary>
+    public static bool SpellLights
+    {
+        get => Get("display", "spell_lights", true);
+        set => Set("display", "spell_lights", value);
+    }
 
     /// <summary>In a fight, Tab chooses an enemy (Shift+Tab goes back) and Enter attacks it (after the Obsidian Edition's).</summary>
     public static bool ChooseEnemyKeys

@@ -1,0 +1,29 @@
+{
+  "_about": "The lighting's data ([display] lighting; none in DSUN.EXE). Day: the sky outdoors over the day, from each Hour (0-24) its Color and Strength, blended between (1 is the map as drawn; up to 2). HourAtZero: the hour a new game starts at (the game clock counts seconds from 0). Indoors: the fixed light inside (data/map_environments.json says which maps are). FigureMinimum: the least light a figure stands in (0-1), so night never hides who is where. Palette: pixels of the ground, objects and walls in palette colours From-To give light (HotOnly: only those of the region's palette that are red to yellow, as lava is; a region's own cycling colours are water in one region and lava in the next), a light for each 48-pixel square with at least MinPixels of them. Objects (OJFF numbers), Items (RDFF numbers, carried) and Conditions (by name) give a light by name; Regions (region numbers) put lights by hand at map pixel X, Y. A light: Color, Radius (map pixels), Strength, Flicker (0-1), Offset [x, y]. A mod's rules/lights.json is added over this one.",
+  "HourAtZero": 9,
+  "Day": [
+    { "Hour": 0, "Color": "#7080c0", "Strength": 0.58 },
+    { "Hour": 4.5, "Color": "#7282c0", "Strength": 0.6 },
+    { "Hour": 5.5, "Color": "#f07058", "Strength": 0.78 },
+    { "Hour": 7, "Color": "#ffb488", "Strength": 0.95 },
+    { "Hour": 10, "Color": "#fff4e4", "Strength": 1.06 },
+    { "Hour": 13, "Color": "#ffffff", "Strength": 1.16 },
+    { "Hour": 16, "Color": "#fff0dc", "Strength": 1.04 },
+    { "Hour": 18.5, "Color": "#ff9448", "Strength": 0.86 },
+    { "Hour": 19.5, "Color": "#a86888", "Strength": 0.62 },
+    { "Hour": 21, "Color": "#7080c0", "Strength": 0.58 }
+  ],
+  "Indoors": { "Hour": 0, "Color": "#ffe8d0", "Strength": 0.72 },
+  "FigureMinimum": 0.55,
+  "Palette": [
+    { "From": 240, "To": 248, "MinPixels": 6, "Light": { "Color": "#ff9040", "Radius": 56, "Strength": 1.0, "Flicker": 0.35 } },
+    { "From": 224, "To": 239, "HotOnly": true, "MinPixels": 24, "Light": { "Color": "#ff5a20", "Radius": 64, "Strength": 0.6, "Flicker": 0.12 } }
+  ],
+  "Objects": {},
+  "Items": {},
+  "Conditions": {
+    "FlameBlade": { "Color": "#ff8030", "Radius": 40, "Strength": 0.9, "Flicker": 0.3 },
+    "FireShield": { "Color": "#ff6020", "Radius": 36, "Strength": 0.7, "Flicker": 0.25 }
+  },
+  "Regions": {}
+}

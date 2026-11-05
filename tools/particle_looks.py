@@ -1,4 +1,5 @@
-"""Write the engine's spell particle looks: engine/game/looks/particles/*.json and particle_looks.json.
+"""Write the engine's spell particle looks: engine/game/looks/particles/*.json and particle_looks.json,
+and the light each look throws with [display] lighting on: spell_lights.json.
 
 Every part of each of the original's 196 spell looks gets particles in both styles of
 [display] spell_effects (Pixel: the region's palette; Modern: colours and glow). A look is an
@@ -9,6 +10,10 @@ ring...) in a theme (its colours). Change this file and run it rather than editi
 
 Pixel palettes use only indexes the original's spell OJFFs draw with, so they are the same in
 every region (240-248, 1-5 and 11-15 turn with colour cycling, as in the originals).
+
+A part's light is its theme's glow colour (themes without one, smoke and darkness, give none),
+at the same points as its particles: a flash at the caster, a light flying with the projectile,
+a flash at the burst or hit, a glow over a field while it lasts (LIGHTS).
 """
 import json
 import os
@@ -367,6 +372,7 @@ ARCHETYPES['globe'] = lambda t, n: ring(t, n, radius=18)
 def kept():
     """The first looks, made by hand: the starter set's particular ones."""
     def d(name, theme, px, md):
+        THEME_OF[name] = theme
         look(name, T[theme], px, md)
     d('magic-missile-flight', 'arcane',
       # The original's one bolt, here three that weave a little: the same flight time.
@@ -639,16 +645,43 @@ SPELLS = """
 
 PARTS = {'C': 'Cast', 'F': 'Flight', 'B': 'Burst', 'H': 'Hit', 'D': 'Field'}
 
+# The hand-made looks' themes (kept() fills it); an archetype's look is named archetype-theme.
+THEME_OF = {}
+
+# Each part's light: map pixels it reaches, its strength, how long it fades (0: while the flight or field lasts).
+LIGHTS = {
+    'Cast': dict(Radius=40, Strength=0.9, Seconds=0.6),
+    'Flight': dict(Radius=40, Strength=1.0),
+    'Burst': dict(Radius=96, Strength=1.3, Seconds=0.9),
+    'Hit': dict(Radius=36, Strength=0.9, Seconds=0.5),
+    'Field': dict(Radius=56, Strength=0.8, Flicker=0.25),
+}
+
+
+def light(part, theme):
+    """The light a part in a theme throws, or None (a theme without a glow)."""
+    glow = T[theme].glow
+    if glow is None:
+        return None
+    body = dict(Color=glow[:7], **LIGHTS[part])
+    if theme == 'fire':
+        body['Flicker'] = max(body.get('Flicker', 0), 0.2)
+    return body
+
 
 def main():
     kept()
     looks = {'_about': 'Particle looks by spell number and part (Cast, Flight, Burst, Hit, Field) and style (Pixel, Modern), '
                        'naming looks/particles/NAME.json. A spell, part or style not here keeps its original OJFF. '
                        'Written by tools/particle_looks.py.'}
+    lights = {'_about': 'The light each spell part throws with [display] lighting on, by spell number and part: its colour, '
+                        'Radius (map pixels), Strength, Flicker and Seconds (0: while the flight or field lasts). '
+                        'Written by tools/particle_looks.py.'}
     for line in filter(None, map(str.strip, SPELLS.splitlines())):
         head, parts = line.split('|')
         number = head.split()[0]
         entry = {}
+        lit = {}
         for part in parts.split():
             key, value = part.split('=')
             if ':' in value:
@@ -661,7 +694,12 @@ def main():
                 if name + '.pixel' not in DEFS:
                     sys.exit(f'spell {number}: no look {name}')
             entry[PARTS[key]] = {'Pixel': name + '.pixel', 'Modern': name + '.modern'}
+            theme = value.split(':')[1] if ':' in value else THEME_OF.get(name)
+            if theme and (body := light(PARTS[key], theme)):
+                lit[PARTS[key]] = body
         looks[number] = entry
+        if lit:
+            lights[number] = lit
 
     folder = os.path.join(ROOT, 'particles')
     os.makedirs(folder, exist_ok=True)
@@ -673,7 +711,9 @@ def main():
             f.write('{\n' + ',\n'.join(f'  {json.dumps(k)}: {json.dumps(v)}' for k, v in body.items()) + '\n}\n')
     with open(os.path.join(ROOT, 'particle_looks.json'), 'w') as f:
         f.write('{\n' + ',\n'.join(f'  {json.dumps(k)}: {json.dumps(v)}' for k, v in looks.items()) + '\n}\n')
-    print(f'{len(DEFS)} definitions, {len(looks) - 1} spells')
+    with open(os.path.join(ROOT, 'spell_lights.json'), 'w') as f:
+        f.write('{\n' + ',\n'.join(f'  {json.dumps(k)}: {json.dumps(v)}' for k, v in lights.items()) + '\n}\n')
+    print(f'{len(DEFS)} definitions, {len(looks) - 1} spells, {len(lights) - 1} with light')
 
 
 if __name__ == '__main__':

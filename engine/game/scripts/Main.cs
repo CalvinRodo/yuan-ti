@@ -244,7 +244,7 @@ public partial class Main : Control
         }
         bool regionCheck = args.Contains("--check-regions") || args.Contains("--check-exits") || args.Contains("--check-start") || args.Contains("--check-verbs") || args.Contains("--check-memory") || args.Contains("--check-save")
             || args.Contains("--check-debugger") || args.Contains("--check-items") || args.Contains("--check-floor") || args.Contains("--check-character") || args.Contains("--check-dialogue")
-            || args.Contains("--check-journal") || args.Contains("--check-colours");
+            || args.Contains("--check-journal") || args.Contains("--check-colours") || args.Contains("--check-lighting");
         bool screenCheck = args.Contains("--check-intro") || args.Contains("--check-menu") || args.Contains("--check-mods") || args.Contains("--check-saves")
             || args.Contains("--check-party") || args.Contains("--check-chargen") || args.Contains("--check-windows");
         if (args.Contains("--check-install") || (install is null && (regionCheck || screenCheck)))
@@ -263,6 +263,11 @@ public partial class Main : Control
         {
             // For this run (not saved): original, particles_pixel or particles_modern.
             Settings.SpellEffectsForRun = effects["--spell-effects=".Length..];
+        }
+        if (args.FirstOrDefault(a => a.StartsWith("--lighting=")) is { } lighting)
+        {
+            // For this run (not saved): off, pixel or smooth.
+            Settings.LightingForRun = lighting["--lighting=".Length..];
         }
         if (args.Contains("--check-sandstorm") || args.Contains("--storm"))
         {

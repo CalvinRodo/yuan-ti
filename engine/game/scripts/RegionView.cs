@@ -214,6 +214,7 @@ public partial class RegionView : Node2D
         };
         AddChild(_camera);
         AddChild(BuildHud());
+        BuildLighting();
         if (OS.GetCmdlineUserArgs().Contains("--debug-overlay"))
         {
             (_overlay.Flags, _overlay.Grid, _overlay.Numbers, _hudPanel.Visible) = (true, true, true, true);
@@ -430,6 +431,11 @@ public partial class RegionView : Node2D
                 CheckColours();
                 return;
             }
+            if (OS.GetCmdlineUserArgs().Contains("--check-lighting"))
+            {
+                CheckLighting();
+                return;
+            }
             if (OS.GetCmdlineUserArgs().Contains("--check-prisoners"))
             {
                 CheckPrisoners();
@@ -532,7 +538,7 @@ public partial class RegionView : Node2D
 
     private CanvasLayer BuildHud()
     {
-        var layer = new CanvasLayer();
+        var layer = new CanvasLayer { Layer = 3 }; // over the map's light (1) and what is drawn unlit over it (2)
         var panel = new PanelContainer { Position = new Vector2(4, 4), Visible = false };
         _hud = new Label { LabelSettings = new LabelSettings { FontSize = 10 } };
         panel.AddChild(_hud);
@@ -1606,6 +1612,7 @@ public partial class RegionView : Node2D
 
     public override void _Process(double delta)
     {
+        UpdateLighting(delta);
         if (_transitioning || _cinematic is not null)
         {
             return; // fading to the next region, or a script's cinematic plays over the map

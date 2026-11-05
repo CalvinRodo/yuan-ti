@@ -184,7 +184,7 @@ public partial class OptionsWindow : RetroScreen
 
     private static List<Row> GameRows()
     {
-        string[] rings = ["NONE", "CHOSEN", "ALL"], effects = ["ORIGINAL", "UPDATED", "MODERN"];
+        string[] rings = ["NONE", "CHOSEN", "ALL"], effects = ["ORIGINAL", "UPDATED", "MODERN"], lightings = ["OFF", "PIXEL", "SMOOTH"];
         return
         [
             Volume("Music volume", () => Settings.MusicVolume, v => Settings.MusicVolume = v, "Click: louder; right-click: softer"),
@@ -205,6 +205,11 @@ public partial class OptionsWindow : RetroScreen
             new("Spell effects", () => effects[Array.IndexOf(Settings.SpellEffectModes, Settings.SpellEffectsMode)],
                 step => Settings.SpellEffectsMode = Settings.SpellEffectModes[(Array.IndexOf(Settings.SpellEffectModes, Settings.SpellEffectsMode) + step + 3) % 3],
                 "The original's, updated in its pixels, or modern"),
+            new("Lighting", () => lightings[Array.IndexOf(Settings.LightingModes, Settings.LightingMode)],
+                step => Settings.LightingMode = Settings.LightingModes[(Array.IndexOf(Settings.LightingModes, Settings.LightingMode) + step + 3) % 3],
+                "Light and dark on the map: in palette steps or smooth"),
+            Toggle("Day and night", () => Settings.DayNight, v => Settings.DayNight = v, "With lighting: the sky follows the clock"),
+            Toggle("Spell light", () => Settings.SpellLights, v => Settings.SpellLights = v, "With lighting: spells light up around them"),
             Toggle("Party follows", () => Settings.FollowLeader, v => Settings.FollowLeader = v, "The others follow whoever walks (off: each alone)"),
             Toggle("Leader alone", () => Settings.LeaderAlone, v => Settings.LeaderAlone = v, "Only the leader shows on the map (next game)"),
             Toggle("Quick collapse", () => Settings.QuickCollapse, v => Settings.QuickCollapse = v, "The party gathers fast (off: at a walk)"),

@@ -22,7 +22,7 @@ public enum FloorTerrain
 public partial class FloorEffects : Node2D
 {
     /// <summary>A shadow lies toward the lower right (the maps are lit from the upper left): where a figure's top lands, per pixel of its height.</summary>
-    private static readonly Vector2 ShadowLean = new(0.75f, 0.4f);
+    public static readonly Vector2 FixedLean = new(0.75f, 0.4f);
 
     private static readonly Color ShadowTint = new(0.12f, 0.06f, 0.02f);
     private const float ShadowAlpha = 0.45f;
@@ -63,6 +63,12 @@ public partial class FloorEffects : Node2D
 
     /// <summary>Living figures cast shadows (<c>[display] shadows</c>).</summary>
     public bool Shadows { get; set; } = true;
+
+    /// <summary>
+    /// Where the shadows fall, per pixel of a figure's height, and how dark they are (0–1): the fixed
+    /// sun of the upper left, or with the lighting's day and night the sun of the hour (<c>LightRules.Sun</c>).
+    /// </summary>
+    public (Vector2 Lean, float Strength) Sun { get; set; } = (FixedLean, 1);
 
     /// <summary>Walking on sand or dirt raises dust, and on water splashes (<c>[display] dust</c>).</summary>
     public bool Dust { get; set; } = true;
@@ -126,7 +132,8 @@ public partial class FloorEffects : Node2D
     /// <param name="figures">The figures' sprites (hot spot on the feet) that are alive and shown.</param>
     public void Follow(double delta, IReadOnlyCollection<Sprite2D> figures)
     {
-        _shadowGroup.Visible = Shadows;
+        _shadowGroup.Visible = Shadows && Sun.Strength > 0;
+        _shadowGroup.Modulate = new Color(1, 1, 1, ShadowAlpha * Sun.Strength);
         foreach (Sprite2D gone in _shadows.Keys.Where(f => !figures.Contains(f) || !IsInstanceValid(f)).ToList())
         {
             _shadows[gone].QueueFree();
@@ -159,8 +166,8 @@ public partial class FloorEffects : Node2D
             _shadowGroup.AddChild(shadow);
             _shadows[figure] = shadow;
         }
-        // The picture's y axis (up is −y) turned to lie along −ShadowLean, flattened.
-        shadow.Transform = new Transform2D(new Vector2(1, 0), -ShadowLean, figure.Position);
+        // The picture's y axis (up is −y) turned to lie along −lean, flattened.
+        shadow.Transform = new Transform2D(new Vector2(1, 0), -Sun.Lean, figure.Position);
         (shadow.Texture, shadow.FlipH, shadow.Offset, shadow.Centered) = (figure.Texture, figure.FlipH, figure.Offset, figure.Centered);
     }
 
