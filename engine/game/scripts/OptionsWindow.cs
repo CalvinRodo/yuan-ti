@@ -8,7 +8,7 @@ namespace DarkSun.Engine;
 /// as the mods screen): an OPTIONS banner and the ten slot bars, each an
 /// option and its value, ten to a page. GAME holds music and sound volume, full
 /// screen, the opening, autosave, pathfinding,
-/// the script repairs, shadows, dust, enemy rings, box selection and the
+/// the script repairs, shadows, dust, enemy rings, spell effects, box selection and the
 /// enemy keys; KEYS every key that can be rebound: click one, then press the
 /// new key (Esc keeps the old one), DEFAULTS puts them all back. A click on a
 /// bar changes its value (a right-click goes back a step); Up and Down choose a
@@ -184,7 +184,7 @@ public partial class OptionsWindow : RetroScreen
 
     private static List<Row> GameRows()
     {
-        string[] rings = ["NONE", "CHOSEN", "ALL"];
+        string[] rings = ["NONE", "CHOSEN", "ALL"], effects = ["ORIGINAL", "UPDATED", "MODERN"];
         return
         [
             Volume("Music volume", () => Settings.MusicVolume, v => Settings.MusicVolume = v, "Click: louder; right-click: softer"),
@@ -202,6 +202,9 @@ public partial class OptionsWindow : RetroScreen
             Toggle("Dust", () => Settings.Dust, v => Settings.Dust = v, "Dust when walking on sand"),
             new("Enemy rings", () => rings[Settings.EnemyRings], step => Settings.EnemyRings = (Settings.EnemyRings + step + 3) % 3,
                 "Rings under enemies in a fight"),
+            new("Spell effects", () => effects[Array.IndexOf(Settings.SpellEffectModes, Settings.SpellEffectsMode)],
+                step => Settings.SpellEffectsMode = Settings.SpellEffectModes[(Array.IndexOf(Settings.SpellEffectModes, Settings.SpellEffectsMode) + step + 3) % 3],
+                "The original's, updated in its pixels, or modern"),
             Toggle("Party follows", () => Settings.FollowLeader, v => Settings.FollowLeader = v, "The others follow whoever walks (off: each alone)"),
             Toggle("Leader alone", () => Settings.LeaderAlone, v => Settings.LeaderAlone = v, "Only the leader shows on the map (next game)"),
             Toggle("Quick collapse", () => Settings.QuickCollapse, v => Settings.QuickCollapse = v, "The party gathers fast (off: at a walk)"),

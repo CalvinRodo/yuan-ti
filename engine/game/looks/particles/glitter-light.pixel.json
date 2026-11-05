@@ -1,0 +1,11 @@
+{
+  "Shape": "Cell",
+  "Rate": 6,
+  "Lifetime": [0.3, 0.7],
+  "Speed": [0, 3],
+  "Spread": 180,
+  "Alpha": [0, 1, 0],
+  "Max": 300,
+  "Palette": [46, 223, 8, 13, 220],
+  "RandomColor": true
+}

@@ -1,0 +1,16 @@
+{
+  "Shape": "Cell",
+  "Offset": [0, 0],
+  "Burst": 160,
+  "Rate": 420,
+  "Seconds": 0.35,
+  "Lifetime": [0.4, 0.8],
+  "Speed": [6, 18],
+  "Direction": -90,
+  "Spread": 25,
+  "Gravity": [0, 15.0],
+  "Size": [2, 1],
+  "Alpha": [1, 1, 0],
+  "Max": 900,
+  "Palette": [46, 223, 47, 167]
+}

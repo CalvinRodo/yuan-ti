@@ -437,7 +437,7 @@ public partial class RegionView
 
     private void PlayEvent(CombatEvent e)
     {
-        bool fast = _checking;
+        bool fast = LooksHidden; // a check that watches the looks plays them at their pace
         foreach (string line in _combatLog.Log.Reveal(e))
         {
             Remember(line);
@@ -517,6 +517,9 @@ public partial class RegionView
             case Pushed p:
                 PlaceSprite(p.Actor, p.To);
                 LookOfSpellOn(p.Actor);
+                break;
+            case Summoned s:
+                LookOfSummoning(s);
                 break;
             case Teleported t:
                 PlaceSprite(t.Actor, t.To);
@@ -1881,6 +1884,219 @@ public partial class RegionView
             GD.Print($"  PROBLEM: {p}");
         }
         GD.Print(problems.Count == 0 ? "effect spells: OK" : $"effect spells: {problems.Count} problems");
+        GetTree().Quit(problems.Count == 0 ? 0 : 1);
+    }
+
+    /// <summary>Spells of each kind of particle look (a missile, a blast, a cone, a field, a help, a harm, a draining, a hold), cast by <c>--check-spell-effects</c>.</summary>
+    private static readonly (int Spell, string Name)[] ParticleStarters =
+    [
+        (9, "Magic Missile"), (28, "Fireball"), (33, "Lightning Bolt"), (59, "Cone of Cold"), (23, "Stinking Cloud"),
+        (55, "Wall of Fire"), (72, "Cure Light Wounds"), (164, "Ego Whip"), (84, "Dust Devil"),
+        (70, "Bless"), (71, "Curse"), (40, "Vampiric Touch"), (31, "Hold Person"), (46, "Ice Storm"), (5, "Color Spray"),
+    ];
+
+    /// <summary>The original's looks (1–196): each part of each has particles in both styles.</summary>
+    private const int OriginalLooks = 196;
+
+    /// <summary>
+    /// <c>--check-spell-effects</c>: every spell has a look that works in each mode of
+    /// <c>[display] spell_effects</c> (each part the original draws has particles, or an <c>OJFF</c>
+    /// that loads; each of the original's has particles in both styles; every look names particles that
+    /// are there). Then, in a fight in the start region, in each mode a member casts a spell of each kind
+    /// (<see cref="ParticleStarters"/>: at a foe, Cure Light Wounds on itself, Dust Devil beside it; from
+    /// no slot of its own), played as the game plays it:
+    /// each look's cast, flight, burst and field show their particles; the playback takes the
+    /// original's time (longer only by a flight's <see cref="ParticleDefinition.MinSeconds"/>); the
+    /// fields' particles go with their fields; none are left after.
+    /// </summary>
+    private async void CheckSpellEffects()
+    {
+        _checking = _checkingLooks = true;
+        var problems = new List<string>();
+        SpellRules spells = Session.SpellRules;
+        ParticleLooks looks = Session.ParticleLooks;
+        problems.AddRange(looks.Missing);
+        var loads = new Dictionary<int, bool>();
+        int partsShown = 0, withParticles = 0;
+        foreach (SpellLook look in spells.Looks)
+        {
+            AreaTemplate? t = spells.Effect(look.Number) is { } e ? spells.TemplateOf(e) : null;
+            (LookPart Part, int Ojff)[] parts =
+            [
+                (LookPart.Cast, look.CastGraphic), (LookPart.Flight, spells.ProjectileOf(look) ?? -1),
+                (LookPart.Burst, t is { Kind: AreaTemplate.Burst } ? t.Graphic : -1),
+                (LookPart.Hit, look.HitGraphic >= 0 ? look.HitGraphic : t?.Graphic ?? -1),
+                (LookPart.Field, t is { Kind: not AreaTemplate.Burst } ? t.Graphic : -1),
+            ];
+            foreach (var (part, ojff) in parts.Where(p => p.Ojff > 0))
+            {
+                foreach (ParticleStyle? style in new ParticleStyle?[] { null, ParticleStyle.Pixel, ParticleStyle.Modern })
+                {
+                    partsShown++;
+                    if (style is { } st && looks.For(look.Number, part, st) is not null)
+                    {
+                        withParticles++;
+                    }
+                    else if (style is { } missing && look.Number <= OriginalLooks)
+                    {
+                        problems.Add($"spell {look.Number} {part} ({missing}): no particles");
+                    }
+                    else if (!(loads.TryGetValue(ojff, out bool ok) ? ok
+                        : loads[ojff] = Region.MakeObject(_objectData, ojff, 0, 0, d => Session.Assets.Frames(d)) is not null))
+                    {
+                        problems.Add($"spell {look.Number} {part} ({style?.ToString() ?? "original"}): OJFF {ojff} doesn't load");
+                    }
+                }
+            }
+        }
+        GD.Print($"spell effects: {spells.Looks.Count} looks, {partsShown} parts in three modes, {withParticles} of them particles, {loads.Count} OJFFs");
+
+        // Timed by the game's clock, not the wall's: the same with --write-movie's fixed frames.
+        double clock = 0;
+        async Task Frames(int n)
+        {
+            for (int i = 0; i < n; i++)
+            {
+                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                clock += GetProcessDeltaTime();
+            }
+        }
+        await Frames(5);
+        if (!StartTestFight() || _battle is not { } battle)
+        {
+            problems.Add("no creature to fight in the start region");
+        }
+        else
+        {
+            double waited = clock;
+            while (PlayerTurn is null && InCombat && clock - waited < 60)
+            {
+                await Frames(1);
+            }
+            if (PlayerTurn is not { } member || battle.Combatants.FirstOrDefault(c => c.Alive && member.IsEnemyOf(c)) is not { } foe)
+            {
+                problems.Add("no member's turn came, or no foe");
+            }
+            else
+            {
+                foreach (Combatant c in new[] { member, foe })
+                {
+                    c.Vitals.MaxHp = c.Vitals.Hp = 30_000; // standing through the whole set, three times
+                }
+                Cell[] around = [new(0, -1), new(1, 0), new(0, 1), new(-1, 0), new(1, -1), new(1, 1), new(-1, 1), new(-1, -1)];
+                var seconds = new Dictionary<(string Mode, int Spell), double>();
+                foreach (string mode in Settings.SpellEffectModes)
+                {
+                    Settings.SpellEffectsForRun = mode;
+                    ParticleStyle? style = Settings.SpellEffects;
+                    foreach (var (spell, name) in ParticleStarters)
+                    {
+                        Cell at = spell switch
+                        {
+                            72 => member.Cell,
+                            84 => around.Select(d => member.Cell + d).Where(battle.Free).DefaultIfEmpty(foe.Cell).First(),
+                            _ => foe.Cell,
+                        };
+                        int fields = battle.Fields.Count;
+                        if (!battle.Cast(member, spell, 10, at, ownSpell: false))
+                        {
+                            problems.Add($"{name} ({mode}) wasn't cast at {at}");
+                            continue;
+                        }
+                        var seen = new HashSet<ParticleDefinition>();
+                        int peak = 0;
+                        // The cast's own look is timed: from its event until the playback would go on (what follows
+                        // it, saves and damage, is rolled anew each time).
+                        while (_combatEvents.TryDequeue(out CombatEvent? before))
+                        {
+                            PlayEvent(before);
+                            if (before is Cast)
+                            {
+                                break;
+                            }
+                        }
+                        double start = clock;
+                        double? played = null;
+                        while (clock - start < 10)
+                        {
+                            await Frames(1);
+                            seen.UnionWith(_particles.Effects.Select(e => e.Definition));
+                            peak = Math.Max(peak, _particles.ParticleCount);
+                            if (played is null && _combatWait <= 0 && !GraphicsBlock)
+                            {
+                                played = clock - start;
+                            }
+                            // The rest played out, and a little longer to see the particles given off.
+                            if (played is { } p && _combatEvents.Count == 0 && _combatWait <= 0 && !GraphicsBlock && clock - start > p + 0.3)
+                            {
+                                break;
+                            }
+                        }
+                        seconds[(mode, spell)] = played ?? 10;
+                        if (style is not null && peak == 0)
+                        {
+                            problems.Add($"{name} ({mode}): no particles given off");
+                        }
+                        bool fieldMade = battle.Fields.Count > fields;
+                        foreach (LookPart part in new[] { LookPart.Cast, LookPart.Flight, LookPart.Burst, LookPart.Field })
+                        {
+                            if (style is { } st && looks.For(spell, part, st) is { } wanted && !seen.Contains(wanted) && (part != LookPart.Field || fieldMade))
+                            {
+                                problems.Add($"{name} ({mode}): its {part} particles weren't shown");
+                            }
+                        }
+                        if (style is null && seen.Count > 0)
+                        {
+                            problems.Add($"{name} (original): particles shown");
+                        }
+                        GD.Print($"spell effects: {mode} {name}: {seconds[(mode, spell)]:F2} s, {seen.Count} looks, at most {peak} particles");
+                    }
+                    // The fields go (as their rounds run out): their particles live out their lives and are gone.
+                    int fieldParticles = _fieldParticles.Count;
+                    foreach (AreaField f in battle.Fields.ToList())
+                    {
+                        FieldGone(f);
+                    }
+                    await Frames(1);
+                    double ending = clock;
+                    while (_particles.Effects.Any() && clock - ending < 5)
+                    {
+                        await Frames(1);
+                    }
+                    if (style is not null && fieldParticles == 0)
+                    {
+                        problems.Add($"{mode}: no field had particles");
+                    }
+                    if (_particles.Effects.Any())
+                    {
+                        problems.Add($"{mode}: {_particles.Effects.Count()} particle effects left after the fields went");
+                    }
+                }
+                foreach (var (spell, name) in ParticleStarters)
+                {
+                    if (!seconds.TryGetValue((Settings.OriginalEffects, spell), out double original))
+                    {
+                        continue;
+                    }
+                    foreach (string mode in new[] { Settings.PixelParticles, Settings.ModernParticles })
+                    {
+                        Settings.SpellEffectsForRun = mode;
+                        double longer = Settings.SpellEffects is { } st && looks.For(spell, LookPart.Flight, st) is { } flight ? flight.MinSeconds : 0;
+                        // A frame or two either way: the playback is timed by real frames here.
+                        if (seconds.TryGetValue((mode, spell), out double s) && (s > original + longer + 0.15 || s < original - 0.15))
+                        {
+                            problems.Add($"{name}: plays {s:F2} s in {mode}, {original:F2} s in the original's");
+                        }
+                    }
+                }
+            }
+        }
+        Settings.SpellEffectsForRun = null;
+        foreach (string p in problems)
+        {
+            GD.Print($"  PROBLEM: {p}");
+        }
+        GD.Print(problems.Count == 0 ? "spell effects: OK" : $"spell effects: {problems.Count} problems");
         GetTree().Quit(problems.Count == 0 ? 0 : 1);
     }
 

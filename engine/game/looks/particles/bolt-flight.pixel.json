@@ -1,0 +1,11 @@
+{
+  "Heads": 2,
+  "Wander": 6,
+  "Rate": 120,
+  "Lifetime": [0.08, 0.16],
+  "Speed": [0, 4],
+  "Spread": 180,
+  "HeadSize": 2,
+  "Max": 200,
+  "Palette": [46, 220]
+}

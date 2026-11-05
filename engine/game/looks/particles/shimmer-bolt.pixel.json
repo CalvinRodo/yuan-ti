@@ -1,0 +1,12 @@
+{
+  "Shape": "Circle",
+  "Radius": 11,
+  "Offset": [0, -16],
+  "Rate": 60,
+  "Seconds": 0.7,
+  "Lifetime": [0.25, 0.6],
+  "Speed": [0, 5],
+  "Spread": 180,
+  "Alpha": [0, 1, 0],
+  "Palette": [46, 220, 161, 13, 12, 11]
+}

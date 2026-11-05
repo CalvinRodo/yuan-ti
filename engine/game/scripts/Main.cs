@@ -259,6 +259,11 @@ public partial class Main : Control
             Settings.SetBundledMod("Defiling", true);
             Settings.SetBundledMod("SweetWater", true);
         }
+        if (args.FirstOrDefault(a => a.StartsWith("--spell-effects=")) is { } effects)
+        {
+            // For this run (not saved): original, particles_pixel or particles_modern.
+            Settings.SpellEffectsForRun = effects["--spell-effects=".Length..];
+        }
         if (args.Contains("--check-sandstorm") || args.Contains("--storm"))
         {
             // For this run (not saved): the mod the check is about.

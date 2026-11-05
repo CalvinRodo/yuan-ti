@@ -1,0 +1,17 @@
+{
+  "Shape": "Circle",
+  "Radius": 12,
+  "Offset": [0, -16],
+  "Rate": 110,
+  "Seconds": 0.7,
+  "Lifetime": [0.25, 0.6],
+  "Speed": [0, 6],
+  "Spread": 180,
+  "Size": [0.5, 3, 0.5],
+  "Alpha": [0, 1, 0],
+  "Colors": ["#ffffff", "#fff080", "#e8a8ff", "#a8a8ff", "#88ffff"],
+  "Texture": "Glow",
+  "Blend": "Add",
+  "RandomColor": true,
+  "Glow": {"Radius": 20, "Color": "#ffffe0", "Alpha": 0.3}
+}

@@ -1,0 +1,14 @@
+{
+  "Shape": "Circle",
+  "Radius": 7,
+  "Burst": 25,
+  "Rate": 50,
+  "Seconds": 0.4,
+  "Lifetime": [0.4, 0.7],
+  "Speed": [2, 6],
+  "Direction": -90,
+  "Spread": 90,
+  "Size": [1, 2],
+  "Alpha": [1, 1, 0],
+  "Palette": [217, 216, 215, 214]
+}

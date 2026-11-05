@@ -332,6 +332,62 @@ public static class Session
 
     private static DarkSun.Game.World.WeatherRules? _weatherRules;
 
+    /// <summary>Where the engine's own particle looks are: <c>particle_looks.json</c> and <c>particles/NAME.json</c>.</summary>
+    private const string EngineLooks = "res://looks";
+
+    private static DarkSun.Game.Animation.ParticleLooks? _particleLooks;
+
+    /// <summary>
+    /// The spells' particle looks (<c>[display] spell_effects</c>): every mod's
+    /// <c>rules/particle_looks.json</c> and <c>looks/particles/NAME.json</c> over the
+    /// engine's (<c>res://looks</c>), the first mod's winning; a file that can't be used
+    /// is left out, with a warning.
+    /// </summary>
+    public static DarkSun.Game.Animation.ParticleLooks ParticleLooks => _particleLooks ??= LoadParticleLooks();
+
+    private static DarkSun.Game.Animation.ParticleLooks LoadParticleLooks()
+    {
+        List<string> maps = [];
+        Dictionary<string, DarkSun.Game.Animation.ParticleDefinition> definitions = [];
+        void Use(string path, string text, bool map)
+        {
+            try
+            {
+                if (map)
+                {
+                    _ = DarkSun.Game.Animation.ParticleLooks.ParseMap(text).Count();
+                    maps.Add(text);
+                }
+                else
+                {
+                    definitions.TryAdd(Path.GetFileNameWithoutExtension(path), DarkSun.Game.Animation.ParticleDefinition.Parse(text));
+                }
+            }
+            catch (InvalidDataException e)
+            {
+                Godot.GD.PushWarning($"Mod file not used: {path}: {e.Message}");
+            }
+        }
+        foreach (string folder in Mods.Mods.Select(m => m.Directory))
+        {
+            string map = Path.Combine(folder, "rules", "particle_looks.json"), particles = Path.Combine(folder, "looks", "particles");
+            if (File.Exists(map))
+            {
+                Use(map, File.ReadAllText(map), map: true);
+            }
+            foreach (string path in Directory.Exists(particles) ? Directory.GetFiles(particles, "*.json").Order().ToArray() : [])
+            {
+                Use(path, File.ReadAllText(path), map: false);
+            }
+        }
+        Use($"{EngineLooks}/particle_looks.json", Godot.FileAccess.GetFileAsString($"{EngineLooks}/particle_looks.json"), map: true);
+        foreach (string file in Godot.DirAccess.GetFilesAt($"{EngineLooks}/particles").Where(f => f.EndsWith(".json")).Order())
+        {
+            Use(file, Godot.FileAccess.GetFileAsString($"{EngineLooks}/particles/{file}"), map: false);
+        }
+        return new DarkSun.Game.Animation.ParticleLooks(maps, definitions);
+    }
+
     /// <summary>The first mod's <c>rules/<paramref name="file"/></c>, else <paramref name="original"/> (with a warning if a mod's can't be used).</summary>
     private static T ModRules<T>(string file, Func<string, T> read, T original)
     {
@@ -447,7 +503,7 @@ public static class Session
         Files.Clear();
         Assets.Clear();
         (_sprites, _rules, _names, _quests) = (null, null, null, null);
-        (_creatureRules, _combatRules, _spellRules, _weatherRules, _spells) = (null, null, null, null, null);
+        (_creatureRules, _combatRules, _spellRules, _weatherRules, _spells, _particleLooks) = (null, null, null, null, null, null);
         GameFonts.Reset();
         LoadParty();
         _bundledMods ??= BundledMods.Extract();

@@ -1,0 +1,12 @@
+{
+  "Rate": 30,
+  "Lifetime": [0.2, 0.4],
+  "Speed": [4, 12],
+  "Direction": 90,
+  "Spread": 60,
+  "Gravity": [0, 40],
+  "HeadSize": 4,
+  "ArriveBurst": 10,
+  "Max": 120,
+  "Palette": [216, 213, 211, 209]
+}

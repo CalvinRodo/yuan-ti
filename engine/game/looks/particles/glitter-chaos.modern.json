@@ -1,0 +1,13 @@
+{
+  "Shape": "Cell",
+  "Rate": 6,
+  "Lifetime": [0.3, 0.7],
+  "Speed": [0, 3],
+  "Spread": 180,
+  "Size": [0.5, 3, 0.5],
+  "Alpha": [0, 1, 0],
+  "Max": 400,
+  "Colors": ["#fff060", "#ffa020", "#ff4848", "#f050e8", "#a868ff", "#6890ff", "#58f0f0", "#68ff68"],
+  "Texture": "Glow",
+  "RandomColor": true
+}

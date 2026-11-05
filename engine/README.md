@@ -432,6 +432,8 @@ mods/
                                     letters, dark their shadow, a row under each marking its width
     BVOC/4.wav                      a sound effect: PCM WAV, any rate, 8 or 16 bits, mono or stereo;
                                     a smpl loop repeats (stored as VOC; .voc files are taken as they are)
+    rules/particle_looks.json       which spells' parts draw particles (see Spell effects)
+    looks/particles/fizz.json       a particle look those name
     RGN2A.GFF/ETAB/42.bin           only in that file; a file folder may also add resources
     RESOURCE.GFF/BVOC/19.wav        so a new sound goes here: sounds 19, 30, 87 and 127, which
                                     scripts play, have no BVOC in the game
@@ -869,6 +871,83 @@ the map's cells (an empty `cells` removes the map). The types are
 `TERRAIN_TYPES` in `src/config.py`. Godot reads the file as
 `res://data/map_terrain.json` whenever a region loads, for `dark_sun` only,
 and uses it for the floor's dust and splashes (see Dust above).
+
+## Spell effects
+
+Not in DSUN.EXE. **Spell effects** in the Options window (`[display] spell_effects`;
+`-- --spell-effects=MODE` for one run) chooses how spells look in a fight:
+
+- **ORIGINAL** (`original`, the default): the original's `OJFF` animations, as before.
+- **UPDATED** (`particles_pixel`): particles in the original's style: whole map pixels at the
+  game's scale, in the region's palette (so colour cycling still turns them: fire flickers),
+  fading by an ordered dither, never blended. The built-in looks take their colours from the
+  spells' own animations.
+- **MODERN** (`particles_modern`): particles at the screen's resolution, soft, glowing and
+  added onto what is under them, with light thrown on the ground. Magic Missile's bolts swarm
+  out across the screen before homing in on the target.
+
+Each spell is drawn in up to five parts, `Cast` (over the caster), `Flight` (the projectile,
+caster to point), `Burst` (where an area spell lands), `Hit` (on each one it reaches unhurt; for a
+summoning, where the creature comes) and `Field` (a lingering area, while it lasts). A part with
+particles in the chosen style draws them; any other keeps the original's `OJFF` (a mod's own
+spell, say, until it gives one particles). Flights fly the projectile's way in its time unless their look sets
+`MinSeconds` (the modern Magic Missile's swarm: a second); bursts keep the original's timing;
+nothing about the rules changes. A field's particles come and go with it, from one emitter for all its
+cells. Particles move in fixed steps from a seeded roll (`ParticleEffect`, `DarkSun.Game`), so an
+effect plays the same way at any frame rate.
+
+Every part of each of the original's 196 looks has particles in both styles. Where the original
+shares one animation among many spells (a cyan sparkle for most casts, a purple one for every ward,
+one burst for Bless, Curse, Haste, Slow and Dispel Magic), each now has its own, by what it does:
+Bless's motes rise gold off each one blessed, Curse's settle dark onto them; wards circle the one
+warded, holds bind it in bands, the mind's spells swirl about the head, drains flow back to the
+caster, summonings rise in a vortex. `tools/particle_looks.py` writes them (an archetype, how the
+particles move, in a theme, their colours) and says which spell has which; change it and run
+`uv run python3 tools/particle_looks.py` rather than editing its JSON.
+
+The looks are data. `game/looks/particle_looks.json` maps spell number → part → style (`Pixel`,
+`Modern`) → a name, and `game/looks/particles/NAME.json` defines it; a mod's
+`rules/particle_looks.json` and `looks/particles/NAME.json` go over them (the first mod's win;
+an entry replaces only that spell, part and style). For example, a mod giving Magic Missile a
+green cast in the modern style:
+
+```json
+{"9": {"Cast": {"Modern": "fizz"}}}
+```
+
+and `looks/particles/fizz.json`:
+
+```json
+{
+  "Shape": "Circle", "Radius": 8, "Burst": 30, "Rate": 60, "Seconds": 0.4,
+  "Lifetime": [0.3, 0.7], "Speed": [8, 24], "Direction": -90, "Spread": 60, "Gravity": [0, -18], "Drag": 1,
+  "Size": [3, 2, 0.5], "Alpha": [1, 0.9, 0], "Colors": ["#ffffff", "#80ff90", "#20a04000"],
+  "Texture": "Glow", "Blend": "Add", "Glow": {"Radius": 26, "Color": "#40ff60", "Alpha": 0.45}
+}
+```
+
+| Field | Meaning |
+|-------|---------|
+| `Shape` | `Point` (at the point; a flight's heads), `Circle` (within `Radius` of it, flattened as the floor), `Ring` (on that circle's rim), `Cone` (from the caster, within `Spread` of the way to the point), `Line` (along the area from the caster's end to the far one), `Cell` (anywhere in the area's cells) |
+| `Offset` | where particles start from where the shape puts them (x, y; not a cone's): `[0, -30]` about the head of one stood at the point, `[0, -48]` above an area's cells for hail |
+| `Rate`, `Burst`, `Seconds`, `Max` | particles a second (a field's per cell, a flight's per head), at once at the start, seconds given off (flights and fields: while they last), most alive at once (default 300) |
+| `Lifetime`, `Speed` | ranges rolled per particle: seconds, pixels a second |
+| `Direction`, `Spread`, `Aim`, `Radial` | degrees (0 right, 90 down; default -90, up) ± `Spread`; a cone's and `Aim`'s are from the way to the point, so give a cone `Direction` 0 to spray straight at it; `Aim`: from the way from the caster to the point (a hit's `Direction` 180 flies back to the caster); `Radial`: from the way out from the (offset) point, so 0 out, 90 around, 180 in |
+| `Gravity`, `Pull`, `Drag` | pixels a second added each second (x, y); added toward the (offset) point (below 0: away; with `Radial` 90, a swirl); the share of speed lost a second |
+| `Size`, `Alpha` | over the life, keys spread evenly (pixels; 0–1) |
+| `Palette` / `Colors`, `RandomColor` | palette indexes stepped through (the pixel style), or `#rrggbb[aa]` blended (the modern; the pixel style without a palette); `RandomColor`: each particle keeps one, picked at its birth (a rainbow) |
+| `Texture`, `Blend` | `Pixel`, `Glow`, `Spark`; `Mix` or `Add` (the pixel style never blends) |
+| `Blocks` | the playback waits until it is done (flights always wait for their flight) |
+| `Heads`, `Wander`, `Stagger`, `MinSeconds`, `HeadSize`, `ArriveBurst` | flights: how many fly, how far off the straight way they swing, the share of the flight by which they land one after another, the least flight time, a head's size, particles where each lands |
+| `Glow` | the modern style's light on the ground: `Radius`, `Color`, `Alpha` |
+
+Distances are map pixels; keys starting with `_` in the map are notes. A file that can't be used is
+left out with a warning. `-- --new-game --check-spell-effects` checks that every spell part the
+original draws has particles or an `OJFF` that loads in each of the three modes (the original's
+196: particles in both styles) and that every look names particles that are there, then casts a
+spell of each kind (Magic Missile, Fireball, Bless, Curse, Hold Person, Vampiric Touch...) in a fight in each mode, played at
+the game's pace: each look's particles show, the cast takes the original's time (longer only by
+a flight's `MinSeconds`), and the fields' particles go with them.
 
 ## Combat log
 

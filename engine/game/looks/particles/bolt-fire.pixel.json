@@ -1,0 +1,13 @@
+{
+  "Heads": 1,
+  "Wander": 0,
+  "Rate": 70,
+  "Lifetime": [0.15, 0.35],
+  "Speed": [0, 6],
+  "Spread": 180,
+  "HeadSize": 3,
+  "ArriveBurst": 6,
+  "Alpha": [1, 1, 0],
+  "Max": 200,
+  "Palette": [46, 167, 244, 245, 246, 247, 248]
+}

@@ -1,0 +1,18 @@
+{
+  "Heads": 3,
+  "Wander": 16,
+  "Rate": 220,
+  "Lifetime": [0.15, 0.4],
+  "Speed": [0, 10],
+  "Spread": 180,
+  "Drag": 1,
+  "HeadSize": 7,
+  "ArriveBurst": 16,
+  "Size": [3.5, 2, 0.5],
+  "Alpha": [1, 0.9, 0],
+  "Max": 600,
+  "Colors": ["#fff6d0", "#ffc040", "#ff6010", "#80200000"],
+  "Texture": "Glow",
+  "Blend": "Add",
+  "Glow": {"Radius": 30, "Color": "#ff8030", "Alpha": 0.5}
+}
