@@ -874,7 +874,7 @@ than leaving them all for the end:
 
 | Feature | Milestone |
 |---------|-----------|
-| Any resolution, integer or smooth scaling, widescreen view of the map | M2 |
+| Any resolution, integer or smooth scaling, widescreen view of the map (the view locked to the original's 320 × 200 by default so a map's size isn't given away, Lock view off for the wide view: done 2026-11-04, #149; `Settings.LockView`) | M2 |
 | Fast-forward, adjustable game and combat speed | M2, M6 |
 | Remappable keys, gamepad support, mouse wheel zoom | M2 |
 | Highlight interactive objects, tooltips on hover | M2–M4 |

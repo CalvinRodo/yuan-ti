@@ -354,7 +354,7 @@ releasing them stops after the current step. They move the active combatant one
 cell per key press in combat, using its movement allowance. Menus and dialogue
 block keyboard walking. The arrow keys or middle-drag scroll (the camera eases after the selected
 character, and follows it again after the next click); mouse wheel or +/-
-zoom (½, 1–4; 2, the default, shows what the original showed); PgUp/PgDn change region;
+zoom (2, the default, shows what the original showed; 3 and 4 closer, and with the view unlocked 1 and ½ farther); PgUp/PgDn change region;
 F1 shows blocked cells (red), cells that block line of sight (blue outline),
 occupied cells (yellow) and move triggers (magenta); F3 a cell grid (coordinates every 8 cells); F4 each object's index
 and `OJFF` number (party green, creatures yellow, doors cyan); with any of
@@ -777,9 +777,14 @@ instead of the intro (with `--check-intro`, through, headless).
 ## Display
 
 The game is drawn for a 640 × 400 viewport (twice the original's 320 × 200)
-and shown at the largest whole-number scale that fits the window; the
-viewport grows to fill the rest (`PixelScaler`), so pixels stay square and
-sharp at any window size. `-- --check-display` prints the window, viewport
+and shown at the largest whole-number scale that fits the window
+(`PixelScaler`), so pixels stay square and sharp at any window size.
+**Lock view** in the Options window (`[display] lock_view`, on by default)
+keeps the viewport at 640 × 400, bordered in black in a bigger window, and the
+map from zooming out past the original's zoom, so no more of a region shows
+than DSUN.EXE showed and its size isn't given away; off, the viewport grows
+to fill the rest of the window and the map zooms out to ½. `--check-items`
+checks the zoom limit and the viewport sizes. `-- --check-display` prints the window, viewport
 and scale; `-- --new-game` goes straight into a new game.
 
 ## Floor effects

@@ -193,6 +193,7 @@ public partial class OptionsWindow : RetroScreen
                 "SoundFont (General MIDI) or the original's AdLib / OPL3"),
             Volume("Sound volume", () => Settings.SoundVolume, v => Settings.SoundVolume = v, "Click: louder; right-click: softer"),
             Toggle("Full screen", () => Settings.Fullscreen, v => Settings.Fullscreen = v, "The whole screen or a window"),
+            Toggle("Lock view", () => Settings.LockView, v => Settings.LockView = v, "Show no more of the map than the original"),
             Toggle("Skip the opening", () => Settings.SkipIntro, v => Settings.SkipIntro = v, "Start at the main menu"),
             Toggle("Autosave", () => Settings.Autosave, v => Settings.Autosave = v, "Save on entering a region"),
             Toggle("Original paths", () => Settings.OriginalPathfinding, v => Settings.OriginalPathfinding = v, "Walk as the original plans paths"),
