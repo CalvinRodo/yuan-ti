@@ -51,6 +51,9 @@ public partial class ColourCycling : CanvasLayer
     private readonly List<Range> _ranges = [];
     private readonly List<Palette> _palettes = [];
     private ShaderMaterial _material = null!;
+
+    /// <summary>Other shaders that turn the colours themselves (<see cref="LightingLayer"/>), kept in step with this one's.</summary>
+    private readonly List<ShaderMaterial> _shared = [];
     private ColorRect _screen = null!;
     private double _sinceStep;
 
@@ -154,8 +157,8 @@ public partial class ColourCycling : CanvasLayer
         _palettes.Clear();
         _palettes.AddRange(palettes.Where(Vga).Take(MaxPalettes));
         (_sinceStep, Steps) = (0, 0);
-        _material.SetShaderParameter("palettes", _palettes.Count);
-        _material.SetShaderParameter("base_colours", Colours(_ => 0));
+        Set("palettes", _palettes.Count);
+        Set("base_colours", Colours(_ => 0));
         Apply();
         _screen.Visible = _palettes.Count > 0;
         SetProcess(_screen.Visible);
@@ -165,6 +168,10 @@ public partial class ColourCycling : CanvasLayer
     public void Stop()
     {
         _ranges.Clear();
+        foreach (ShaderMaterial m in _shared)
+        {
+            m.SetShaderParameter("palettes", 0);
+        }
         _screen.Visible = false;
         SetProcess(false);
     }
@@ -233,7 +240,27 @@ public partial class ColourCycling : CanvasLayer
         return _palettes.Any(p => p[Cycled[code - 1]] == b);
     }
 
-    private void Apply() => _material.SetShaderParameter("now_colours", Colours(ShownAt));
+    private void Apply() => Set("now_colours", Colours(ShownAt));
+
+    private void Set(string name, Variant value)
+    {
+        _material.SetShaderParameter(name, value);
+        foreach (ShaderMaterial m in _shared)
+        {
+            m.SetShaderParameter(name, value);
+        }
+    }
+
+    /// <summary>Keep <paramref name="material"/>'s <c>palettes</c>, <c>base_colours</c> and <c>now_colours</c> as this one's.</summary>
+    public void Share(ShaderMaterial material)
+    {
+        _shared.Add(material);
+        material.SetShaderParameter("palettes", Running ? _palettes.Count : 0);
+        material.SetShaderParameter("base_colours", Colours(_ => 0));
+        material.SetShaderParameter("now_colours", Colours(ShownAt));
+    }
+
+    public void Unshare(ShaderMaterial material) => _shared.Remove(material);
 
     /// <summary>For each palette and each index that can turn, the colour of <paramref name="from"/>(index) (0: the index itself).</summary>
     private Vector3[] Colours(Func<int, int> from)

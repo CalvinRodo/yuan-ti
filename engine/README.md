@@ -434,6 +434,8 @@ mods/
                                     a smpl loop repeats (stored as VOC; .voc files are taken as they are)
     rules/particle_looks.json       which spells' parts draw particles (see Spell effects)
     looks/particles/fizz.json       a particle look those name
+    rules/lights.json               lights added over the engine's (see Lighting)
+    rules/spell_lights.json         the light spells' parts throw, over the engine's
     RGN2A.GFF/ETAB/42.bin           only in that file; a file folder may also add resources
     RESOURCE.GFF/BVOC/19.wav        so a new sound goes here: sounds 19, 30, 87 and 127, which
                                     scripts play, have no BVOC in the game
@@ -947,7 +949,91 @@ original draws has particles or an `OJFF` that loads in each of the three modes 
 196: particles in both styles) and that every look names particles that are there, then casts a
 spell of each kind (Magic Missile, Fireball, Bless, Curse, Hold Person, Vampiric Touch...) in a fight in each mode, played at
 the game's pace: each look's particles show, the cast takes the original's time (longer only by
-a flight's `MinSeconds`), and the fields' particles go with them.
+a flight's `MinSeconds`), and the fields' particles go with them. With `--spell-effects=MODE` it casts
+them in that mode only (to record one).
+
+## Lighting
+
+Not in DSUN.EXE, and off by default: with it off the map looks exactly as the original draws it.
+**Lighting** in the Options window (`[display] lighting`: `off`, `pixel`, `smooth`; `--lighting=MODE`
+for one run) lights the map; **Day and night** (`[display] day_night`) and **Spell light**
+(`[display] spell_lights`) turn its two parts off. It is looks only: no rule, sight or fog sees it.
+
+- **The sky.** Outdoors the light follows the game clock (`GameWorld.Clock`, seconds; a new game
+  starts at 9:00): a hot white glare at noon, orange at dusk, deep blue at night and a red dawn under
+  the crimson sun, blended between the hours `data/lights.json` gives. Indoors
+  (`data/map_environments.json`) the light is fixed. With day and night off it is always noon's.
+  The figures' shadows (`FloorEffects`) fall from the sun of the hour, west in the morning, short at
+  noon, east in the evening, and fade out at night; indoors and with the lighting off they keep the
+  fixed sun of the upper left.
+- **The map's own lights** (`GlowScanner`, found once on entering a region). Pixels of the ground,
+  objects and walls drawn in a glowing palette colour give light, one light for each 48-pixel square
+  with enough of them, at their middle, brighter the more there are:
+  - the game's fire colours 240–248 (fire pits, braziers, torches);
+  - the region's own cycling colours 224–239 where its palette has them hot (lava; in another region
+    the same colours are water).
+
+  Lava and fire themselves show as drawn by day or night. Objects named by their `OJFF` number give a
+  light of their own, and lights can be put by hand in a region.
+- **What figures carry.** An item worn or held (by `RDFF`) or, in a fight, a condition (by name: Flame
+  Blade and Fire Shield glow) lights its bearer and moves with it. Every figure stands in at least
+  `FigureMinimum` of light, the selected character a little farther, so night never hides who is where.
+- **Spells** throw light at the same points as their particles (#147's cast, flight, burst, hit and
+  field; `RegionView.CombatLooks` calls both): a flash at the caster, a light flying with the
+  projectile, a flash where it bursts or hits, and a glow over a field such as Wall of Fire while it
+  lasts. The colours are the particles' themes', written with them by `tools/particle_looks.py` into
+  `looks/spell_lights.json`; smoke and darkness give none.
+
+`LightingLayer` draws it. Lights are added up in a buffer with a texel for each map pixel, over the
+sky's light; a shader over the map, under the unlit layer (the spells' particles, the damage splashes,
+the overhead map's marks, the debug overlay) and the windows, first turns the colour-cycling colours
+(their codes would be lost once lit) and then multiplies each map pixel by its texel, so pixels stay
+square at any scale. `smooth` keeps VGA's 6-bit steps; `pixel` lights in six bands and puts each
+colour back to the nearest of the region's palette. The colours it writes have no code bits, so
+`ColourCycling` leaves them be. At most 160 lights are drawn a frame, the nearest the middle of the
+view; the Lava Rifts' 1500 hold 60 frames a second.
+
+The data is `data/lights.json`, with each mod's `rules/lights.json` added over it (the mod's sky and
+values where it gives them, its entries over the engine's, its palette rules first):
+
+```json
+{
+  "HourAtZero": 9,
+  "Day": [{ "Hour": 13, "Color": "#ffffff", "Strength": 1.16 }, { "Hour": 0, "Color": "#7080c0", "Strength": 0.58 }],
+  "Indoors": { "Hour": 0, "Color": "#ffe8d0", "Strength": 0.72 },
+  "FigureMinimum": 0.55,
+  "Palette": [{ "From": 224, "To": 239, "HotOnly": true, "MinPixels": 24, "Light": { "Color": "#ff5a20", "Radius": 64 } }],
+  "Objects": { "1233": { "Color": "#ffb060", "Radius": 48, "Flicker": 0.3, "Offset": [0, -8] } },
+  "Items": { "2001": { "Color": "#80a0ff", "Radius": 32 } },
+  "Conditions": { "FlameBlade": { "Color": "#ff8030", "Radius": 40, "Flicker": 0.3 } },
+  "Regions": { "41": [{ "X": 400, "Y": 300, "Light": { "Color": "#ffd080", "Radius": 80 } }] }
+}
+```
+
+| Key | Meaning |
+|-----|---------|
+| `Day` | the sky outdoors: from each `Hour` (0–24) its `Color` and `Strength` (1 the map as drawn, up to 2), blended between, round midnight too |
+| `HourAtZero` | the hour the game clock's 0 is |
+| `Indoors` | the fixed light inside |
+| `FigureMinimum` | the least light a figure stands in, 0–1 |
+| `Palette` | palette colours `From`–`To` that glow (`HotOnly`: those of the region's palette that are red to yellow), a light for each 48-pixel square with at least `MinPixels` of them |
+| `Objects`, `Items`, `Conditions` | a light by `OJFF` number (at the middle of the object's picture), by `RDFF` number (worn or held), by condition name (in a fight) |
+| `Regions` | lights put by hand, by region number, at map pixel `X`, `Y` |
+| a light | `Color` (`#rrggbb`), `Radius` (map pixels), `Strength`, `Flicker` (0–1 of its strength), `Offset` (`[x, y]`), and for a spell `Seconds` (0: while its flight or field lasts) |
+
+`looks/spell_lights.json` gives a spell's parts their light, `{"28": {"Burst": {"Color": "#ff8030",
+"Radius": 96, "Strength": 1.3, "Seconds": 0.9}}}`; a mod's `rules/spell_lights.json` wins part by part.
+A file that can't be used is left out with a warning.
+
+`-- --new-game --check-lighting` checks the sky (brighter at noon than at midnight, fixed indoors),
+the shadows' sun, the lights found in the Lava Rifts (region 6) and region 41's torches, that a
+spell's flash fades, a flight's light flies and a field's glow lasts until the field goes, and the
+layers' order. With a window it also looks at the screen: under a white sky and no lights the map
+shows pixel for pixel as unlit; the colour cycling still turns under the light with no code showing;
+noon is brighter than midnight (indoors, the same); `pixel` leaves every colour one of the region's
+palette's; and the frame rate with every light the region has (`--region=6` for the lava;
+`--lighting-shots=DIR` saves what it looked at). `--hour=H` sets the hour for a run, and with
+`--day-speed=N` it moves on N hours a second.
 
 ## Combat log
 

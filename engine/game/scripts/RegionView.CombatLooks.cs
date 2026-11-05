@@ -148,6 +148,7 @@ public partial class RegionView
     /// </summary>
     private void ShowLook(int spell, LookPart part, int ojff, Vector2 at, Vector2? from = null)
     {
+        LightUp(spell, part, at);
         if (ParticlesOf(spell, part) is { } particles)
         {
             ShowParticles(particles, spell, part, from ?? at, at);
@@ -251,6 +252,7 @@ public partial class RegionView
             {
                 ShowParticles(particles, c.Effect, LookPart.Flight, from, to, flight: flight);
             }
+            LightUp(c.Effect, LookPart.Flight, from, to, flight);
             // The burst plays where the projectile lands (7D80:003B, then 7D80:05C7).
             Play(look.FlightSound);
             GetTree().CreateTimer(flight).Timeout += () =>
@@ -291,9 +293,13 @@ public partial class RegionView
     /// <summary>A creature summoned (<see cref="Summoned"/>): the original shows nothing; particles, the spell's hit where it comes.</summary>
     private void LookOfSummoning(Summoned s)
     {
-        if (_castLook is { } cast && ParticlesOf(cast.Look.Number, LookPart.Hit) is { } particles)
+        if (_castLook is { } cast)
         {
-            ShowParticles(particles, cast.Look.Number, LookPart.Hit, Feet(s.Creature.Cell), Feet(s.Creature.Cell));
+            LightUp(cast.Look.Number, LookPart.Hit, Feet(s.Creature.Cell));
+        }
+        if (_castLook is { } look && ParticlesOf(look.Look.Number, LookPart.Hit) is { } particles)
+        {
+            ShowParticles(particles, look.Look.Number, LookPart.Hit, Feet(s.Creature.Cell), Feet(s.Creature.Cell));
         }
     }
 
@@ -414,6 +420,7 @@ public partial class RegionView
         {
             return false;
         }
+        LightUp(effect, LookPart.Burst, Feet(at));
         if (ParticlesOf(effect, LookPart.Burst) is { } particles)
         {
             List<Vector2> cells = [.. battle.AreaCells(caster, e, caster.Level, at).Select(Centre)];
@@ -485,6 +492,10 @@ public partial class RegionView
     /// <summary>A field laid (<c>7D80:2782</c>): its template's graphic on each of its cells while it lasts.</summary>
     private void LookOfField(AreaField f)
     {
+        if (f.Cells.Count > 0)
+        {
+            LightField(f, f.Cells.Select(Centre).Aggregate((a, b) => a + b) / f.Cells.Count);
+        }
         if (ParticlesOf(f.Effect.Number, LookPart.Field) is { } particles && f.Cells.Count > 0)
         {
             Vector2 centre = f.Cells.Select(Centre).Aggregate((a, b) => a + b) / f.Cells.Count;
@@ -500,6 +511,7 @@ public partial class RegionView
 
     private void FieldGone(AreaField f)
     {
+        FieldLightGone(f);
         if (_fieldParticles.Remove(f, out ParticleEffect? particles))
         {
             particles.Stop();

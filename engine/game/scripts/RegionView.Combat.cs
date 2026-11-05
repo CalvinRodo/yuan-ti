@@ -1907,7 +1907,7 @@ public partial class RegionView
     /// no slot of its own), played as the game plays it:
     /// each look's cast, flight, burst and field show their particles; the playback takes the
     /// original's time (longer only by a flight's <see cref="ParticleDefinition.MinSeconds"/>); the
-    /// fields' particles go with their fields; none are left after.
+    /// fields' particles go with their fields; none are left after. With <c>--spell-effects=MODE</c>, in that mode only.
     /// </summary>
     private async void CheckSpellEffects()
     {
@@ -1985,7 +1985,9 @@ public partial class RegionView
                 }
                 Cell[] around = [new(0, -1), new(1, 0), new(0, 1), new(-1, 0), new(1, -1), new(1, 1), new(-1, 1), new(-1, -1)];
                 var seconds = new Dictionary<(string Mode, int Spell), double>();
-                foreach (string mode in Settings.SpellEffectModes)
+                // --spell-effects=MODE: that mode alone (to record it).
+                string[] modes = OS.GetCmdlineUserArgs().Any(a => a.StartsWith("--spell-effects=")) ? [Settings.SpellEffectsMode] : Settings.SpellEffectModes;
+                foreach (string mode in modes)
                 {
                     Settings.SpellEffectsForRun = mode;
                     ParticleStyle? style = Settings.SpellEffects;

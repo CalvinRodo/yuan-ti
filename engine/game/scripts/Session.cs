@@ -388,6 +388,59 @@ public static class Session
         return new DarkSun.Game.Animation.ParticleLooks(maps, definitions);
     }
 
+    private static DarkSun.Game.Lighting.LightRules? _lightRules;
+
+    /// <summary>
+    /// The lighting's data (<c>[display] lighting</c>): the engine's <c>res://data/lights.json</c>
+    /// with every mod's <c>rules/lights.json</c> added over it, the first mod's last so it wins;
+    /// a mod's file that can't be used is left out, with a warning.
+    /// </summary>
+    public static DarkSun.Game.Lighting.LightRules LightRules => _lightRules ??= LoadLightRules();
+
+    private static DarkSun.Game.Lighting.LightRules LoadLightRules()
+    {
+        var rules = DarkSun.Game.Lighting.LightRules.Parse(Godot.FileAccess.GetFileAsString("res://data/lights.json"));
+        foreach (string path in Mods.Mods.Select(m => Path.Combine(m.Directory, "rules", "lights.json")).Where(File.Exists).Reverse())
+        {
+            try
+            {
+                rules = rules.Over(DarkSun.Game.Lighting.LightRules.Read(path));
+            }
+            catch (InvalidDataException e)
+            {
+                Godot.GD.PushWarning($"Mod file not used: {path}: {e.Message}");
+            }
+        }
+        return rules;
+    }
+
+    private static DarkSun.Game.Lighting.SpellLights? _spellLights;
+
+    /// <summary>
+    /// The light each spell's parts throw (<c>[display] lighting</c>): every mod's
+    /// <c>rules/spell_lights.json</c> over the engine's <c>res://looks/spell_lights.json</c>,
+    /// part by part, the first mod's winning.
+    /// </summary>
+    public static DarkSun.Game.Lighting.SpellLights SpellLights => _spellLights ??= LoadSpellLights();
+
+    private static DarkSun.Game.Lighting.SpellLights LoadSpellLights()
+    {
+        var entries = new List<((int, DarkSun.Game.Animation.LookPart), DarkSun.Game.Lighting.Light)>();
+        foreach (string path in Mods.Mods.Select(m => Path.Combine(m.Directory, "rules", "spell_lights.json")).Where(File.Exists))
+        {
+            try
+            {
+                entries.AddRange(DarkSun.Game.Lighting.SpellLights.Parse(File.ReadAllText(path)));
+            }
+            catch (InvalidDataException e)
+            {
+                Godot.GD.PushWarning($"Mod file not used: {path}: {e.Message}");
+            }
+        }
+        entries.AddRange(DarkSun.Game.Lighting.SpellLights.Parse(Godot.FileAccess.GetFileAsString($"{EngineLooks}/spell_lights.json")));
+        return new DarkSun.Game.Lighting.SpellLights(entries);
+    }
+
     /// <summary>The first mod's <c>rules/<paramref name="file"/></c>, else <paramref name="original"/> (with a warning if a mod's can't be used).</summary>
     private static T ModRules<T>(string file, Func<string, T> read, T original)
     {
@@ -503,7 +556,7 @@ public static class Session
         Files.Clear();
         Assets.Clear();
         (_sprites, _rules, _names, _quests) = (null, null, null, null);
-        (_creatureRules, _combatRules, _spellRules, _weatherRules, _spells, _particleLooks) = (null, null, null, null, null, null);
+        (_creatureRules, _combatRules, _spellRules, _weatherRules, _spells, _particleLooks, _lightRules, _spellLights) = (null, null, null, null, null, null, null, null);
         GameFonts.Reset();
         LoadParty();
         _bundledMods ??= BundledMods.Extract();
