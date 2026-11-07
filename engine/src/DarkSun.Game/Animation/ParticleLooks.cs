@@ -32,6 +32,15 @@ public enum ParticleTexture
     Pixel,
     Glow,
     Spark,
+
+    /// <summary>The modern style: a lumpy puff, turned by its spin (billowing flame, smoke, a blizzard's gusts).</summary>
+    Smoke,
+
+    /// <summary>The modern style: a sharp sliver pointing the way it flies, else turned by its spin (hail, ice, splinters).</summary>
+    Shard,
+
+    /// <summary>The modern style: a ring on the floor its size across (a shock wave, frost spreading).</summary>
+    Shock,
 }
 
 public enum ParticleBlend
@@ -62,6 +71,9 @@ public enum ParticleStyle
 
 /// <summary>Light a modern effect throws on the ground around it.</summary>
 public sealed record ParticleGlow(float Radius = 24, string Color = "#ffffff", float Alpha = 0.5f);
+
+/// <summary>The modern style's view shaking as an effect starts (<c>[display] screen_shake</c>): map pixels at most, easing off over its seconds.</summary>
+public sealed record ParticleShake(float Strength = 2, float Seconds = 0.3f);
 
 /// <summary>
 /// One effect's particles: a mod's <c>looks/particles/NAME.json</c>. Lists over a
@@ -161,6 +173,27 @@ public sealed record ParticleDefinition
     /// <summary>The modern style's light on the ground.</summary>
     public ParticleGlow? Glow { get; init; }
 
+    /// <summary>Seconds after the effect starts that this begins (a layer's smoke after its flash).</summary>
+    public float Delay { get; init; }
+
+    /// <summary>A range each particle's <see cref="Size"/> is multiplied by, rolled at its birth (puffs of many sizes).</summary>
+    public float[] Scale { get; init; } = [1, 1];
+
+    /// <summary>A range of degrees a second each particle turns, rolled at its birth (each starts turned at random).</summary>
+    public float[] Spin { get; init; } = [0, 0];
+
+    /// <summary>Pixels a second added to each particle's speed each second in a direction rolled each step (flames licking, smoke curling).</summary>
+    public float Turbulence { get; init; }
+
+    /// <summary>The modern style's view shaking as it begins.</summary>
+    public ParticleShake? Shake { get; init; }
+
+    /// <summary>
+    /// More particles played with these, from the same points and as long (a fireball's flash, billows, smoke,
+    /// embers and shock wave), each drawn over those before it; a layer's own layers are refused.
+    /// </summary>
+    public ParticleDefinition[] Layers { get; init; } = [];
+
     private (float R, float G, float B, float A)[]? _rgba;
 
     /// <summary><see cref="Colors"/>, read.</summary>
@@ -186,6 +219,29 @@ public sealed record ParticleDefinition
         {
             throw new InvalidDataException(e.Message, e);
         }
+        d.Check();
+        for (int i = 0; i < d.Layers.Length; i++)
+        {
+            if (d.Layers[i] is not { } layer || layer.Layers.Length > 0)
+            {
+                throw new InvalidDataException($"layer {i + 1}: a definition without layers of its own");
+            }
+            try
+            {
+                layer.Check();
+            }
+            catch (InvalidDataException e)
+            {
+                throw new InvalidDataException($"layer {i + 1}: {e.Message}", e);
+            }
+        }
+        return d;
+    }
+
+    /// <summary>Refuses what can't be played.</summary>
+    private void Check()
+    {
+        ParticleDefinition d = this;
         if (d.Lifetime is not [> 0, var longest] || longest < d.Lifetime[0] || d.Speed is not [_, _] || d.Gravity is not [_, _] || d.Offset is not [_, _])
         {
             throw new InvalidDataException("lifetime needs [shortest > 0, longest], speed, gravity and offset two numbers each");
@@ -194,9 +250,13 @@ public sealed record ParticleDefinition
         {
             throw new InvalidDataException("size, alpha, and palette or colors need a value each");
         }
-        if (d.Rate < 0 || d.Burst < 0 || d.Max < 1 || d.Heads < 1 || d.Seconds < 0 || d.Stagger is < 0 or >= 1)
+        if (d.Rate < 0 || d.Burst < 0 || d.Max < 1 || d.Heads < 1 || d.Seconds < 0 || d.Delay < 0 || d.Stagger is < 0 or >= 1)
         {
-            throw new InvalidDataException("rate, burst and seconds can't be negative, max and heads must be 1 or more, stagger 0 to under 1");
+            throw new InvalidDataException("rate, burst, seconds and delay can't be negative, max and heads must be 1 or more, stagger 0 to under 1");
+        }
+        if (d.Scale is not [>= 0, var biggest] || biggest < d.Scale[0] || d.Spin is not [_, _])
+        {
+            throw new InvalidDataException("scale needs [smallest >= 0, biggest], spin two numbers");
         }
         if (d.Palette.Any(i => i is < 0 or > 255))
         {
@@ -207,7 +267,6 @@ public sealed record ParticleDefinition
         {
             ParseColour(glow.Color);
         }
-        return d;
     }
 
     public static (float R, float G, float B, float A) ParseColour(string colour)

@@ -1,16 +1,22 @@
 {
   "Shape": "Cell",
-  "Rate": 20,
-  "Lifetime": [0.4, 0.8],
-  "Speed": [12, 30],
+  "Offset": [0, -14],
+  "Rate": 3,
+  "Lifetime": [1.0, 1.6],
+  "Speed": [8, 16],
   "Direction": -90,
-  "Spread": 15,
+  "Spread": 20,
   "Gravity": [0, -10],
-  "Size": [5, 3.5, 1],
-  "Alpha": [1, 0.9, 0.5, 0],
-  "Max": 1100,
-  "Colors": ["#fff0b0", "#ffb030", "#ff5010", "#60100000"],
-  "Texture": "Glow",
-  "Blend": "Add",
-  "Glow": {"Radius": 40, "Color": "#ff8030", "Alpha": 0.45}
+  "Turbulence": 20,
+  "Size": [4, 7, 10],
+  "Scale": [0.7, 1.3],
+  "Spin": [-60, 60],
+  "Alpha": [0, 0.4, 0.25, 0],
+  "Max": 500,
+  "Colors": ["#4a3a3000", "#3a302ab0", "#28222090", "#18141400"],
+  "Texture": "Smoke",
+  "Layers": [
+    {"Shape": "Cell", "Rate": 16, "Lifetime": [0.35, 0.75], "Speed": [14, 34], "Direction": -90, "Spread": 15, "Gravity": [0, -16], "Turbulence": 60, "Size": [5, 4, 1.5], "Scale": [0.7, 1.3], "Spin": [-160, 160], "Alpha": [0.9, 1, 0.6, 0], "Max": 1200, "Colors": ["#fff0b0", "#ffb030", "#ff5010e0", "#a0200890", "#40100000"], "Texture": "Smoke", "Glow": {"Radius": 40, "Color": "#ff8030", "Alpha": 0.5}},
+    {"Shape": "Cell", "Rate": 2, "Lifetime": [0.5, 1.0], "Speed": [20, 50], "Direction": -90, "Spread": 30, "Turbulence": 80, "Size": [1.2, 0.5], "Max": 200, "Colors": ["#fff0a0", "#ffa030", "#ff401000"], "Texture": "Spark", "Blend": "Add"}
+  ]
 }

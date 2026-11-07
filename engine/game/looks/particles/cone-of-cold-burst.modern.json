@@ -1,18 +1,24 @@
 {
   "Shape": "Cone",
   "Direction": 0,
-  "Spread": 24,
-  "Burst": 220,
-  "Rate": 900,
-  "Seconds": 0.35,
-  "Lifetime": [0.3, 0.7],
-  "Speed": [60, 140],
+  "Spread": 22,
+  "Burst": 40,
+  "Rate": 300,
+  "Seconds": 0.45,
+  "Lifetime": [0.4, 0.8],
+  "Speed": [60, 120],
   "Drag": 1.8,
-  "Size": [1.5, 4, 7],
-  "Alpha": [1, 0.8, 0.4, 0],
-  "Max": 1800,
-  "Colors": ["#ffffff", "#d8f6ff", "#90c8ff80", "#6090ff00"],
-  "Texture": "Glow",
-  "Blend": "Add",
-  "Glow": {"Radius": 34, "Color": "#a0d8ff", "Alpha": 0.4}
+  "Turbulence": 60,
+  "Size": [2, 6, 9],
+  "Scale": [0.7, 1.3],
+  "Spin": [-120, 120],
+  "Alpha": [0, 0.8, 0.5, 0],
+  "Max": 900,
+  "Colors": ["#f0f8ff00", "#e0f0ffb0", "#c0dcf880", "#a0c4f000"],
+  "Texture": "Smoke",
+  "Glow": {"Radius": 36, "Color": "#a0d8ff", "Alpha": 0.45},
+  "Layers": [
+    {"Shape": "Cone", "Direction": 0, "Spread": 20, "Burst": 60, "Rate": 420, "Seconds": 0.4, "Lifetime": [0.25, 0.55], "Speed": [120, 200], "Drag": 1.2, "Size": [2.2, 1.6], "Scale": [0.6, 1.4], "Max": 900, "Colors": ["#ffffff", "#e8f8ff", "#b0e0ff", "#80b8f000"], "Texture": "Shard"},
+    {"Shape": "Cone", "Direction": 0, "Spread": 10, "Burst": 20, "Rate": 200, "Seconds": 0.35, "Lifetime": [0.15, 0.3], "Speed": [100, 170], "Size": [2, 3, 1], "Alpha": [1, 0.7, 0], "Max": 300, "Shake": {"Strength": 1.2, "Seconds": 0.35}, "Colors": ["#ffffff", "#c8f0ff", "#80c0ff00"], "Texture": "Glow", "Blend": "Add"}
+  ]
 }

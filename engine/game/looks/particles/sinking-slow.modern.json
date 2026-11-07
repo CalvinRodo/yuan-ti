@@ -13,5 +13,10 @@
   "Alpha": [0, 1, 0],
   "Max": 1400,
   "Colors": ["#c8e4ffe0", "#6090d0c0", "#2040a000"],
-  "Texture": "Glow"
+  "Texture": "Glow",
+  "Scale": [0.7, 1.3],
+  "Layers": [
+    {"Shape": "Cell", "Offset": [0, -28], "Seconds": 0.35, "Burst": 55, "Rate": 150.0, "Max": 370, "Lifetime": [0.08, 0.2], "Speed": [25, 70], "Spread": 180, "Turbulence": 150, "Size": [1.6, 0.5], "Colors": ["#c8e4ffe0", "#6090d0c0", "#2040a000"], "Texture": "Spark"},
+    {"Burst": 1, "Lifetime": [0.5, 0.5], "Speed": [0, 0], "Delay": 0.0, "Size": [12.0, 72.0, 102.0, 115.2, 120], "Alpha": [0.8, 0.48, 0], "Colors": ["#6090d0", "#6090d000"], "Texture": "Shock"}
+  ]
 }

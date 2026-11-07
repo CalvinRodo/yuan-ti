@@ -12,5 +12,10 @@
   "Size": [1.5, 3, 3.5],
   "Alpha": [0, 1, 0.6],
   "Colors": ["#c8e4ffe0", "#6090d0c0", "#2040a000"],
-  "Texture": "Glow"
+  "Texture": "Glow",
+  "Scale": [0.7, 1.3],
+  "Layers": [
+    {"Shape": "Ring", "Radius": 16, "Offset": [0, -8], "Seconds": 0.45, "Rate": 40.0, "Max": 95, "Lifetime": [0.08, 0.2], "Speed": [25, 70], "Spread": 180, "Turbulence": 150, "Size": [1.6, 0.5], "Colors": ["#c8e4ffe0", "#6090d0c0", "#2040a000"], "Texture": "Spark"},
+    {"Burst": 1, "Lifetime": [0.5, 0.5], "Speed": [0, 0], "Delay": 0.0, "Size": [4.4, 26.4, 37.4, 42.24, 44], "Alpha": [0.6, 0.36, 0], "Colors": ["#6090d0", "#6090d000"], "Texture": "Shock"}
+  ]
 }

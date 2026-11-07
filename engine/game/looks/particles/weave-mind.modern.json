@@ -13,6 +13,10 @@
   "Max": 600,
   "Colors": ["#ffffff", "#c8a8ff", "#7040ff00"],
   "Texture": "Glow",
+  "Scale": [0.7, 1.3],
   "Blend": "Add",
-  "Glow": {"Radius": 30, "Color": "#9060ff", "Alpha": 0.5}
+  "Glow": {"Radius": 30, "Color": "#9060ff", "Alpha": 0.5},
+  "Layers": [
+    {"Heads": 1, "Wander": 36, "Rate": 55.0, "Max": 170, "Lifetime": [0.08, 0.2], "Speed": [25, 70], "Spread": 180, "Turbulence": 150, "Size": [1.6, 0.5], "Colors": ["#ffffff", "#c8a8ff", "#7040ff00"], "Texture": "Spark", "Blend": "Add"}
+  ]
 }

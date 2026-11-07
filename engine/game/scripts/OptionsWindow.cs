@@ -205,6 +205,7 @@ public partial class OptionsWindow : RetroScreen
             new("Spell effects", () => effects[Array.IndexOf(Settings.SpellEffectModes, Settings.SpellEffectsMode)],
                 step => Settings.SpellEffectsMode = Settings.SpellEffectModes[(Array.IndexOf(Settings.SpellEffectModes, Settings.SpellEffectsMode) + step + 3) % 3],
                 "The original's, updated in its pixels, or modern"),
+            Toggle("Screen shake", () => Settings.ScreenShake, v => Settings.ScreenShake = v, "Modern spell effects shake the view"),
             new("Lighting", () => lightings[Array.IndexOf(Settings.LightingModes, Settings.LightingMode)],
                 step => Settings.LightingMode = Settings.LightingModes[(Array.IndexOf(Settings.LightingModes, Settings.LightingMode) + step + 3) % 3],
                 "Light and dark on the map: in palette steps or smooth"),

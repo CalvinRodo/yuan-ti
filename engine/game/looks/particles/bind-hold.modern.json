@@ -15,6 +15,12 @@
   "Texture": "Spark",
   "Alpha": [0, 1, 0],
   "Colors": ["#ffffff", "#c0f0ff", "#60b0d0", "#2060a000"],
+  "Scale": [0.7, 1.3],
   "Blend": "Add",
-  "Glow": {"Radius": 20, "Color": "#80d0ff", "Alpha": 0.4}
+  "Glow": {"Radius": 20, "Color": "#80d0ff", "Alpha": 0.4},
+  "Layers": [
+    {"Shape": "Ring", "Radius": 11, "Offset": [0, -14], "Seconds": 0.6, "Burst": 8, "Rate": 27.5, "Max": 95, "Lifetime": [0.08, 0.2], "Speed": [25, 70], "Spread": 180, "Turbulence": 150, "Size": [1.6, 0.5], "Colors": ["#ffffff", "#c0f0ff", "#60b0d0", "#2060a000"], "Texture": "Spark", "Blend": "Add"},
+    {"Burst": 1, "Lifetime": [0.35, 0.35], "Speed": [0, 0], "Delay": 0.0, "Size": [3.6, 21.6, 30.6, 34.56, 36], "Alpha": [0.6, 0.36, 0], "Colors": ["#80d0ff", "#80d0ff00"], "Texture": "Shock", "Blend": "Add"},
+    {"Burst": 3, "Lifetime": [0.126, 0.18], "Speed": [0, 0], "Size": [5.0, 10, 8.0], "Alpha": [1, 0.6, 0], "Offset": [0, -14], "Colors": ["#ffffff", "#80d0ff", "#80d0ff00"], "Texture": "Glow", "Blend": "Add"}
+  ]
 }

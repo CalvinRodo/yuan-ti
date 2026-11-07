@@ -9,5 +9,9 @@
   "Max": 400,
   "Colors": ["#fff060", "#ffa020", "#ff4848", "#f050e8", "#a868ff", "#6890ff", "#58f0f0", "#68ff68"],
   "Texture": "Glow",
-  "RandomColor": true
+  "Scale": [0.7, 1.3],
+  "RandomColor": true,
+  "Layers": [
+    {"Shape": "Cell", "Rate": 1.5, "Max": 120, "RandomColor": true, "Lifetime": [0.4, 0.8], "Speed": [15, 45], "Spread": 180, "Turbulence": 60, "Size": [1.8, 1.2], "Scale": [0.6, 1.4], "Spin": [-400, 400], "Colors": ["#fff060", "#ffa020", "#ff4848", "#f050e8", "#a868ff", "#6890ff", "#58f0f0", "#68ff68"], "Texture": "Shard"}
+  ]
 }

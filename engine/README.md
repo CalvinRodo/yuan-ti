@@ -886,7 +886,12 @@ Not in DSUN.EXE. **Spell effects** in the Options window (`[display] spell_effec
   spells' own animations.
 - **MODERN** (`particles_modern`): particles at the screen's resolution, soft, glowing and
   added onto what is under them, with light thrown on the ground. Magic Missile's bolts swarm
-  out across the screen before homing in on the target.
+  out across the screen before homing in on the target. The elements look like themselves, in
+  layers: a fireball flashes, swells into a ball of rolling flame with a shock wave and flung
+  embers, and leaves a column of smoke; Ice Storm drives hail slantwise out of a black cloud
+  through a gale of snow, shattering where it lands as ice forms on the ground; Lightning Bolt
+  blinds along its line. Every other burst, hit and cast lands with a pop of light and a ring
+  across the floor. The big ones shake the view (**Screen shake**, `[display] screen_shake`).
 
 Each spell is drawn in up to five parts, `Cast` (over the caster), `Flight` (the projectile,
 caster to point), `Burst` (where an area spell lands), `Hit` (on each one it reaches unhurt; for a
@@ -938,7 +943,10 @@ and `looks/particles/fizz.json`:
 | `Gravity`, `Pull`, `Drag` | pixels a second added each second (x, y); added toward the (offset) point (below 0: away; with `Radial` 90, a swirl); the share of speed lost a second |
 | `Size`, `Alpha` | over the life, keys spread evenly (pixels; 0–1) |
 | `Palette` / `Colors`, `RandomColor` | palette indexes stepped through (the pixel style), or `#rrggbb[aa]` blended (the modern; the pixel style without a palette); `RandomColor`: each particle keeps one, picked at its birth (a rainbow) |
-| `Texture`, `Blend` | `Pixel`, `Glow`, `Spark`; `Mix` or `Add` (the pixel style never blends) |
+| `Texture`, `Blend` | `Pixel`, `Glow`, `Spark`, and for the modern style `Smoke` (a lumpy puff), `Shard` (a sliver pointing the way it flies), `Shock` (a ring on the floor its size across); `Mix` or `Add` (the pixel style never blends) |
+| `Scale`, `Spin`, `Turbulence` | a range each particle's size is multiplied by; a range of degrees a second it turns (each starts turned at random); pixels a second added each second in a direction rolled each step (flames licking, smoke curling) |
+| `Delay`, `Layers` | seconds after the effect starts that it begins; more definitions played with it from the same points (a fireball's smoke, flame, heat, embers and shock wave), each drawn over those before it, with no layers of their own |
+| `Shake` | the modern style's view shaking as it begins: `Strength` (map pixels), `Seconds` (easing off) |
 | `Blocks` | the playback waits until it is done (flights always wait for their flight) |
 | `Heads`, `Wander`, `Stagger`, `MinSeconds`, `HeadSize`, `ArriveBurst` | flights: how many fly, how far off the straight way they swing, the share of the flight by which they land one after another, the least flight time, a head's size, particles where each lands |
 | `Glow` | the modern style's light on the ground: `Radius`, `Color`, `Alpha` |

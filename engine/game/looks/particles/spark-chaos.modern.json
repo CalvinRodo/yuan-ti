@@ -12,5 +12,10 @@
   "Size": [3, 1.5, 0.5],
   "Colors": ["#fff060", "#ffa020", "#ff4848", "#f050e8", "#a868ff", "#6890ff", "#58f0f0", "#68ff68"],
   "Texture": "Glow",
-  "RandomColor": true
+  "Scale": [0.7, 1.3],
+  "RandomColor": true,
+  "Layers": [
+    {"Shape": "Circle", "Radius": 4, "Offset": [0, -12], "Seconds": 0.2, "Burst": 10, "Rate": 10.0, "Max": 95, "RandomColor": true, "Lifetime": [0.4, 0.8], "Speed": [15, 45], "Spread": 180, "Turbulence": 60, "Size": [1.8, 1.2], "Scale": [0.6, 1.4], "Spin": [-400, 400], "Colors": ["#fff060", "#ffa020", "#ff4848", "#f050e8", "#a868ff", "#6890ff", "#58f0f0", "#68ff68"], "Texture": "Shard"},
+    {"Burst": 1, "Lifetime": [0.35, 0.35], "Speed": [0, 0], "Delay": 0.0, "Size": [3.6, 21.6, 30.6, 34.56, 36], "Alpha": [0.6, 0.36, 0], "Colors": ["#ffa020", "#ffa02000"], "Texture": "Shock"}
+  ]
 }
