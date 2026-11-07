@@ -234,7 +234,7 @@ while that level has some left ("2 LEVEL 1 SPELLS TO CAST"; the spells of a leve
 of a member not Okay, are crossed out, and the pointer on one says YOU NEED TO REST). The spells fill the
 panel's slots in their numbers' order, as DSUN.EXE does (`8F23:19B6`); MAGE / CLERIC / PSIONIC goes round
 the kinds and LEVEL n round the levels, and the points and status show under the boxes. Click a spell, then a member's box, to
-cast it (in a fight CAST lists them all). In a fight, clicking a spell or power goes back to the map to aim it there
+cast it (in a fight CAST opens the spell bar, below). In a fight, clicking a spell or power goes back to the map to aim it there
 on the member's turn, as CAST does; out of one, so does a spell at foes (the spell pointer, as a wand's: clicking a
 creature starts the fight with it, the spell cast first). Out of a fight the healing ones heal, and those that put a condition on
 the party (Bless, Haste, Enlarge, Strength, Protection from Evil, Biofeedback …) take effect as they would in a fight on
@@ -279,9 +279,15 @@ As in the original (the manual: "by default, only the leader of your party appea
 game shows the leader alone, the others gathered into it, and they gather again after each fight; COLLAPSE
 PARTY spreads them out and they stay so until it is pressed again (Options → Leader alone off starts new
 games with everyone shown). The Dark Sun icon in the top left corner (`BMP` 5012) opens the character
-screens at the page last shown; a right click opens quick cast: the six spells and powers the member chose
-last, an orange X over those it can't use now; one clicked is cast as from the Cast Spells page (in a fight
-at once, else that page opens with it picked). `--check-quick-cast` tries it.
+screens at the page last shown; a right click opens the spell bar (`SpellBar`, issue #159), as CAST does in a
+fight (popped up over the quick-use bar): in the game's stone and font at the top left, the member's RECENT spells (the six it chose last, by kind and
+level), then every spell it knows by kind (WIZARD, PRIEST) and level, its PSIONIC powers and the ITEMS it carries that
+cast a spell (wands, potions), each a small icon on the original's slot (shrunk a step so the icons stay sharp), the
+orange X over one it can't use now. The line at its foot names the one under the pointer and what is left (casts at
+its level, points, charges); a click on a crossed-out one says why. One clicked is cast as from the Cast Spells page (in
+a fight at once or aimed on the map, else that page opens with it picked, one at foes going to the map), an item's as
+its USE; SPELLS opens Cast Spells. With nothing to show the right click opens Cast Spells. `--check-quick-cast` tries
+it; `--open-quick-cast` (with `--fight`, CAST's) opens it for screenshots.
 COLLAPSE PARTY makes the other members walk into the selected leader and disappear
 (as in the original, quickly: three times their walking pace; Options → Quick collapse off walks them in);
 they travel with that character, still present for scripts, dialogue and character screens.
@@ -1085,7 +1091,15 @@ fight's events into lines, and `CombatLogView` draws them:
 - Lines are written when the fight decides them, so the hit points are
   those of that moment. They are shown when the playback reaches them.
 - The CAST, GUARD, WAIT, END TURN and AUTO buttons moved to the lower left,
-  to leave the lower right to the log.
+  to leave the lower right to the log, as a small quick-use bar of icons in the
+  same stone (`CombatBar`): CAST is the original's CAST SPELL/USE PSIONIC button
+  (`ICON` 11104) and WAIT its hourglass (`ICON` 6010); GUARD, END TURN and AUTO
+  are placeholders (a letter on a stone slot) until original art is found (the
+  `AddButton` calls in `RegionView.Combat.cs` take an `ICON` number). Under the
+  pointer a button's name and keys show on a stone plaque over the bar, which
+  otherwise says what a click on the map would do (the chance to hit, a spell's
+  targets) or what the member has left. CAST pops the spell bar up over it.
+  `--hover-combat-button=NAME` (with `--fight`) shows a tooltip for screenshots.
 
 Unlike Obsidian Edition's log, it shows only fights, not the rolls made
 out of them (thief skills, hit points at a new level), and it has no strip
