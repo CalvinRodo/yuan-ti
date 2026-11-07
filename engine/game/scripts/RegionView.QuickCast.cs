@@ -56,8 +56,8 @@ public partial class RegionView
         }
     }
 
-    /// <summary>The spell bar for <paramref name="member"/>; false if it has nothing to show.</summary>
-    private bool OpenSpellBar(int member, string what)
+    /// <summary>The spell bar for <paramref name="member"/> (at the top left, or just over <paramref name="above"/>); false if it has nothing to show.</summary>
+    private bool OpenSpellBar(int member, string what, Vector2? above = null)
     {
         List<SpellBarRow> rows = SpellBarRows(member);
         if (rows.All(r => r.Entries.Count == 0))
@@ -65,7 +65,7 @@ public partial class RegionView
             return false;
         }
         _spellBarMember = member;
-        _spellBar.Open($"{Session.Party[member].Name}: {what}", rows);
+        _spellBar.Open($"{Session.Party[member].Name}: {what}", rows, above);
         return true;
     }
 
@@ -334,7 +334,10 @@ public partial class RegionView
             }
             else
             {
-                OpenCastMenu();
+                Expect(_combatPanel.TooltipOf("CAST") == $"CAST ({KeyHelp.Keys(Controls.CombatCast)})" && _combatPanel.TooltipOf("END TURN").StartsWith("END TURN"),
+                    $"the quick-use bar's icons name themselves and their keys under the pointer ({_combatPanel.TooltipOf("CAST")})");
+                Expect(_combatPanel.Press("CAST") && _spellBar.Visible && _spellBar.Bottom <= _combatPanel.TopLeft.Y,
+                    $"its CAST pops the spell list up over the bar ({_spellBar.Bottom} over {_combatPanel.TopLeft.Y})");
                 IReadOnlyList<SpellBarEntry> powers = _spellBar.Row("PSIONIC");
                 int aimed = powers.FirstOrDefault(e => e.Usable && _battle!.Spells.Effect(e.Spell) is { Target: not (7 or 8) })?.Spell ?? -1;
                 Expect(_spellBar.Visible && aimed > 0 && powers.Any(e => e.Spell == Detonate && !e.Usable && e.Note.Contains("PSP")),

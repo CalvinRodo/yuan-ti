@@ -74,11 +74,13 @@ public partial class RegionView
 
         // At the lower left: the combat log has the lower right, as in Obsidian Edition.
         _combatPanel = new CombatBar();
-        _combatPanel.AddButton("CAST", Controls.CombatCast, OpenCastMenu);
-        _combatPanel.AddButton("GUARD", Controls.CombatGuard, () => PlayerAct(c => _battle!.Guard(c)));
-        _combatPanel.AddButton("WAIT", Controls.CombatWait, () => PlayerAct(c => _battle!.Wait(c)));
-        _combatPanel.AddButton("END TURN", Controls.CombatEndTurn, () => PlayerAct(c => _battle!.EndTurn(c)));
-        _combatPanel.AddButton("AUTO", Controls.CombatAuto, ToggleAuto);
+        // The original's pictures where it has one: CAST its CAST SPELL/USE PSIONIC button (BUTN 11305's ICON 11104), WAIT its
+        // hourglass pointer (ICON 6010). GUARD, END TURN and AUTO have none yet: placeholders until original art is found.
+        _combatPanel.AddButton("CAST", Controls.CombatCast, 11104, "C", OpenCastMenu);
+        _combatPanel.AddButton("GUARD", Controls.CombatGuard, null, "G", () => PlayerAct(c => _battle!.Guard(c)));
+        _combatPanel.AddButton("WAIT", Controls.CombatWait, Pointers.Wait, "W", () => PlayerAct(c => _battle!.Wait(c)));
+        _combatPanel.AddButton("END TURN", Controls.CombatEndTurn, null, "E", () => PlayerAct(c => _battle!.EndTurn(c)));
+        _combatPanel.AddButton("AUTO", Controls.CombatAuto, null, "A", ToggleAuto);
         layer.AddChild(_combatPanel);
 
         _combatLog = new CombatLogView
@@ -620,8 +622,9 @@ public partial class RegionView
             ShowCombatMenu(c);
         }
         int steps = c.MovementPoints / Math.Max(1, battle.Rules.StepCost);
-        _combatPanel.Turn = $"{Who(c)}: HP {c.Vitals.Hp}/{c.Vitals.MaxHp} · moves {((c.Flags & TurnFlags.MayMove) != 0 ? steps : 0)}"
-            + ((c.Flags & TurnFlags.MayAttack) != 0 ? " · may attack" : "") + (c.Psp > 0 ? $" · PSP {c.Psp}" : "");
+        // Short, to fit the plaque over the quick-use bar (the log's header and the ring say whose turn it is).
+        _combatPanel.Turn = $"HP {c.Vitals.Hp}/{c.Vitals.MaxHp} · {((c.Flags & TurnFlags.MayMove) != 0 ? steps : 0)} moves"
+            + ((c.Flags & TurnFlags.MayAttack) != 0 ? " · attack" : "") + (c.Psp > 0 ? $" · PSP {c.Psp}" : "");
         _combatPanel.Tip = TipFor(c, MouseCell());
     }
 
@@ -648,7 +651,7 @@ public partial class RegionView
         }
         if (there is null || there == c)
         {
-            return (c.Flags & TurnFlags.MayMove) != 0 && battle.Free(cell) ? "Click: move here" : "";
+            return ""; // a move: the pointer says so
         }
         string who = $"{Who(there)} {there.Vitals.Hp}/{there.Vitals.MaxHp}";
         if (!c.IsEnemyOf(there))
@@ -1016,7 +1019,7 @@ public partial class RegionView
     /// <summary>CAST: the spell bar (<see cref="SpellBar"/>) for the member whose turn it is: its spells, powers and items.</summary>
     private void OpenCastMenu()
     {
-        if (PlayerTurn is not { Source: { } o } c || o.Index >= Session.Party.Count || !OpenSpellBar(o.Index, "cast"))
+        if (PlayerTurn is not { Source: { } o } c || o.Index >= Session.Party.Count || !OpenSpellBar(o.Index, "cast", above: _combatPanel.TopLeft))
         {
             Notice(PlayerTurn is { } who ? $"{Who(who)} has nothing to cast." : "Not now.");
         }

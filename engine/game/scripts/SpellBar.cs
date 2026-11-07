@@ -75,8 +75,11 @@ public partial class SpellBar : RetroScreen
         }
     }
 
-    /// <summary>Show <paramref name="rows"/> under <paramref name="title"/> (rows without entries are left out).</summary>
-    public void Open(string title, IEnumerable<SpellBarRow> rows)
+    /// <summary>
+    /// Show <paramref name="rows"/> under <paramref name="title"/> (rows without entries are left out): at
+    /// the screen's top left, or popped up with its foot just over <paramref name="above"/> (CAST's bar).
+    /// </summary>
+    public void Open(string title, IEnumerable<SpellBarRow> rows, Vector2? above = null)
     {
         _title = title;
         float scale = Canvas.Scale.X;
@@ -94,7 +97,9 @@ public partial class SpellBar : RetroScreen
         {
             _perRow++;
         }
-        _panel.Position = new Vector2(Left, Top);
+        _panel.Position = above is { } at
+            ? new Vector2(Math.Clamp(at.X, 0, RetroScreen.Width - PanelWidth), Math.Max(0, at.Y - 1 - PanelHeight))
+            : new Vector2(Left, Top);
         _panel.Size = new Vector2(PanelWidth, PanelHeight);
         _panel.QueueRedraw();
         Visible = true;
@@ -325,6 +330,9 @@ public partial class SpellBar : RetroScreen
 
     /// <summary>Is the RECENT row's entry <paramref name="index"/> crossed out?</summary>
     public bool CrossedOut(int index) => Row(Recent) is { } row && index < row.Count && !row[index].Usable;
+
+    /// <summary>The panel's foot in the screen's 320 × 200 pixels.</summary>
+    public float Bottom => _panel.Position.Y + _panel.Size.Y;
 
     /// <summary>What the foot says after a click on one that can't be used.</summary>
     public string? Said => _said;

@@ -374,6 +374,11 @@ public partial class RegionView : Node2D
                     : Session.Party[i].Classes.Contains(DarkSun.Game.Characters.CharacterClass.Psionicist), _selected);
                 Callable.From(() => _character.Open(_world, caster, page)).CallDeferred();
             }
+            if (OS.GetCmdlineUserArgs().FirstOrDefault(a => a.StartsWith("--hover-combat-button=")) is { } hovered)
+            {
+                // Development, with --fight: a combat bar button as under the pointer, its tooltip up (for screenshots).
+                GetTree().CreateTimer(6).Timeout += () => _combatPanel.Hover(hovered["--hover-combat-button=".Length..]);
+            }
             if (OS.GetCmdlineUserArgs().Contains("--open-quick-cast"))
             {
                 Callable.From(OpenQuickCastForShow).CallDeferred();
