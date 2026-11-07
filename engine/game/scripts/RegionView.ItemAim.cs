@@ -14,11 +14,12 @@ namespace DarkSun.Engine;
 /// clicked (<c>8B7D:0627</c> → <c>7D80:21C5</c>, level 6). Here a help is cast
 /// on the party member clicked, as members' own spells are out of a fight
 /// (<see cref="Encounter.CastOnMap"/>); anything else on a creature starts the
-/// fight with it and is cast first. A right-click puts the spell away.
+/// fight with it and is cast first. A right-click puts the spell away. A member's
+/// own spell at foes, picked on Cast Spells, is aimed the same way (<see cref="AimSpell"/>).
 /// </summary>
 public partial class RegionView
 {
-    /// <summary>The item spell being aimed on the map out of a fight, and the member using it.</summary>
+    /// <summary>The spell being aimed on the map out of a fight (an item's, or the member's own), and the member casting it.</summary>
     private (int Member, CastChoice Cast)? _mapCast;
 
     private string? CastOnMap(int caster, int target, int number, bool fromItem) =>
@@ -61,12 +62,38 @@ public partial class RegionView
     }
 
     /// <summary>
+    /// A spell or power picked on Cast Spells to aim on the map (<see cref="CharacterScreen.AimSpell"/>): in a
+    /// fight the map's CAST on the member's turn; out of one the spell pointer, as an item's spell is aimed.
+    /// </summary>
+    private string? AimSpell(int member, int spell)
+    {
+        if (InCombat)
+        {
+            if (PlayerTurn is not { } c || c.Source != _world[member])
+            {
+                return "NOT THIS CHARACTER'S TURN";
+            }
+            ChooseCast(spell);
+            return null;
+        }
+        if (_world[member] is not { Kind: ObjectKind.Party } caster)
+        {
+            return Spellcasting.NothingHappens;
+        }
+        SetUseWith(null);
+        int level = caster.Character is { } ch ? Math.Max(1, (int)ch.Levels.ToArray().Max()) : 1; // as its combatant's (Combatant.Build)
+        _mapCast = (member, new CastChoice(spell, level));
+        AddScriptLine($"> {caster.Name} aims {EffectName(spell)}");
+        return null;
+    }
+
+    /// <summary>
     /// Whom a click at <paramref name="at"/> casts the aimed spell on, if anyone: a help, a party
     /// member; anything else, a creature within the spell's range of the caster and in its sight.
     /// </summary>
     private WorldObject? MapCastTarget(Vector2 at)
     {
-        if (_mapCast is not { Member: var member, Cast.Spell: var spell } || Session.SpellRules.Effect(spell) is not { } e
+        if (_mapCast is not { Member: var member, Cast: { Spell: var spell, Level: var level } } || Session.SpellRules.Effect(spell) is not { } e
             || _world[member] is not { } caster)
         {
             return null;
@@ -76,7 +103,7 @@ public partial class RegionView
             return MemberAt(at);
         }
         return ObjectAt(at) is { Kind: ObjectKind.Creature, Hidden: false } creature && creature.Vitals.Alive
-            && _world.CellsOf(creature).Any(c => Battle.Distance(caster.Cell, c) <= e.RangeCells(ItemMagic.CasterLevel)
+            && _world.CellsOf(creature).Any(c => Battle.Distance(caster.Cell, c) <= e.RangeCells(level)
                 && GplGeometry.LineOfSight(_region, caster.Cell.X, caster.Cell.Y, c.X, c.Y))
             ? creature : null;
     }
@@ -106,28 +133,29 @@ public partial class RegionView
             return true;
         }
         _mapCast = null;
-        CastItemOnMap(aimed.Member, aimed.Cast, target);
+        CastAimedOnMap(aimed.Member, aimed.Cast, target);
         return true;
     }
 
-    private void CastItemOnMap(int member, CastChoice cast, WorldObject target)
+    private void CastAimedOnMap(int member, CastChoice cast, WorldObject target)
     {
-        string name = ItemText.Name(_world, cast.Item!);
+        string? name = cast.Item is { } item ? ItemText.Name(_world, item) : null;
+        string from = name is null ? "" : $" from {name}";
         string spell = EffectName(cast.Spell);
         if (target.Kind == ObjectKind.Party)
         {
-            string result = CastOnMap(member, target.Index, cast.Spell, fromItem: true) ?? "ONLY IN COMBAT";
-            if (result == CharacterScreen.TakesEffect && _world.UseItemCharge(cast.Holder!, cast.Item!))
+            string result = CastOnMap(member, target.Index, cast.Spell, fromItem: cast.Item is not null) ?? "ONLY IN COMBAT";
+            if (result == CharacterScreen.TakesEffect && cast is { Item: { } used, Holder: { } holder } && _world.UseItemCharge(holder, used))
             {
-                result += $"; {name.ToUpperInvariant()} IS USED UP";
+                result += $"; {name!.ToUpperInvariant()} IS USED UP";
             }
-            AddScriptLine($"> {_world[member]?.Name} casts {spell} from {name} on {target.Name}: {result.ToLowerInvariant()}");
+            AddScriptLine($"> {_world[member]?.Name} casts {spell}{from} on {target.Name}: {result.ToLowerInvariant()}");
             Notice($"{spell}: {result}");
             UpdateHud();
             return;
         }
         // A spell at a creature is an attack on it: the fight starts, and the spell is its first blow.
-        if (!StartCombat(target, $"{spell} from {name} at {Describe(target)}"))
+        if (!StartCombat(target, $"{spell}{from} at {Describe(target)}"))
         {
             Notice($"{Called(target, start: true)} won't fight.");
             return;
@@ -198,7 +226,7 @@ public partial class RegionView
         if (_mapCast is { } cast && MapCastTarget(there) is { } target)
         {
             _mapCast = null;
-            CastItemOnMap(cast.Member, cast.Cast, target);
+            CastAimedOnMap(cast.Member, cast.Cast, target);
         }
         Expect(InCombat && _battle!.Log.Any(e => e is Cast { Effect: MagicMissile } c && c.Actor.Source == me),
             $"aimed at {foe.Name}, the fight starts with Magic Missile cast ({(InCombat ? "fighting" : "no fight")})");

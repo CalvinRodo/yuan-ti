@@ -186,6 +186,20 @@ public partial class RegionView
                 Expect(_quickCast.Shown is [Detonate], $"in a fight the window is the psionicist's ({string.Join(", ", _quickCast.Shown)})");
                 _quickCast.Click(0);
                 Expect(_castChoice is { Spell: Detonate }, $"and its slot chooses it to cast ({_castChoice})");
+                // #156: picked on the Cast Spells page in a fight, it goes back to the map to aim, as CAST does.
+                _castChoice = null;
+                OpenMagic(1);
+                int power = Enumerable.Range(0, 21).FirstOrDefault(i => screen.SpellAt(false, i) == Detonate, -1);
+                screen.ClickSpell(false, power);
+                Expect(!screen.IsOpen && _castChoice is { Spell: Detonate },
+                    $"in a fight, a power picked on the page closes it to aim on the map ({_castChoice}; {screen.Status})");
+                _castChoice = null;
+                cleric.Cast.Clear(); // its casts back (they were used above)
+                OpenMagic(0);
+                screen.ClickSpell(false, Enumerable.Range(0, 21).FirstOrDefault(i => screen.SpellAt(false, i) == CureLight, -1));
+                Expect(screen.IsOpen && _castChoice is null && screen.Status == "NOT THIS CHARACTER'S TURN",
+                    $"and another member's spell waits for its turn ({screen.Status})");
+                screen.Close();
             }
         }
         GetTree().Quit(problems.Count == 0 ? 0 : 1);

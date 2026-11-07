@@ -1,4 +1,5 @@
 using DarkSun.Game.Characters;
+using DarkSun.Game.Combat;
 using DarkSun.Game.Magic;
 using DarkSun.Game.World;
 using Godot;
@@ -23,7 +24,8 @@ namespace DarkSun.Engine;
 /// <see cref="Spellcasting.CastsLeft"/>), crossed out (frame 6) when it has none or the
 /// member isn't Okay (<c>8F23:1DED</c>); the pointer on one shows the level's line
 /// (<c>8F23:1111</c>: "YOU NEED TO REST" when none are left). Click one,
-/// then a member's box, to cast it on them (double-click: on the caster).
+/// then a member's box, to cast it on them (double-click: on the caster); in a fight, or out of
+/// one for a spell at foes, picking it goes back to the map to aim it there (<see cref="AimSpell"/>).
 /// A preserver learns new spells on gaining a level (<see cref="SpellStudyWindow"/>).</item>
 /// <item>A right-click on a spell above, or on a power, opens the spell
 /// information window (<see cref="ShowSpellInfo"/>).</item>
@@ -410,23 +412,20 @@ public partial class CharacterScreen
             return;
         }
         string? message = null;
-        if (_page == Page.Spells)
+        bool power = _page == Page.Psionics;
+        if (!FitToCast || (power ? _magic.Psp(c) < Session.Rules.PowerCost : !_magic.CanCast(c, n)))
         {
-            if (!_magic.CanCast(c, n) || !FitToCast)
+            _pickedSpell = null;
+            message = power ? "NOT ENOUGH PSIONIC STRENGTH" : "YOU NEED TO REST";
+        }
+        else if (AimsOnMap(n))
+        {
+            if (ToMap(c, n) is not { } refused)
             {
-                _pickedSpell = null;
-                message = "YOU NEED TO REST";
-            }
-            else if (click.DoubleClick)
-            {
-                c.RememberCast(n);
-                CastAt(_member, n);
                 return;
             }
-            else
-            {
-                _pickedSpell = _pickedSpell == n ? null : n;
-            }
+            _pickedSpell = null;
+            message = refused;
         }
         else if (click.DoubleClick)
         {
@@ -448,6 +447,31 @@ public partial class CharacterScreen
             _status.Text = message;
         }
     }
+
+    /// <summary>
+    /// Is spell or power <paramref name="number"/> aimed on the map rather than at a member's box: everything
+    /// in a fight (as CAST is), and out of one a spell at foes (as an item's is, <see cref="AimOnMap"/>).
+    /// </summary>
+    private bool AimsOnMap(int number) =>
+        AimSpell is not null && (Fighting() || Session.SpellRules.Effect(number) is { Purpose: not SpellEffect.Helps, Target: not (7 or 8) });
+
+    /// <summary>Hand spell <paramref name="number"/> to the map to aim (the screen closes), or why it can't be.</summary>
+    private string? ToMap(Character c, int number)
+    {
+        if (AimSpell!(_member, number) is { } refused)
+        {
+            return refused;
+        }
+        c.RememberCast(number); // 78A9:2324: the quick-cast list
+        Close();
+        return null;
+    }
+
+    /// <summary>
+    /// A spell or power picked on this page to aim on the map: member, number; null when it is (the map's
+    /// CAST in a fight, the spell pointer out of one), else why not ("NOT THIS CHARACTER'S TURN").
+    /// </summary>
+    public Func<int, int, string?>? AimSpell { get; set; }
 
     /// <summary>Cast the picked spell (or use the power) on member <paramref name="slot"/>.</summary>
     private void CastAt(int slot, int number)
@@ -486,11 +510,16 @@ public partial class CharacterScreen
             ? KnownDisciplines(c).IndexOf(spell.Discipline ?? Discipline.Telepathy)
             : SpellChoices(c).FindIndex(x => x.Kind == spell.Kind && x.Level == spell.Level));
         bool can = FitToCast && (power ? c.Powers.Contains(number) && _magic.Psp(c) >= Session.Rules.PowerCost : _magic.CanCast(c, number));
-        _pickedSpell = can ? number : null;
-        RefreshMagic();
-        if (!can)
+        string? refused = null;
+        if (can && AimsOnMap(number) && (refused = ToMap(c, number)) is null)
         {
-            _status.Text = power ? "NOT ENOUGH PSIONIC STRENGTH" : "YOU NEED TO REST";
+            return; // handed to the map to aim
+        }
+        _pickedSpell = can && refused is null ? number : null;
+        RefreshMagic();
+        if (_pickedSpell is null)
+        {
+            _status.Text = refused ?? (power ? "NOT ENOUGH PSIONIC STRENGTH" : "YOU NEED TO REST");
         }
     }
 

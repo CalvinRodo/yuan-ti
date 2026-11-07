@@ -266,6 +266,29 @@ public class CombatTests
     }
 
     [Fact]
+    public void TheFightEndsWhenThePartyFallsThoughWhatItSummonedFightsOn()
+    {
+        // #157: with every member down or dead, a summoned creature on the party's side doesn't keep the fight going.
+        Combatant member = Fighter("member", 1, 5, 5, party: true), other = Fighter("other", 1, 5, 6, party: true);
+        Combatant summoned = Fighter("summoned", 1, 6, 5), foe = Fighter("foe", 2, 8, 5);
+        Battle b = Fight(new ScriptedDice(), member, other, summoned, foe);
+        Assert.False(b.Over);
+        member.Vitals.Status = Vitals.Down;
+        Assert.False(b.Over); // one still standing
+        Assert.False(b.PartyFallen);
+        other.Vitals.Status = Vitals.Dead;
+        Assert.True(b.PartyFallen);
+        Assert.True(b.Over);
+        Assert.True(b.Finish());
+        Assert.Equal((Vitals.Well, 30), (member.Vitals.Status, member.Vitals.Hp)); // the one down gets up for the game over
+
+        // A bout the party only watches isn't lost however it goes.
+        Battle watched = Fight(new ScriptedDice(), Fighter("ally", 1, 5, 5), Fighter("foe", 2, 8, 5));
+        Assert.False(watched.PartyFallen);
+        Assert.False(watched.Over);
+    }
+
+    [Fact]
     public void AttackingEndsInvisibilityAndPoisonKillsWhenItsRoundsRunOut()
     {
         Combatant a = Fighter("a", 1, 5, 5), t = Fighter("t", 2, 6, 5, hp: 500);
