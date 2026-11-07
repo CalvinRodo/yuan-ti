@@ -79,10 +79,18 @@ public sealed partial class Battle
     /// enemy (bit 2) standing within sight range and line of sight
     /// (<c>612E:281F</c>, which asks <c>612E:0000</c> for enemies within 24 cells
     /// with line of sight): one left out of sight, in another room, doesn't
-    /// keep the fight going.
+    /// keep the fight going. It is over, too, once the party has fallen
+    /// (<see cref="PartyFallen"/>): what it summoned fighting on can't save the game.
     /// </summary>
-    public bool Over => !_all.Any(p => p.Fights && (p.Side & 1) != 0
+    public bool Over => PartyFallen || !_all.Any(p => p.Fights && (p.Side & 1) != 0
         && _all.Any(e => e.Fights && (e.Side & 2) != 0 && Distance(p, e) <= Rules.SightRange && InSight(p.Cell, e.Cell)));
+
+    /// <summary>
+    /// The party fought and none of its members is standing with hit points left: all are down or dead
+    /// (DSUN.EXE's game over at the fight's end, <c>85FE:02C9</c>). Not in a bout the party only watched.
+    /// </summary>
+    public bool PartyFallen => _all.Any(c => c.PartyMember)
+        && !_all.Any(c => c.PartyMember && c.Vitals is { Status: >= Vitals.Well and < Vitals.Down, Hp: >= 1 });
 
     public void Add(Combatant c)
     {
@@ -269,9 +277,8 @@ public sealed partial class Battle
     /// The fight's end for the party (<c>612E:3060</c>, <c>612E:3199</c>): each
     /// member is no longer Paralyzed and drops the powers it kept up; one down
     /// or hurt but alive (status 1–3) gets up, with 1 hit point if it had none.
-    /// True when no member was standing with hit points left: the party has
-    /// fallen (DSUN.EXE's game over, <c>85FE:02C9</c>), even if some only went down;
-    /// false when no member fought (a bout the party watched). Anyone not dead gets
+    /// True when the party has fallen (<see cref="PartyFallen"/>, as it was before they get up),
+    /// even if some only went down; false when no member fought (a bout the party watched). Anyone not dead gets
     /// back what Psionic Blast took (<see cref="CombatFixes.PsionicBlastWearsOff"/>) first.
     /// </summary>
     public bool Finish()
@@ -284,7 +291,7 @@ public sealed partial class Battle
             }
             c.ImaginedLoss = 0;
         }
-        bool fallen = _all.Any(c => c.PartyMember); // a fight the party only watched isn't lost
+        bool fallen = PartyFallen;
         foreach (Combatant c in _all.Where(c => c.PartyMember))
         {
             EndCondition(c, Condition.Paralyzed);
@@ -295,14 +302,7 @@ public sealed partial class Battle
             Vitals v = c.Vitals;
             if (v.Status is >= Vitals.Well and <= Vitals.Down)
             {
-                if (v.Hp < 1)
-                {
-                    v.Hp = 1;
-                }
-                else if (v.Status != Vitals.Down)
-                {
-                    fallen = false;
-                }
+                v.Hp = Math.Max(1, v.Hp);
                 v.Status = Vitals.Well;
             }
         }

@@ -81,6 +81,11 @@ public partial class RegionView : Node2D
     /// <summary>Seconds until the weather is looked at again.</summary>
     private double _weatherCheck;
     private Node2D _sorted = null!;
+
+    /// <summary>The combatants' <see cref="Silhouette"/>s, by the figure each copies.</summary>
+    private CanvasGroup _silhouettes = null!;
+
+    private readonly Dictionary<Sprite2D, Sprite2D> _silhouetteOf = [];
     private DebugOverlay _overlay = null!;
     private OverheadMarkers _overheadMarks = null!;
 
@@ -198,6 +203,10 @@ public partial class RegionView : Node2D
         AddChild(_box);
         _sorted = new Node2D { YSortEnabled = true };
         AddChild(_sorted);
+        // Drawn whole, nearest last, then faded as one: where figures overlap only the nearest one's shows (#158).
+        // (Its children kept in order by hand: y-sorting them would draw them outside the group.)
+        _silhouettes = new CanvasGroup { ZIndex = 5, ZAsRelative = false, SelfModulate = new Color(1, 1, 1, 0.4f) };
+        AddChild(_silhouettes);
         AddChild(_particles);
         _floor.AddSibling(_particles.Ground); // the modern style's light, on the floor under the figures
         _sandstorm = new SandstormLayer();
@@ -610,6 +619,7 @@ public partial class RegionView : Node2D
             CastOnMap = CastOnMap,
             CastInFight = CastItemInFight,
             AimOnMap = AimItemOnMap,
+            AimSpell = AimSpell,
             UseTrigger = UseQuestItem,
             SpellName = Session.SpellName,
             Did = text => AddScriptLine($"> {text}"),
@@ -1289,20 +1299,37 @@ public partial class RegionView : Node2D
     /// <summary>
     /// In a fight, a faint copy of a combatant drawn above the scenery, so one
     /// that steps behind a building (a frightened mage fleeing north) can still
-    /// be followed. Not in DSUN.EXE.
+    /// be followed. Not in DSUN.EXE. The copies are sorted as the figures are and
+    /// drawn together (<see cref="_silhouettes"/>), so one doesn't show through
+    /// another figure standing in front of it.
     /// </summary>
     private void Silhouette(Sprite2D node)
     {
-        if (node.GetNodeOrNull<Sprite2D>("Silhouette") is not { } ghost)
+        if (!_silhouetteOf.TryGetValue(node, out Sprite2D? ghost))
         {
-            ghost = new Sprite2D
+            ghost = new Sprite2D { Centered = false, TextureFilter = node.TextureFilter };
+            _silhouettes.AddChild(ghost);
+            _silhouetteOf[node] = ghost;
+            node.TreeExiting += () =>
             {
-                Name = "Silhouette", Centered = false, ZIndex = 5, ZAsRelative = false, Modulate = new Color(1, 1, 1, 0.4f),
-                TextureFilter = node.TextureFilter,
+                _silhouetteOf.Remove(node);
+                ghost.QueueFree();
             };
-            node.AddChild(ghost);
         }
-        (ghost.Texture, ghost.FlipH, ghost.Offset, ghost.Visible) = (node.Texture, node.FlipH, node.Offset, InCombat);
+        (ghost.Texture, ghost.FlipH, ghost.Offset, ghost.Position) = (node.Texture, node.FlipH, node.Offset, node.Position);
+        ghost.Visible = InCombat && node.Visible;
+        // Sorted as the figures are, the nearest (lowest) drawn last.
+        int at = ghost.GetIndex(), last = _silhouettes.GetChildCount() - 1;
+        float y = ghost.Position.Y;
+        while (at > 0 && _silhouettes.GetChild<Sprite2D>(at - 1).Position.Y > y)
+        {
+            at--;
+        }
+        while (at < last && _silhouettes.GetChild<Sprite2D>(at + 1).Position.Y < y)
+        {
+            at++;
+        }
+        _silhouettes.MoveChild(ghost, at);
     }
 
     /// <summary>Show or put away every combatant's <see cref="Silhouette"/> (a fight starts or ends).</summary>
@@ -3869,20 +3896,25 @@ public partial class RegionView : Node2D
             Expect(!_study.IsOpen, "EXIT after choosing closes it");
             screen.Open(_world, 1, CharacterScreen.Page.Spells);
             screen.ClickSpell(false, SlotOf(false, MagicMissile));
-            Expect(screen.PickedSpell == MagicMissile, $"and it can be cast at once ({screen.Status})");
+            Expect(!screen.IsOpen && _mapCast is { Member: 1, Cast: { Spell: MagicMissile, Item: null } },
+                $"and it can be cast at once: a spell at foes goes back to the map to aim (#156; {screen.Status})");
+            _mapCast = null;
+            screen.Open(_world, 1, CharacterScreen.Page.Spells);
             screen.ClickSpell(false, SlotOf(false, MagicMissile), button: MouseButton.Right);
             Expect(screen.SpellInfo?.StartsWith("MAGIC MISSILE:") == true, $"right-clicking it shows what it does ({screen.SpellInfo})");
             screen._Input(new InputEventKey { Keycode = Key.Escape, PhysicalKeycode = Key.Escape, Pressed = true });
             Expect(screen.SpellInfo is null && screen.Visible, "Esc closes it, not the screen");
 
             // The psionicist: CAST SPELL/USE PSIONIC shows the powers it was given; a click picks one to use.
-            screen.ClickSpell(false, SlotOf(false, MagicMissile)); // put Magic Missile down: a box click would cast it
             screen.ClickBox(2);
             Expect(screen.Showing == CharacterScreen.Page.Psionics && SlotOf(false, Detonate) >= 0
                 && Enumerable.Range(0, 21).All(i => screen.SpellAt(false, i) is not int n || psionicist.Powers.Contains(n)),
                 $"the psionicist's page shows the powers it knows, Detonate first ({screen.Showing}, {screen.Status})");
             screen.ClickSpell(false, SlotOf(false, Detonate));
-            Expect(screen.PickedSpell == Detonate && psionicist.Powers.Count == 5, $"clicking one picks it to use, learning nothing ({screen.Status})");
+            Expect(!screen.IsOpen && _mapCast is { Member: 2, Cast.Spell: Detonate } && psionicist.Powers.Count == 5,
+                $"clicking one at foes aims it on the map, learning nothing ({screen.Status})");
+            _mapCast = null;
+            screen.Open(_world, 2, CharacterScreen.Page.Psionics);
 
             // CURRENT SPELL EFFECTS: out of a fight, none.
             screen.Press(11306);

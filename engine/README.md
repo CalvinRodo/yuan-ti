@@ -234,7 +234,9 @@ while that level has some left ("2 LEVEL 1 SPELLS TO CAST"; the spells of a leve
 of a member not Okay, are crossed out, and the pointer on one says YOU NEED TO REST). The spells fill the
 panel's slots in their numbers' order, as DSUN.EXE does (`8F23:19B6`); MAGE / CLERIC / PSIONIC goes round
 the kinds and LEVEL n round the levels, and the points and status show under the boxes. Click a spell, then a member's box, to
-cast it (in a fight CAST lists them all). Out of a fight the healing ones heal, and those that put a condition on
+cast it (in a fight CAST lists them all). In a fight, clicking a spell or power goes back to the map to aim it there
+on the member's turn, as CAST does; out of one, so does a spell at foes (the spell pointer, as a wand's: clicking a
+creature starts the fight with it, the spell cast first). Out of a fight the healing ones heal, and those that put a condition on
 the party (Bless, Haste, Enlarge, Strength, Protection from Evil, Biofeedback …) take effect as they would in a fight on
 the members shown (collapsed, the leader alone), and last on the game clock into the next fight; a spell still
 running when a fight ends goes on after it, a power ends with it; damage and summoning wait for a fight. A combatant
@@ -627,7 +629,9 @@ pops up by it: "END name's MOVE" with GUARD, WAIT and END TURN. Stepping on a mo
 script mid-fight, as in the original. A creature that falls leaves its body and gives the party its
 experience; what members used (spells cast, psionic points, ammunition) goes back to their sheets.
 At the end those down get up with a hit point; if no one was left standing, the original's "your
-party has been defeated" screen leads back to the main menu. No saving during a fight; leaving the
+party has been defeated" screen leads back to the main menu. The fight ends as the last member falls, even
+with what the party summoned still fighting (it can't save the game). In a fight a faint copy of each combatant
+shows over the scenery, so one behind a building can be followed; a figure in front of another isn't seen through. No saving during a fight; leaving the
 region drops it. `-- --new-game --fight` starts a fight with the nearest creature (`--auto`: the
 party fights by itself), `--check-combat` plays one through headless, and `--screenshot=FILE` saves
 the screen after five seconds (`--screenshot-after=N` seconds).
