@@ -374,6 +374,10 @@ public partial class RegionView : Node2D
                     : Session.Party[i].Classes.Contains(DarkSun.Game.Characters.CharacterClass.Psionicist), _selected);
                 Callable.From(() => _character.Open(_world, caster, page)).CallDeferred();
             }
+            if (OS.GetCmdlineUserArgs().Contains("--open-quick-cast"))
+            {
+                Callable.From(OpenQuickCastForShow).CallDeferred();
+            }
             if (OS.GetCmdlineUserArgs().Contains("--open-menu"))
             {
                 Callable.From(() => _gameMenu.Open()).CallDeferred();

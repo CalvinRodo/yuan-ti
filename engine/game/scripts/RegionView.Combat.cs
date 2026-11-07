@@ -38,13 +38,9 @@ public partial class RegionView
     private double _combatWait;
     private (Walker Walker, double Left)? _combatWalk;
     private readonly List<string> _combatLines = [];
-    private PanelContainer _combatPanel = null!;
-    private Label _combatTurn = null!;
-    private Label _combatTip = null!;
+    private CombatBar _combatPanel = null!;
     private CombatLogView _combatLog = null!;
-    private PopupMenu _castMenu = null!;
     private Node2D _floaters = null!;
-    private Button _castButton = null!, _autoButton = null!;
 
     /// <summary>A spell or power chosen with CAST (or an item's, USE), waiting for its target.</summary>
     private CastChoice? _castChoice;
@@ -76,37 +72,13 @@ public partial class RegionView
         _floaters = new Node2D { ZIndex = 100 };
         AddChild(_floaters);
 
-        _combatPanel = new PanelContainer { Visible = false };
         // At the lower left: the combat log has the lower right, as in Obsidian Edition.
-        _combatPanel.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.BottomLeft);
-        _combatPanel.GrowHorizontal = Control.GrowDirection.End;
-        _combatPanel.GrowVertical = Control.GrowDirection.Begin;
-        _combatPanel.OffsetBottom = -4;
-        _combatPanel.OffsetLeft = 4;
-        var box = new VBoxContainer();
-        _combatTurn = new Label { HorizontalAlignment = HorizontalAlignment.Center };
-        _combatTurn.AddThemeFontSizeOverride("font_size", 10);
-        _combatTip = new Label { HorizontalAlignment = HorizontalAlignment.Center };
-        _combatTip.AddThemeFontSizeOverride("font_size", 9);
-        _combatTip.AddThemeColorOverride("font_color", new Color(1f, 0.9f, 0.6f));
-        var buttons = new HBoxContainer { Alignment = BoxContainer.AlignmentMode.Center };
-        Button Add(string text, string action, Action pressed)
-        {
-            var b = new Button { Text = text, TooltipText = KeyHelp.Keys(action), FocusMode = Control.FocusModeEnum.None };
-            b.AddThemeFontSizeOverride("font_size", 9);
-            b.Pressed += pressed;
-            buttons.AddChild(b);
-            return b;
-        }
-        _castButton = Add("CAST", Controls.CombatCast, OpenCastMenu);
-        Add("GUARD", Controls.CombatGuard, () => PlayerAct(c => _battle!.Guard(c)));
-        Add("WAIT", Controls.CombatWait, () => PlayerAct(c => _battle!.Wait(c)));
-        Add("END TURN", Controls.CombatEndTurn, () => PlayerAct(c => _battle!.EndTurn(c)));
-        _autoButton = Add("AUTO", Controls.CombatAuto, ToggleAuto);
-        box.AddChild(_combatTurn);
-        box.AddChild(_combatTip);
-        box.AddChild(buttons);
-        _combatPanel.AddChild(box);
+        _combatPanel = new CombatBar();
+        _combatPanel.AddButton("CAST", Controls.CombatCast, OpenCastMenu);
+        _combatPanel.AddButton("GUARD", Controls.CombatGuard, () => PlayerAct(c => _battle!.Guard(c)));
+        _combatPanel.AddButton("WAIT", Controls.CombatWait, () => PlayerAct(c => _battle!.Wait(c)));
+        _combatPanel.AddButton("END TURN", Controls.CombatEndTurn, () => PlayerAct(c => _battle!.EndTurn(c)));
+        _combatPanel.AddButton("AUTO", Controls.CombatAuto, ToggleAuto);
         layer.AddChild(_combatPanel);
 
         _combatLog = new CombatLogView
@@ -118,10 +90,6 @@ public partial class RegionView
         };
         layer.AddChild(_combatLog);
 
-        _castMenu = new PopupMenu();
-        _castMenu.AddThemeFontSizeOverride("font_size", 9);
-        _castMenu.IdPressed += id => ChooseCast((int)id);
-        layer.AddChild(_castMenu);
     }
 
     // -- starting and ending ---------------------------------------------------------------------------
@@ -638,12 +606,13 @@ public partial class RegionView
         }
         Combatant? c = PlayerTurn;
         _combatPanel.Visible = !_checking && !_character.IsOpen;
-        _castButton.Disabled = c is null || c.Spells.Count == 0 && (c.Powers.Count == 0 || c.Psp <= 0);
-        _autoButton.Disabled = c is null;
+        _combatPanel.SetDisabled("CAST", c is null || c.Spells.Count == 0 && (c.Powers.Count == 0 || c.Psp <= 0)
+            && !(c.Source is { } o && o.Items.Any(CastsASpell)));
+        _combatPanel.SetDisabled("AUTO", c is null);
         if (c is null)
         {
-            _combatTurn.Text = battle.Current is { } other ? $"{Who(other)}'s turn" : $"Round {battle.Round}";
-            _combatTip.Text = "";
+            _combatPanel.Turn = battle.Current is { } other ? $"{Who(other)}'s turn" : $"Round {battle.Round}";
+            _combatPanel.Tip = "";
             return;
         }
         if (!_menuShown && (c.Flags & TurnFlags.MayMove) == 0 && (c.Flags & ~TurnFlags.Waited) != TurnFlags.None)
@@ -651,9 +620,9 @@ public partial class RegionView
             ShowCombatMenu(c);
         }
         int steps = c.MovementPoints / Math.Max(1, battle.Rules.StepCost);
-        _combatTurn.Text = $"{Who(c)}: HP {c.Vitals.Hp}/{c.Vitals.MaxHp} · moves {((c.Flags & TurnFlags.MayMove) != 0 ? steps : 0)}"
+        _combatPanel.Turn = $"{Who(c)}: HP {c.Vitals.Hp}/{c.Vitals.MaxHp} · moves {((c.Flags & TurnFlags.MayMove) != 0 ? steps : 0)}"
             + ((c.Flags & TurnFlags.MayAttack) != 0 ? " · may attack" : "") + (c.Psp > 0 ? $" · PSP {c.Psp}" : "");
-        _combatTip.Text = TipFor(c, MouseCell());
+        _combatPanel.Tip = TipFor(c, MouseCell());
     }
 
     /// <summary>The cell a click in a fight aims at: the mouse's, or that of the combatant drawn there (<see cref="AimCell"/>).</summary>
@@ -1044,32 +1013,13 @@ public partial class RegionView
         _ => "No line of sight",
     };
 
-    /// <summary>CAST: the spells this member can still cast (with its level's casts left) and, with points, its powers.</summary>
+    /// <summary>CAST: the spell bar (<see cref="SpellBar"/>) for the member whose turn it is: its spells, powers and items.</summary>
     private void OpenCastMenu()
     {
-        if (PlayerTurn is not { } c)
+        if (PlayerTurn is not { Source: { } o } c || o.Index >= Session.Party.Count || !OpenSpellBar(o.Index, "cast"))
         {
-            return;
+            Notice(PlayerTurn is { } who ? $"{Who(who)} has nothing to cast." : "Not now.");
         }
-        _castMenu.Clear();
-        foreach (int spell in c.Spells.Distinct().Order())
-        {
-            int casts = c.CastsOf(spell);
-            _castMenu.AddItem($"{EffectName(spell)}{(casts > 1 ? $" ×{casts}" : "")}", spell);
-        }
-        foreach (int p in c.Powers.Distinct().Order())
-        {
-            int cost = _battle!.Spells.Power(p)?.Cost ?? 0;
-            _castMenu.AddItem($"{EffectName(p)} ({cost} PSP)", p);
-            _castMenu.SetItemDisabled(_castMenu.ItemCount - 1, cost > c.Psp);
-        }
-        if (_castMenu.ItemCount == 0)
-        {
-            Notice($"{Who(c)} has nothing to cast.");
-            return;
-        }
-        _castMenu.Position = (Vector2I)GetViewport().GetMousePosition();
-        _castMenu.Popup();
     }
 
     private void ChooseCast(int spell)

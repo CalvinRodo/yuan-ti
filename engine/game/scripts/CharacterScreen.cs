@@ -1005,6 +1005,18 @@ public partial class CharacterScreen : RetroScreen
         ShowInfo(null, null, message);
     }
 
+    /// <summary>USE on one of the member's own items, as its item window's (the spell bar's items, out of a fight); false if it doesn't hold it.</summary>
+    public bool UseOwn(Item item)
+    {
+        if (Member is not { } m || !m.Items.Contains(item))
+        {
+            return false;
+        }
+        _described = m;
+        UseItem(item);
+        return true;
+    }
+
     private static string Healed(Vitals v)
     {
         int before = v.Hp;

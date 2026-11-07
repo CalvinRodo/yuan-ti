@@ -1,5 +1,6 @@
 using DarkSun.Game.Combat;
 using Godot;
+using static DarkSun.Engine.StoneDraw;
 
 namespace DarkSun.Engine;
 
@@ -33,11 +34,7 @@ public partial class CombatLogView : RetroScreen
     };
 
     // Obsidian Edition's colours (its palette.py): the stone, the well, the line kinds and the names.
-    private static readonly Color Outline = Color.FromHtml("#202038"), Lit = Color.FromHtml("#A6A6BE"), Stone = Color.FromHtml("#71718A"),
-        Dark = Color.FromHtml("#595971"), Well = Color.FromHtml("#30304D"), TextShadow = Color.FromHtml("#101018"), Pale = Color.FromHtml("#D7D7E3"),
-        Monster = Color.FromHtml("#FF7070");
-
-    private static readonly Color[] WellShades = [Color.FromHtml("#262640"), Color.FromHtml("#2C2C48"), Well, Color.FromHtml("#3A3A5A")];
+    private static readonly Color Monster = Color.FromHtml("#FF7070");
 
     private static readonly Color[] PartyColours = [Color.FromHtml("#6FD8E8"), Color.FromHtml("#F48CF4"), Color.FromHtml("#FFB86B"), Color.FromHtml("#FFFFFF")];
 
@@ -248,10 +245,6 @@ public partial class CombatLogView : RetroScreen
 
     // -- the lines --------------------------------------------------------------------------------------
 
-    private static Font FontIn(Color colour) => GameFonts.Get(colour, TextShadow) ?? ThemeDB.FallbackFont;
-
-    private static int Measure(string text) => (int)FontIn(Pale).GetStringSize(text, HorizontalAlignment.Left, -1, GameFonts.Size).X;
-
     private Color NameColour(Combatant c) => PartySlot(c) is int slot ? PartyColours[Math.Clamp(slot, 0, PartyColours.Length - 1)] : Monster;
 
     /// <summary>The lines as the well's rows: each wrapped to its width, the rows after a line's first indented.</summary>
@@ -318,13 +311,7 @@ public partial class CombatLogView : RetroScreen
     private void Draw(Panel p)
     {
         int w = PanelWidth, h = Height;
-        // The frame: an outline, the stone, its lit and dark edges.
-        p.DrawRect(new Rect2(0, 0, w, h), Outline);
-        p.DrawRect(new Rect2(1, 1, w - 2, h - 2), Stone);
-        p.DrawRect(new Rect2(1, 1, w - 2, 1), Lit);
-        p.DrawRect(new Rect2(1, 1, 1, h - 2), Lit);
-        p.DrawRect(new Rect2(1, h - 2, w - 2, 1), Dark);
-        p.DrawRect(new Rect2(w - 2, 1, 1, h - 2), Dark);
+        Frame(p, new Rect2I(0, 0, w, h));
 
         // The header: the round and who acts (collapsed, the newest line), then its buttons.
         var buttons = Buttons();
@@ -343,7 +330,7 @@ public partial class CombatLogView : RetroScreen
 
         // The well, mottled in its four shades, and its lines.
         Rect2I well = WellRect;
-        p.DrawTextureRect(WellTexture(well.Size), new Rect2(well.Position, well.Size), false);
+        DrawWell(p, well);
         foreach (var (filter, rect) in FilterChips())
         {
             Chip(p, rect, filter.ToString(), filter == _filter ? KindColours[LogKind.Other] : Pale, filter == _filter);
@@ -398,57 +385,6 @@ public partial class CombatLogView : RetroScreen
         int room = track.Size.Y - h;
         int most = Math.Max(1, total - VisibleRows);
         return (track.Position.Y + room * TopRow / most, h);
-    }
-
-    private static void DrawText(Panel p, string text, int x, int y, Color colour) =>
-        p.DrawString(FontIn(colour), new Vector2(x, y + 8), text, HorizontalAlignment.Left, -1, GameFonts.Size, Colors.White);
-
-    /// <summary><paramref name="text"/> cut to <paramref name="room"/> pixels, "..." at its end if it was.</summary>
-    private static string Fit(string text, int room)
-    {
-        if (Measure(text) <= room)
-        {
-            return text;
-        }
-        while (text.Length > 0 && Measure(text + "...") > room)
-        {
-            text = text[..^1];
-        }
-        return text + "...";
-    }
-
-    /// <summary>A small stone button: bevelled, its word in the middle (pressed in when chosen).</summary>
-    private static void Chip(Panel p, Rect2I r, string text, Color ink, bool down)
-    {
-        p.DrawRect(new Rect2(r.Position, r.Size), Outline);
-        p.DrawRect(new Rect2(r.Position + Vector2I.One, r.Size - 2 * Vector2I.One), down ? Dark : Stone);
-        p.DrawRect(new Rect2(r.Position.X + 1, r.Position.Y + 1, r.Size.X - 2, 1), down ? Outline : Lit);
-        p.DrawRect(new Rect2(r.Position.X + 1, r.Position.Y + 1, 1, r.Size.Y - 2), down ? Outline : Lit);
-        DrawText(p, text, r.Position.X + (r.Size.X - Measure(text)) / 2, r.Position.Y + 1, ink);
-    }
-
-    private readonly Dictionary<Vector2I, Texture2D> _wells = [];
-
-    /// <summary>The well's mottle: its four shades, a pixel at a time, the same each time.</summary>
-    private Texture2D WellTexture(Vector2I size)
-    {
-        if (_wells.TryGetValue(size, out Texture2D? texture))
-        {
-            return texture;
-        }
-        Image image = Image.CreateEmpty(Math.Max(1, size.X), Math.Max(1, size.Y), false, Image.Format.Rgba8);
-        for (int y = 0; y < size.Y; y++)
-        {
-            for (int x = 0; x < size.X; x++)
-            {
-                uint n = (uint)(x * 374761393 + y * 668265263);
-                n = (n ^ (n >> 13)) * 1274126177;
-                n ^= n >> 16;
-                int shade = (n & 255) < 32 ? 1 : (n & 255) < 48 ? 3 : (n & 255) < 64 ? 0 : 2;
-                image.SetPixel(x, y, WellShades[shade]);
-            }
-        }
-        return _wells[size] = ImageTexture.CreateFromImage(image);
     }
 
     // -- the pointer ------------------------------------------------------------------------------------
