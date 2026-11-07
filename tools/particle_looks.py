@@ -30,6 +30,7 @@ class Theme:
     glow: str | None = None  # modern style: light thrown on the ground
     blend: str = 'Add'       # Mix for smoke and darkness (added colour can only lighten)
     random: bool = False     # each particle one of the colours (a rainbow)
+    name: str = ''           # its key in T (MATERIAL)
 
 
 T = {
@@ -73,7 +74,16 @@ T = {
     'detonate': Theme([46, 223, 66, 212], ['#ffffff', '#fff080', '#ffb040', '#80808000'], '#fff0a0'),
 }
 
+for _key, _theme in T.items():
+    _theme.name = _key
+
 DEFS = {}
+
+# Looks made whole by elemental(), which punctuate() leaves as they are.
+CUSTOM = set()
+
+# Looks punctuate() has given their beat.
+BEATEN = set()
 
 
 def pixel(t, **d):
@@ -87,6 +97,7 @@ def pixel(t, **d):
 def modern(t, glow=None, **d):
     d['Colors'] = t.colors
     d.setdefault('Texture', 'Glow')
+    d.setdefault('Scale', [0.7, 1.3])  # puffs and motes of many sizes
     if t.blend == 'Add':
         d['Blend'] = 'Add'
     if t.random:
@@ -98,7 +109,7 @@ def modern(t, glow=None, **d):
 
 def look(name, t, px, md):
     DEFS[name + '.pixel'] = pixel(t, **px)
-    DEFS[name + '.modern'] = modern(t, **md)
+    DEFS[name + '.modern'] = matter(t, name, modern(t, **md))
     return name
 
 
@@ -396,7 +407,7 @@ def kept():
            Size=[6, 4, 1.5], Alpha=[1, 0.8, 0.4, 0], Max=1600, glow=(70, 0.5)))
     DEFS['fireball-burst.pixel']['Palette'] = [46, 244, 243, 242, 241, 165, 164, 163]
     DEFS['fireball-burst.modern']['Colors'] = ['#fff0b0', '#ffa030f0', '#e04810d0', '#80200080', '#30101000']
-    DEFS['fireball-burst.modern'].pop('Blend')
+    DEFS['fireball-burst.modern'].pop('Blend', None)
     d('bolt-flight', 'bolt',
       dict(Heads=2, Wander=6, Rate=120, Lifetime=[0.08, 0.16], Speed=[0, 4], Spread=180, HeadSize=2, Max=200),
       dict(Heads=3, Wander=12, Rate=260, Lifetime=[0.06, 0.16], Speed=[0, 10], Spread=180, HeadSize=4, Size=[2, 1], Texture='Spark',
@@ -439,6 +450,375 @@ def kept():
            Gravity=[0, -10], Drag=0.8, Size=[1, 2], Alpha=[1, 1, 0.5, 0]),
       dict(Shape='Circle', Radius=12, Burst=40, Rate=90, Seconds=0.8, Lifetime=[0.6, 1.1], Speed=[14, 34], Direction=-90, Spread=40,
            Gravity=[0, -12], Drag=0.8, Size=[3, 7, 10], Alpha=[0.9, 0.6, 0]))
+
+
+# The modern style's elements, in layers (an effect's Layers play with it, each drawn over those before it):
+# fire billows and smokes and throws embers, ice is sharp shards in a gale, and the big ones shake the view.
+
+def layer(colors, texture='Glow', blend='Add', **d):
+    """One layer of a modern look: its colours, how it is drawn, and how it moves."""
+    d['Colors'] = colors
+    d['Texture'] = texture
+    if blend == 'Add':
+        d['Blend'] = 'Add'
+    return d
+
+
+def layered(first, *rest, glow=None, lit=0):
+    """
+    A modern look of layers: the first drawn under the rest. glow is (radius, colour, alpha) of the light on the
+    ground thrown by layer lit (0: the first), which it shows while that layer's particles do.
+    """
+    parts = [dict(first), *rest]
+    if glow:
+        parts[lit]['Glow'] = dict(Radius=glow[0], Color=glow[1], Alpha=glow[2])
+    return {**parts[0], 'Layers': parts[1:]}
+
+
+def faded(colour):
+    return colour[:7] + '00'
+
+
+def shock(colour, across, life=0.45, delay=0.0, alpha=0.8, blend='Add', **d):
+    """A ring running out over the floor from the point."""
+    return layer([colour, faded(colour)], 'Shock', blend, Burst=1, Lifetime=[life, life], Speed=[0, 0], Delay=delay,
+                 Size=[across * 0.1, across * 0.6, across * 0.85, across * 0.96, across], Alpha=[alpha, alpha * 0.6, 0], **d)
+
+
+def flash(colour, size, life=0.18, **d):
+    """A bright pop at the point, gone in a blink."""
+    return layer(['#ffffff', colour, faded(colour)], 'Glow', 'Add', **{**dict(Burst=3, Lifetime=[life * 0.7, life], Speed=[0, 0],
+                 Size=[size * 0.5, size, size * 0.8], Alpha=[1, 0.6, 0]), **d})
+
+
+FIRE_BILLOW = ['#fff4c0', '#ffb040', '#f06018e8', '#a02808b0', '#40100800']
+FIRE_CORE = ['#fff6d0', '#ffc040', '#ff601000']
+EMBERS = ['#fff0a0', '#ffa030', '#ff401000']
+SMOKE = ['#4a3a3000', '#3a302ab0', '#28222090', '#18141400']
+ICE = ['#ffffff', '#e8f8ff', '#b0e0ff', '#80b8f000']
+FROST = ['#f0f8ff00', '#e0f0ffb0', '#c0dcf880', '#a0c4f000']
+
+
+def fire_boom(where, n=1.0, s=1.0, smoke=True, shake=None, ring=None):
+    """An explosion of fire: a ball of flame swelling out from the point and rolling up, a hot glow at its
+    heart, flames licking over the rest of where (a shape: an area's cells, a circle about one reached),
+    embers flung, a shock wave, and a column of smoke rising after."""
+    k = lambda v: max(1, round(v * n))
+    up = [0, -10 * s]
+    ball = dict(Shape='Circle', Radius=8 * s, Offset=up)
+    layers = [
+        # The rest of the area catching: low flames over it.
+        layer(FIRE_BILLOW, 'Smoke', 'Mix', **where, Burst=k(90), Rate=k(160), Seconds=0.3, Lifetime=[0.3, 0.7], Speed=[4, 16],
+              Direction=-90, Spread=50, Gravity=[0, -30], Turbulence=40, Size=[2 * s, 4.5 * s, 2 * s], Scale=[0.7, 1.3],
+              Spin=[-160, 160], Alpha=[0.9, 1, 0.5, 0], Max=k(600)),
+        # The fireball: big billows thrown out from its heart, slowing, rolling up and darkening.
+        layer(FIRE_BILLOW, 'Smoke', 'Mix', **ball, Radial=True, Direction=0, Spread=40, Burst=k(70), Rate=k(160), Seconds=0.15,
+              Lifetime=[0.45, 0.95], Speed=[30 * s, 110 * s], Drag=3.5, Gravity=[0, -40], Turbulence=30,
+              Size=[6 * s, 13 * s, 15 * s], Scale=[0.7, 1.3], Spin=[-120, 120], Alpha=[1, 1, 0.7, 0], Max=k(400)),
+        # White-yellow heat inside it, burning out to orange.
+        layer(['#fffbe8', '#ffe880', '#ffa830c0', '#ff602000'], 'Smoke', 'Mix', **ball, Burst=k(30), Rate=k(80), Seconds=0.15,
+              Lifetime=[0.2, 0.45], Speed=[10 * s, 45 * s], Spread=180, Drag=3, Gravity=[0, -30], Size=[5 * s, 9 * s, 6 * s],
+              Scale=[0.7, 1.3], Spin=[-160, 160], Alpha=[1, 1, 0], Max=k(150)),
+        # Its heart: a glow, not a white-out (added onto sand, too much turns it white).
+        layer(['#fff0c0', '#ff9a40', '#ff401000'], 'Glow', 'Add', Shape='Point', Offset=up, Burst=6, Lifetime=[0.18, 0.32],
+              Speed=[0, 0], Size=[10 * s, 22 * s, 16 * s], Alpha=[0.7, 0.45, 0], Max=10,
+              **({'Shake': dict(Strength=shake[0], Seconds=shake[1])} if shake else {})),
+        # Embers flung out and falling.
+        layer(EMBERS, 'Spark', 'Add', **ball, Burst=k(45), Lifetime=[0.4, 0.9], Speed=[60 * s, 140 * s], Direction=-90,
+              Spread=180, Gravity=[0, 160], Drag=1.2, Size=[1.3, 0.9, 0.4], Max=k(100)),
+    ]
+    if ring:
+        layers.append(shock('#ffc070', ring, life=0.4, alpha=0.8))
+    if smoke:
+        # Drawn under the flames: a column rising off it as they die.
+        first = layer(SMOKE, 'Smoke', 'Mix', Shape='Circle', Radius=10 * s, Offset=[0, -14 * s], Delay=0.2, Rate=k(70), Seconds=0.5,
+                      Lifetime=[1.0, 1.8], Speed=[8 * s, 22 * s], Direction=-90, Spread=35, Gravity=[0, -12], Drag=0.8,
+                      Turbulence=20, Size=[6 * s, 12 * s, 18 * s], Scale=[0.7, 1.3], Spin=[-50, 50], Alpha=[0, 0.75, 0.5, 0],
+                      Max=k(200))
+        return layered(first, *layers, glow=(70 * s, '#ff8030', 0.55), lit=2)  # on the fireball
+    return layered(*layers, glow=(70 * s, '#ff8030', 0.55), lit=1)
+
+
+def hailstorm():
+    """Ice Storm: a black storm cloud churning over the area, hail hammering down slantwise out of it through a
+    gale of snow, shattering into splinters and powder where it lands, ice crystals forming on the ground, the
+    ground rumbling under it."""
+    cell = dict(Shape='Cell')
+    # Hail falls at 65° (down and to the right) at about 210 pixels a second, landing on its cell after 0.35 s.
+    cloud = layer(['#3a465800', '#4a5a70d0', '#56688098', '#60708800'], 'Smoke', 'Mix', **cell, Offset=[-31, -72], Burst=30,
+                  Rate=70, Seconds=0.9, Lifetime=[0.8, 1.3], Speed=[4, 14], Spread=180, Turbulence=40, Size=[10, 16, 18],
+                  Scale=[0.7, 1.3], Spin=[-70, 70], Alpha=[0, 0.85, 0.7, 0], Max=200)
+    gale = layer(['#d0e4f800', '#c0d8f0c0', '#a8c4e890', '#90b0e000'], 'Smoke', 'Mix', **cell, Offset=[-36, -26], Rate=140,
+                 Seconds=1.0, Lifetime=[0.5, 0.9], Speed=[70, 110], Direction=15, Spread=12, Turbulence=90, Size=[5, 9, 12],
+                 Scale=[0.6, 1.4], Spin=[-120, 120], Alpha=[0, 0.8, 0.5, 0], Max=400)
+    hail = layer(['#ffffff', '#d8f0ff', '#90c4f8'], 'Shard', 'Mix', **cell, Offset=[-31, -67], Burst=30, Rate=170, Seconds=0.9,
+                 Lifetime=[0.34, 0.36], Speed=[205, 215], Direction=65, Spread=3, Size=[3.6, 4], Scale=[0.6, 1.4],
+                 Alpha=[0.9, 1], Max=500)
+    streaks = layer(['#ffffff80', '#d8f0ff60', '#a0d0ff00'], 'Spark', 'Add', **cell, Offset=[-31, -67], Rate=80, Seconds=0.9,
+                    Lifetime=[0.3, 0.36], Speed=[230, 250], Direction=65, Spread=3, Size=[2], Alpha=[0.6, 0.6, 0], Max=300)
+    crystals = layer(['#f0faff', '#b8e0ff', '#80b8f0'], 'Shard', 'Mix', **cell, Delay=0.4, Rate=45, Seconds=0.8,
+                     Lifetime=[0.9, 1.4], Speed=[0, 0], Direction=-90, Spread=0, Size=[0, 2.6, 2.6, 0], Scale=[0.6, 1.4],
+                     Spin=[-8, 8], Alpha=[1], Max=200)
+    splinters = layer(ICE, 'Shard', 'Mix', **cell, Delay=0.34, Rate=220, Seconds=0.9, Lifetime=[0.25, 0.5], Speed=[40, 100],
+                      Direction=-90, Spread=75, Gravity=[0, 300], Size=[2, 1.4], Scale=[0.6, 1.3], Spin=[-400, 400], Max=500,
+                      Shake=dict(Strength=2, Seconds=0.9))
+    powder = layer(['#ffffffd0', '#e0f0ffa0', '#c0dcf800'], 'Smoke', 'Mix', **cell, Delay=0.34, Rate=110, Seconds=0.9,
+                   Lifetime=[0.3, 0.6], Speed=[10, 26], Direction=-90, Spread=80, Drag=2.5, Size=[2.5, 5.5, 7], Scale=[0.7, 1.3],
+                   Spin=[-120, 120], Max=300)
+    frost = shock('#a8dcff', 120, life=1.2, delay=0.35, alpha=0.6, blend='Add')
+    return layered(frost, crystals, cloud, gale, hail, streaks, powder, splinters, glow=(80, '#a0d8ff', 0.5), lit=4)
+
+
+def elemental():
+    """The modern style's fire, ice, lightning and stone (over the archetypes' and kept() looks)."""
+    for name in ['explode-fire', 'blast-fire', 'cone-fire', 'fall-fire', 'fall-cold', 'spark-cold', 'shards-cold', 'blast-stone']:
+        if name + '.pixel' not in DEFS:
+            archetype, theme = name.split('-', 1)
+            ARCHETYPES[archetype](T[theme], name)
+    hit = dict(Shape='Circle', Radius=6, Offset=[0, -8])
+
+    # Fireball: the great one, filling its area, shaking the view.
+    DEFS['fireball-burst.modern'] = fire_boom(dict(Shape='Cell'), n=1.0, s=1.2, shake=(3.5, 0.5), ring=150)
+    DEFS['explode-fire.modern'] = fire_boom(dict(Shape='Cell'), n=0.8, s=1.0, shake=(2.5, 0.4), ring=110)
+    # A meteor striking one: a small explosion on it.
+    DEFS['blast-fire.modern'] = fire_boom(hit, n=0.25, s=0.8, shake=(1.2, 0.25), ring=50)
+    # The fireball in flight: a roiling ball of flame trailing smoke.
+    DEFS['fire-flight.modern'] = layered(
+        layer(SMOKE, 'Smoke', 'Mix', Rate=90, Lifetime=[0.4, 0.8], Speed=[2, 8], Spread=180, Gravity=[0, -14], Turbulence=20,
+              Size=[2, 5, 7], Scale=[0.7, 1.3], Spin=[-90, 90], Alpha=[0, 0.5, 0.3, 0], Max=300),
+        layer(FIRE_BILLOW, 'Smoke', 'Mix', Rate=200, Lifetime=[0.15, 0.4], Speed=[4, 20], Spread=180, Gravity=[0, -30], Drag=1,
+              Turbulence=40, Size=[4.5, 3.5, 1.5], Scale=[0.7, 1.3], Spin=[-200, 200], Alpha=[1, 0.9, 0], Max=500),
+        layer(FIRE_CORE, 'Glow', 'Add', Rate=120, Lifetime=[0.08, 0.2], Speed=[0, 8], Spread=180, HeadSize=9, Size=[4, 2],
+              Alpha=[1, 0], Max=200),
+        layer(EMBERS, 'Spark', 'Add', Rate=40, Lifetime=[0.3, 0.6], Speed=[20, 50], Spread=180, Gravity=[0, 80], Size=[1.2, 0.5],
+              Max=100),
+        glow=(44, '#ff8030', 0.6), lit=1)
+    # Burning Hands and the like: a roaring gout of flame from the hands, embers and smoke after.
+    cone = dict(Shape='Cone', Direction=0)
+    DEFS['cone-fire.modern'] = layered(
+        layer(SMOKE, 'Smoke', 'Mix', **cone, Spread=18, Delay=0.15, Rate=160, Seconds=0.35, Lifetime=[0.6, 1.0], Speed=[40, 80],
+              Drag=1.6, Gravity=[0, -20], Turbulence=40, Size=[3, 6, 9], Scale=[0.7, 1.3], Spin=[-90, 90], Alpha=[0, 0.5, 0.3, 0],
+              Max=400),
+        layer(FIRE_BILLOW, 'Smoke', 'Mix', **cone, Spread=20, Burst=60, Rate=520, Seconds=0.4, Lifetime=[0.25, 0.6],
+              Speed=[70, 140], Drag=2.2, Gravity=[0, -20], Turbulence=90, Size=[1.5, 4.5, 7], Scale=[0.7, 1.3], Spin=[-220, 220],
+              Alpha=[1, 0.95, 0.5, 0], Max=1200),
+        layer(FIRE_CORE, 'Glow', 'Add', **cone, Spread=12, Burst=30, Rate=300, Seconds=0.35, Lifetime=[0.12, 0.3], Speed=[90, 160],
+              Drag=2, Size=[2, 3.5, 1], Alpha=[1, 0.8, 0], Max=500),
+        layer(EMBERS, 'Spark', 'Add', **cone, Spread=26, Rate=120, Seconds=0.4, Lifetime=[0.3, 0.7], Speed=[110, 190], Drag=1.5,
+              Gravity=[0, 60], Size=[1.4, 0.5], Max=200),
+        glow=(40, '#ff8030', 0.5), lit=1)
+    # A hit by fire: flames lick up the one reached.
+    DEFS['fire-hit.modern'] = layered(
+        layer(FIRE_BILLOW, 'Smoke', 'Mix', Shape='Circle', Radius=6, Burst=24, Rate=60, Seconds=0.35, Lifetime=[0.25, 0.55],
+              Speed=[10, 30], Direction=-90, Spread=40, Gravity=[0, -40], Turbulence=60, Size=[2, 4, 1.5], Scale=[0.7, 1.3],
+              Spin=[-200, 200], Alpha=[1, 0.9, 0], Max=200),
+        flash('#ff9040', 12, Offset=[0, -10]),
+        layer(EMBERS, 'Spark', 'Add', Shape='Circle', Radius=6, Offset=[0, -8], Burst=14, Lifetime=[0.3, 0.6], Speed=[30, 70],
+              Direction=-90, Spread=70, Gravity=[0, 120], Size=[1.2, 0.5], Max=60),
+        glow=(28, '#ff8030', 0.55))
+    # Wall of Fire: tall flames roiling over its cells, embers and smoke going up.
+    DEFS['wall-of-fire-field.modern'] = layered(
+        layer(SMOKE, 'Smoke', 'Mix', Shape='Cell', Offset=[0, -14], Rate=3, Lifetime=[1.0, 1.6], Speed=[8, 16], Direction=-90,
+              Spread=20, Gravity=[0, -10], Turbulence=20, Size=[4, 7, 10], Scale=[0.7, 1.3], Spin=[-60, 60], Alpha=[0, 0.4, 0.25, 0],
+              Max=500),
+        layer(['#fff0b0', '#ffb030', '#ff5010e0', '#a0200890', '#40100000'], 'Smoke', 'Mix', Shape='Cell', Rate=16,
+              Lifetime=[0.35, 0.75], Speed=[14, 34], Direction=-90, Spread=15, Gravity=[0, -16], Turbulence=60, Size=[5, 4, 1.5],
+              Scale=[0.7, 1.3], Spin=[-160, 160], Alpha=[0.9, 1, 0.6, 0], Max=1200),
+        layer(EMBERS, 'Spark', 'Add', Shape='Cell', Rate=2, Lifetime=[0.5, 1.0], Speed=[20, 50], Direction=-90, Spread=30,
+              Turbulence=80, Size=[1.2, 0.5], Max=200),
+        glow=(40, '#ff8030', 0.5), lit=1)
+    # Flame Strike: a pillar of fire down from the sky, bursting where it lands.
+    strike = fire_boom(dict(Shape='Cell'), n=0.6, s=0.9, shake=(2.5, 0.4), ring=100, smoke=True)
+    for part in strike['Layers']:
+        part['Delay'] = part.get('Delay', 0) + 0.25
+    strike['Delay'] = strike.get('Delay', 0) + 0.25
+    strike['Layers'].insert(0, layer(['#fff8e0', '#ffd060', '#ff702000'], 'Spark', 'Add', Shape='Cell', Offset=[0, -60],
+                                     Burst=40, Rate=280, Seconds=0.3, Lifetime=[0.24, 0.26], Speed=[230, 250], Direction=90,
+                                     Spread=2, Size=[2.5, 2], Max=600))
+    DEFS['fall-fire.modern'] = strike
+
+    # Ice Storm.
+    DEFS['fall-cold.modern'] = hailstorm()
+    # Cone of Cold: a freezing blast of mist, shards and rime.
+    DEFS['cone-of-cold-burst.modern'] = layered(
+        layer(FROST, 'Smoke', 'Mix', **cone, Spread=22, Burst=40, Rate=300, Seconds=0.45, Lifetime=[0.4, 0.8], Speed=[60, 120],
+              Drag=1.8, Turbulence=60, Size=[2, 6, 9], Scale=[0.7, 1.3], Spin=[-120, 120], Alpha=[0, 0.8, 0.5, 0], Max=900),
+        layer(ICE, 'Shard', 'Mix', **cone, Spread=20, Burst=60, Rate=420, Seconds=0.4, Lifetime=[0.25, 0.55], Speed=[120, 200],
+              Drag=1.2, Size=[2.2, 1.6], Scale=[0.6, 1.4], Max=900),
+        layer(['#ffffff', '#c8f0ff', '#80c0ff00'], 'Glow', 'Add', **cone, Spread=10, Burst=20, Rate=200, Seconds=0.35,
+              Lifetime=[0.15, 0.3], Speed=[100, 170], Size=[2, 3, 1], Alpha=[1, 0.7, 0], Max=300,
+              Shake=dict(Strength=1.2, Seconds=0.35)),
+        glow=(36, '#a0d8ff', 0.45))
+    # A hit by cold: shards burst off the one reached in a puff of frost.
+    shatter = lambda n, size: [
+        layer(FROST, 'Smoke', 'Mix', Shape='Circle', Radius=6, Offset=[0, -12], Burst=n, Lifetime=[0.35, 0.7], Speed=[6, 20],
+              Spread=180, Drag=2, Size=[2, 5, 7], Scale=[0.7, 1.3], Spin=[-120, 120], Alpha=[0, 0.8, 0], Max=100),
+        flash('#a0d8ff', 10, Offset=[0, -12]),
+        layer(ICE, 'Shard', 'Mix', Shape='Circle', Radius=4, Offset=[0, -12], Burst=n * 2, Lifetime=[0.25, 0.55],
+              Speed=[30, 80], Spread=180, Gravity=[0, 160], Drag=1.5, Size=[size, size * 0.6], Scale=[0.6, 1.4], Max=200)]
+    DEFS['cold-hit.modern'] = layered(*shatter(12, 1.8), glow=(24, '#a0d8ff', 0.45))
+    DEFS['spark-cold.modern'] = layered(*shatter(10, 1.6), glow=(26, '#a0d8ff', 0.5))
+    # Wall of Ice: its face glinting, rime drifting off it.
+    DEFS['shards-cold.modern'] = layered(
+        layer(FROST, 'Smoke', 'Mix', Shape='Cell', Rate=2, Lifetime=[1.0, 1.6], Speed=[2, 6], Direction=90, Spread=40,
+              Size=[4, 7, 9], Scale=[0.7, 1.3], Spin=[-40, 40], Alpha=[0, 0.5, 0], Max=300),
+        layer(ICE, 'Shard', 'Mix', Shape='Cell', Offset=[0, -6], Rate=4, Lifetime=[0.6, 1.1], Speed=[0, 2], Spread=180,
+              Size=[1, 2.5, 1], Scale=[0.6, 1.4], Spin=[-30, 30], Alpha=[0, 1, 0], Max=300),
+        layer(['#ffffff', '#d8f6ff', '#90c8ff00'], 'Spark', 'Add', Shape='Cell', Offset=[0, -6], Rate=3, Lifetime=[0.3, 0.6],
+              Speed=[2, 8], Direction=-90, Spread=10, Size=[0.5, 3, 0.5], Alpha=[0, 1, 0], Max=200),
+        glow=(30, '#a0d8ff', 0.25))
+
+    # Lightning Bolt: a blinding flash along its line, the view jolting.
+    bolt = DEFS['lightning-burst.modern']
+    DEFS['lightning-burst.modern'] = layered(
+        bolt, layer(['#ffffff', '#c0f8ff', '#5090ff00'], 'Glow', 'Add', Shape='Line', Burst=40, Lifetime=[0.06, 0.16],
+                    Speed=[0, 0], Size=[10, 6], Alpha=[1, 0], Max=60, Shake=dict(Strength=2.5, Seconds=0.3)))
+
+    # Stone striking: rubble flung, a cloud of dust, the ground jolting.
+    DEFS['blast-stone.modern'] = layered(
+        layer(['#c8b8a000', '#b0a08ca0', '#8c806c80', '#60584800'], 'Smoke', 'Mix', **hit, Burst=20, Rate=40, Seconds=0.2,
+              Lifetime=[0.6, 1.1], Speed=[10, 30], Spread=180, Drag=2, Gravity=[0, -8], Size=[3, 7, 9], Scale=[0.7, 1.3],
+              Spin=[-80, 80], Alpha=[0, 0.8, 0.5, 0], Max=150),
+        layer(['#d8d0c0', '#a09080', '#605040'], 'Shard', 'Mix', **hit, Burst=40, Lifetime=[0.4, 0.8], Speed=[40, 110],
+              Direction=-90, Spread=100, Gravity=[0, 260], Drag=0.5, Size=[2, 1.6], Scale=[0.6, 1.5], Spin=[-500, 500], Max=100,
+              Shake=dict(Strength=1.5, Seconds=0.25)),
+        shock('#d8c8a8', 50, life=0.35, alpha=0.6, blend='Mix'))
+
+
+# What each theme is made of in the modern style: its particles take that stuff's look (flame billows, ice
+# shards, dust, rubble, leaves, gas...) and more layers come with them (embers and smoke, frost, crackle,
+# rays of light, drips, grit), so every look keeps its archetype's motion but reads as its element.
+MATERIAL = {
+    'fire': 'flame', 'cold': 'ice', 'holy': 'radiant', 'heal': 'radiant', 'light': 'radiant',
+    'dark': 'dark', 'shadow': 'dark', 'fear': 'dark', 'necro': 'gas', 'poison': 'gas', 'fog': 'gas',
+    'sand': 'dust', 'stone': 'stone', 'water': 'liquid', 'acid': 'liquid', 'blood': 'liquid', 'grease': 'liquid',
+    'nature': 'nature', 'air': 'air', 'chaos': 'chaos', 'web': None, 'insects': None,
+}
+
+# Where a layer starts and how it flies, taken from the look it is added to.
+PLACE = ('Shape', 'Radius', 'Offset', 'Seconds', 'Heads', 'Wander', 'Stagger', 'MinSeconds')
+
+
+def matter(t, name, d):
+    """Look d (a modern archetype's) made of its theme's material, with that material's layers."""
+    material = MATERIAL.get(t.name, 'energy')
+    if material is None or d.get('Texture') == 'Pixel':
+        return d
+    place = {k: d[k] for k in PLACE if k in d}
+    if place.get('Shape') == 'Cone':  # a cone's layers spray its way too
+        place.update(Direction=d.get('Direction', 0), Spread=d.get('Spread', 20))
+    aimed = place.get('Shape') == 'Cone'
+
+    def more(share, colors, texture, blend, **motion):
+        """A layer giving off share of the look's particles."""
+        burst, rate = round(d.get('Burst', 0) * share), d.get('Rate', 0) * share
+        if burst == 0 and rate == 0:
+            return None
+        if aimed:
+            for k in ('Direction', 'Spread', 'Gravity'):
+                motion.pop(k, None)
+            motion['Speed'] = [s * 0.8 for s in d.get('Speed', [0, 0])]
+        return layer(colors, texture, blend, **place, **({'Burst': burst} if burst else {}), **({'Rate': rate} if rate else {}),
+                     Max=max(40, round(d.get('Max', 300) * share) + 20), **motion)
+
+    spin = [-160, 160]
+    hue = t.colors
+    blend = t.blend
+    turn = dict(Spin=spin, Turbulence=d.get('Turbulence', 0) + 25)
+    if material == 'flame':
+        d.update(Colors=FIRE_BILLOW, Texture='Smoke', **turn)
+        d.pop('Blend', None)
+        rest = [more(0.15, SMOKE, 'Smoke', 'Mix', Delay=0.1, Lifetime=[0.6, 1.1], Speed=[4, 12], Direction=-90, Spread=40,
+                     Gravity=[0, -10], Size=[3, 6, 8], Scale=[0.7, 1.3], Spin=[-60, 60], Alpha=[0, 0.5, 0.3, 0]),
+                more(0.3, EMBERS, 'Spark', 'Add', Lifetime=[0.3, 0.7], Speed=[20, 60], Direction=-90, Spread=60,
+                     Gravity=[0, 90], Size=[1.2, 0.5])]
+    elif material == 'ice':
+        d.update(**turn)
+        rest = [more(0.15, FROST, 'Smoke', 'Mix', Lifetime=[0.5, 0.9], Speed=[2, 8], Spread=180, Size=[3, 6, 8], Scale=[0.7, 1.3],
+                     Spin=[-60, 60], Alpha=[0, 0.7, 0]),
+                more(0.35, ICE, 'Shard', 'Mix', Lifetime=[0.3, 0.6], Speed=[10, 40], Spread=180, Gravity=[0, 60], Size=[1.8, 1.1],
+                     Scale=[0.6, 1.4], Spin=[-300, 300])]
+    elif material == 'radiant':
+        rest = [more(0.1, hue, 'Spark', 'Add', Lifetime=[0.4, 0.8], Speed=[12, 26], Direction=-90, Spread=5,
+                     Size=[0.5, 5, 0.5], Alpha=[0, 0.8, 0]),
+                more(0.12, ['#ffffff', hue[1]], 'Glow', 'Add', Lifetime=[0.25, 0.6], Speed=[0, 6], Spread=180,
+                     Size=[0, 2.6, 0], Scale=[0.6, 1.4])]
+    elif material == 'gas':
+        d.update(Texture='Smoke', **turn)
+        rest = [more(0.2, hue, 'Smoke', blend, Delay=0.1, Lifetime=[0.8, 1.4], Speed=[2, 8], Spread=180, Drag=0.6, Turbulence=20,
+                     Size=[s * 1.8 for s in d.get('Size', [2])], Scale=[0.7, 1.3], Spin=[-50, 50], Alpha=[0, 0.6, 0.4, 0])]
+    elif material == 'dark':
+        d.update(Texture='Smoke', **turn)
+        rest = [more(0.3, hue, 'Spark', blend, Lifetime=[0.3, 0.6], Speed=[20, 45], Spread=180, Pull=60, Turbulence=60,
+                     Size=[2.5, 1.5, 0.5], Alpha=[0, 1, 0]),
+                more(0.15, hue, 'Smoke', blend, Delay=0.08, Lifetime=[0.6, 1.0], Speed=[2, 8], Spread=180, Turbulence=30,
+                     Size=[4, 8, 10], Scale=[0.7, 1.3], Spin=[-50, 50], Alpha=[0, 0.6, 0])]
+    elif material == 'dust':
+        d.update(Texture='Smoke', **turn)
+        rest = [more(0.35, hue, 'Pixel', 'Mix', Lifetime=[0.3, 0.6], Speed=[20, 50], Direction=-90, Spread=70, Gravity=[0, 150],
+                     Size=[1.2])]
+    elif material == 'stone':
+        d.update(Texture='Shard', Spin=[-300, 300])
+        rest = [more(0.2, ['#c8b8a000', '#b0a08ca0', '#8c806c80', '#60584800'], 'Smoke', 'Mix', Lifetime=[0.5, 1.0],
+                     Speed=[4, 14], Spread=180, Drag=1.5, Size=[3, 6, 8], Scale=[0.7, 1.3], Spin=[-60, 60], Alpha=[0, 0.7, 0])]
+    elif material == 'liquid':
+        rest = [more(0.35, hue, 'Glow', blend, Lifetime=[0.3, 0.6], Speed=[30, 70], Direction=-90, Spread=55, Gravity=[0, 220],
+                     Size=[1.5, 1], Scale=[0.6, 1.4])]
+        if t.name == 'acid':
+            rest.append(more(0.15, ['#d0ff8000', '#a0e050a0', '#60a03060', '#30601000'], 'Smoke', 'Mix', Lifetime=[0.6, 1.0],
+                             Speed=[6, 14], Direction=-90, Spread=30, Turbulence=30, Size=[2, 5, 7], Scale=[0.7, 1.3],
+                             Spin=[-60, 60], Alpha=[0, 0.7, 0]))
+    elif material == 'nature':
+        d.update(Texture='Shard', **turn)
+        rest = [more(0.2, ['#f0ffa0', '#b0e060', '#70a03000'], 'Glow', 'Add', Lifetime=[0.4, 0.9], Speed=[2, 10], Spread=180,
+                     Turbulence=30, Size=[0, 2, 0])]
+    elif material == 'air':
+        d.update(Texture='Smoke', **turn)
+        rest = [more(0.3, hue, 'Spark', blend, Lifetime=[0.2, 0.4], Speed=[60, 110], Spread=180, Turbulence=120,
+                     Size=[3, 0.5], Alpha=[0, 0.8, 0])]
+    elif material == 'chaos':
+        rest = [more(0.25, hue, 'Shard', blend, RandomColor=True, Lifetime=[0.4, 0.8], Speed=[15, 45], Spread=180,
+                     Turbulence=60, Size=[1.8, 1.2], Scale=[0.6, 1.4], Spin=[-400, 400])]
+    else:  # energy: a crackle of sparks about it
+        rest = [more(0.25, hue, 'Spark', blend, Lifetime=[0.08, 0.2], Speed=[25, 70], Spread=180, Turbulence=150,
+                     Size=[1.6, 0.5])]
+    rest = [r for r in rest if r]
+    if rest:
+        d['Layers'] = rest
+    return d
+
+
+def made_whole(before):
+    """The modern looks elemental() replaced (CUSTOM)."""
+    CUSTOM.update(n[:-len('.modern')] for n, d in DEFS.items() if n.endswith('.modern') and before.get(n) is not d)
+
+
+def punctuate(name, part, theme):
+    """
+    Every other modern burst, hit and cast lands with a beat: a pop of light (themes that glow) and a ring
+    run out over the floor (a burst's with a jolt), unless elemental() made it whole; once a look, whatever parts use it.
+    """
+    body = DEFS[name + '.modern']
+    t = T[theme]
+    if name in CUSTOM or name in BEATEN or part not in ('Cast', 'Burst', 'Hit') or body.get('Shape') in ('Cone', 'Line') \
+            or 'Heads' in body:
+        return
+    colour = t.glow or t.colors[1]
+    blend = 'Add' if t.glow else 'Mix'
+    offset = body.get('Offset', [0, 0])
+    if part == 'Burst':
+        rest = [shock(colour[:7], 120, life=0.5, alpha=0.8, blend=blend)]
+        if t.glow:
+            rest.append(flash(colour[:7], 14, life=0.22, Shape='Cell', Burst=6, Alpha=[0.6, 0.3, 0],
+                              Shake=dict(Strength=1.5, Seconds=0.3)))
+    elif part == 'Hit':
+        rest = [shock(colour[:7], 36, life=0.35, alpha=0.6, blend=blend)]
+        if t.glow:
+            rest.append(flash(colour[:7], 10, Offset=[0, min(offset[1], -10)]))
+    else:
+        rest = [shock(colour[:7], 44, life=0.5, alpha=0.6, blend=blend)]
+    body['Layers'] = body.get('Layers', []) + rest
+    BEATEN.add(name)
 
 
 # What each of the original's looks is drawn with: number, name (the monsters' own have none), and each part
@@ -669,8 +1049,29 @@ def light(part, theme):
     return body
 
 
+def tidy(value):
+    """Numbers worked out from others rounded (55.199999999999996 → 55.2)."""
+    if isinstance(value, float):
+        return round(value, 3)
+    if isinstance(value, list):
+        return [tidy(v) for v in value]
+    if isinstance(value, dict):
+        return {k: tidy(v) for k, v in value.items()}
+    return value
+
+
+def field(key, value):
+    """A definition's field as written: its layers one to a line."""
+    if key == 'Layers':
+        return '[\n' + ',\n'.join(f'    {json.dumps(tidy(layer))}' for layer in value) + '\n  ]'
+    return json.dumps(tidy(value))
+
+
 def main():
     kept()
+    before = dict(DEFS)
+    elemental()
+    made_whole(before)
     looks = {'_about': 'Particle looks by spell number and part (Cast, Flight, Burst, Hit, Field) and style (Pixel, Modern), '
                        'naming looks/particles/NAME.json. A spell, part or style not here keeps its original OJFF. '
                        'Written by tools/particle_looks.py.'}
@@ -695,6 +1096,8 @@ def main():
                     sys.exit(f'spell {number}: no look {name}')
             entry[PARTS[key]] = {'Pixel': name + '.pixel', 'Modern': name + '.modern'}
             theme = value.split(':')[1] if ':' in value else THEME_OF.get(name)
+            if theme:
+                punctuate(name, PARTS[key], theme)
             if theme and (body := light(PARTS[key], theme)):
                 lit[PARTS[key]] = body
         looks[number] = entry
@@ -708,7 +1111,7 @@ def main():
             os.remove(os.path.join(folder, old))
     for name, body in sorted(DEFS.items()):
         with open(os.path.join(folder, name + '.json'), 'w') as f:
-            f.write('{\n' + ',\n'.join(f'  {json.dumps(k)}: {json.dumps(v)}' for k, v in body.items()) + '\n}\n')
+            f.write('{\n' + ',\n'.join(f'  {json.dumps(k)}: {field(k, v)}' for k, v in body.items()) + '\n}\n')
     with open(os.path.join(ROOT, 'particle_looks.json'), 'w') as f:
         f.write('{\n' + ',\n'.join(f'  {json.dumps(k)}: {json.dumps(v)}' for k, v in looks.items()) + '\n}\n')
     with open(os.path.join(ROOT, 'spell_lights.json'), 'w') as f:

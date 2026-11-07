@@ -11,5 +11,9 @@
   "Size": [3, 6],
   "Alpha": [0.9, 0.7, 0],
   "Colors": ["#f4f4ffe0", "#c8c8d8b0", "#80809000"],
-  "Texture": "Glow"
+  "Texture": "Glow",
+  "Scale": [0.7, 1.3],
+  "Layers": [
+    {"Burst": 1, "Lifetime": [0.35, 0.35], "Speed": [0, 0], "Delay": 0.0, "Size": [3.6, 21.6, 30.6, 34.56, 36], "Alpha": [0.6, 0.36, 0], "Colors": ["#c8c8d8", "#c8c8d800"], "Texture": "Shock"}
+  ]
 }

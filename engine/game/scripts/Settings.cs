@@ -14,7 +14,8 @@ namespace DarkSun.Engine;
 /// <item><c>[display]</c> <c>fullscreen</c>, <c>lock_view</c> (no more of the map than the original's screen), <c>shadows</c>,
 /// <c>dust</c>, <c>enemy_rings</c> (0 none, 1 under the enemy chosen with Tab, 2 under every enemy),
 /// <c>spell_effects</c> (<c>original</c>, <c>particles_pixel</c>, <c>particles_modern</c>: see <see cref="SpellEffectsMode"/>),
-/// <c>lighting</c> (<c>off</c>, <c>pixel</c>, <c>smooth</c>: see <see cref="LightingMode"/>), <c>day_night</c>, <c>spell_lights</c>;</item>
+/// <c>lighting</c> (<c>off</c>, <c>pixel</c>, <c>smooth</c>: see <see cref="LightingMode"/>), <c>day_night</c>, <c>spell_lights</c>,
+/// <c>screen_shake</c> (with the modern spell effects);</item>
 /// <item><c>[game]</c> <c>skip_intro</c>, <c>autosave</c> (on entering a region), <c>original_pathfinding</c>,
 /// <c>difficulty</c> (0–3: easy, balanced, hard, hideous), <c>animations</c> (the map's animated things),
 /// <c>choose_enemy_keys</c> (Tab and Enter choose and attack an enemy in a fight), <c>leader_alone</c> (only the leader
@@ -214,6 +215,13 @@ public static class Settings
     {
         get => Get("display", "spell_lights", true);
         set => Set("display", "spell_lights", value);
+    }
+
+    /// <summary>The view shakes with the modern spell effects that call for it (a fireball, an ice storm).</summary>
+    public static bool ScreenShake
+    {
+        get => Get("display", "screen_shake", true);
+        set => Set("display", "screen_shake", value);
     }
 
     /// <summary>In a fight, Tab chooses an enemy (Shift+Tab goes back) and Enter attacks it (after the Obsidian Edition's).</summary>

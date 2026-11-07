@@ -12,6 +12,13 @@
   "Size": [3, 1.5, 0.5],
   "Colors": ["#f0ffa0", "#a0f040", "#40a01800"],
   "Texture": "Glow",
+  "Scale": [0.7, 1.3],
   "Blend": "Add",
-  "Glow": {"Radius": 28, "Color": "#80e040", "Alpha": 0.55}
+  "Glow": {"Radius": 28, "Color": "#80e040", "Alpha": 0.55},
+  "Layers": [
+    {"Shape": "Circle", "Radius": 4, "Offset": [0, -12], "Seconds": 0.2, "Burst": 14, "Rate": 14.0, "Max": 125, "Lifetime": [0.3, 0.6], "Speed": [30, 70], "Direction": -90, "Spread": 55, "Gravity": [0, 220], "Size": [1.5, 1], "Scale": [0.6, 1.4], "Colors": ["#f0ffa0", "#a0f040", "#40a01800"], "Texture": "Glow", "Blend": "Add"},
+    {"Shape": "Circle", "Radius": 4, "Offset": [0, -12], "Seconds": 0.2, "Burst": 6, "Rate": 6.0, "Max": 65, "Lifetime": [0.6, 1.0], "Speed": [6, 14], "Direction": -90, "Spread": 30, "Turbulence": 30, "Size": [2, 5, 7], "Scale": [0.7, 1.3], "Spin": [-60, 60], "Alpha": [0, 0.7, 0], "Colors": ["#d0ff8000", "#a0e050a0", "#60a03060", "#30601000"], "Texture": "Smoke"},
+    {"Burst": 1, "Lifetime": [0.35, 0.35], "Speed": [0, 0], "Delay": 0.0, "Size": [3.6, 21.6, 30.6, 34.56, 36], "Alpha": [0.6, 0.36, 0], "Colors": ["#80e040", "#80e04000"], "Texture": "Shock", "Blend": "Add"},
+    {"Burst": 3, "Lifetime": [0.126, 0.18], "Speed": [0, 0], "Size": [5.0, 10, 8.0], "Alpha": [1, 0.6, 0], "Offset": [0, -12], "Colors": ["#ffffff", "#80e040", "#80e04000"], "Texture": "Glow", "Blend": "Add"}
+  ]
 }

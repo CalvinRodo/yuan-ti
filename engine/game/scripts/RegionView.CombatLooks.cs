@@ -122,6 +122,8 @@ public partial class RegionView
             }
         }
         _particles.Advance(delta);
+        float shake = Settings.ScreenShake ? _particles.Shaking : 0;
+        _camera.Offset = shake > 0 ? new Vector2((float)GD.RandRange(-1.0, 1.0), (float)GD.RandRange(-1.0, 1.0)) * shake : Vector2.Zero;
     }
 
     /// <summary>A graphic the playback waits for: a missile or spell in flight, or particles that block.</summary>
@@ -168,6 +170,7 @@ public partial class RegionView
         _graphics.Clear();
         _fieldGraphics.Clear();
         _particles.Clear();
+        _camera.Offset = Vector2.Zero;
         _fieldParticles.Clear();
         _castLook = null;
         _lastAttack = null;

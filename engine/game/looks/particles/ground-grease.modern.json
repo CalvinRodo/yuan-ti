@@ -8,5 +8,9 @@
   "Alpha": [0, 0.9, 0],
   "Max": 300,
   "Colors": ["#706050f0", "#403028e0", "#20181000"],
-  "Texture": "Glow"
+  "Texture": "Glow",
+  "Scale": [0.7, 1.3],
+  "Layers": [
+    {"Shape": "Cell", "Rate": 1.4, "Max": 125, "Lifetime": [0.3, 0.6], "Speed": [30, 70], "Direction": -90, "Spread": 55, "Gravity": [0, 220], "Size": [1.5, 1], "Scale": [0.6, 1.4], "Colors": ["#706050f0", "#403028e0", "#20181000"], "Texture": "Glow"}
+  ]
 }

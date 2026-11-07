@@ -13,6 +13,12 @@ public struct Particle
     /// <summary>Where in its palette or colours it is, 0–1, if they are picked (<see cref="ParticleDefinition.RandomColor"/>).</summary>
     public float Pick;
 
+    /// <summary>Its size's share of the definition's (<see cref="ParticleDefinition.Scale"/>).</summary>
+    public float Scale;
+
+    /// <summary>How far it is turned, in radians, and how fast it turns (<see cref="ParticleDefinition.Spin"/>).</summary>
+    public float Rotation, Spin;
+
     /// <summary>0 at its birth, 1 at its death.</summary>
     public readonly float T => Age / Life;
 }
@@ -23,9 +29,10 @@ public struct Particle
 /// area's <paramref name="cells"/> (pixel centres), flying for <paramref name="flight"/>
 /// seconds if it is a flight, or lasting until <see cref="Stop"/> if it is a field. It
 /// moves on in fixed steps from a seeded roll, so the same effect plays the same way at
-/// any frame rate; nothing in it reaches the battle.
+/// any frame rate; nothing in it reaches the battle. Its definition's layers play with it
+/// (<see cref="Layers"/>), each from its own roll, their heads flying its heads' ways.
 /// </summary>
-public sealed class ParticleEffect(ParticleDefinition definition, Vector2 from, Vector2 to, IReadOnlyList<Vector2> cells, float flight, bool lasts, int seed)
+public sealed class ParticleEffect
 {
     public const int StepsPerSecond = 60;
 
@@ -35,22 +42,50 @@ public sealed class ParticleEffect(ParticleDefinition definition, Vector2 from, 
     /// <summary>Half a map cell: how far from a cell's centre a particle may start in it.</summary>
     private const float HalfCell = 8;
 
-    private readonly Random _random = new(seed);
+    private readonly IReadOnlyList<Vector2> cells;
+    private readonly float flight;
+    private readonly bool lasts;
+    private readonly Random _random;
     private readonly List<Particle> _particles = [];
-    private readonly (Vector2 Out, Vector2 In, float Ends)[] _paths = Paths(definition, from, to, flight, new Random(seed ^ 0x5F3759DF));
-    private readonly bool[] _arrived = new bool[definition.Heads];
+    private readonly (Vector2 Out, Vector2 In, float Ends)[] _paths;
+    private readonly bool[] _arrived;
     private float _owed;
     private double _clock;
     private int _steps;
-    private bool _stopped;
+    private bool _stopped, _begun;
 
-    public ParticleDefinition Definition { get; } = definition;
+    public ParticleEffect(ParticleDefinition definition, Vector2 from, Vector2 to, IReadOnlyList<Vector2> cells, float flight, bool lasts, int seed)
+        : this(definition, from, to, cells, flight, lasts, seed, null)
+    {
+    }
 
-    public Vector2 From { get; } = from;
+    private ParticleEffect(ParticleDefinition definition, Vector2 from, Vector2 to, IReadOnlyList<Vector2> cells, float flight, bool lasts, int seed,
+        (Vector2, Vector2, float)[]? paths)
+    {
+        (Definition, From, To, this.cells, this.flight, this.lasts) = (definition, from, to, cells, flight, lasts);
+        _random = new Random(seed);
+        _paths = paths ?? Paths(definition, from, to, flight, new Random(seed ^ 0x5F3759DF));
+        _arrived = new bool[_paths.Length];
+        Layers = [.. definition.Layers.Select((layer, i) => new ParticleEffect(layer, from, to, cells, flight, lasts, seed + (i + 1) * 0x3C6EF372, _paths))];
+    }
 
-    public Vector2 To { get; } = to;
+    public ParticleDefinition Definition { get; }
+
+    public Vector2 From { get; }
+
+    public Vector2 To { get; }
 
     public IReadOnlyList<Particle> Particles => _particles;
+
+    /// <summary>Its definition's layers, playing with it (drawn over it, in order).</summary>
+    public IReadOnlyList<ParticleEffect> Layers { get; }
+
+    /// <summary>It and its layers, in the order drawn.</summary>
+    public IEnumerable<ParticleEffect> WithLayers => Layers.Prepend(this);
+
+    /// <summary>How far the view shakes now, in map pixels (<see cref="ParticleDefinition.Shake"/>: the most of it and its layers').</summary>
+    public float Shaking => WithLayers.Max(e => e.Definition.Shake is { Seconds: > 0 } s && e.Time - e.Definition.Delay is var t && t >= 0 && t < s.Seconds
+        ? s.Strength * (1 - t / s.Seconds) : 0);
 
     /// <summary>Seconds since it started.</summary>
     public float Time { get; private set; }
@@ -58,16 +93,24 @@ public sealed class ParticleEffect(ParticleDefinition definition, Vector2 from, 
     /// <summary>Seconds it gives off particles (a field: until stopped).</summary>
     public float Emits => flight > 0 ? flight : Definition.Seconds;
 
-    public bool Emitting => !_stopped && (lasts || Time < Emits);
+    /// <summary>It gives off particles now or will (a layer waiting out its delay).</summary>
+    public bool Emitting => !_stopped && (lasts || Time < Definition.Delay + Emits);
 
-    /// <summary>Nothing more to show.</summary>
-    public bool Done => !Emitting && _particles.Count == 0;
+    /// <summary>Nothing more to show, of it or its layers.</summary>
+    public bool Done => !Emitting && _particles.Count == 0 && Layers.All(l => l.Done);
 
     /// <summary>The playback waits for it: a flight until it lands, else one that blocks until it is done.</summary>
-    public bool Blocks => flight > 0 ? Time < flight : Definition.Blocks && !Done;
+    public bool Blocks => (flight > 0 ? Time < flight : Definition.Blocks && !Done) || Layers.Any(l => l.Blocks);
 
     /// <summary>A field is gone: no more particles, and those alive live out their lives.</summary>
-    public void Stop() => _stopped = true;
+    public void Stop()
+    {
+        _stopped = true;
+        foreach (ParticleEffect layer in Layers)
+        {
+            layer.Stop();
+        }
+    }
 
     /// <summary>The flight's heads in the air now (none once landed, or if it isn't a flight).</summary>
     public IEnumerable<Vector2> Heads()
@@ -119,16 +162,21 @@ public sealed class ParticleEffect(ParticleDefinition definition, Vector2 from, 
         {
             StepOnce();
         }
+        foreach (ParticleEffect layer in Layers)
+        {
+            layer.Update(seconds);
+        }
     }
 
     private void StepOnce()
     {
         ParticleDefinition d = Definition;
-        if (Time == 0)
+        if (!_begun && !_stopped && Time >= d.Delay - 1e-4f)
         {
+            _begun = true;
             Emit(d.Burst);
         }
-        if (Emitting)
+        if (_begun && Emitting)
         {
             int sources = flight > 0 ? Heads().Count() : d.Shape == ParticleShape.Cell && lasts ? Math.Max(1, cells.Count) : 1;
             _owed += d.Rate * sources * Step;
@@ -161,8 +209,10 @@ public sealed class ParticleEffect(ParticleDefinition definition, Vector2 from, 
                 continue;
             }
             Vector2 pull = d.Pull != 0 && centre != p.Position ? Vector2.Normalize(centre - p.Position) * d.Pull * Step : Vector2.Zero;
-            p.Velocity = (p.Velocity + gravity + pull) * keep;
+            Vector2 stir = d.Turbulence > 0 ? Angle((float)(_random.NextDouble() * MathF.Tau)) * d.Turbulence * Step : Vector2.Zero;
+            p.Velocity = (p.Velocity + gravity + pull + stir) * keep;
             p.Position += p.Velocity * Step;
+            p.Rotation += p.Spin * Step;
             _particles[i] = p;
         }
     }
@@ -194,6 +244,9 @@ public sealed class ParticleEffect(ParticleDefinition definition, Vector2 from, 
             Velocity = Angle(direction) * speed,
             Life = Roll(d.Lifetime[0], d.Lifetime[1]),
             Pick = d.RandomColor ? (float)_random.NextDouble() : 0,
+            Scale = d.Scale[0] == d.Scale[1] ? d.Scale[0] : Roll(d.Scale[0], d.Scale[1]),
+            Rotation = d.Spin is [0, 0] ? 0 : (float)(_random.NextDouble() * MathF.Tau),
+            Spin = d.Spin is [0, 0] ? 0 : Roll(d.Spin[0], d.Spin[1]) * MathF.PI / 180,
         });
     }
 

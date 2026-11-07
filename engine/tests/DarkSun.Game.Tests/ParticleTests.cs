@@ -73,6 +73,10 @@ public class ParticleTests
     [InlineData("""{"Palette": [46], "Shape": "Square"}""")]
     [InlineData("""{"Palette": [46], "Stagger": 1}""")]
     [InlineData("""{"Palette": [46], "Offset": [0]}""")]
+    [InlineData("""{"Palette": [46], "Delay": -1}""")]
+    [InlineData("""{"Palette": [46], "Scale": [2, 1]}""")]
+    [InlineData("""{"Palette": [46], "Layers": [{"Burst": 1}]}""")]
+    [InlineData("""{"Palette": [46], "Layers": [{"Palette": [46], "Layers": [{"Palette": [46]}]}]}""")]
     public void ADefinitionThatCantBeUsedIsRefused(string json) => Assert.Throws<InvalidDataException>(() => Def(json));
 
     [Theory]
@@ -253,8 +257,60 @@ public class ParticleTests
         foreach (var (name, cone) in cones)
         {
             var effect = new ParticleEffect(cone, From, To, [], 0, false, 3);
-            effect.Update(0.1);
-            Assert.True(effect.Particles.All(p => Vector2.Dot(Vector2.Normalize(p.Velocity), way) > 0.8f), $"{name} sprays off its way");
+            effect.Update(0.3); // past a layer's delay (smoke after the flame)
+            foreach (ParticleEffect sprayed in effect.WithLayers.Where(e => e.Definition.Shape == ParticleShape.Cone))
+            {
+                Assert.NotEmpty(sprayed.Particles);
+                Assert.True(sprayed.Particles.All(p => Vector2.Dot(Vector2.Normalize(p.Position - From), way) > 0.8f), $"{name} sprays off its way");
+            }
         }
+    }
+
+    [Fact]
+    public void LayersPlayTogetherEachAfterItsDelayAndTheEffectIsDoneWhenAllAre()
+    {
+        ParticleDefinition boom = Def("""
+            {"Burst": 10, "Lifetime": [0.2, 0.2], "Palette": [46], "Layers": [
+                {"Burst": 5, "Delay": 0.5, "Lifetime": [0.3, 0.3], "Palette": [46]},
+                {"Burst": 1, "Lifetime": [0.2, 0.2], "Palette": [46], "Shake": {"Strength": 4, "Seconds": 0.4}}]}
+            """);
+        var effect = new ParticleEffect(boom, From, To, [], 0, false, 1);
+        Assert.Equal(2, effect.Layers.Count);
+        effect.Update(0.1);
+        Assert.Equal([10, 0, 1], effect.WithLayers.Select(e => e.Particles.Count));
+        Assert.InRange(effect.Shaking, 2.5f, 3.5f); // easing off: 4 at the start, none at 0.4 s
+
+        effect.Update(0.35); // the first gone, the delayed one not begun: not done yet
+        Assert.Equal(0, effect.WithLayers.Sum(e => e.Particles.Count));
+        Assert.Equal(0, effect.Shaking);
+        Assert.False(effect.Done);
+
+        effect.Update(0.1);
+        Assert.Equal(5, effect.Layers[0].Particles.Count);
+        effect.Update(0.4);
+        Assert.True(effect.Done);
+    }
+
+    [Fact]
+    public void AFlightsLayersFlyItsHeadsWays()
+    {
+        ParticleDefinition flight = Def("""{"Heads": 3, "Wander": 60, "Rate": 0, "Palette": [46], "Layers": [{"Rate": 0, "Palette": [46]}]}""");
+        var effect = new ParticleEffect(flight, From, To, [], 1, false, 5);
+        effect.Update(0.4);
+        Assert.Equal(effect.Heads(), effect.Layers[0].Heads());
+    }
+
+    [Fact]
+    public void EachParticleKeepsItsScaleAndTurnsAtItsSpin()
+    {
+        ParticleDefinition puffs = Def("""{"Burst": 40, "Lifetime": [1, 1], "Scale": [0.5, 2], "Spin": [90, 90], "Palette": [46]}""");
+        var effect = new ParticleEffect(puffs, From, To, [], 0, false, 2);
+        effect.Update(ParticleEffect.Step);
+        Assert.All(effect.Particles, p => Assert.InRange(p.Scale, 0.5f, 2f));
+        Assert.True(effect.Particles.Max(p => p.Scale) - effect.Particles.Min(p => p.Scale) > 0.8f, "sizes vary");
+        float[] turned = [.. effect.Particles.Select(p => p.Rotation)];
+        effect.Update(0.5);
+        Assert.All(effect.Particles.Zip(turned), z => Assert.Equal(z.Second + MathF.PI / 4, z.First.Rotation, 3));
+        Assert.Equal(1, Def("""{"Burst": 1, "Palette": [46]}""").Scale[0]); // unscaled when not given
     }
 }
